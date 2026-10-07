@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Binoculars, Check, ChevronDown, Clock3, Copy, ExternalLink, Mail, MoreHorizontal, RefreshCw, Sparkles, X } from "lucide-react";
+import { Binoculars, Check, ChevronDown, Clock3, Copy, ExternalLink, Mail, MoreHorizontal, RefreshCw, ShieldAlert, Sparkles, X } from "lucide-react";
 import {
   Disclosure, IconButton, Pill, SectionHeader, btnPlain, btnPrimary, cardCls, divider, focusRing, hairline, inset, rowCls, text, tint,
 } from "@/components/admin/ui";
@@ -128,6 +128,49 @@ export function ScoutToday() {
       });
     }
     if (status === "snoozed") load();
+  };
+
+  // Spam Desk (spam-desk function): Spam reports the email to Apple and the other abuse desks, moves it to Junk, blocks the
+  // sender and stops reply drafts for it. Same optimistic update and Undo as every other tap.
+  const spamRow = async (r: Row) => {
+    setBusy(r.id);
+    setRows((all) => all?.map((x) => (x.id === r.id ? { ...x, status: "dismissed", done_at: new Date().toISOString() } : x)) ?? null);
+    const { data, error } = await supabase.functions.invoke("spam-desk", { body: { op: "mark", draft_id: r.id } });
+    setBusy(null);
+    const res = data as { ok?: boolean; error?: string; report?: { id: string }; already?: boolean } | null;
+    if (error || !res?.ok) { toast.error(res?.error ?? error?.message ?? "Could not report it"); load(); return; }
+    toast(res.already ? "Already reported" : "Reported as spam. Sender blocked.", {
+      description: r.title,
+      action: res.already || !res.report ? undefined : {
+        label: "Undo",
+        onClick: async () => {
+          const u = await supabase.functions.invoke("spam-desk", { body: { op: "undo", id: res.report!.id } });
+          const ur = u.data as { ok?: boolean; error?: string } | null;
+          if (u.error || !ur?.ok) toast.error(ur?.error ?? u.error?.message ?? "Could not undo");
+          else toast.success("Spam report undone");
+          load();
+        },
+      },
+    });
+  };
+
+  const notSpamRow = async (r: Row) => {
+    setBusy(r.id);
+    setRows((all) => all?.map((x) => (x.id === r.id ? { ...x, status: "dismissed", done_at: new Date().toISOString() } : x)) ?? null);
+    const { data, error } = await supabase.functions.invoke("spam-desk", { body: { op: "protect", draft_id: r.id } });
+    setBusy(null);
+    const res = data as { ok?: boolean; error?: string; protected?: string; added?: boolean; mail_id?: string } | null;
+    if (error || !res?.ok) { toast.error(res?.error ?? error?.message ?? "Could not save that"); load(); return; }
+    toast("Marked not spam. This sender is safe now.", {
+      description: r.title,
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          if (res.added) await supabase.functions.invoke("spam-desk", { body: { op: "unprotect", from: res.protected, mail_id: res.mail_id } });
+          await set(r, "open", undefined, true);
+        },
+      },
+    });
   };
 
   const run = async (job: "morning" | "drafts" | "wrap") => {
@@ -274,7 +317,7 @@ export function ScoutToday() {
           <SectionHeader id="drafts-title" title="Replies ready" aside={drafts.length} />
           <div className={cn(cardCls, "overflow-hidden")}>
             <ul id="drafts-list" className={divider}>
-              {shownDrafts.map((d) => <DraftCard key={d.id} d={d} onSet={set} busy={busy === d.id} />)}
+              {shownDrafts.map((d) => <DraftCard key={d.id} d={d} onSet={set} onSpam={spamRow} onNotSpam={notSpamRow} busy={busy === d.id} />)}
             </ul>
             {drafts.length > 3 && (
               <Disclosure open={allDrafts} onToggle={() => setAllDrafts((v) => !v)} controls="drafts-list">
@@ -482,24 +525,58 @@ function RunMenu({ running, onRun }: { running: string | null; onRun: (j: "morni
   );
 }
 
-function DraftCard({ d, onSet, busy }: { d: Row; onSet: (r: Row, s: Status, msg?: string) => void; busy: boolean }) {
+
+const spamBtn = cn(btn, "justify-center text-[#FF6961] hover:bg-[#FF453A1f] bento:text-[#D70015]");
+
+function DraftCard({ d, onSet, onSpam, onNotSpam, busy }: {
+  d: Row; onSet: (r: Row, s: Status, msg?: string) => void; onSpam: (r: Row) => void; onNotSpam: (r: Row) => void; busy: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [text_, setText] = useState(d.body ?? "");
   const a = d.action ?? {};
+  // Spam Desk's "Spam?" card: mail it could not call, shown instead of a reply draft.
+  const suspect = a.spam_suspect === true;
+  const title = suspect ? d.title.replace(/^Spam\?\s*/i, "") : d.title;
   const mailto = `mailto:${encodeURIComponent(a.to ?? "")}?subject=${encodeURIComponent(a.subject ?? "")}&body=${encodeURIComponent(text_)}`;
   const copy = async () => {
     try { await navigator.clipboard.writeText(text_); toast.success("Reply copied"); } catch { toast.error("Could not copy"); }
   };
+  if (suspect) {
+    return (
+      <li className={cn("py-3", inset)}>
+        <div className="flex items-start gap-3">
+          <ShieldAlert className={cn("mt-0.5 h-4 w-4 shrink-0", tint.orange)} aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className={cn(text.title, "break-words")}><Pill tone="orange" className="mr-2 align-middle">Spam?</Pill>{title}</p>
+            {d.why && <p className={cn(text.detail, "mt-1 break-words")}>{d.why}</p>}
+            <p className={cn(text.detail, "mt-1 break-words")}>From {a.to_name ? `${a.to_name} <${a.to}>` : a.to} · to {a.mailbox}</p>
+          </div>
+        </div>
+        <div className="-mx-1 mt-2 flex flex-wrap gap-1 pl-7">
+          <button className={spamBtn} disabled={busy} onClick={() => onSpam(d)}><ShieldAlert className="h-4 w-4" aria-hidden /> Spam</button>
+          <button className={ghost} disabled={busy} onClick={() => onNotSpam(d)}><Check className="h-4 w-4" aria-hidden /> Not spam</button>
+        </div>
+      </li>
+    );
+  }
   return (
     <li>
-      <button className={cn(rowCls, "w-full text-left transition-colors hover:bg-white/[0.04] focus-visible:ring-inset", focusRing)} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <Mail className="h-4 w-4 shrink-0 text-white/55" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className={cn(text.title, "truncate")}>{d.title}</p>
-          {d.why && <p className={cn(text.detail, "mt-0.5 truncate")}>{d.why}</p>}
-        </div>
-        <ChevronDown className={cn("h-4 w-4 shrink-0 text-white/40 transition-transform", open && "rotate-180")} aria-hidden />
-      </button>
+      <div className="flex items-stretch">
+        <button className={cn(rowCls, "min-w-0 flex-1 text-left transition-colors hover:bg-white/[0.04] focus-visible:ring-inset", focusRing)} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <Mail className="h-4 w-4 shrink-0 text-white/55" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className={cn(text.title, "break-words")}>{title}</p>
+            {d.why && <p className={cn(text.detail, "mt-0.5 break-words")}>{d.why}</p>}
+          </div>
+          <ChevronDown className={cn("h-4 w-4 shrink-0 text-white/40 transition-transform", open && "rotate-180")} aria-hidden />
+        </button>
+        <button
+          className={cn("flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center self-center text-[#FF6961] transition hover:bg-[#FF453A1f] active:scale-[0.97] disabled:opacity-50 bento:text-[#D70015] sm:mr-2 sm:rounded-full", focusRing)}
+          disabled={busy} onClick={() => onSpam(d)} aria-label={`Report as spam: ${title}`} title="Spam"
+        >
+          <ShieldAlert className="h-5 w-5" aria-hidden />
+        </button>
+      </div>
       {open && (
         <div className={cn("space-y-3 border-t pb-4 pt-3", hairline, inset)}>
           <p className={text.detail}>To {a.to_name ? `${a.to_name} <${a.to}>` : a.to} · from {a.mailbox}</p>
@@ -515,6 +592,7 @@ function DraftCard({ d, onSet, busy }: { d: Row; onSet: (r: Row, s: Status, msg?
             <button className={ghost} onClick={copy}><Copy className="h-4 w-4" aria-hidden /> Copy</button>
             <button className={ghost} disabled={busy} onClick={() => onSet(d, "done", "Marked sent")}><Check className="h-4 w-4" aria-hidden /> Sent</button>
             <button className={ghost} disabled={busy} onClick={() => onSet(d, "dismissed")}><X className="h-4 w-4" aria-hidden /> Skip</button>
+            <button className={spamBtn} disabled={busy} onClick={() => onSpam(d)}><ShieldAlert className="h-4 w-4" aria-hidden /> Spam</button>
           </div>
         </div>
       )}

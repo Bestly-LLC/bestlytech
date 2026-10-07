@@ -113,6 +113,7 @@ const ClaimsCloser = lazyPage(() => import("./pages/admin/ClaimsCloser"));
 const Wall = lazyPage(() => import("./pages/admin/Wall"));
 const Sky = lazyPage(() => import("./pages/admin/Sky"));
 const Security = lazyPage(() => import("./pages/admin/Security"));
+const SpamDesk = lazyPage(() => import("./pages/admin/SpamDesk"));
 const Team = lazyPage(() => import("./pages/admin/Team"));
 const AdminSkills = lazyPage(() => import("./pages/admin/AdminSkills"));
 const AdminNotFound = lazyPage(() => import("./pages/admin/AdminNotFound"));
@@ -255,6 +256,7 @@ const App = () => {
                   <Route path="wall" element={<Wall />} />
                   <Route path="sky" element={<Sky />} />
                   <Route path="security" element={<Security />} />
+                  <Route path="spam" element={<SpamDesk />} />
                   <Route path="team" element={<Team />} />
                   <Route path="turo" element={<AdminTuro />} />
                   <Route path="claims" element={<ClaimsCloser />} />

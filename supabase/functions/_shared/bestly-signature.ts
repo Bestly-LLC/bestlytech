@@ -38,23 +38,27 @@ export async function signatureGif(db: Db): Promise<string | null> {
 }
 
 /** Plain text in, Bestly HTML out: paragraphs on blank lines, line breaks kept, signature underneath. */
-export function bodyHtml(text: string, hasGif: boolean): string {
+export function bodyHtml(text: string, hasGif: boolean, signed = true): string {
   const paras = text.trim().split(/\n{2,}/).map((p) => `<p style="margin:0 0 12px">${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
-  return `<div style="font:15px/1.5 -apple-system,Helvetica,Arial,sans-serif;color:#1d1d1f">${paras}${sigHtml(hasGif)}</div>`;
+  return `<div style="font:15px/1.5 -apple-system,Helvetica,Arial,sans-serif;color:#1d1d1f">${paras}${signed ? sigHtml(hasGif) : ""}</div>`;
 }
 
-export type Attachment = { filename: string; content: string; content_id?: string };
+export type Attachment = { filename: string; content: string; content_id?: string; content_type?: string };
 
 /**
  * Send one email as Jared through Resend, signature included. Jared is bcc'd so it lands in his mailbox (and
  * bestly_mail) like anything he sends himself; replies go to jared@bestly.tech.
+ * Spam Desk reports (2026-10-07) go out plain: signature:false drops the signature and GIF, bcc:false keeps the
+ * report copies out of his inbox. Both default to true, so every other caller is unchanged.
  */
 export async function sendAsJared(db: Db, o: {
   to: string[]; cc?: string[]; subject: string; text: string; key?: string; attachments?: Attachment[];
+  signature?: boolean; bcc?: boolean;
 }): Promise<{ ok: boolean; id?: string; error?: string; signature: "gif" | "text" }> {
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey) return { ok: false, error: "RESEND_API_KEY is not set on this project", signature: "text" };
-  const gif = await signatureGif(db);
+  const signed = o.signature !== false;
+  const gif = signed ? await signatureGif(db) : null;
   const attachments = [...(o.attachments ?? []), ...(gif ? [{ filename: "jared.gif", content: gif, content_id: "jared-sig" }] : [])];
   const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
   if (o.key) headers["Idempotency-Key"] = o.key.slice(0, 256);
@@ -62,8 +66,9 @@ export async function sendAsJared(db: Db, o: {
     method: "POST",
     headers,
     body: JSON.stringify({
-      from: SENDER, to: o.to, ...(o.cc?.length ? { cc: o.cc } : {}), bcc: ["jared@bestly.tech"], reply_to: "jared@bestly.tech",
-      subject: o.subject, text: o.text.trim() + SIG_TEXT, html: bodyHtml(o.text, !!gif), attachments,
+      from: SENDER, to: o.to, ...(o.cc?.length ? { cc: o.cc } : {}), ...(o.bcc === false ? {} : { bcc: ["jared@bestly.tech"] }), reply_to: "jared@bestly.tech",
+      subject: o.subject, text: signed ? o.text.trim() + SIG_TEXT : o.text.trim(),
+      html: bodyHtml(o.text, !!gif, signed), attachments,
     }),
   }).catch((e) => ({ ok: false, status: 0, json: async () => ({ message: String(e) }) }) as unknown as Response);
   const j = await r.json().catch(() => ({}));

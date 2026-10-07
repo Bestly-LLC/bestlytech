@@ -28,7 +28,7 @@ import { CopyBlock } from "@/components/CopyText";
 import { copyText } from "@/lib/copyForClaude";
 import { RecorderBar, useRecorder, useNow, clock, listNames, type RecentRecording } from "./ScoutRecorder";
 import { JobCard, useJobFollow, useMacJobs, type MacJob } from "./ScoutJobs";
-import { AttachBar, AttachButton, useScoutFiles } from "./ScoutAttach";
+import { AttachBar, AttachButton, FileChips, splitFiles, useScoutFiles } from "./ScoutAttach";
 import { ScoutAutoRunBar } from "./ScoutAutoRun";
 import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, type ScoutAsk } from "./scoutBus";
 import { NeedsYouCard, useNeedsYou, type TodayRow } from "./ScoutNeedsYou";
@@ -1270,9 +1270,28 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </span>
-                    <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-[1.125rem] rounded-br-md bg-[#0A84FF] px-3.5 py-2 text-[0.9375rem] leading-snug text-[#fff] sm:max-w-[80%] sm:text-sm">
-                      {m.body}
-                    </p>
+                    {(() => {
+                      // v37: attached pictures, PDFs and videos show as thumbnails, not as the text copy Scout keeps for itself.
+                      const sf = splitFiles(m.body);
+                      const shown = sf.files.filter((f) => f.kind !== "text" || f.paths.length);
+                      if (!shown.length) {
+                        return (
+                          <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-[1.125rem] rounded-br-md bg-[#0A84FF] px-3.5 py-2 text-[0.9375rem] leading-snug text-[#fff] sm:max-w-[80%] sm:text-sm">
+                            {m.body}
+                          </p>
+                        );
+                      }
+                      return (
+                        <div className="flex max-w-[85%] flex-col items-end gap-1.5 sm:max-w-[80%]">
+                          <FileChips files={shown} className="justify-end" />
+                          {sf.text.trim() && (
+                            <p className="whitespace-pre-wrap break-words rounded-[1.125rem] rounded-br-md bg-[#0A84FF] px-3.5 py-2 text-[0.9375rem] leading-snug text-[#fff] sm:text-sm">
+                              {sf.text.trim()}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ) : (
                   <div className="flex items-start gap-1">

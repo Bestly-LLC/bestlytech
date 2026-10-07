@@ -19,6 +19,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { llm, LlmUnavailable, type LlmTask } from "../_shared/free-llm.ts";
 import { corsWith } from "../_shared/cors.ts";
+import { isBlocked, type BlockRow } from "../_shared/spam-rules.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -163,7 +164,9 @@ async function morning(day: string) {
 
 /* ───────── 6am: drafted replies ───────── */
 
-const NOISE = /(no-?reply|donotreply|notifications?@|mailer|newsletter|news@|updates?@|marketing|info@.*(shop|store)|bounce|support@(apple|google|github)|@(github|vercel|stripe|supabase|google|apple|amazon|linkedin|facebook|instagram|x|twitter|turo|uber|lyft|doordash|paypal|venmo|chase|wellsfargo|bankofamerica)\.com)/i;
+// 2026-10-07 (Spam Desk): bulk-mail senders and bulk-mail footers are noise too, so they never reach a reply draft.
+const NOISE = /(no-?reply|donotreply|notifications?@|mailer|newsletter|news@|updates?@|marketing|promo|deals?@|offers?@|rewards?@|surveys?@|campaigns?@|mailing|info@.*(shop|store)|bounce|support@(apple|google|github)|@(github|vercel|stripe|supabase|google|apple|amazon|linkedin|facebook|instagram|x|twitter|turo|uber|lyft|doordash|paypal|venmo|chase|wellsfargo|bankofamerica)\.com)/i;
+const BULK_BODY = /(view (this email )?in (your )?browser|you are receiving this (email |message )?because|manage (your )?(email )?preferences|update (your )?(email )?preferences)/i;
 
 async function drafts(day: string) {
   const since = new Date(Date.now() - 48 * 3600e3).toISOString();
@@ -171,9 +174,19 @@ async function drafts(day: string) {
     .eq("folder", "INBOX").gte("sent_at", since).order("sent_at", { ascending: false }).limit(150);
   const { data: done } = await db.from("scout_daily").select("source_key").eq("kind", "draft").gte("day", addDays(day, -14));
   const seen = new Set((done ?? []).map((d: any) => d.source_key));
+  // Spam Desk: blocked senders and anything already judged phishing / commercial / spam never become a reply draft.
+  // ("unsure" mail gets a Spam? card from spam-desk instead; "legit" is judged fine and drafts as before.)
+  const { data: blockRows } = await db.from("mail_blocklist").select("pattern, kind").eq("active", true).limit(5000);
+  const blocklist = (blockRows ?? []) as BlockRow[];
+  const mailIds = (mail ?? []).map((m: any) => m.id);
+  const { data: verdictRows } = mailIds.length
+    ? await db.from("mail_verdicts").select("mail_id, verdict").in("mail_id", mailIds).in("verdict", ["phishing", "commercial", "spam", "unsure"])
+    : { data: [] as any[] };
+  const spammy = new Set((verdictRows ?? []).map((v: any) => v.mail_id));
   const cands = (mail ?? []).filter((m: any) =>
     m.from_addr && !NOISE.test(m.from_addr) && !/jared(best)?@|@bestly\.tech$/i.test(m.from_addr) && !seen.has(`mail:${m.id}`) &&
-    !/unsubscribe/i.test(String(m.body_text ?? "").slice(-1500))).slice(0, 40);
+    !isBlocked(blocklist, m.from_addr) && !spammy.has(m.id) &&
+    !/unsubscribe/i.test(String(m.body_text ?? "").slice(-1500)) && !BULK_BODY.test(String(m.body_text ?? "").slice(0, 2500))).slice(0, 40);
   if (!cands.length) return { drafted: 0, looked_at: 0 };
 
   // v9 (2026-09-30): the mail goes in batches that fit Groq's 8K tokens/min per model and the Mac mini's 8K context.

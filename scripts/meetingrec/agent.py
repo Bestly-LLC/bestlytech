@@ -14,7 +14,7 @@ Standard library only: it runs on the system python3.
 import base64, glob, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone
 
-VERSION = "1.8.0"   # 1.8: voice bank (Jared's Pro voice clone from his own mic track, voicebank.py)
+VERSION = "1.9.0"   # 1.9: Spam Desk worker (mailspam.py: junks and reports spam through Apple Mail). 1.8: voice bank (voicebank.py)
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -42,6 +42,7 @@ SYNC = {"notetaker/notetaker.js": f"{HOME}/notetaker/notetaker.js",
         "notetaker/tester.js": f"{HOME}/notetaker/tester.js",
         "talk_tracks.py": f"{HOME}/talk_tracks.py",
         "voicebank.py": f"{HOME}/voicebank.py",
+        "mailspam.py": f"{HOME}/mailspam.py",
         "agent.py": f"{HOME}/agent.py"}
 BAD = f"{HOME}/.bad-versions"
 heal = {"next_sync": 0, "next_version_check": 0, "selftest": None, "last": None, "verify_after_update": False}
@@ -540,6 +541,31 @@ def run_voicebank():
         voicebank_job["running"] = False
 
 
+mailspam_job = {"running": False, "next": 0}
+
+
+def run_mailspam():
+    """Every 60 s on a background thread: the Spam Desk worker (mailspam.py) junks and reports spam through Apple Mail.
+    The file is loaded fresh each time, so a synced fix applies without a restart, and a broken or missing mailspam.py is
+    only logged: it can never stop the recorder."""
+    if mailspam_job["running"]:
+        return
+    mailspam_job["running"] = True
+    try:
+        path = f"{HOME}/mailspam.py"
+        if not os.path.exists(path):
+            return
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("mailspam", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.tick(KEY, log)
+    except Exception as e:  # noqa: BLE001
+        log("mailspam failed", e)
+    finally:
+        mailspam_job["running"] = False
+
+
 def heal_tick():
     """Idle-time upkeep: code sync, Talk version watch, daily self-test."""
     if recording_pid() or busy["stage"] or (heal["selftest"] or {}).get("status") == "running":
@@ -897,6 +923,12 @@ def main():
                 heal_tick()
             except Exception as e:  # noqa: BLE001
                 log("notetaker/heal tick failed", e)
+            try:
+                if time.time() >= mailspam_job["next"]:
+                    mailspam_job["next"] = time.time() + 60
+                    threading.Thread(target=run_mailspam, daemon=True).start()
+            except Exception as e:  # noqa: BLE001
+                log("mailspam start failed", e)
             r = call({"op": "poll", "state": snapshot(), "can_run_jobs": job["id"] is None})
             watch_backend(True)
             if r.get("job") and job["id"] is None:

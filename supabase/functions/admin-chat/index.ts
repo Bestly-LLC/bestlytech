@@ -459,6 +459,21 @@ const TOOLS = [
     },
   },
   {
+    name: "report_spam",
+    description:
+      "Report an email as spam or phishing, same as tapping Spam on a Replies ready card: it is reported to Apple and the other abuse desks, moved to Junk, " +
+      "its sender is blocked and Scout stops drafting replies to it. Use when Jared says an email is spam, a scam or phishing. Give mail_id if you have it, " +
+      "otherwise from (sender name or address) and subject words to find the latest matching email. He can undo it for a few minutes from the Spam page.",
+    input_schema: {
+      type: "object",
+      properties: {
+        mail_id: { type: "string" },
+        from: { type: "string", description: "sender name or address" },
+        subject: { type: "string", description: "words from the subject" },
+      },
+    },
+  },
+  {
     name: "ask_user",
     description:
       "Ask Jared 1-4 multiple-choice questions, shown as tappable answers (he can always type his own instead). Use it when the ask is " +
@@ -945,7 +960,7 @@ ${convo}`;
 const FREE_TOOLS = new Set([
   "today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "notify", "mark_done",
   "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn", "ask_user", "make_video",
-  "send_email", "look",
+  "send_email", "look", "report_spam",
 ]);
 const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "look"]);
 const FREE_STEPS = 14;           // v36 (was 10); the 85 s budget still bounds each hop
@@ -995,6 +1010,7 @@ const TOOL_TOPICS: [string[], RegExp][] = [
   [["make_video"], /\b(video|videos|clip|clips|ltx|render|animate|animation|footage|b-?roll|reel)\b/i],
   [["send_email"], /\b(e-?mails?|mail|send|signature|message (to|eli|rohit)|write to|reply to)\b/i],
   [["look"], /\b(images?|photos?|screenshots?|pictures?|videos?|frames?|pdf|look|see|seen)\b|scout-files/i],
+  [["report_spam"], /\b(spam|phish(ing)?|scam|junk|block (this|that|the) sender|report (this|that|it) (to|as))\b/i],
 ];
 const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "ask_user"]);
 
@@ -1589,6 +1605,21 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
       out = await lookForFree(args, threadId);
       break;
     }
+    case "report_spam": {
+      // Spam Desk (2026-10-07): the same mark logic as the Spam button, through the spam-desk function with the service key.
+      try {
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/spam-desk`, {
+          method: "POST", headers: { "Content-Type": "application/json", apikey: SECRET_KEY, Authorization: `Bearer ${SECRET_KEY}` },
+          body: JSON.stringify({ op: "mark", mail_id: args.mail_id, from: args.from, subject: args.subject }), signal: AbortSignal.timeout(30_000),
+        });
+        const j = await res.json().catch(() => ({}));
+        out = res.ok && j?.ok ? { ok: true, message: j.message, blocked: j.blocked, report_id: j.report?.id, verdict: j.report?.verdict }
+          : { ok: false, error: j?.error ?? `spam-desk ${res.status}` };
+      } catch (e) {
+        out = { ok: false, error: (e as Error).message };
+      }
+      break;
+    }
     case "ask_user":
       // Reached only when the questions were malformed (a valid call ends the turn before tools run).
       out = { ok: false, error: "bad_questions", hint: "1-4 questions, each with a question and 2-4 options (label, optional description)." };
@@ -1705,7 +1736,7 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
 }
 
 // Tools autopilot never runs even without a confirmed flag: they reach Jared or a machine.
-const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "db_write", "clear_alerts", "ask_user", "make_video", "send_email"]);
+const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "db_write", "clear_alerts", "ask_user", "make_video", "send_email", "report_spam"]);
 
 // ---------------------------------------------------------------- v35 send_email: mail as Jared with his Bestly signature
 const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]{2,}$/;
