@@ -309,7 +309,7 @@ export function CalendarSheet({ open, onOpenChange }: { open: boolean; onOpenCha
               <p className="mt-0.5 text-sm text-white/60">{when(e)}{e.location ? ` · ${e.location}` : ""}</p>
               {e.join_url && (
                 <a href={e.join_url} target="_blank" rel="noreferrer"
-                  className="mt-2 inline-flex h-9 items-center rounded-full bg-white px-4 text-sm font-semibold text-black bento:bg-[#111114] bento:text-[#fff]">Join</a>
+                  className="mt-2 inline-flex min-h-11 items-center rounded-full bg-white px-4 text-sm font-semibold text-black bento:bg-[#111114] bento:text-[#fff]">Join</a>
               )}
             </li>
           ))}
