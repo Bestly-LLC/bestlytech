@@ -184,3 +184,53 @@ export async function fetchPeople(c: Creds, trace: string[] = [], onChunk?: (peo
   trace.push(`6 ${cards} card(s) -> ${seen.size} number(s)`);
   return { people: [...byPhone.values()], cards, books: books.length };
 }
+
+/* ───────── email addresses, for Spam Desk (2026-10-07) ─────────
+ * Spam Desk reported Jared's mom because it had no idea she was in his contacts. Same CardDAV walk as fetchPeople,
+ * but it keeps the EMAIL lines instead of the phones. Ava's code above is not touched. */
+export type ContactEmail = { email: string; name: string };
+
+export function cardEmails(card: string): ContactEmail[] {
+  const lines = unfold(card).split("\n");
+  let fn = "", n = "", org = "";
+  const mails: string[] = [];
+  for (const line of lines) {
+    const colon = line.indexOf(":");
+    if (colon < 1) continue;
+    const name = line.slice(0, colon).toUpperCase().replace(/^ITEM\d+\./, "").split(";")[0];
+    const value = line.slice(colon + 1);
+    if (name === "FN" && !fn) fn = unescape(value);
+    else if (name === "N" && !n) n = unescape(value.split(";").slice(0, 2).reverse().filter(Boolean).join(" "));
+    else if (name === "ORG" && !org) org = unescape(value.split(";")[0] ?? "");
+    else if (name === "EMAIL") mails.push(value.trim().replace(/^mailto:/i, "").toLowerCase());
+  }
+  const who = (fn || n || org).slice(0, 80);
+  return [...new Set(mails)].filter((e) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]{2,}$/.test(e)).map((email) => ({ email, name: who }));
+}
+
+export async function fetchContactEmails(c: Creds, trace: string[] = []): Promise<{ emails: ContactEmail[]; cards: number }> {
+  const books = await addressBooks(c, trace);
+  const byEmail = new Map<string, ContactEmail>();
+  let cards = 0;
+  for (const book of books) {
+    const list = await dav(book, "PROPFIND", c, HREFS_XML, { depth: "1" });
+    if (list.status >= 400) { trace.push(`list ${list.status}`); continue; }
+    const hrefs: string[] = [];
+    for (const r of blocks(list.text, "response")) {
+      const href = first(r, "href");
+      if (href && /\.vcf$/i.test(unxml(href))) hrefs.push(unxml(href));
+    }
+    for (let i = 0; i < hrefs.length; i += CHUNK) {
+      const r = await dav(book, "REPORT", c, multigetXml(hrefs.slice(i, i + CHUNK)), { depth: "1" });
+      if (r.status >= 400) { trace.push(`chunk ${i} ${r.status}`); continue; }
+      for (const resp of blocks(r.text, "response")) {
+        const data = first(resp, "address-data");
+        if (!data) continue;
+        cards++;
+        for (const e of cardEmails(unxml(data))) if (!byEmail.has(e.email)) byEmail.set(e.email, e);
+      }
+    }
+  }
+  trace.push(`${cards} card(s) -> ${byEmail.size} email(s)`);
+  return { emails: [...byEmail.values()], cards };
+}

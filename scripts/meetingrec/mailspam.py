@@ -9,6 +9,8 @@ agent.py runs tick() on a background thread every 60 seconds. Each tick:
      (`set junk mail status of m to true`: Mail moves it to Junk and trains its own filter);
   3. uploads the source (op source, the server then sends the report emails) or reports why it could not (op fail).
      "junk only" jobs (a blocked sender wrote again) just junk the message (op junked), no report email.
+     "restore" jobs (Jared tapped Not spam): un-junk it and move it back to INBOX (op restored).
+     "dispose" jobs (an abuse desk replied to a report): mark it read and delete it to Trash (op disposed).
 
 If macOS has not let this script control Mail yet, AppleScript fails with error -1743; the job is returned with code
 automation_denied and the server raises "Mail needs your OK on the Mac mini". Jared clicks Allow once.
@@ -22,13 +24,16 @@ URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/spam-desk"
 SCRIPT_TIMEOUT_S = 150          # searching a big IMAP inbox with `whose message id is` can take a while
 JUNK_NAMES = '{"Junk", "Spam", "Junk Mail", "Junk E-mail", "Bulk Mail"}'
 
-# argv: 1 account email address, 2 message id without angle brackets, 3 "1" to junk it, 4 "1" to return the source
+# argv: 1 account email address, 2 message id without angle brackets, 3 "1" to junk it, 4 "1" to return the source,
+#       5 mode: "" (as before), "restore" (not junk, back to INBOX) or "trash" (read, then deleted to Trash)
 APPLESCRIPT = r'''
 on run argv
 	set theEmail to item 1 of argv
 	set theId to item 2 of argv
 	set doJunk to (item 3 of argv is "1")
 	set wantSource to (item 4 of argv is "1")
+	set theMode to ""
+	if (count of argv) > 4 then set theMode to item 5 of argv
 	set ids to {theId, "<" & theId & ">"}
 	tell application "Mail"
 		set theAcc to missing value
@@ -42,9 +47,11 @@ on run argv
 		end repeat
 		if theAcc is missing value then error "no_account" number 9001
 		set junkBox to missing value
+		set inboxBox to missing value
 		set boxes to {}
 		try
-			set end of boxes to mailbox "INBOX" of theAcc
+			set inboxBox to mailbox "INBOX" of theAcc
+			set end of boxes to inboxBox
 		end try
 		repeat with mb in (mailboxes of theAcc)
 			try
@@ -62,6 +69,20 @@ on run argv
 					set src to ""
 					if wantSource then set src to source of m
 					set inJunk to ((name of mb) is in ''' + JUNK_NAMES + r''')
+					if theMode is "restore" then
+						set junk mail status of m to false
+						if inJunk and inboxBox is not missing value then
+							move m to inboxBox
+						end if
+						return "OK" & linefeed
+					end if
+					if theMode is "trash" then
+						try
+							set read status of m to true
+						end try
+						delete m
+						return "OK" & linefeed
+					end if
 					if doJunk then
 						set junk mail status of m to true
 						if (not inJunk) and junkBox is not missing value then
@@ -94,13 +115,13 @@ class Failed(Exception):
         self.code = code
 
 
-def run_mail(mailbox, message_id, junk, want_source):
+def run_mail(mailbox, message_id, junk, want_source, mode=""):
     """Returns the .eml source as text ('' when not wanted). Raises Denied / NotFound / Failed."""
     mid = message_id.strip().strip("<>").strip()
     if not mid:
         raise Failed("empty message id", "bad_job")
     try:
-        r = subprocess.run(["osascript", "-e", APPLESCRIPT, mailbox, mid, "1" if junk else "0", "1" if want_source else "0"],
+        r = subprocess.run(["osascript", "-e", APPLESCRIPT, mailbox, mid, "1" if junk else "0", "1" if want_source else "0", mode],
                            capture_output=True, timeout=SCRIPT_TIMEOUT_S)
     except subprocess.TimeoutExpired:
         raise Failed("Apple Mail took too long to search", "timeout")
@@ -139,6 +160,22 @@ def post(key, body, timeout=60):
 def handle(key, log, job):
     """One job. Returns False when the whole tick should stop (Mail automation not allowed)."""
     jid = job["id"]
+    if job.get("restore") or job.get("dispose"):
+        mode, done_op = ("restore", "restored") if job.get("restore") else ("trash", "disposed")
+        try:
+            run_mail(job["mailbox"], job["message_id"], False, False, mode)
+        except Denied as e:
+            log("mailspam: macOS has not allowed controlling Mail", str(e)[:120])
+            return False
+        except NotFound:
+            post(key, {"op": done_op, "id": jid, "missing": True})
+            return True
+        except Failed as e:
+            log("mailspam:", mode, "failed", jid, e.code, str(e)[:200])
+            return True             # the claim goes stale and the server retries it (5 tries)
+        post(key, {"op": done_op, "id": jid})
+        log("mailspam:", mode, "done", jid)
+        return True
     junk_only = bool(job.get("junk_only"))
     try:
         src = run_mail(job["mailbox"], job["message_id"], True, not junk_only)
