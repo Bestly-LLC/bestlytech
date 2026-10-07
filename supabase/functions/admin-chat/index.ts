@@ -1440,7 +1440,7 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
 
   const system = `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You run on a free model WITH real tools: do the work yourself, don't tell Jared what someone else should do.
 How to work:
-- Read before you answer or act: run_sql, today, incidents, read_file, meeting_transcript. Never invent numbers, names, files or results. Never use placeholders like X or [Name].
+- Read before you answer or act: search_mail + read_email (any email or person), run_sql, today, incidents, read_file, meeting_transcript. Anything about a person, an email, an invoice, a task or a call is answered from what you read THIS turn. Never invent numbers, names, files or results. Never use placeholders like X or [Name].
 - run_sql is one SELECT/WITH on the public schema. If a table or column is wrong, look it up: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND table_name ILIKE '%word%'. Then retry. Never answer from a failed query.
 - Times in the data are UTC; show Pacific time, 12-hour (3:05 PM). US units.
 - You can't see pictures yourself. A file he attaches arrives as a text copy plus a ⟦scout-files: …⟧ line; for any question about a picture, video frames or PDF, call look with those paths and a specific question, and answer from what it returns. Say so if look can't open it.
@@ -1595,7 +1595,12 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       const nudge = (why: string) => { msgs.push({ role: "assistant", content: reply }); msgs.push({ role: "user", content: why }); nudges++; };
       // v41: status filler is not an answer ("No action needed", "it will pick up", "still working").
       if (/\bno action (is )?(needed|required)\b|\bit will pick (it|this) up\b|\bstill (working|finding out)\b|\bi'?ll keep (going|working)\b/i.test(reply) && nudges < 2) { nudge("That is status filler, not an answer. Give Jared the actual answer from what you found, or say exactly what is missing."); continue; }
-      if (PLACEHOLDER.test(reply) && nudges < 2) { nudge("That reply has placeholders instead of real values. Get the real values with a tool, then reply."); continue; }
+      // v41: a question about a person, email, invoice, task or call must be answered from something it READ this turn.
+      if (!used.length && !cachedHits && (NEEDS_LOOKUP.test(goal) || NEEDS_LOOKUP_NAME.test(goal)) && nudges < 2) {
+        nudge("You answered without reading anything. Look it up first: search_mail {who, about} then read_email for mail, run_sql for data, today for his queue, meeting_transcript {find} for a call. Then answer only from what the tools returned.");
+        continue;
+      }
+            if (PLACEHOLDER.test(reply) && nudges < 2) { nudge("That reply has placeholders instead of real values. Get the real values with a tool, then reply."); continue; }
       if (REFUSES.test(reply) && nudges < 1) { nudge("You DO have tools (see the list), including commit_files for code and db_write for data. Use them to do this."); continue; }
       const own = reply.split(/^\s*OPTIONS:/m)[0];
       if (CLAIMS_DONE.test(own) && !acted && !ALREADY.test(own) && !/\?\s*$/.test(own.trim())) {
