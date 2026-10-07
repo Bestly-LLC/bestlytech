@@ -203,7 +203,12 @@ def _eleven(brand, lines, jd, client_slug):
             m, w = f"{jd}/v{i:02d}.mp3", f"{jd}/v{i:02d}.wav"
             with open(m, "wb") as f:
                 f.write(mp3)
-            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", m, "-ar", "44100", "-ac", "1", w], check=True, timeout=60)
+            # ElevenLabs pads each clip with ~0.3 s of silence at both ends; trim to the speech (keeps 0.05 s / 0.15 s) so the
+            # gaps between scenes match what Piper gave and nothing sounds like a dead pause.
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", m, "-af",
+                            "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05,areverse,"
+                            "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.15,areverse",
+                            "-ar", "44100", "-ac", "1", w], check=True, timeout=60)
             wavs.append((w, dur(w)))
     except Exception as e:  # noqa: BLE001  (any scene failing throws all ElevenLabs audio away)
         for i in range(len(lines)):
@@ -233,6 +238,22 @@ def _piper(brand, lines, jd):
             raise RuntimeError(f"voice failed on line {i + 1}: {p.stderr[-400:]}")
         wavs.append((w, dur(w)))
     return wavs
+
+
+def _level(path, target=-16.0):
+    """ElevenLabs speech comes in around -24 LUFS while Piper's sits near -16 (what the final mixes were tuned on): bring the
+    narration to -16 LUFS integrated with one static gain, peaks held under -1 dBFS by a limiter. Never raises (a missed level is not a failure)."""
+    try:
+        r = subprocess.run(["ffmpeg", "-v", "info", "-nostats", "-i", path, "-af", "ebur128", "-f", "null", "-"],
+                           capture_output=True, text=True, timeout=120).stderr
+        lufs = float(r.rsplit("Integrated loudness:", 1)[1].split("I:")[1].split("LUFS")[0])
+        gain = max(-6.0, min(14.0, target - lufs))
+        tmp = path + ".lvl.wav"
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", path, "-af", f"volume={gain:.2f}dB,alimiter=limit=0.89:level=disabled",
+                        "-ac", "2", tmp], check=True, timeout=120)
+        os.replace(tmp, path)
+    except Exception as e:  # noqa: BLE001
+        print("level skipped:", e, flush=True)
 
 
 def voice(brand, script, jd, job_id, client_slug=None):
@@ -271,6 +292,8 @@ def voice(brand, script, jd, job_id, client_slug=None):
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"aevalsrc='{pad}':s=44100:d={total + 0.5:.2f}",
                     "-af", f"lowpass=f=900,aecho=0.8:0.6:180:0.25,afade=t=in:d=2,afade=t=out:st={max(total - 2.5, 0):.2f}:d=2.5",
                     "-ac", "2", f"{pub}/pad.wav"], check=True)
+    if info["provider"] == "elevenlabs":
+        _level(f"{pub}/narration.wav")
     json.dump({k: info.get(k) for k in ("provider", "line", "chars", "cost")}, open(f"{jd}/voice.json", "w"))
     return total, info
 

@@ -37,3 +37,17 @@ on conflict (key) do nothing;
 
 -- 3) Team card: ElevenLabs is one of Montage's tools (same slug family; Montage's own card is unchanged)
 select public.team_onboard('[{"slug":"elevenlabs-voice","name":"ElevenLabs Voice","role":"Paid narrator (Piper is the backup)","tool_of":"montage","runs_on":"external","schedule":"on demand","what_it_does":"Reads Montage videos aloud, one voice per brand. If credits run low or ElevenLabs is down, Piper reads the whole video instead, so a video never fails over its voice.","pulse":{"src":"none"},"icon":"bot"}]'::jsonb);
+
+-- 4) montage_file used to set cost_usd = LTX spend only, which erased the ElevenLabs voice cost the worker had added
+--    (montage_report cost_usd) during the job. Keep both: LTX actuals + whatever the job already carries.
+do $$
+declare def text; new_def text;
+begin
+  select pg_get_functiondef(p.oid) into def from pg_proc p where p.proname = 'montage_file' and p.pronamespace = 'public'::regnamespace;
+  if def is null then raise exception 'montage_file not found'; end if;
+  if def like '%coalesce(j.cost_usd, 0)%' then return; end if;
+  new_def := replace(def, 'select coalesce(sum(actual_usd), 0) into v_cost from ltx_jobs where montage_job_id = j.id;',
+                          'select coalesce(sum(actual_usd), 0) + coalesce(j.cost_usd, 0) into v_cost from ltx_jobs where montage_job_id = j.id;');
+  if new_def = def then raise exception 'could not patch montage_file (anchor not found)'; end if;
+  execute new_def;
+end $$;
