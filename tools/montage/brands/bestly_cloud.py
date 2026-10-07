@@ -37,7 +37,8 @@ BRAND = {
 ASSETS = {"fonts/serif700.woff2": f"{KIT}/serif700.woff2", "fonts/serif600.woff2": f"{KIT}/serif600.woff2",
           "fonts/inter400.woff2": f"{KIT}/inter400.woff2", "fonts/inter600.woff2": f"{KIT}/inter600.woff2",
           "pill.png": f"{KIT}/pill.png"}
-VOICE = {"model": "en_US-lessac-medium", "length_scale": 1.05}
+VOICE = {"model": "en_US-lessac-medium", "length_scale": 1.05}  # Piper: the automatic backup
+VOICE_11 = {"voice_id": "cjVigY5qzO86Huf0OWal", "name": "Eric", "stability": 0.55, "similarity_boost": 0.75, "style": 0.0, "speed": 1.0}  # ElevenLabs Eric: smooth, trustworthy, plain-spoken (premade)
 SHOT_STYLE = ("Vertical 9:16 documentary b-roll, soft natural light, dark moody backgrounds with deep blue shadows, slow gentle "
               "camera, calm, no text, no logos, no people facing the camera, any phone or laptop only a dark silhouette.")
 

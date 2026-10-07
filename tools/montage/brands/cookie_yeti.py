@@ -35,7 +35,8 @@ BRAND = {
 }
 ASSETS = {**{f"fonts/InterTight-{w}.ttf": f"{KIT}/fonts/InterTight-{w}.ttf" for w in (500, 600, 700, 800)},
           "art/cookieyeti-icon.png": f"{KIT}/art/cookieyeti-icon.png"}
-VOICE = {"model": "en_US-lessac-medium", "length_scale": 1.05}
+VOICE = {"model": "en_US-lessac-medium", "length_scale": 1.05}  # Piper: the automatic backup
+VOICE_11 = {"voice_id": "TX3LPaxmHKxFdv7VOQHJ", "name": "Liam", "stability": 0.4, "similarity_boost": 0.75, "style": 0.15, "speed": 1.05}  # ElevenLabs Liam: energetic, light and quick, made for reels (premade)
 SHOT_STYLE = ("Vertical 9:16 documentary b-roll, cool dusk light, deep teal and plum shadows, soft background, slow gentle "
               "camera, calm, no text, no logos, no people facing the camera, any phone or laptop only a dark silhouette.")
 

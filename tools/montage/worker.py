@@ -3,7 +3,8 @@
 systemd bestly-montage runs this forever. Each loop it checks in (agent_beats 'montage'), claims the oldest queued job
 from studio_video_jobs (montage_claim) and makes the video:
   writing    brand module writes the script with free AI and passes the brand's claim rules + fact check
-  voicing    Piper (local, free) reads each scene; scene lengths follow the voice
+  voicing    ElevenLabs reads each scene (Piper, local and free, takes over for the whole video if credits are low or ElevenLabs
+             fails); scene lengths follow the voice
   rendering  OpenMontage VideoCompose, atelier mode, our hand-authored brand composition (om_render.py)
   checking   OpenMontage's post-render review + our own ffprobe / loudness / size checks
   filing     MP4 + thumbnail to storage, then montage_file puts it in Studio > Drafts > To review
@@ -19,6 +20,7 @@ import subprocess
 import sys
 import time
 import traceback
+import urllib.error
 import urllib.request
 
 sys.path.insert(0, "/opt/bestly/cron")
@@ -87,11 +89,141 @@ def dur(path):
     return float(probe(path)["format"]["duration"])
 
 
-def voice(brand, script, jd, job_id):
-    """Read every scene with Piper, lay the scenes out to fit the voice, build narration.wav + a quiet pad."""
-    pub = f"{jd}/public"
+EL_API = "https://api.elevenlabs.io"
+EL_USD_PER_CREDIT = 22 / 131000      # Creator plan: $22 for 131,000 credits
+_el_key = {}
+
+
+def _el_secret():
+    """ElevenLabs key through pi_secret (Vault). Never raises: no key just means "use Piper"."""
+    if "k" not in _el_key:
+        try:
+            _el_key["k"] = lib.rpc("pi_secret", p_name="elevenlabs_api_key") or ""
+        except Exception:  # noqa: BLE001
+            _el_key["k"] = ""
+    return _el_key["k"]
+
+
+def _el_call(method, path, key, body=None, timeout=30, retries=2):
+    """One ElevenLabs request; 2 retries on 429 / 5xx / network trouble. Returns bytes, raises RuntimeError with a short reason."""
+    last = "?"
+    for attempt in range(retries + 1):
+        req = urllib.request.Request(EL_API + path, method=method, headers={
+            "xi-api-key": key, "Content-Type": "application/json", "Accept": "audio/mpeg" if method == "POST" else "application/json"},
+            data=json.dumps(body).encode() if body is not None else None)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")[:160].replace(key, "***")
+            last = f"HTTP {e.code} {detail}"
+            if e.code != 429 and e.code < 500:
+                raise RuntimeError(last)
+        except Exception as e:  # noqa: BLE001  (timeout, reset, DNS)
+            last = f"{type(e).__name__}: {str(e)[:120]}"
+        if attempt < retries:
+            time.sleep(2 * (attempt + 1))
+    raise RuntimeError(last)
+
+
+def _voice_alert(kind, why):
+    """kind 'low' = credits protect Ava's calls (warning + push, once a day); 'down' = outage or error (info, no push, once a day)."""
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    try:
+        if kind == "low":
+            lib.notify("Montage: ElevenLabs credits are low, videos use the Piper voice", why[:400], severity="warning", push=True,
+                       url="/admin/team", dedupe=f"montage-voice-low-{day}")
+        else:
+            lib.notify("Montage: ElevenLabs did not answer, this video used the Piper voice", why[:400], severity="info", push=False,
+                       url="/admin/team", dedupe=f"montage-voice-down-{day}")
+    except Exception as e:  # noqa: BLE001  (an alert must never fail a video)
+        print("voice alert failed:", e, flush=True)
+
+
+def _eleven(brand, lines, jd, client_slug):
+    """Try ElevenLabs for the whole video. Returns (wavs, info) on success, (None, info) when Piper must take over.
+    info = {"line": job-log text, "chars": credits-worth of characters actually sent, "cost": estimated USD}.
+    Rules: setting says elevenlabs + client ai_voice_ok + brand VOICE_11 + key + subscription answers + credits left after
+    this video stay >= reserve_pct of the limit (that reserve is Ava's calls). One voice per video, never mixed."""
+    info = {"line": "", "chars": 0, "cost": 0.0}
+    try:
+        st = (lib.get("montage_settings", "select=value&key=eq.voice") or [{}])[0].get("value") or {}
+    except Exception as e:  # noqa: BLE001
+        info["line"] = f"voice: piper (settings unreadable: {str(e)[:80]})"
+        return None, info
+    if st.get("provider") != "elevenlabs":
+        info["line"] = f"voice: piper (setting is {st.get('provider') or 'unset'})"
+        return None, info
+    v11 = getattr(brand, "VOICE_11", None)
+    if not v11 or not v11.get("voice_id"):
+        info["line"] = "voice: piper (brand has no ElevenLabs voice)"
+        return None, info
+    try:
+        pol = (lib.get("montage_brand_policy", f"select=ai_voice_ok&client_slug=eq.{client_slug}") or [{}])[0]
+    except Exception:  # noqa: BLE001
+        pol = {}
+    if not pol.get("ai_voice_ok"):
+        info["line"] = "voice: piper (client policy does not allow an AI voice)"
+        return None, info
+    model = st.get("model") or "eleven_multilingual_v2"
+    rate = 0.5 if model.startswith(("eleven_flash", "eleven_turbo")) else 1.0
+    reserve = float(st.get("reserve_pct", 30))
+    key = _el_secret()
+    if not key:
+        info["line"] = "voice: piper (no ElevenLabs key)"
+        _voice_alert("down", "No ElevenLabs key could be read from Vault, so this video used the free Piper voice.")
+        return None, info
+    chars = sum(len(t) for t in lines)
+    try:
+        sub = json.loads(_el_call("GET", "/v1/user/subscription", key, timeout=20))
+        limit, used = int(sub["character_limit"]), int(sub["character_count"])
+    except Exception as e:  # noqa: BLE001
+        info["line"] = f"voice: piper (ElevenLabs subscription check failed: {str(e)[:100]})"
+        _voice_alert("down", f"ElevenLabs subscription check failed ({str(e)[:160]}). The video used Piper; nothing else is affected.")
+        return None, info
+    left_after = limit - used - chars * rate
+    if left_after < limit * reserve / 100:
+        info["line"] = (f"voice: piper (credits low: {limit - used} left, this video needs {int(chars * rate)}, "
+                        f"reserve {reserve:g}% = {int(limit * reserve / 100)} is kept for calls)")
+        _voice_alert("low", f"{limit - used:,} of {limit:,} ElevenLabs credits left; a video needs about {int(chars * rate)} and the last "
+                            f"{reserve:g}% is kept for Ava's calls, so videos use the Piper voice until the credits reset.")
+        return None, info
+    ss = {"stability": v11.get("stability", 0.5), "similarity_boost": v11.get("similarity_boost", 0.75),
+          "style": v11.get("style", 0.0), "speed": v11.get("speed", 1.0), "use_speaker_boost": True}
+    wavs = []
+    try:
+        for i, text in enumerate(lines):
+            body = {"text": text, "model_id": model, "voice_settings": ss}
+            if i > 0:
+                body["previous_text"] = " ".join(lines[max(0, i - 2):i])
+            if i + 1 < len(lines):
+                body["next_text"] = lines[i + 1]
+            mp3 = _el_call("POST", f"/v1/text-to-speech/{v11['voice_id']}?output_format=mp3_44100_128", key, body)
+            info["chars"] += len(text)
+            m, w = f"{jd}/v{i:02d}.mp3", f"{jd}/v{i:02d}.wav"
+            with open(m, "wb") as f:
+                f.write(mp3)
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", m, "-ar", "44100", "-ac", "1", w], check=True, timeout=60)
+            wavs.append((w, dur(w)))
+    except Exception as e:  # noqa: BLE001  (any scene failing throws all ElevenLabs audio away)
+        for i in range(len(lines)):
+            for ext in ("mp3", "wav"):
+                try:
+                    os.remove(f"{jd}/v{i:02d}.{ext}")
+                except OSError:
+                    pass
+        info["cost"] = info["chars"] * rate * EL_USD_PER_CREDIT
+        info["line"] = f"voice: piper (ElevenLabs failed on line {len(wavs) + 1}: {str(e)[:120]})"
+        _voice_alert("down", f"ElevenLabs failed on line {len(wavs) + 1} of {len(lines)} ({str(e)[:160]}). "
+                             "The whole video used the Piper voice; nothing else is affected.")
+        return None, info
+    info["cost"] = chars * rate * EL_USD_PER_CREDIT
+    info["line"] = f"voice: elevenlabs {v11.get('name') or v11['voice_id']} ({chars} chars)"
+    return wavs, info
+
+
+def _piper(brand, lines, jd):
     v = brand.VOICE
-    lines = [s["say"] for s in script["scenes"]] + [script["end"]["say"]]
     wavs = []
     for i, text in enumerate(lines):
         w = f"{jd}/v{i:02d}.wav"
@@ -100,6 +232,20 @@ def voice(brand, script, jd, job_id):
         if p.returncode != 0 or not os.path.exists(w):
             raise RuntimeError(f"voice failed on line {i + 1}: {p.stderr[-400:]}")
         wavs.append((w, dur(w)))
+    return wavs
+
+
+def voice(brand, script, jd, job_id, client_slug=None):
+    """Read every scene (ElevenLabs when the rules allow, else Piper, one provider for the whole video), lay the scenes out to
+    fit the voice, build narration.wav + a quiet pad. Returns (total_seconds, info); info["line"] is the voice line for the job log."""
+    pub = f"{jd}/public"
+    lines = [s["say"] for s in script["scenes"]] + [script["end"]["say"]]
+    wavs, info = _eleven(brand, lines, jd, client_slug or "")
+    if wavs is None:
+        wavs = _piper(brand, lines, jd)
+        info["provider"] = "piper"
+    else:
+        info["provider"] = "elevenlabs"
     t, lead = 0.0, 0.35
     for s, (_, d) in zip(script["scenes"], wavs):
         s["start"], s["end"] = round(t, 3), round(t + max(d + lead + 0.6, 2.8), 3)
@@ -125,7 +271,20 @@ def voice(brand, script, jd, job_id):
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"aevalsrc='{pad}':s=44100:d={total + 0.5:.2f}",
                     "-af", f"lowpass=f=900,aecho=0.8:0.6:180:0.25,afade=t=in:d=2,afade=t=out:st={max(total - 2.5, 0):.2f}:d=2.5",
                     "-ac", "2", f"{pub}/pad.wav"], check=True)
-    return total
+    json.dump({k: info.get(k) for k in ("provider", "line", "chars", "cost")}, open(f"{jd}/voice.json", "w"))
+    return total, info
+
+
+def _voice_report(job_id, info):
+    """Put the voice line in the job log and add what ElevenLabs cost (credits actually used) to cost_usd."""
+    p = {"note": info["line"]}
+    if info.get("cost"):
+        try:
+            cur = float(((lib.get("studio_video_jobs", f"select=cost_usd&id=eq.{job_id}") or [{}])[0].get("cost_usd")) or 0)
+            p["cost_usd"] = round(cur + info["cost"], 4)
+        except Exception as e:  # noqa: BLE001
+            print("cost lookup failed:", e, flush=True)
+    report(job_id, **p)
 
 
 def upload(path, name, ctype):
@@ -234,16 +393,23 @@ def process(job):
 
     if resumed:
         script = job["script"]
+        vinfo = {}
         if os.path.exists(f"{jd}/public/narration.wav") and os.path.exists(f"{jd}/public/pad.wav"):
             total = script["end"]["end"]
+            try:
+                vinfo = json.load(open(f"{jd}/voice.json"))
+            except (OSError, ValueError):
+                pass
         else:  # voice files lost (reboot, cleanup): re-read the same script, never re-order clips
-            total = voice(brand, script, jd, jid)
+            total, vinfo = voice(brand, script, jd, jid, job["client_slug"])
+            _voice_report(jid, vinfo)
         note("b-roll is back from the LTX box; picking the video up again")
     else:
         report(jid, stage="writing", note="re-cutting with the change note" if job.get("parent_job_id") else "writing the script with free AI")
         script = brand.write(job, note)
         report(jid, stage="voicing", script=script, note=f"script ok via {script['provider']} (editor {script['score']:g}/10)")
-        total = voice(brand, script, jd, jid)
+        total, vinfo = voice(brand, script, jd, jid, job["client_slug"])
+        _voice_report(jid, vinfo)
         if job.get("broll") and not job.get("parent_job_id") and all(s.get("shot") for s in script["scenes"]):
             shots = [{"scene": i, "seconds": max(3, min(10, int(s["end"] - s["start"] + 0.99))),
                       "prompt": f"{s['shot']} {brand.SHOT_STYLE}"} for i, s in enumerate(script["scenes"])]
@@ -297,7 +463,7 @@ def process(job):
                        "render_s": render_s, "length_s": round(total, 1), "openmontage": "9327439"},
         "note": ((f"Re-cut with the note: \"{(job.get('revise_note') or '')[:300]}\". " if job.get("parent_job_id") else "")
                  + f"Montage made this from the brief: \"{job['brief'][:300]}\". Script by free AI ({script['provider']}), "
-                 f"passed {getattr(brand, 'NAME', 'HOKU')}'s claim rules and fact check (editor {script['score']:g}/10). Voice: Piper. "
+                 f"passed {getattr(brand, 'NAME', 'HOKU')}'s claim rules and fact check (editor {script['score']:g}/10). Voice: {'ElevenLabs' if vinfo.get('provider') == 'elevenlabs' else 'Piper'}. "
                  + (f"{len(clips)} b-roll clip(s) from the LTX box. " if clips else "")
                  + f"Rendered on the Pi in {render_s}s with OpenMontage.")})
     return f"filed #{r.get('code')} '{script['title']}' ({total:.0f}s video, rendered in {render_s}s)"

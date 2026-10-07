@@ -1,0 +1,36 @@
+-- Track V (voice-and-studio-promo-opusplan): Montage speaks with ElevenLabs, Piper is the automatic backup.
+-- 1) the Pi may read the ElevenLabs key through pi_secret (same patch pattern as the Fireworks migration)
+-- 2) montage_settings: key/value settings the worker reads on every job; key 'voice' picks provider/model/reserve.
+do $$
+declare
+  def text;
+  new_def text;
+begin
+  select pg_get_functiondef(p.oid) into def from pg_proc p
+   where p.proname = 'pi_secret' and p.pronamespace = 'public'::regnamespace;
+  if def is null then
+    raise exception 'pi_secret not found';
+  end if;
+  if def like '%''elevenlabs_api_key''%' then
+    return;  -- already allowed
+  end if;
+  new_def := replace(def, '''Scout-FreeLLM'',', '''Scout-FreeLLM'',''elevenlabs_api_key'',');
+  if new_def = def then
+    raise exception 'could not patch pi_secret allowlist (anchor not found)';
+  end if;
+  execute new_def;  -- CREATE OR REPLACE keeps the existing grants (service_role only)
+end $$;
+
+create table if not exists public.montage_settings (
+  key text primary key,
+  value jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.montage_settings enable row level security;
+revoke all on public.montage_settings from anon, authenticated;
+grant all on public.montage_settings to service_role;
+comment on table public.montage_settings is 'Montage worker settings (service role only). voice = {"provider":"elevenlabs"|"piper","model":"eleven_multilingual_v2"|"eleven_flash_v2_5","reserve_pct":30}';
+
+insert into public.montage_settings (key, value)
+values ('voice', '{"provider":"elevenlabs","model":"eleven_multilingual_v2","reserve_pct":30}'::jsonb)
+on conflict (key) do nothing;

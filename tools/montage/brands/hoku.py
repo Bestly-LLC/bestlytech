@@ -184,7 +184,8 @@ ASSETS = {  # files copied into each job's public/ folder
     "lockup_w.webp": "/opt/bestly/hoku-kit/lockup_w.webp",
     **{f"art/hoku-can-{t}.png": f"/opt/bestly/hoku-kit/art/hoku-can-{t}.png" for t in THEMES},
 }
-VOICE = {"model": "en_US-hfc_female-medium", "length_scale": 1.08}
+VOICE = {"model": "en_US-hfc_female-medium", "length_scale": 1.08}  # Piper: the automatic backup
+VOICE_11 = {"voice_id": "pFZP5JQG7iQjIQuC4Bku", "name": "Lily", "stability": 0.6, "similarity_boost": 0.75, "style": 0.0, "speed": 0.95}  # ElevenLabs Lily: velvety, calm, warm (premade)
 # added to every LTX shot so the clips feel like one film
 SHOT_STYLE = ("Vertical 9:16 documentary b-roll, natural light, soft background, gentle handheld camera, calm, "
               "warm muted colors, no text, no logos, no people facing the camera.")

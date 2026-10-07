@@ -39,7 +39,8 @@ BRAND = {
 }
 ASSETS = {**{f"fonts/Manrope-{w}.ttf": f"{KIT}/fonts/Manrope-{w}.ttf" for w in (500, 600, 700, 800)},
           "art/proofy-cheering-arms-up.png": f"{KIT}/art/proofy-cheering-arms-up.png"}
-VOICE = {"model": "en_US-hfc_female-medium", "length_scale": 1.05}
+VOICE = {"model": "en_US-hfc_female-medium", "length_scale": 1.05}  # Piper: the automatic backup
+VOICE_11 = {"voice_id": "XrExE9yKIg1WjnnlVkGX", "name": "Matilda", "stability": 0.5, "similarity_boost": 0.75, "style": 0.0, "speed": 1.0}  # ElevenLabs Matilda: clear, upbeat, professional (premade)
 SHOT_STYLE = ("Vertical 9:16 documentary b-roll, warm natural light, soft background, gentle handheld camera, calm, "
               "muted colors, no text, no logos, no people facing the camera, any phone only a dark silhouette.")
 
