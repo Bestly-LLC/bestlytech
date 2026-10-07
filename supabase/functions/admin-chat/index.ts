@@ -1505,7 +1505,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   let replied = false, acted = false, fails = 0, nudges = 0;
   const goal = prior?.goal ?? text.replace(/\s+/g, " ").slice(0, 600);
   // v41 (chief of staff): classify once, in code. A question answers within 8 tool calls; a task gets 25 a round.
-  const isQ = !autopilot && classifyAsk(goal) === "question" && !(prior?.pending);
+  const isQ = classifyAsk(goal) === "question" && !(prior?.pending);   // autopilot texts ("Autopilot fix attempt...") classify as tasks, so only real questions get the 8-call budget
   const callBudget = isQ ? QUESTION_CALLS : TASK_CALLS;
   let forceAnswer = false, inTokens = 0, endHop = false;
   const repeats = new Map<string, number>();   // same tool + same arguments, this request
