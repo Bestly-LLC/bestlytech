@@ -80,9 +80,11 @@ export const SCOUT_BUDDY_CSS = `
 .sb[data-size="sm"] .sb-q-path{stroke-width:3.6}
 .sb[data-size="sm"] .sb-xtra,.sb[data-size="sm"] .sb-md{display:none}
 .sb[data-size="md"] .sb-sm,.sb[data-size="lg"] .sb-sm{display:none}
-.sb-wheel{opacity:0;transform:scale(.4);transform-box:view-box;transform-origin:36px 17px;transition:opacity .2s ease,transform .35s var(--sb-spring)}
-.sb-wheel-spin{transform-box:view-box;transform-origin:36px 17px}
-.sb[data-wheel] .sb-wheel{opacity:1;transform:none}
+.sb-wheel{opacity:0;transform:scale(.5);transform-box:view-box;transform-origin:36px 27px;transition:opacity .2s ease,transform .35s var(--sb-spring)}
+.sb-wheel-spin{transform-box:view-box;transform-origin:36px 27px}
+.sb-hole{opacity:0;transition:opacity .2s ease}
+.sb[data-wheel] .sb-wheel,.sb[data-wheel] .sb-hole{opacity:1}
+.sb[data-wheel] .sb-wheel{transform:none}
 
 /* Posed moods: lids, gaze, pupils, posture. */
 .sb[data-pose] .am-lidL{animation:none;transform:translateY(var(--lyL,-13px)) rotate(var(--lrL,0deg));transition:transform .5s var(--sb-spring)}
@@ -100,7 +102,8 @@ export const SCOUT_BUDDY_CSS = `
 .sb[data-mood="proud"]{--lyL:-6px;--lyR:-6px;--py:-1.5px;--ps:1.12}
 .sb[data-mood="confused"]{--lyL:-13px;--lyR:-1px;--lrR:-6deg;--px:2.4px;--py:-2px;--tilt:-8deg}
 .sb[data-mood="needs"]{--lyL:-13px;--lyR:-13px;--px:3px;--py:3.4px}
-.sb[data-mood="sad"]{--lyL:-7px;--lyR:-7px;--lrL:-10deg;--lrR:10deg;--py:3.4px}
+.sb[data-mood="sad"]{--lyL:-3px;--lyR:-3px;--lrL:-19deg;--lrR:19deg;--py:3.4px}
+.sb[data-mood="sad"] .sb-drop{opacity:1}
 .sb[data-mood="sleepy"]{--lyL:2px;--lyR:2px;--py:3px}
 .sb[data-mood="happy"] .sb-smile{opacity:1;stroke-dashoffset:0;transition:opacity .1s ease .15s,stroke-dashoffset .35s ease-out .15s}
 .sb[data-mood="proud"] .sb-shine{transform:scale(1);transition:transform .3s var(--sb-spring)}
@@ -147,10 +150,10 @@ export const SCOUT_BUDDY_CSS = `
 /* sad: lids droop, one drop falls, then a softer droop holds (1.6 s) */
 .sb[data-mood="sad"] .am-lidL{animation:sb-sad-lidL 1.6s var(--sb-spring)}
 .sb[data-mood="sad"] .am-lidR{animation:sb-sad-lidR 1.6s var(--sb-spring)}
-@keyframes sb-sad-lidL{0%{transform:translateY(-13px) rotate(0)}35%{transform:translateY(-5px) rotate(-18deg)}100%{transform:translateY(-7px) rotate(-10deg)}}
-@keyframes sb-sad-lidR{0%{transform:translateY(-13px) rotate(0)}35%{transform:translateY(-5px) rotate(18deg)}100%{transform:translateY(-7px) rotate(10deg)}}
-.sb[data-mood="sad"] .sb-drop{animation:sb-drop 1.6s ease-in}
-@keyframes sb-drop{0%{opacity:0;transform:translateY(0) scale(.5)}25%{opacity:1;transform:translateY(0) scale(1)}85%{opacity:1;transform:translateY(7px) scale(1)}100%{opacity:0;transform:translateY(8px) scale(.9)}}
+@keyframes sb-sad-lidL{0%{transform:translateY(-13px) rotate(0)}35%{transform:translateY(-1px) rotate(-23deg)}100%{transform:translateY(-3px) rotate(-19deg)}}
+@keyframes sb-sad-lidR{0%{transform:translateY(-13px) rotate(0)}35%{transform:translateY(-1px) rotate(23deg)}100%{transform:translateY(-3px) rotate(19deg)}}
+.sb[data-mood="sad"] .sb-drop{animation:sb-drop 1.2s var(--sb-spring)}
+@keyframes sb-drop{0%{opacity:0;transform:translateY(-4px) scale(.5)}40%{opacity:1;transform:translateY(1px) scale(1.12)}100%{opacity:1;transform:translateY(0) scale(1)}}
 
 /* sleepy: slow breathing, a z drifts up every 8 s */
 .sb[data-mood="sleepy"] .sb-body{animation:sb-breath 4s ease-in-out infinite}
@@ -225,6 +228,19 @@ function BuddyInner({ mood = "idle", size = "sm", className, label, watchCursor 
           <rect width="72" height="72" fill="#fff" />
           <circle cx="19" cy="44" r="10.3" />
           <circle cx="53" cy="44" r="10.3" />
+          {/* While the focus wheel shows, the bridge gives way to it (so its notches cut through to the background). */}
+          <circle className="sb-hole" cx="36" cy="27" r="5.5" />
+        </mask>
+        <mask id={`wm${uid}`} maskUnits="userSpaceOnUse" x="0" y="0" width="72" height="72">
+          <rect width="72" height="72" fill="#fff" />
+          <g className="sb-wheel-spin">
+            {[0, 60, 120, 180, 240, 300].map((a) => (
+              <circle key={a} className="sb-md" cx="41.5" cy="27" r="1.55" transform={`rotate(${a} 36 27)`} />
+            ))}
+            {[0, 120, 240].map((a) => (
+              <circle key={a} className="sb-sm" cx="41.5" cy="27" r="2.3" transform={`rotate(${a} 36 27)`} />
+            ))}
+          </g>
         </mask>
         <clipPath id={`cl${uid}`}><circle cx="19" cy="44" r="10.7" /></clipPath>
         <clipPath id={`cr${uid}`}><circle cx="53" cy="44" r="10.7" /></clipPath>
@@ -256,17 +272,10 @@ function BuddyInner({ mood = "idle", size = "sm", className, label, watchCursor 
           <path className="am-st" d="M9 37L13.5 21Q14 18 17 18H21Q24 18 24.5 21L29 37M43 37L47.5 21Q48 18 51 18H55Q58 18 58.5 21L63 37" />
           <path className="am-st" d="M25.5 27H46.5M30 42H42" />
         </g>
-        {/* The focus wheel, on the bridge: ring centre (36,17); the bridge's top edge is y 24.25 and the barrels' inner edges are x 27 and 45. */}
+        {/* The focus wheel: a filled disc (r 5.5, same weight as the 5.5 strokes) centred on the bridge at (36,27), knurled by
+            notches punched from its rim (mask above). The notches turn; the disc and bridge stay put. */}
         <g className="sb-wheel">
-          <path className="sb-line" d="M36 21V25.4" style={{ strokeWidth: 2.4 }} />
-          <g className="sb-wheel-spin">
-            <circle className="sb-line sb-md" cx="36" cy="17" r="3.4" style={{ strokeWidth: 2 }} />
-            <circle className="sb-line sb-sm" cx="36" cy="17" r="3.6" style={{ strokeWidth: 2.6 }} />
-            <path className="sb-line sb-md" d="M32.9 17H39.1" style={{ strokeWidth: 1.2 }} />
-            <path className="sb-line sb-md" d="M32.9 17H39.1" style={{ strokeWidth: 1.2 }} transform="rotate(60 36 17)" />
-            <path className="sb-line sb-md" d="M32.9 17H39.1" style={{ strokeWidth: 1.2 }} transform="rotate(120 36 17)" />
-            <path className="sb-line sb-sm" d="M32.4 17H39.6" style={{ strokeWidth: 2.2 }} />
-          </g>
+          <circle className="am-fl" cx="36" cy="27" r="5.5" mask={`url(#wm${uid})`} />
         </g>
         <circle className="am-st sb-lens" cx="19" cy="44" r="13" />
         <circle className="am-st sb-lens" cx="53" cy="44" r="13" />
@@ -291,7 +300,7 @@ function BuddyInner({ mood = "idle", size = "sm", className, label, watchCursor 
         <circle cx="66.6" cy="17" r="1.5" fill="currentColor" />
       </g>
       <g className="sb-xtra">
-        <g transform="translate(4 22)"><path className="sb-drop" fill="currentColor" d="M0-3.4C1.7-.9 2.5.6 2.5 1.6a2.5 2.5 0 0 1-5 0Z" /></g>
+        <g transform="translate(5 23) scale(1.25)"><path className="sb-drop" fill="currentColor" d="M0-3.4C1.7-.9 2.5.6 2.5 1.6a2.5 2.5 0 0 1-5 0Z" /></g>
         <g transform="translate(64 9)"><path className="sb-line sb-z sb-z1" style={{ strokeWidth: 1.9 }} d="M0 0H5L0 6H5" /></g>
         <g transform="translate(67 2) scale(.72)"><path className="sb-line sb-z sb-z2" style={{ strokeWidth: 1.9 }} d="M0 0H5L0 6H5" /></g>
         <g transform="translate(7 12)"><path className="sb-line sb-sparkle" style={{ strokeWidth: 2 }} d="M0-3.4V3.4M-3.4 0H3.4" /></g>
