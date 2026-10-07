@@ -10,6 +10,10 @@
   },
   "rewrites": [
     {
+      "source": "/s/:slug",
+      "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/site-go?s=:slug"
+    },
+    {
       "source": "/tesla/callback",
       "destination": "/tesla/callback.html"
     },

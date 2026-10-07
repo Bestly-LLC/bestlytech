@@ -320,6 +320,24 @@ const TOOLS = [
     },
   },
   {
+    name: "code_job",
+    description:
+      "Hand a real coding job to the Code Worker on the Mac mini: anything that spans several files, needs a build, makes a NEW site, or touches another Bestly-LLC repo. " +
+      "It works in a fresh copy with a free coding AI (3 tries, the build must pass), pushes to main and posts the result in this chat. " +
+      "repo: 'site' (bestlytech), 'hoku', or Bestly-LLC/<name>. For a brand new site pass new_site {name} and a short goal; it makes a private repo and deploys it. " +
+      "Use commit_files only for a one-line edit. Requires confirmed:true after Jared has said yes.",
+    input_schema: {
+      type: "object",
+      properties: {
+        repo: { type: "string" },
+        goal: { type: "string", description: "What to build or change, in plain words, with the details he gave." },
+        new_site: { type: "object", properties: { name: { type: "string" } } },
+        confirmed: { type: "boolean" },
+      },
+      required: ["goal", "confirmed"],
+    },
+  },
+  {
     name: "mac_command",
     description:
       "Give the agent on Jared's MacBook Air a job. That machine is the only one that can reach IMAP. mail_drain runs every pending mail action; " +
@@ -683,7 +701,7 @@ The router is a Verizon Internet Gateway (ASK-NCM1100) at 192.168.1.1. Scout has
 - See what he attaches: images, PDFs and videos (a video arrives as frames in order, "video frame 3 of 9") in his newest file messages are visible to you. Look at them directly and answer from what you see; the "[File: …]" text under each is only a rough copy made by a smaller model, so trust your own eyes over it. For older files use look with the paths from the ⟦scout-files: …⟧ line.
 - Tidy up: clear_alerts, resolve_incident, mark_done.
 - Reach him later: notify (bell, and his phone with push). When you leave something waiting on him, or find something he must act on, notify him before you finish, in one line.
-- Change bestly.tech and the admin: list_files, read_file, commit_files (watched, auto-reverted on a failed build).
+- Change bestly.tech and the admin: list_files, read_file, commit_files (watched, auto-reverted on a failed build). Anything bigger than a one-line edit (several files, a new feature, a NEW site, another repo): code_job, which hands it to the Code Worker (free coding AI, build must pass, posts the live URL here).
 - Give the MacBook Air mail work: mac_command. Run anything on the Mac mini: mac_run (he taps Run). Record calls on the Mac mini: recorder.
 
 # Doing, not describing
@@ -1182,7 +1200,7 @@ const FREE_TOOLS = new Set([
   "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn", "ask_user", "make_video",
   "send_email", "look", "report_spam",
   "search_mail", "read_email",   // v41
-  "commit_files", "db_write", "mac_command",   // v38: the same hands as paid Scout (same confirmation rules, same AUTOPILOT_NEVER)
+  "commit_files", "db_write", "mac_command", "code_job",   // v38/v42: the same hands as paid Scout (same confirmation rules, same AUTOPILOT_NEVER)
 ]);
 const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "look", "search_mail", "read_email"]);
 const FREE_STEPS = 26;           // v41: a TASK gets 25 tool calls a hop (QUESTION_CALLS for a question); the 85 s budget still bounds each hop
@@ -1246,7 +1264,7 @@ const TOOL_TOPICS: [string[], RegExp][] = [
   [["look"], /\b(images?|photos?|screenshots?|pictures?|videos?|frames?|pdf|look|see|seen)\b|scout-files/i],
   [["report_spam"], /\b(spam|phish(ing)?|scam|junk|block (this|that|the) sender|report (this|that|it) (to|as))\b/i],
   // v38: code, data and schema work. Wide on purpose: Scout used to refuse these, and a missing tool schema is a silent refusal.
-  [["commit_files"], /\b(code|bugs?|fix(es|ed)?|build|built|change[sd]?|edit|implement|feature|page|button|component|site|admin|deploy|commit|repo|refactor|css|layout|typo|wording|copy|broken|errors?|fail(ed|ing|s)?|migration|edge ?functions?|functions?|alert|dashboard|ui|screen)\b/i],
+  [["commit_files", "code_job"], /\b(websites?|landing|one-?page|webpage|app|build|code|bugs?|fix(es|ed)?|build|built|change[sd]?|edit|implement|feature|page|button|component|site|admin|deploy|commit|repo|refactor|css|layout|typo|wording|copy|broken|errors?|fail(ed|ing|s)?|migration|edge ?functions?|functions?|alert|dashboard|ui|screen)\b/i],
   [["db_write"], /\b(data|rows?|records?|database|table|schema|insert|update[sd]?|delete[sd]?|backfill|status|assign|owner|cron|migration|improver|queue[sd]?|fix(es|ed)?|change[sd]?|set)\b/i],
   [["mac_command"], /\b(imap|mail[_ ]?drain|restart[_ ]?mail|macbook|mail agent|mail bridge)\b/i],
 ];
@@ -1254,6 +1272,7 @@ const TOOL_TOPICS: [string[], RegExp][] = [
 const FREE_DESC: Record<string, string> = {
   commit_files: "Commit changes to main and watch the deploy. Read the file first. Use edits [{path, old, new}] (old = an exact, unique snippet of the current file); files only for new or tiny files. A failed build is reverted automatically. confirmed:true only after his yes (or auto-run). If the result has deploy_needed, propose that job with mac_run.",
   db_write: "Change data: ONE INSERT, UPDATE or DELETE on the public schema (UPDATE/DELETE need a WHERE). Read the rows with run_sql first. Add RETURNING. Schema or cron changes: INSERT into improver_ideas (kind 'schema', change = exact SQL). confirmed:true only after his yes (or auto-run).",
+  code_job: "Hand a coding job to the Code Worker (Mac mini, free coding AI, build must pass, pushes to main, reports here): multi-file changes, new sites, other Bestly-LLC repos. repo: site, hoku or Bestly-LLC/name; new_site {name} for a new site. confirmed:true only after his yes.",
   mac_command: "Give the MacBook Air mail agent a job: mail_drain, restart_mail, ping, run_named. confirmed:true only after his yes (or auto-run).",
 };
 const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "ask_user"]);
@@ -1898,6 +1917,26 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
       }
       break;
     }
+    case "code_job": {
+      if (!args.confirmed) { out = { ok: false, error: "not_confirmed", hint: "Say what it will build or change in one line, then end with OPTIONS: Do it | Not now." }; break; }
+      const goal = String(args.goal ?? "").trim().slice(0, 4000);
+      if (goal.length < 8) { out = { ok: false, error: "goal too short", hint: "Give the goal in a full sentence." }; break; }
+      const ns = args.new_site && typeof args.new_site === "object" ? (args.new_site as any) : null;
+      let repoName = String(args.repo ?? "").trim();
+      if (ns) {
+        const slug = String(ns.name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50);
+        if (slug.length < 3) { out = { ok: false, error: "new_site.name needs 3+ letters" }; break; }
+        repoName = `Bestly-LLC/${slug}`;
+      } else if (repoName === "site" || repoName === "") repoName = "Bestly-LLC/bestlytech";
+      else if (repoName === "hoku") repoName = "Bestly-LLC/hoku-clean";
+      else if (!repoName.includes("/")) repoName = `Bestly-LLC/${repoName}`;
+      if (!/^Bestly-LLC\/[A-Za-z0-9._-]{1,100}$/.test(repoName)) { out = { ok: false, error: "only Bestly-LLC repos" }; break; }
+      const { data: openJob } = await db.from("code_jobs").select("id").in("status", ["queued", "running"]).eq("thread_id", threadId).limit(1);
+      if (openJob?.length) { out = { ok: true, job_id: openJob[0].id, note: "A job from this chat is already running. Tell him it will post here when done." }; break; }
+      const { data: jr, error: je } = await db.from("code_jobs").insert({ thread_id: threadId, repo: repoName, goal, new_site: ns ? { name: String(ns.name) } : null }).select("id").single();
+      out = je ? { ok: false, error: je.message } : { ok: true, job_id: (jr as any).id, repo: repoName, note: "Queued for the Code Worker. It posts the result in this chat (usually 5 to 15 minutes). Tell him that in one line; do not wait for it." };
+      break;
+    }
     case "commit_files": {
       if (!args.confirmed) { out = { ok: false, error: "not_confirmed", hint: "Ask him first, then call again." }; break; }
       const files: { path: string; content: string }[] = Array.isArray(args.files) ? [...args.files] : [];
@@ -2186,7 +2225,7 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
 }
 
 // Tools autopilot never runs even without a confirmed flag: they reach Jared or a machine.
-const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "db_write", "clear_alerts", "ask_user", "make_video", "send_email", "report_spam"]);
+const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "code_job", "db_write", "clear_alerts", "ask_user", "make_video", "send_email", "report_spam"]);
 
 // ---------------------------------------------------------------- v35 send_email: mail as Jared with his Bestly signature
 const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]{2,}$/;
@@ -2635,6 +2674,10 @@ Deno.serve(async (req) => {
       } else if (/^always,? stop asking\.?$/i.test(text) || /^(yes,? use paid ai|use paid ai for this one)\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
         const always = /^always/i.test(text);
         paidOk = await flip(always ? null : 60, always ? "always" : "yes_tap");
+        if (paidOk) {
+          const { data: rq } = await db.rpc("code_job_requeue_paid", { p_thread: threadId });
+          if (Number(rq) > 0) return await say("Paid AI is on for one hour. I put the code job back in the queue; it posts here when done.");
+        }
         if (!paidOk) {
           const { data: sp } = await db.rpc("scout_paid_spend");
           return await say(`Paid AI is at today's cap ($${Number((sp as any)?.spent ?? 0).toFixed(2)} of $${Number((sp as any)?.cap ?? 5).toFixed(2)}). I can raise it by $5 for today, or wait until midnight. Your message is saved.\n\n${CAP_OPTIONS}`, { capped: true });
@@ -2650,6 +2693,7 @@ Deno.serve(async (req) => {
         return await say("Okay, I'll hold. Your job is saved where it stopped; say keep going once the free AI has room.");
       } else if (/^(drop it|leave it)\.?$/i.test(text)) {
         await saveRunState(threadId, null).catch(() => {});
+        await db.from("code_jobs").update({ status: "failed", finished_at: new Date().toISOString() }).eq("thread_id", threadId).eq("status", "needs_yes");
         return await say("Dropped. Nothing was spent.");
       } else if (autopilot) {
         // v29: the fix ladder tries the free agent first (same autopilot limits: nothing that needs a yes runs).
