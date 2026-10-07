@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { QuestionCard, splitQuestions } from "@/components/admin/ScoutQuestions";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,6 +22,7 @@ import {
   Square,
   ArrowUp,
   Clock3,
+  AppWindow,
 } from "lucide-react";
 import { CopyBlock } from "@/components/CopyText";
 import { copyText } from "@/lib/copyForClaude";
@@ -94,6 +95,9 @@ const OPENERS = [
  * always docks (there is no room to move it). */
 type Box = { x: number; y: number; w: number; h: number };
 const BOX_KEY = "scout.box.v1";
+/** The first window ("main") keeps the keys Scout has always used, so nothing saved is lost. Others get per-id keys. */
+const PRIMARY_ID = "main";
+const boxKeyFor = (id: string) => (id === PRIMARY_ID ? BOX_KEY : `${BOX_KEY}:${id}`);
 const canMove = () => typeof window !== "undefined" && window.innerWidth >= 640;
 function clampBox(b: Box): Box {
   const vw = window.innerWidth, vh = window.innerHeight;
@@ -101,18 +105,18 @@ function clampBox(b: Box): Box {
   const h = Math.min(Math.max(b.h, 340), vh - 16);
   return { w, h, x: Math.min(Math.max(b.x, 8), vw - w - 8), y: Math.min(Math.max(b.y, 8), vh - h - 8) };
 }
-function loadBox(): Box | null {
+function loadBox(key: string = BOX_KEY): Box | null {
   try {
-    const b = JSON.parse(localStorage.getItem(BOX_KEY) ?? "null");
+    const b = JSON.parse(localStorage.getItem(key) ?? "null");
     return b && typeof b.w === "number" && canMove() ? clampBox(b) : null;
   } catch {
     return null;
   }
 }
-function saveBox(b: Box | null) {
+function saveBox(b: Box | null, key: string = BOX_KEY) {
   try {
-    if (b) localStorage.setItem(BOX_KEY, JSON.stringify(b));
-    else localStorage.removeItem(BOX_KEY);
+    if (b) localStorage.setItem(key, JSON.stringify(b));
+    else localStorage.removeItem(key);
   } catch {
     /* private window: it just won't be remembered */
   }
@@ -156,16 +160,54 @@ export function splitFences(body: string): Array<{ kind: "text" | "code"; conten
 }
 
 const SCOUT_STATE_KEY = "bestly-scout-state";
+const stateKeyFor = (id: string) => (id === PRIMARY_ID ? SCOUT_STATE_KEY : `${SCOUT_STATE_KEY}:${id}`);
 type ScoutSaved = { open: boolean; threadId: string | null; text: string; at: number };
-function loadScoutState(): ScoutSaved | null {
+function loadScoutState(key: string = SCOUT_STATE_KEY): ScoutSaved | null {
   try {
-    const v = JSON.parse(localStorage.getItem(SCOUT_STATE_KEY) ?? "null") as ScoutSaved | null;
+    const v = JSON.parse(localStorage.getItem(key) ?? "null") as ScoutSaved | null;
     // Kept for a working day; after that a fresh start is what you'd expect.
     return v && Date.now() - v.at < 12 * 3600_000 ? v : null;
   } catch { return null; }
 }
-function saveScoutState(v: Omit<ScoutSaved, "at">) {
-  try { localStorage.setItem(SCOUT_STATE_KEY, JSON.stringify({ ...v, at: Date.now() })); } catch { /* private mode */ }
+function saveScoutState(v: Omit<ScoutSaved, "at">, key: string = SCOUT_STATE_KEY) {
+  try { localStorage.setItem(key, JSON.stringify({ ...v, at: Date.now() })); } catch { /* private mode */ }
+}
+
+/* The open windows, remembered across a reload: [{ id, threadId }]. The first one is always the primary. */
+const WINDOWS_KEY = "bestly-scout-windows";
+const MAX_WINDOWS = 4;
+const CASCADE = 32;
+interface WinEntry { id: string; threadId: string | null }
+function loadWindows(): WinEntry[] {
+  const main: WinEntry = { id: PRIMARY_ID, threadId: loadScoutState()?.threadId ?? null };
+  try {
+    const raw = JSON.parse(localStorage.getItem(WINDOWS_KEY) ?? "[]");
+    const extra = (Array.isArray(raw) ? raw : [])
+      .filter((w): w is WinEntry => !!w && typeof w.id === "string" && w.id !== PRIMARY_ID)
+      // A window whose saved state has aged out (12 hours) is gone, like the primary's open/closed state.
+      .filter((w) => !!loadScoutState(stateKeyFor(w.id)))
+      .map((w) => ({ id: w.id, threadId: loadScoutState(stateKeyFor(w.id))?.threadId ?? null }));
+    return [main, ...extra].slice(0, MAX_WINDOWS);
+  } catch {
+    return [main];
+  }
+}
+
+/** Where a new window opens: 32 px off the one that spawned it, on screen, and not exactly on top of another window. */
+function cascadeBox(from: DOMRect): Box {
+  const taken = [...document.querySelectorAll("[data-scout-window]")].map((el) => el.getBoundingClientRect());
+  const size = { w: from.width, h: from.height };
+  const dirs: Array<[number, number]> = [[1, 1], [-1, -1], [1, -1], [-1, 1]];
+  let best: Box = clampBox({ ...size, x: from.left - CASCADE, y: from.top - CASCADE });
+  for (let k = 1; k <= 4; k++) {
+    for (const [dx, dy] of dirs) {
+      const b = clampBox({ ...size, x: from.left + dx * CASCADE * k, y: from.top + dy * CASCADE * k });
+      // "On top of another window" = within a title-bar's width of its corner (the docked window sits 12 px off the clamp).
+      if (!taken.some((r) => Math.abs(r.left - b.x) < 24 && Math.abs(r.top - b.y) < 24)) return b;
+      best = b;
+    }
+  }
+  return best;
 }
 
 export function splitOptions(body: string): { text: string; options: string[] } {
@@ -335,11 +377,45 @@ function when(iso: string): string {
   return `${Math.round(h / 24)}d ago`;
 }
 
-export function Scout() {
+/** What the host needs to know about the primary window to draw the launcher. */
+interface PrimaryStatus { open: boolean; running: boolean; pendingJobs: number }
+export interface ScoutHandle { open: () => void }
+
+interface WindowProps {
+  id: string;
+  /** The first window: owns Cmd+J, ?scout=open, the askScout events, and stays mounted (closed) behind the launcher. */
+  primary: boolean;
+  /** 1-based, for the title of a window with no conversation title yet. */
+  n: number;
+  /** Stacking: 0 is the back-most window. */
+  z: number;
+  /** The window that gets Esc when focus is not inside any Scout window. */
+  isFront: boolean;
+  /** Room for another window (under the max). */
+  canSpawn: boolean;
+  /** Conversations open in the other windows, so a Mac job card shows up in the window that owns its thread. */
+  others: string[];
+  today: ReturnType<typeof useNeedsYou>;
+  recorder: ReturnType<typeof useRecorder>;
+  onFront: (id: string) => void;
+  onThread: (id: string, threadId: string | null) => void;
+  onSpawn: (from: DOMRect) => void;
+  /** A secondary window closed itself: the host forgets it. */
+  onRemove: (id: string) => void;
+  onStatus?: (s: PrimaryStatus) => void;
+}
+
+const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
+  { id: winId, primary, n, z, isFront, canSpawn, others, today, recorder, onFront, onThread, onSpawn, onRemove, onStatus },
+  handleRef,
+) {
   // Where you were (open or not, which conversation, a half-typed message) survives a reload,
   // a discarded tab or a new build, so coming back never means starting Scout over.
-  const saved = useRef(loadScoutState()).current;
-  const [open, setOpen] = useState(saved?.open ?? false);
+  const stateKey = stateKeyFor(winId);
+  const boxKey = boxKeyFor(winId);
+  const saved = useRef(loadScoutState(stateKey)).current;
+  // A secondary window exists only while it is open: closing it removes it.
+  const [open, setOpen] = useState(primary ? saved?.open ?? false : true);
   const [view, setView] = useState<"chat" | "history">("chat");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [threads, setThreads] = useState<ThreadRow[]>([]);
@@ -353,7 +429,6 @@ export function Scout() {
   const [copied, setCopied] = useState<number | null>(null);
   const [copiedFix, setCopiedFix] = useState<"ok" | "fail" | null>(null);
   const [toolsFor, setToolsFor] = useState<number | null>(null);
-  const [bubble, setBubble] = useState(false);
   // v34: queue + interrupt. `chaining` = the server is still carrying the job on by itself after the request returned.
   const [queue, setQueue] = useState<Queued[]>([]);
   const [chaining, setChaining] = useState(false);
@@ -361,12 +436,12 @@ export function Scout() {
   const runId = useRef(0);
   const lastSeen = useRef(Date.now());
   const logRef = useRef<HTMLDivElement>(null);
-  const { state: rec, latest: lastCall, refresh: refreshRec } = useRecorder(open);
-  const recNow = useNow(rec?.status === "recording");
+  // The recorder, Needs you and the badge are read once by the host and handed down: N windows must not mean N× polling.
+  const { state: rec, latest: lastCall, refresh: refreshRec } = recorder;
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const [box, setBox] = useState<Box | null>(() => loadBox());
+  const [box, setBox] = useState<Box | null>(() => loadBox(boxKey));
   // On a phone Scout is the whole screen: the draggable box, the resize grips and the
   // saved position are desktop furniture and get ignored rather than shrunk.
   const phone = useIsMobile();
@@ -415,26 +490,38 @@ export function Scout() {
   const close = useCallback(() => {
     setClosing(true);
     window.setTimeout(() => {
-      setOpen(false);
-      setClosing(false);
+      if (primary) {
+        setOpen(false);
+        setClosing(false);
+      } else onRemove(winId);
     }, 170);
-  }, []);
+  }, [primary, winId, onRemove]);
   const sectionRef = useRef<HTMLElement>(null);
-  const { jobs, refresh: refreshJobs } = useMacJobs(threadId, open);
+  const { jobs: liveJobs, refresh: refreshJobs } = useMacJobs(threadId, open);
+  // A Mac job belongs to the window whose conversation proposed it. The primary also keeps the ones nobody
+  // else owns (exactly what it showed before there were several windows); a secondary shows only its own.
+  const othersKey = others.join("|");
+  const jobs = useMemo(
+    () => liveJobs.filter((j) => (primary
+      ? !j.thread_id || j.thread_id === threadId || !othersKey.split("|").includes(j.thread_id)
+      : !!j.thread_id && j.thread_id === threadId)),
+    [liveJobs, primary, threadId, othersKey],
+  );
   const pendingJobs = jobs.filter((j) => j.status === "proposed").length;
 
   // The badge and the list inside Scout read the same rows, so the number always has something behind it.
-  const { rows: todayRows, urgent, refresh: refreshToday } = useNeedsYou(open);
+  const { rows: todayRows, urgent, refresh: refreshToday } = today;
   const waiting = urgent.length;
-  const urgentSig = urgent.map((r) => r.key).join("|");
-  const bubbleFor = useRef<string>("");
+
+  useImperativeHandle(handleRef, () => ({
+    open: () => {
+      setOpen(true);
+      setView("chat");
+    },
+  }), []);
   useEffect(() => {
-    // A new set of items speaks up once; the same set never nags again.
-    if (!urgentSig || urgentSig === bubbleFor.current || open) return;
-    bubbleFor.current = urgentSig;
-    setBubble(true);
-    window.setTimeout(() => setBubble(false), 9000);
-  }, [urgentSig, open]);
+    onThread(winId, threadId);
+  }, [winId, threadId, onThread]);
 
   // The log sits at the bottom, the way a chat should, and only the reader can unpin it
   // (see useStickToBottom for why layout reflows used to throw it back up the page).
@@ -468,8 +555,8 @@ export function Scout() {
     if (saved?.threadId) loadThread(saved.threadId);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    saveScoutState({ open, threadId, text });
-  }, [open, threadId, text]);
+    saveScoutState({ open, threadId, text }, stateKey);
+  }, [open, threadId, text, stateKey]);
 
   const attach = useScoutFiles();
   const [overDrop, setOverDrop] = useState(false);
@@ -612,16 +699,20 @@ export function Scout() {
   }, [text, open, view]);
 
   // Esc: stops a running job first (like Claude), then leaves History, then closes.
+  // With several windows it acts only on the one that has focus; if focus is somewhere else on the page
+  // (as it can be with one window), the front-most window takes it.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || !open) return;
+      const focused = (document.activeElement as HTMLElement | null)?.closest?.("[data-scout-window]");
+      if (focused ? focused !== sectionRef.current : !isFront) return;
       if (running && view === "chat") { e.preventDefault(); void stop(); return; }
       if (view === "history") setView("chat");
       else close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, view, running, stop, close]);
+  }, [open, view, running, stop, close, isFront]);
 
   // Scout is done: what he queued goes out as one message, in the order he wrote it.
   useEffect(() => {
@@ -634,6 +725,7 @@ export function Scout() {
   // Other parts of the admin open Scout or hand it a question (scoutBus.ts).
   const pendingAsk = useRef<ScoutAsk | null>(null);
   useEffect(() => {
+    if (!primary) return; // the global hooks belong to the primary window only
     const onAsk = (e: Event) => {
       const d = (e as CustomEvent<ScoutAsk>).detail;
       if (!d?.text) return;
@@ -656,10 +748,11 @@ export function Scout() {
       window.removeEventListener(SCOUT_ASK_EVENT, onAsk);
       window.removeEventListener(SCOUT_OPEN_EVENT, onOpen);
     };
-  }, [send]);
+  }, [send, primary]);
 
   // A push or bell item links to ?scout=open: open Scout and tidy the URL.
   useEffect(() => {
+    if (!primary) return;
     const q = new URLSearchParams(location.search);
     if (q.get("scout") !== "open") return;
     setOpen(true);
@@ -667,10 +760,11 @@ export function Scout() {
     q.delete("scout");
     const rest = q.toString();
     navigate(location.pathname + (rest ? `?${rest}` : ""), { replace: true });
-  }, [location.search, location.pathname, navigate]);
+  }, [location.search, location.pathname, navigate, primary]);
 
   // Cmd/Ctrl+J toggles Scout from anywhere in the admin.
   useEffect(() => {
+    if (!primary) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === "j" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
@@ -680,7 +774,7 @@ export function Scout() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [close]);
+  }, [close, primary]);
 
   // Keep a moved window on screen when the browser is resized.
   useEffect(() => {
@@ -711,7 +805,7 @@ export function Scout() {
       window.removeEventListener("pointerup", up);
       document.body.style.userSelect = "";
       setDragging(false);
-      saveBox(last);
+      saveBox(last, boxKey);
     };
     document.body.style.userSelect = "none";
     setDragging(true);
@@ -721,7 +815,8 @@ export function Scout() {
 
   // Glide back to the corner, then hand positioning back to CSS.
   const resetBox = () => {
-    saveBox(null);
+    if (!primary) return; // the corner is the primary's; another window put there would sit on top of it
+    saveBox(null, boxKey);
     if (!box) return;
     const vw = window.innerWidth, vh = window.innerHeight;
     const w = Math.min(400, vw - 40), h = Math.min(box.h, 608, vh - 96);
@@ -825,71 +920,26 @@ export function Scout() {
   const askAbout = (r: TodayRow) =>
     send(`Help me with this one from Needs you: ${r.title}${r.detail ? `\n\n${r.detail}` : ""}\n\nWhat's the fastest way to clear it, and can you do any of it for me?`, null, true);
 
-  if (!open) {
-    return (
-      <>
-        <style>{SCOUT_CSS}</style>
-        {!bubble && pendingJobs > 0 && (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="scout-bubble-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-5 z-40 hidden md:block max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
-          >
-            {pendingJobs === 1 ? "I have a Mac job ready. Tap Run?" : `${pendingJobs} Mac jobs are waiting for you.`}
-          </button>
-        )}
-        {bubble && (
-          <button
-            type="button"
-            onClick={() => {
-              setBubble(false);
-              setOpen(true);
-            }}
-            className="scout-bubble-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-5 z-40 hidden md:block max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
-          >
-            {waiting === 1 ? "One thing needs you. Want the detail?" : `${waiting} things need you. Want the detail?`}
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label="Open Scout (Cmd+J)"
-          title="Scout (⌘J)"
-          className={cn(
-            "scout-launcher fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 hidden items-center gap-2.5 rounded-full md:flex",
-            "px-4 py-2.5 text-sm font-semibold shadow-lg",
-            "bg-white text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            needs > 0 && "scout-nudge",
-          )}
-        >
-          <Scoutie mood={mood} className="h-[1.15rem] w-[1.55rem]" />
-          Scout
-          {recording && (
-            <span className="ml-0.5 flex items-center gap-1.5 rounded-full bg-red-500 px-2 py-0.5 text-[0.6875rem] font-bold tabular-nums text-white">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" aria-hidden />
-              REC {clock(rec?.started_at ?? null, recNow)}
-            </span>
-          )}
-          {needs > 0 && (
-            <span key={needs} className={cn(
-              "scout-badge-pop ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[0.6875rem] font-bold",
-              waiting > 0 ? "bg-red-500 text-white" : "bg-amber-400 text-black",
-            )}>
-              {needs}
-            </span>
-          )}
-        </button>
-      </>
-    );
-  }
+  // The primary tells the host what the launcher needs; the launcher itself lives in the host (drawn once).
+  useEffect(() => {
+    onStatus?.({ open, running, pendingJobs });
+  }, [open, running, pendingJobs, onStatus]);
+
+  if (!open) return null;
 
   return (
     <>
-      <style>{SCOUT_CSS}</style>
       <section
         ref={sectionRef}
-        aria-label="Scout"
-        style={box && !phone ? { left: box.x, top: box.y, width: box.w, height: box.h } : phone && vv ? vv : undefined}
+        data-scout-window={winId}
+        aria-label={primary ? "Scout" : `Scout window ${n}`}
+        onPointerDownCapture={() => onFront(winId)}
+        onFocusCapture={() => onFront(winId)}
+        style={{
+          ...(box && !phone ? { left: box.x, top: box.y, width: box.w, height: box.h } : phone && vv ? vv : {}),
+          // Stacking among Scout's own windows only; page dialogs (z-50) stay above all of them.
+          zIndex: 40 + z,
+        }}
         className={cn(
           "scout-pop-in scout-panel fixed z-40 flex flex-col overflow-hidden rounded-2xl shadow-2xl",
           closing && "scout-closing",
@@ -942,7 +992,7 @@ export function Scout() {
 
           <div className="min-w-0 flex-1 px-1">
             <p className="break-words text-sm font-semibold leading-tight text-white">
-              {view === "history" ? "History" : title ?? "Scout"}
+              {view === "history" ? "History" : title ?? (primary ? "Scout" : `Scout ${n}`)}
             </p>
             <p className="text-[0.6875rem] leading-tight text-white/50">
               {view === "history"
@@ -953,7 +1003,7 @@ export function Scout() {
             </p>
           </div>
 
-          {box && (
+          {box && primary && (
             <Button
               variant="ghost"
               size="icon"
@@ -967,6 +1017,20 @@ export function Scout() {
           )}
           {view === "chat" && (
             <>
+              {/* Desktop only: a phone keeps its one full-screen sheet. */}
+              {!phone && canMove() && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => sectionRef.current && onSpawn(sectionRef.current.getBoundingClientRect())}
+                  disabled={!canSpawn}
+                  aria-label="New Scout window"
+                  title={canSpawn ? "New Scout window" : `${MAX_WINDOWS} windows is the most`}
+                  className="scout-press h-11 w-11 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white disabled:opacity-30 sm:h-8 sm:w-8"
+                >
+                  <AppWindow className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -996,7 +1060,7 @@ export function Scout() {
             variant="ghost"
             size="icon"
             onClick={close}
-            aria-label="Close Scout"
+            aria-label={primary ? "Close Scout" : "Close this Scout window"}
             className="scout-press h-11 w-11 shrink-0 border-0 text-white/50 hover:bg-white/5 hover:text-white sm:h-8 sm:w-8"
           >
             <X className="h-4 w-4" />
@@ -1424,4 +1488,154 @@ export function Scout() {
       </section>
     </>
   );
+});
+
+/**
+ * Scout, as callers import it: the launcher (drawn once) plus one ScoutWindow per open window.
+ *
+ * Desktop can open up to four windows, each with its own conversation, position and draft. The first is the
+ * primary: it keeps the original storage keys, owns Cmd+J, ?scout=open and the askScout events, and stays mounted
+ * behind the launcher when closed (so a Mac job that finishes still reports back). Closing any other window
+ * removes it. A phone shows only the primary, as the one full-screen sheet. The things that poll (Needs you,
+ * the call recorder) are read once here and handed down, so more windows do not mean more requests.
+ */
+export function Scout() {
+  const phone = useIsMobile();
+  const [wins, setWins] = useState<WinEntry[]>(loadWindows);
+  // Back to front. The last one is on top, and gets Esc when focus is not inside any Scout window.
+  const [order, setOrder] = useState<string[]>(() => wins.map((w) => w.id));
+  const [status, setStatus] = useState<PrimaryStatus>(() => ({ open: loadScoutState()?.open ?? false, running: false, pendingJobs: 0 }));
+  const [bubble, setBubble] = useState(false);
+  const primaryRef = useRef<ScoutHandle>(null);
+
+  const shown = phone ? wins.slice(0, 1) : wins;
+  const anyOpen = status.open || shown.length > 1;
+  const today = useNeedsYou(anyOpen);
+  const recorder = useRecorder(anyOpen);
+  const recNow = useNow(recorder.state?.status === "recording");
+
+  useEffect(() => {
+    try { localStorage.setItem(WINDOWS_KEY, JSON.stringify(wins)); } catch { /* private mode */ }
+  }, [wins]);
+
+  const front = useCallback((id: string) => setOrder((o) => (o[o.length - 1] === id ? o : [...o.filter((x) => x !== id), id])), []);
+  const setThread = useCallback((id: string, threadId: string | null) => {
+    setWins((ws) => (ws.some((w) => w.id === id && w.threadId !== threadId) ? ws.map((w) => (w.id === id ? { ...w, threadId } : w)) : ws));
+  }, []);
+  const spawn = useCallback((from: DOMRect) => {
+    if (wins.length >= MAX_WINDOWS) return;
+    const id = `w${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+    saveBox(cascadeBox(from), boxKeyFor(id));
+    setWins((ws) => (ws.length >= MAX_WINDOWS ? ws : [...ws, { id, threadId: null }]));
+    setOrder((o) => [...o, id]);
+  }, [wins.length]);
+  const remove = useCallback((id: string) => {
+    setWins((ws) => ws.filter((w) => w.id !== id || w.id === PRIMARY_ID));
+    setOrder((o) => o.filter((x) => x !== id));
+    try {
+      localStorage.removeItem(stateKeyFor(id));
+      localStorage.removeItem(boxKeyFor(id));
+    } catch { /* private mode */ }
+  }, []);
+
+  // The launcher's bubble: a new set of urgent items speaks up once; the same set never nags again.
+  const waiting = today.urgent.length;
+  const urgentSig = today.urgent.map((r) => r.key).join("|");
+  const bubbleFor = useRef("");
+  useEffect(() => {
+    if (!urgentSig || urgentSig === bubbleFor.current || status.open) return;
+    bubbleFor.current = urgentSig;
+    setBubble(true);
+    window.setTimeout(() => setBubble(false), 9000);
+  }, [urgentSig, status.open]);
+
+  const { pendingJobs, running } = status;
+  const needs = waiting + pendingJobs;
+  const mood: Mood = running ? "think" : needs > 0 && !status.open ? "alert" : "idle";
+  const recording = recorder.state?.status === "recording";
+  const openPrimary = () => primaryRef.current?.open();
+
+  const shownOrder = order.filter((id) => shown.some((w) => w.id === id));
+  const frontId = shownOrder[shownOrder.length - 1];
+
+  return (
+    <>
+      <style>{SCOUT_CSS}</style>
+      {shown.map((w, i) => (
+        <ScoutWindow
+          key={w.id}
+          ref={w.id === PRIMARY_ID ? primaryRef : undefined}
+          id={w.id}
+          primary={w.id === PRIMARY_ID}
+          n={i + 1}
+          z={Math.max(0, shownOrder.indexOf(w.id))}
+          isFront={w.id === frontId}
+          canSpawn={wins.length < MAX_WINDOWS}
+          others={phone ? NO_THREADS : wins.filter((x) => x.id !== w.id && x.threadId).map((x) => x.threadId as string)}
+          today={today}
+          recorder={recorder}
+          onFront={front}
+          onThread={setThread}
+          onSpawn={spawn}
+          onRemove={remove}
+          onStatus={w.id === PRIMARY_ID ? setStatus : undefined}
+        />
+      ))}
+      {!status.open && (
+        <>
+          {!bubble && pendingJobs > 0 && (
+            <button
+              type="button"
+              onClick={openPrimary}
+              className="scout-bubble-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-5 z-40 hidden md:block max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
+            >
+              {pendingJobs === 1 ? "I have a Mac job ready. Tap Run?" : `${pendingJobs} Mac jobs are waiting for you.`}
+            </button>
+          )}
+          {bubble && (
+            <button
+              type="button"
+              onClick={() => {
+                setBubble(false);
+                openPrimary();
+              }}
+              className="scout-bubble-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-5 z-40 hidden md:block max-w-[14rem] rounded-2xl rounded-br-sm border border-white/10 bg-white px-3.5 py-2.5 text-left text-xs font-medium text-black shadow-xl"
+            >
+              {waiting === 1 ? "One thing needs you. Want the detail?" : `${waiting} things need you. Want the detail?`}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={openPrimary}
+            aria-label="Open Scout (Cmd+J)"
+            title="Scout (⌘J)"
+            className={cn(
+              "scout-launcher fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 hidden items-center gap-2.5 rounded-full md:flex",
+              "px-4 py-2.5 text-sm font-semibold shadow-lg",
+              "bg-white text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              needs > 0 && "scout-nudge",
+            )}
+          >
+            <Scoutie mood={mood} className="h-[1.15rem] w-[1.55rem]" />
+            Scout
+            {recording && (
+              <span className="ml-0.5 flex items-center gap-1.5 rounded-full bg-red-500 px-2 py-0.5 text-[0.6875rem] font-bold tabular-nums text-white">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" aria-hidden />
+                REC {clock(recorder.state?.started_at ?? null, recNow)}
+              </span>
+            )}
+            {needs > 0 && (
+              <span key={needs} className={cn(
+                "scout-badge-pop ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[0.6875rem] font-bold",
+                waiting > 0 ? "bg-red-500 text-white" : "bg-amber-400 text-black",
+              )}>
+                {needs}
+              </span>
+            )}
+          </button>
+        </>
+      )}
+    </>
+  );
 }
+const NO_THREADS: string[] = [];
