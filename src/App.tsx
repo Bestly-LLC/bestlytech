@@ -32,6 +32,7 @@ const CookieYetiGetStartedRouter = lazyPage(() => import("./pages/CookieYetiGetS
 const InventoryProof = lazyPage(() => import("./pages/InventoryProof"));
 const Hoku = lazyPage(() => import("./pages/Hoku"));
 const InHouseCloud = lazyPage(() => import("./pages/InHouseCloud"));
+const BestlyStudio = lazyPage(() => import("./pages/BestlyStudio"));
 const NeckPilot = lazyPage(() => import("./pages/NeckPilot"));
 const PressKit = lazyPage(() => import("./pages/PressKit"));
 const PrivacyPolicy = lazyPage(() => import("./pages/PrivacyPolicy"));
@@ -165,6 +166,7 @@ const App = () => {
                   <Route path="/hoku" element={<Hoku />} />
                   <Route path="/cloud" element={<InHouseCloud />} />
                   <Route path="/in-house-cloud" element={<InHouseCloud />} />
+                  <Route path="/studio" element={<BestlyStudio />} />
                   <Route path="/neckpilot" element={<NeckPilot />} />
                   <Route path="/press" element={<PressKit />} />
                   <Route path="/privacy-policy" element={<PrivacyPolicy />} />

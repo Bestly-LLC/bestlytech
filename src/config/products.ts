@@ -5,7 +5,7 @@ import neckpilotIcon from "@/assets/neckpilot-icon.png";
 import schoolpilotIcon from "@/assets/schoolpilot-icon.png";
 import hoacureIcon from "@/assets/hoacure-icon.png";
 import confeshIcon from "@/assets/confesh-icon.png";
-import { Droplets, Gem, HeartHandshake, Compass, Leaf, Flower2, ShoppingBag } from "lucide-react";
+import { Droplets, Gem, HeartHandshake, Compass, Leaf, Flower2, ShoppingBag, Clapperboard } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type ProductCategory =
@@ -117,6 +117,22 @@ export const products: Product[] = [
     category: "Social",
     status: "In Development",
     features: ["Fully anonymous posting", "End-to-end encryption", "No account required", "Community moderation"],
+  },
+  {
+    id: "bestly-studio",
+    name: "Bestly Studio",
+    description:
+      "We make your social posts. You approve them from your phone. We post them.",
+    href: "/studio",
+    icon: Clapperboard,
+    category: "Social",
+    status: "Live",
+    features: [
+      "Posts and short videos made for you",
+      "A person at Bestly checks every post",
+      "Approve from your phone",
+      "We post to your Instagram",
+    ],
   },
   {
     id: "el-dora",
