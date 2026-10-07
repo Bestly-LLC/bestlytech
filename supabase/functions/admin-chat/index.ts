@@ -79,6 +79,17 @@ import { llm, llmChat, type ChatResult } from "../_shared/free-llm.ts"; // v26: 
 //  - v19: home network diagnosis through the Pi (agent >= 1.5.0): network.* and router.probe
 //    (read-only, no yes), pihole.recent_blocked/allow/unallow, history in home_hub_network_samples.
 
+// v36 (2026-10-06, Jared: "Can we also have Scout go on longer runs to get the task done on free AI?"): free runs carry
+//   their own working memory. Every hop started from scratch (last 10 chat messages only), so hop N re-read what hop N-1
+//   already found: the Oct 6 11:50 AM run posted eight "Found so far" notes about the same meeting and to-dos, ran out of
+//   hops, and he typed "Keep going" by hand 41 times in two days. Now admin_chat_threads.run_state (jsonb, <= 12 KB) keeps
+//   {goal, hop, notes, calls[{tool, args_hash, args, result <= 600 chars}]} from hop to hop and is injected as "you are
+//   continuing your own run"; a repeated read returns the saved result instead of running again. FREE_STEPS 10 -> 14,
+//   AUTO_HOPS 8 -> 24 with a 20-minute wall clock. It stops when a hop makes no new (non-cached) call or two hops in a
+//   row add no new note, and says so with OPTIONS: Keep going | Yes, use paid AI (run_state is kept, so "Keep going"
+//   resumes with its memory). One progress message is edited in place (body + created_at, so the window still sees the
+//   chain alive) instead of eight "Still working on it." notes; the final answer is a new message. A new message from
+//   him still clears the state and stops the chain. Paid AI, autopilot and the free tool list are unchanged.
 // v35 (2026-10-06, Jared: "give Scout my Bestly email signature with the gif, he searched and could not find it"):
 //   send_email tool. Sends as Jared through Resend with the shared Bestly signature (_shared/bestly-signature.ts, the GIF
 //   headshot from claims_assets 'jared-signature.gif' inline as cid). Names resolve to addresses from his own mail.
@@ -124,7 +135,7 @@ import { sendAsJared } from "../_shared/bestly-signature.ts";
 
 const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
 const MAX_TURNS = 10;
-const AUTO_HOPS = 8;             // v33: free-AI jobs carry on by themselves up to 8 more rounds (~80 steps) before asking
+const AUTO_HOPS = 24;            // v36 (was 8): free-AI jobs carry on by themselves up to 24 more rounds, or 20 minutes, before asking
 const STOP_MARK = "[Stopped]";   // v34: his Stop button; the window draws it as a divider, the models read it as "he stopped you"
 
 /** v34: has he written (or tapped Stop) since `since`? Then the run answering the older message stops. */
@@ -915,7 +926,7 @@ const FREE_TOOLS = new Set([
   "send_email",
 ]);
 const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript"]);
-const FREE_STEPS = 10;
+const FREE_STEPS = 14;           // v36 (was 10); the 85 s budget still bounds each hop
 const FREE_BUDGET_MS = 85_000;   // freeTry (up to 30s) + this + the 20s summary must stay under the 150s platform limit
 const REFUSES = /\b(can'?t|cannot|can not|unable to|not able to|don'?t have (access|the ability))\b|\bmanually\b|\byou('ll| will)? (need|have) to\b/i;
 const CLAIMS_DONE = /\b(done|fixed|resolved|pushed|sent|cleared|moved|restarted|deployed|completed|updated|notified)\b/i;
@@ -1003,10 +1014,76 @@ function trimForBudget(msgs: Msg[], maxTokens = 3800) {
 /** The message holding his current request: trimming never drops it. */
 const KEEP = new WeakSet<Msg>();
 
-async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean; askFirst?: boolean; since?: string | null } = {}):
-  Promise<{ answer?: string; why: string; tools?: string[]; note?: string; more?: boolean; stopped?: boolean }> {
+/** v36: what a free run has done so far, carried from hop to hop in admin_chat_threads.run_state. */
+interface RunCall { tool: string; h: string; args: string; result: string; stale?: boolean }
+interface RunState {
+  chain_from: string;
+  goal: string;
+  hop: number;
+  started_at: string;
+  steps: number;            // tool calls actually run, all hops
+  stale_hops: number;       // hops in a row that added no new note
+  progress_msg_id?: string | null;
+  notes: string[];
+  calls: RunCall[];
+}
+const RUN_STATE_CAP = 12_000;       // bytes of JSON kept per thread
+const RUN_MAX_MS = 20 * 60_000;     // wall clock for one free run (hops included)
+const RUN_RESUME_MS = 60 * 60_000;  // a hand-typed "keep going" picks the memory back up if it is this fresh
+
+/** Same tool + same arguments = same hash (key order and the confirmation flags don't matter). */
+function argsHash(name: string, args: Record<string, unknown>): string {
+  const clean = Object.keys(args).filter((k) => k !== "confirmed" && k !== "__free").sort().map((k) => [k, args[k]]);
+  const str = `${name}:${JSON.stringify(clean)}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16);
+}
+function capRunState(st: RunState): RunState {
+  const size = () => JSON.stringify(st).length;
+  for (const c of st.calls) { if (size() <= RUN_STATE_CAP) break; if (c.result.length > 120) c.result = c.result.slice(0, 120); }
+  while (size() > RUN_STATE_CAP && st.calls.length > 1) {
+    const old = st.calls.shift()!;
+    st.notes.push(`${old.tool}(${old.args.slice(0, 60)}) -> ${old.result.slice(0, 80)}`);
+    if (st.notes.length > 40) st.notes.shift();
+  }
+  while (size() > RUN_STATE_CAP && st.notes.length > 4) st.notes.shift();
+  return st;
+}
+/** First sentence of a status note, whole words only: the window never shows text cut off with "...". */
+function oneLine(s: string, max = 150): string {
+  const flat = s.replace(/\s+/g, " ").trim();
+  const first = flat.match(/^.+?[.!?](?=\s|$)/)?.[0] ?? flat;
+  if (first.length <= max) return first;
+  const cut = first.slice(0, max);
+  return cut.slice(0, Math.max(cut.lastIndexOf(" "), 40)).replace(/[,;:\s]+$/, "") + ".";
+}
+const minutesIn = (st: RunState) => Math.max(0, Math.round((Date.now() - Date.parse(st.started_at)) / 60_000));
+function continuationNote(st: RunState): string {
+  const calls = st.calls.map((c, i) => `${i + 1}. ${c.tool}(${c.args}) -> ${c.result}${c.stale ? " [before a change was made, may be out of date]" : ""}`).join("\n");
+  return `You are continuing your own run (hop ${st.hop + 1}, ${st.steps} steps and ${minutesIn(st)} min in). His request: ${st.goal}
+Here is what you already did and found. Do not repeat these calls; pick up with what is left, and when you have the answer, give it.
+${st.notes.length ? `What you have noted so far:\n${st.notes.map((n) => `- ${n}`).join("\n")}\n` : ""}Calls so far (results shortened):
+${calls || "(none)"}`;
+}
+async function loadRunState(threadId: string): Promise<RunState | null> {
+  const { data } = await db.from("admin_chat_threads").select("run_state").eq("id", threadId).maybeSingle();
+  const st = (data as any)?.run_state;
+  return st && typeof st === "object" && Array.isArray(st.calls) ? st as RunState : null;
+}
+async function saveRunState(threadId: string, st: RunState | null) {
+  await db.from("admin_chat_threads").update({ run_state: st ? capRunState(st) : null }).eq("id", threadId);
+}
+
+async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean; askFirst?: boolean; since?: string | null; state?: RunState | null; hop?: number } = {}):
+  Promise<{ answer?: string; why: string; tools?: string[]; note?: string; more?: boolean; stopped?: boolean; stalled?: boolean; state?: RunState }> {
   const autopilot = !!opts.autopilot;
   const until = Date.now() + FREE_BUDGET_MS;
+  const prior = autopilot ? null : (opts.state ?? null);   // v36: what earlier hops of this run already did
+  const calls: RunCall[] = prior ? prior.calls.map((c) => ({ ...c })) : [];
+  const notes: string[] = prior ? prior.notes.slice() : [];
+  const runStartedAt = prior?.started_at ?? new Date().toISOString();
+  let newCalls = 0, cachedHits = 0;
 
   const [{ data: hist }, { data: today }] = await Promise.all([
     db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(10),
@@ -1072,6 +1149,13 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     else msgs.push({ role, content: body });
   });
   if (msgs[msgs.length - 1].role !== "user") msgs.push({ role: "user", content: text.slice(0, 20_000) });
+  // v36: a continuing hop sees its own earlier work instead of starting over.
+  if (prior) {
+    const note = continuationNote(prior);
+    const last = msgs[msgs.length - 1];
+    if (/^\s*keep going\b/i.test(text)) last.content = note;
+    else last.content += `\n\n${note}`;
+  }
   KEEP.add(msgs[msgs.length - 1]);
 
   const tools = freeToolDefs(autopilot, msgs.slice(1).map((m) => String(m.content ?? "")).join("\n").slice(-6000));
@@ -1148,12 +1232,30 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
         answer({ ok: false, error: "not_confirmed", hint: "He hasn't said yes. Tell him what it will do and end with OPTIONS: Do it | Not now." });
         continue;
       }
+      // v36: the same read, with the same arguments, already answered earlier in this run: hand back that result.
+      const h = argsHash(c.name, args);
+      if (FREE_READS.has(c.name)) {
+        const seen = calls.find((x) => x.h === h && x.tool === c.name && !x.stale);
+        if (seen) {
+          cachedHits++;
+          msgs.push({ role: "tool", tool_call_id: c.id, content: `(from earlier in this run) ${seen.result}` });
+          continue;
+        }
+      }
       if (c.name === "mac_run" && args.action === "propose") args.__free = true;   // never auto-run a free-model script
       let out = await runTool(c.name, args, threadId);
       if ((out as any)?.ok === false && c.name !== "learn") out = await heal(c.name, args, out, {});  // real columns + past lessons
       used.push(c.name);
+      newCalls++;
       const ok = (out as any)?.ok !== false;
-      if (ok && !FREE_READS.has(c.name) && !(c.name === "mac_run" && args.action === "get") && !(c.name === "pi_command" && PI_READ_ONLY.has(`${args.target}.${args.action}`))) acted = true;
+      if (ok && !FREE_READS.has(c.name) && !(c.name === "mac_run" && args.action === "get") && !(c.name === "pi_command" && PI_READ_ONLY.has(`${args.target}.${args.action}`))) {
+        acted = true;
+        for (const x of calls) x.stale = true;   // a change was made: earlier reads may no longer be true, read again
+      }
+      if (ok && !autopilot) {
+        let r = ""; try { r = JSON.stringify(out); } catch { r = String(out); }
+        calls.push({ tool: c.name, h, args: JSON.stringify(Object.fromEntries(Object.entries(args).filter(([k]) => k !== "confirmed" && k !== "__free"))).slice(0, 160), result: r.slice(0, 600) });
+      }
       if (!ok) fails++;
       answer(out);
     }
@@ -1164,9 +1266,9 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   if (await supersededSince(threadId, opts.since ?? null)) return { why: "", tools: used, stopped: true };
   // Out of steps or time with work in hand: say what was found. Chat offers to keep going for free; autopilot
   // keeps the findings next to the paid offer (a STUCK verdict), so the paid run starts from them.
-  if (used.length) {
+  if (used.length || cachedHits) {
     try {
-      msgs.push({ role: "user", content: "Stop using tools now. In under 90 words, tell Jared what you found so far and what is left, using only the tool results above. No options line." });
+      msgs.push({ role: "user", content: "Stop using tools now. In under 90 words, tell Jared what you found so far and what is left, using only the tool results above. Start with one short sentence (under 20 words) that says where you are. No options line." });
       trimForBudget(msgs);
       const s = await llmChat({ messages: msgs, tools, toolChoice: "none", maxTokens: 700, deadlineMs: 20_000, job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
       const sum = s.content.replace(/^\s*OPTIONS:.*$/m, "").trim();
@@ -1174,7 +1276,19 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
         return autopilot
           ? { answer: `${sum.replace(/^(FIXED|NEEDS_YES|STUCK):.*$/gm, "").trim()}\nSTUCK: the free AI ran out of time before finishing.`, why: "", tools: used }
           // v33: out of steps with work in hand is not a stop on free AI: the handler picks it back up by itself.
-          : { answer: sum, why: "", tools: used, more: true };
+          // v36: unless it made no new call this hop, or two hops in a row added nothing new: then it stops and says so.
+          : (() => {
+            const key = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 160);
+            const isNew = !notes.some((n) => key(n) === key(sum));
+            if (isNew) notes.push(sum.slice(0, 500));
+            const staleHops = isNew ? 0 : (prior?.stale_hops ?? 0) + 1;
+            const state: RunState = {
+              chain_from: prior?.chain_from ?? "", goal: prior?.goal ?? text.replace(/\s+/g, " ").slice(0, 600), hop: opts.hop ?? 0,
+              started_at: runStartedAt, steps: (prior?.steps ?? 0) + newCalls, stale_hops: staleHops,
+              progress_msg_id: prior?.progress_msg_id ?? null, notes, calls,
+            };
+            return { answer: sum, why: "", tools: used, more: true, stalled: newCalls === 0 || staleHops >= 2, state };
+          })();
       }
     } catch { /* fall through to the paid ask */ }
   }
@@ -1771,10 +1885,12 @@ Deno.serve(async (req) => {
   if (!paidOn) {
     // "keep going" alone is NOT a yes to spending.
     let paidOk = false;
+    let sayId: string | null = null;   // v36: the message say() just wrote (the first hop's progress note is edited in place later)
     const say = async (reply: string, extra: Record<string, unknown> = {}) => {
       if (await interrupted()) return stoppedReply();   // v34: he moved on; this answer is stale
       if (extra.free) routerBeat(`Free reply${Array.isArray(extra.tools) && extra.tools.length ? ` (${extra.tools.length} steps)` : ""}`);
-      await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
+      const { data: ins } = await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply }).select("id").single();
+      sayId = (ins as any)?.id ?? null;
       await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
       return J({ ok: true, thread_id: threadId, reply, tools: [], ...extra });
     };
@@ -1815,16 +1931,61 @@ Deno.serve(async (req) => {
         return await say(`${diag}NEEDS_YES: Let Scout work on this with paid AI (Claude). It costs a few cents.`, { paid_needed: true, tools: agent.tools ?? [] });
       } else {
         const askFirst = ASKS_FOR_QUESTIONS.test(text);
-        let free = askFirst ? { why: "" } as { answer?: string; why: string } : await freeTry(threadId, text, body.page);
+        // v36: working memory for a free run. A new message starts clean; a hop (or a hand-typed "keep going" within the
+        // hour) picks up what the run already did, so it never re-reads the same things.
+        let runIn: RunState | null = null;
+        if (autoHop > 0) {
+          const st = await loadRunState(threadId).catch(() => null);
+          if (st && st.chain_from && st.chain_from === String(body.chain_from ?? "")) runIn = st;
+        } else if (keepGoing) {
+          const st = await loadRunState(threadId).catch(() => null);
+          if (st && Date.now() - Date.parse(st.started_at) < RUN_RESUME_MS) {
+            // Resume: keep the memory, restart the clocks and the no-progress counter. The old progress note is closed out.
+            if (st.progress_msg_id) {
+              await db.from("admin_chat_messages").update({ body: `Worked ${st.steps} steps over ${minutesIn(st)} min.` }).eq("id", st.progress_msg_id);
+            }
+            runIn = { ...st, hop: 0, started_at: new Date().toISOString(), stale_hops: 0, progress_msg_id: null, chain_from: "" };
+          } else if (st) await saveRunState(threadId, null).catch(() => {});
+        } else {
+          await saveRunState(threadId, null).catch(() => {});
+        }
+        let free = askFirst || runIn ? { why: "" } as { answer?: string; why: string } : await freeTry(threadId, text, body.page);
         if (free.answer) return await say(free.answer, { free: true });
         // v28: before asking to spend, the free model tries the job itself with tools.
-        const agent = await freeAgent(threadId, text, body.page, { askFirst, since: runSince });
+        const agent = await freeAgent(threadId, text, body.page, { askFirst, since: runSince, state: runIn, hop: autoHop });
         if (agent.stopped) return stoppedReply();
-        if (agent.answer && agent.more) {
+        // v36: closes out this run's progress note and drops its memory (kept only when the run stalls: "Keep going" resumes it).
+        const endRun = async (keep?: RunState) => {
+          const pid = keep?.progress_msg_id ?? runIn?.progress_msg_id ?? null;
+          const st = keep ?? agent.state ?? runIn;
+          if (pid && st) await db.from("admin_chat_messages").update({ body: `Worked ${st.steps} steps over ${minutesIn(st)} min.` }).eq("id", pid);
+          await saveRunState(threadId, keep ? { ...keep, progress_msg_id: null } : null).catch(() => {});
+        };
+        if (agent.answer && agent.more && agent.state) {
           // v33 (Jared, Oct 5): on free AI Scout keeps working until it is done or needs him. No "Keep going" bursts.
-          if (autoHop < AUTO_HOPS) {
+          // v36: up to AUTO_HOPS rounds or 20 minutes, and only while each hop finds something new.
+          const st = agent.state;
+          const withinTime = Date.now() - Date.parse(st.started_at) < RUN_MAX_MS;
+          if (autoHop < AUTO_HOPS && withinTime && !agent.stalled) {
             const chainFrom = String(body.chain_from ?? new Date().toISOString());
-            const res = await say(`${agent.answer}\n\nStill working on it.`, { free: true, tools: agent.tools ?? [], continuing: true });
+            st.chain_from = chainFrom;
+            st.hop = autoHop;
+            // One progress note, edited in place. created_at moves with it so the window still sees the run alive.
+            const note = `${oneLine(agent.answer)}\n\nStill working on it (step ${st.steps}, ${minutesIn(st)} min in).`;
+            let res: Response;
+            if (st.progress_msg_id) {
+              if (await interrupted()) return stoppedReply();
+              const now = new Date().toISOString();
+              await db.from("admin_chat_messages").update({ body: note, created_at: now }).eq("id", st.progress_msg_id);
+              await db.from("admin_chat_threads").update({ updated_at: now }).eq("id", threadId);
+              routerBeat(`Free reply (${st.steps} steps)`);
+              res = J({ ok: true, thread_id: threadId, reply: note, tools: [], free: true, continuing: true });
+            } else {
+              res = await say(note, { free: true, tools: agent.tools ?? [], continuing: true });
+              st.progress_msg_id = sayId;
+            }
+            if (await interrupted()) return res;   // he wrote while the note went out: his message wins, nothing carries on
+            await saveRunState(threadId, st);
             const hop = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/admin-chat`, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: req.headers.get("Authorization") ?? "", apikey: req.headers.get("apikey") ?? "" },
@@ -1834,8 +1995,11 @@ Deno.serve(async (req) => {
             if (er?.waitUntil) er.waitUntil(hop); else await hop;
             return res;
           }
+          // Out of hops or time, or it stopped finding anything new: say what it has and let him decide. Memory stays for "Keep going".
+          await endRun(st);
           return await say(`${agent.answer}\n\nOPTIONS: Keep going | Yes, use paid AI`, { free: true, tools: agent.tools ?? [] });
         }
+        await endRun();
         if (agent.answer) return await say(agent.answer, { free: true, tools: agent.tools ?? [] });
         free = { why: agent.why || free.why };
         // Don't offer a paid run that can't happen: say the real blocker instead.

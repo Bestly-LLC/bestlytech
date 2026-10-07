@@ -31,6 +31,7 @@ import { AttachBar, AttachButton, useScoutFiles } from "./ScoutAttach";
 import { ScoutAutoRunBar } from "./ScoutAutoRun";
 import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, type ScoutAsk } from "./scoutBus";
 import { NeedsYouCard, useNeedsYou, type TodayRow } from "./ScoutNeedsYou";
+import { dotHex, markScoutThreadRead, publishScoutDot, scoutDotColor, useScoutUnread } from "./scoutUnread";
 
 /**
  * Scout - the assistant that lives in the corner of the admin.
@@ -73,7 +74,8 @@ interface Queued {
 /** Written by the server when he taps Stop (admin-chat v34). Drawn as a divider, never as a bubble. */
 const STOP_MARK = "[Stopped]";
 /** The last line of a free-AI progress note while it carries on by itself (admin-chat v33). */
-const CONTINUING = /Still working on it\.\s*$/;
+// v36: the one progress note reads "...\n\nStill working on it (step 23, 4 min in)."; the older form ended "Still working on it."
+const CONTINUING = /Still working on it(?: \([^)\n]*\))?\.\s*$/;
 /** A chain that has said nothing for this long has died: stop showing it as running. */
 const CHAIN_IDLE_MS = 4 * 60_000;
 
@@ -426,6 +428,18 @@ export function Scout() {
   // The badge and the list inside Scout read the same rows, so the number always has something behind it.
   const { rows: todayRows, urgent, refresh: refreshToday } = useNeedsYou(open);
   const waiting = urgent.length;
+  // Unread replies across every thread: the dot on the launcher, the phone tab bar and the History rows.
+  const { threads: unreadThreads, anyUnread, anyNeedsYou } = useScoutUnread(open);
+  const dotColor = scoutDotColor({
+    anyNeedsYou,
+    urgent: urgent.length,
+    pendingJobs,
+    anyUnread,
+    normalWaiting: Math.max(0, (todayRows?.length ?? 0) - urgent.length),
+  });
+  useEffect(() => {
+    publishScoutDot(dotColor);
+  }, [dotColor]);
   const urgentSig = urgent.map((r) => r.key).join("|");
   const bubbleFor = useRef<string>("");
   useEffect(() => {
@@ -463,6 +477,24 @@ export function Scout() {
     setMsgs((data ?? []) as unknown as Msg[]);
   }, []);
 
+  // He is looking at this conversation, so what Scout said in it counts as read. Runs when the thread opens and
+  // again (debounced ~1 s) when new messages land while he is watching; hidden tabs don't count as looking.
+  const lastMsgAt = msgs.length ? msgs[msgs.length - 1].created_at : null;
+  useEffect(() => {
+    if (!open || view !== "chat" || !threadId) return;
+    const t = window.setTimeout(() => {
+      if (document.visibilityState !== "visible") return;
+      void markScoutThreadRead(threadId);
+    }, 1000);
+    return () => window.clearTimeout(t);
+  }, [open, view, threadId, msgs.length, lastMsgAt]);
+  useEffect(() => {
+    if (!open || view !== "chat" || !threadId) return;
+    const onVis = () => document.visibilityState === "visible" && void markScoutThreadRead(threadId);
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [open, view, threadId]);
+
   // Put the remembered conversation back on screen, then keep remembering.
   useEffect(() => {
     if (saved?.threadId) loadThread(saved.threadId);
@@ -475,7 +507,7 @@ export function Scout() {
   const [overDrop, setOverDrop] = useState(false);
 
   // v34: Scout is "running" while a request is in flight OR while the server is still carrying the job on by itself
-  // (its last note ends "Still working on it." and is recent). Derived from the messages, so it can't get stuck.
+  // (its last note ends "Still working on it." or "Still working on it (step 23, 4 min in)." and is recent). Derived from the messages, so it can't get stuck.
   const lastMsg = msgs[msgs.length - 1];
   const chainAlive = !!lastMsg && lastMsg.role === "assistant" && CONTINUING.test(lastMsg.body)
     && Date.now() - Date.parse(lastMsg.created_at ?? "") < CHAIN_IDLE_MS;
@@ -853,13 +885,14 @@ export function Scout() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="Open Scout (Cmd+J)"
+          aria-label={`Open Scout (Cmd+J)${dotColor === "orange" ? ", needs you" : dotColor === "purple" ? ", unread replies" : ""}`}
           title="Scout (⌘J)"
           className={cn(
             "scout-launcher fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 hidden items-center gap-2.5 rounded-full md:flex",
             "px-4 py-2.5 text-sm font-semibold shadow-lg",
             "bg-white text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             needs > 0 && "scout-nudge",
+            "relative",
           )}
         >
           <Scoutie mood={mood} className="h-[1.15rem] w-[1.55rem]" />
@@ -873,10 +906,19 @@ export function Scout() {
           {needs > 0 && (
             <span key={needs} className={cn(
               "scout-badge-pop ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[0.6875rem] font-bold",
-              waiting > 0 ? "bg-red-500 text-white" : "bg-amber-400 text-black",
-            )}>
+              "text-black",
+            )} style={{ background: dotHex(dotColor === "purple" ? "purple" : "orange") }}>
               {needs}
             </span>
+          )}
+          {dotColor && needs === 0 && (
+            <span
+              key={dotColor}
+              aria-hidden
+              data-testid="scout-unread-dot"
+              style={{ background: dotHex(dotColor) }}
+              className="scout-badge-pop absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ring-2 ring-white"
+            />
           )}
         </button>
       </>
@@ -1046,7 +1088,22 @@ export function Scout() {
                         }}
                         className="min-w-0 flex-1 text-left"
                       >
-                        <p className="break-words text-sm leading-snug text-white">{t.title ?? "Untitled"}</p>
+                        <p className="break-words text-sm leading-snug text-white">
+                          {(() => {
+                            const u = t.id === threadId ? undefined : unreadThreads.find((x) => x.id === t.id);
+                            if (!u) return null;
+                            const c = u.needs_you ? "orange" : "purple";
+                            return (
+                              <span
+                                role="img"
+                                aria-label={u.needs_you ? "Needs you" : "Unread replies"}
+                                style={{ background: dotHex(c) }}
+                                className="mr-1.5 inline-block h-2 w-2 shrink-0 rounded-full align-middle"
+                              />
+                            );
+                          })()}
+                          {t.title ?? "Untitled"}
+                        </p>
                         <p className="mt-0.5 text-xs text-white/45">
                           {when(t.updated_at)} · <span className="whitespace-nowrap">{t.message_count} message{t.message_count === 1 ? "" : "s"}</span>
                         </p>

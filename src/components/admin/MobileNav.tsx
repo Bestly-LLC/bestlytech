@@ -16,6 +16,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Binoculars, Brush, Car, Focus, LayoutDashboard, Menu, Mic, Plane, Projector, RotateCw, Zap, X } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { openScout } from "@/components/admin/scoutBus";
+import { dotHex, useScoutDot } from "@/components/admin/scoutUnread";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +54,7 @@ const TOOLS: Tool[] = [
 
 function QuickTools({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
+  const scoutDot = useScoutDot();
   const [note, setNote] = useState<string | null>(null);
   const sheet = useRef<HTMLDivElement>(null);
 
@@ -121,8 +123,16 @@ function QuickTools({ open, onClose }: { open: boolean; onClose: () => void }) {
                   open ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0",
                 )}
               >
-                <span className="flex h-11 w-11 items-center justify-center rounded-full" style={{ background: t.tint }}>
+                <span className="relative flex h-11 w-11 items-center justify-center rounded-full" style={{ background: t.tint }}>
                   <Icon className="h-[22px] w-[22px] text-white" strokeWidth={2.2} />
+                  {t.label === "Ask Scout" && scoutDot && (
+                    <span
+                      role="img"
+                      aria-label={scoutDot === "orange" ? "Needs you" : "Unread replies"}
+                      style={{ background: dotHex(scoutDot) }}
+                      className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full ring-2 ring-[#1c1c1e] bento:ring-white"
+                    />
+                  )}
                 </span>
                 <span className="text-[13px] font-semibold leading-tight text-white bento:text-[#111]">{t.label}</span>
                 <span className="-mt-1 text-[11px] leading-tight text-white/45 bento:text-black/45">{t.sub}</span>
@@ -140,6 +150,7 @@ export function MobileNav() {
   const { pathname } = useLocation();
   const { setOpenMobile } = useSidebar();
   const [quick, setQuick] = useState(false);
+  const scoutDot = useScoutDot();
 
   useEffect(() => { setQuick(false); }, [pathname]);
 
@@ -173,15 +184,23 @@ export function MobileNav() {
           <button
             type="button"
             onClick={() => setQuick((v) => !v)}
-            aria-label={quick ? "Close quick tools" : "Open quick tools"}
+            aria-label={`${quick ? "Close quick tools" : "Open quick tools"}${scoutDot === "orange" ? ", Scout needs you" : scoutDot === "purple" ? ", Scout has unread replies" : ""}`}
             aria-expanded={quick}
             className={cn(
-              "-mt-4 flex h-14 w-14 items-center justify-center rounded-full text-white",
+              "relative -mt-4 flex h-14 w-14 items-center justify-center rounded-full text-white",
               "bg-gradient-to-b from-[#0A84FF] to-[#5E5CE6] shadow-[0_8px_24px_rgba(10,132,255,.45)] ring-4 ring-black",
               "bento:ring-[#F3F2EE] transition-transform duration-300 active:scale-90",
             )}
           >
             {quick ? <X className="h-6 w-6" strokeWidth={2.4} /> : <Zap className="h-6 w-6" strokeWidth={2.4} />}
+            {scoutDot && !quick && (
+              <span
+                aria-hidden
+                data-testid="scout-unread-dot-phone"
+                style={{ background: dotHex(scoutDot) }}
+                className="absolute right-0 top-0 h-3.5 w-3.5 rounded-full ring-2 ring-black bento:ring-[#F3F2EE]"
+              />
+            )}
           </button>
         </div>
 
