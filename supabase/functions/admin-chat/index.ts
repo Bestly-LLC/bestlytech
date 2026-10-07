@@ -909,7 +909,7 @@ async function searchMail(args: Record<string, any>): Promise<Record<string, unk
   const conds = [`sent_at > now() - interval '${Math.round(days)} days'`];
   if (who) conds.push(`(from_addr ilike '%${who}%' or from_name ilike '%${who}%' or to_addrs::text ilike '%${who}%')`);
   if (about.length) conds.push("(" + about.map((a) => `subject ilike '%${a}%' or body_text ilike '%${a}%'`).join(" or ") + ")");
-  const sql = `select id, sent_at, from_addr, from_name, subject, left(regexp_replace(coalesce(body_text,''), '\\s+', ' ', 'g'), 160) as snippet from bestly_mail where ${conds.join(" and ")} order by sent_at desc limit 10`;
+  const sql = `select id, sent_at, from_addr, from_name, subject, left(regexp_replace(coalesce(body_text,''), '\\s+', ' ', 'g'), 220) as snippet from bestly_mail where ${conds.join(" and ")} order by sent_at desc limit 10`;
   const { data, error } = await db.rpc("admin_sql_read", { p_query: sql, p_limit: 10 });
   if (error) return { ok: false, error: error.message };
   const rows = ((data ?? []) as any[]).map((r) => `${r.id} | ${ptTime(r.sent_at)} | ${r.from_name ? r.from_name + " " : ""}<${r.from_addr}> | ${String(r.subject ?? "").slice(0, 100)} | ${r.snippet}`);
@@ -1440,7 +1440,7 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
 
   const system = `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You run on a free model WITH real tools: do the work yourself, don't tell Jared what someone else should do.
 How to work:
-- Read before you answer or act: search_mail + read_email (any email or person), run_sql, today, incidents, read_file, meeting_transcript. Anything about a person, an email, an invoice, a task or a call is answered from what you read THIS turn. Never invent numbers, names, files or results. Never use placeholders like X or [Name].
+- Read before you answer or act: search_mail + read_email (any email or person), run_sql, today, incidents, read_file, meeting_transcript. Anything about a person, an email, an invoice, a task or a call is answered from what you read THIS turn: after search_mail, read_email the 2 or 3 best matches (newest first) before you answer, and give the concrete answer (names, amounts, dates) with where it came from. Never invent numbers, names, files or results. Never use placeholders like X or [Name].
 - run_sql is one SELECT/WITH on the public schema. If a table or column is wrong, look it up: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND table_name ILIKE '%word%'. Then retry. Never answer from a failed query.
 - Times in the data are UTC; show Pacific time, 12-hour (3:05 PM). US units.
 - You can't see pictures yourself. A file he attaches arrives as a text copy plus a ⟦scout-files: …⟧ line; for any question about a picture, video frames or PDF, call look with those paths and a specific question, and answer from what it returns. Say so if look can't open it.
