@@ -1,21 +1,25 @@
-// wall-live-activity — W6 (wall round 4, 2026-09-28): the aircraft Live Activity on Jared's iPhone.
+// wall-live-activity — W6 (wall round 4, 2026-09-28): Live Activities on Jared's iPhone. 2026-10-06: second kind (attr=turo).
 //
-// The Pi (server.py, section "W6 SKY LIVE ACTIVITY") decides WHAT to show — the plane on the wall's name tag
-// (state.airFocus / heartbeat tag_hex) — and calls op=push. This function signs APNs pushes with the team's
+// The Pi (server.py) decides WHAT to show and calls op=push. This function signs APNs pushes with the team's
 // APNs .p8 key from Vault (get_apns_credentials) and sends them to the tokens the "Bestly Sky" app registered.
+// Two activity kinds share the tokens table, told apart by `attr` (default 'aircraft', so older callers keep working):
+//   attr=aircraft -> AircraftAttributes (the plane on the wall's name tag)
+//   attr=turo     -> TuroReturnAttributes (the Turo return card with the progress ring)
+// NOTE: iOS gives ONE push-to-start token per device+app (the same value is reported for every attributes type; the push payload
+// names the type with attributes-type). So `start` tokens are attr-agnostic here; only `update` tokens (one per running
+// activity) carry a meaningful attr.
 //
-//   op=register  (app, x-sky-key)   {kind:'start'|'update', token, activity_id?, env, device?, app_version?}
-//   op=current   (app, x-sky-key)   -> {state, event, at}   (the in-app live compass reads this)
-//   op=push      (Pi, x-api-key)    {event:'start'|'update'|'end', state, alert?, priority?, stale_s?}
+//   op=register  (app, x-sky-key)   {kind:'start'|'update', attr?, token, activity_id?, env, device?, app_version?}
+//   op=current   (app, x-sky-key)   {attr?} -> {state, event, at}   (the in-app live compass reads this)
+//   op=push      (Pi, x-api-key)    {attr?, event:'start'|'update'|'end', state, alert?, priority?, stale_s?, dismiss_s?}
 //                                   -> {ok, sent, results:[{kind, env, tail, status, reason}]}
-//   op=health    (Pi, x-api-key)    -> {tokens:{start, update}, last_ok_at, last_fail}
+//   op=health    (Pi, x-api-key)    {attr?} -> {tokens:{start, update}, last_ok_at, last_fail}
 //
 // APNs: topic tech.bestly.sky.push-type.liveactivity, apns-push-type liveactivity. The debug build installed from
 // the Mac mini is development-signed -> sandbox host; a TestFlight/App Store build would register env=production.
 // Nothing here ever returns or logs a key or a full device token.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { corsWith } from "../_shared/cors.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -23,12 +27,18 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { pers
 
 const BUNDLE = "tech.bestly.sky";
 const TOPIC = BUNDLE + ".push-type.liveactivity";
-const ATTR_TYPE = "AircraftAttributes";
 
-const CORS = corsWith({
-  headers: "authorization, content-type, apikey, x-client-info, x-api-key, x-sky-key",
-  methods: "POST, OPTIONS"
-});
+const KINDS: Record<string, { type: string; attributes: Record<string, unknown>; curId: number; relevance: number }> = {
+  aircraft: { type: "AircraftAttributes", attributes: { home: "Home", lat: 34.0852, lon: -118.3718 }, curId: 1, relevance: 60 },
+  turo: { type: "TuroReturnAttributes", attributes: { label: "Turo return" }, curId: 2, relevance: 80 },
+};
+const attrOf = (b: Record<string, any>) => (b.attr === "turo" ? "turo" : "aircraft");
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info, x-api-key, x-sky-key",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 const J = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 
 const b64url = (bytes: Uint8Array) => {
@@ -108,6 +118,8 @@ Deno.serve(async (req) => {
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return J({ ok: false, error: "expected JSON" }, 400); }
   const op = String(body.op ?? "");
+  const attr = attrOf(body);
+  const K = KINDS[attr];
 
   let c: Creds;
   try { c = await creds(); } catch (e) { return J({ ok: false, error: String((e as Error).message) }, 500); }
@@ -116,22 +128,22 @@ Deno.serve(async (req) => {
   if (op === "register" || op === "current") {
     if (!same(req.headers.get("x-sky-key") ?? "", c.app_key ?? "")) return J({ ok: false, error: "unauthorized" }, 401);
     if (op === "current") {
-      const { data } = await db.from("wall_sky_current").select("event, state, at").eq("id", 1).maybeSingle();
+      const { data } = await db.from("wall_sky_current").select("event, state, at").eq("id", K.curId).maybeSingle();
       return J({ ok: true, ...(data ?? {}) });
     }
     const kind = body.kind === "update" ? "update" : body.kind === "start" ? "start" : null;
     const token = String(body.token ?? "").toLowerCase();
     if (!kind || !/^[0-9a-f]{32,200}$/.test(token)) return J({ ok: false, error: "bad token" }, 400);
     const env = body.env === "production" ? "production" : "sandbox";
-    const row = { token, kind, env, activity_id: body.activity_id ? String(body.activity_id).slice(0, 80) : null,
+    const row = { token, kind, attr, env, activity_id: body.activity_id ? String(body.activity_id).slice(0, 80) : null,
       device: body.device ? String(body.device).slice(0, 60) : null, app_version: body.app_version ? String(body.app_version).slice(0, 20) : null,
       last_seen: new Date().toISOString(), dead: false };
     const { error } = await db.from("wall_sky_tokens").upsert(row, { onConflict: "token" });
     if (error) return J({ ok: false, error: error.message }, 500);
-    if (kind === "start") {   // a new push-to-start token replaces the old ones from this device
+    if (kind === "start") {   // a new push-to-start token replaces the old ones from this device (one start token serves every attributes type)
       await db.from("wall_sky_tokens").update({ dead: true }).eq("kind", "start").eq("device", row.device ?? "").neq("token", token);
     }
-    return J({ ok: true, kind, env });
+    return J({ ok: true, kind, attr, env });
   }
 
   // ---------- Pi side ----------
@@ -140,10 +152,10 @@ Deno.serve(async (req) => {
   if (!same(req.headers.get("x-api-key") ?? "", agentKey ?? "")) return J({ ok: false, error: "unauthorized" }, 401);
 
   if (op === "health") {
-    const { data: toks } = await db.from("wall_sky_tokens").select("kind, env, last_seen, last_status, last_reason").eq("dead", false);
-    const { data: lastOk } = await db.from("wall_sky_log").select("at, event").gt("ok", 0).order("at", { ascending: false }).limit(1);
-    const { data: lastFail } = await db.from("wall_sky_log").select("at, event, statuses").eq("ok", 0).gt("sent", 0).order("at", { ascending: false }).limit(1);
-    return J({ ok: true, tokens: { start: (toks ?? []).filter((t) => t.kind === "start").length, update: (toks ?? []).filter((t) => t.kind === "update").length },
+    const { data: toks } = await db.from("wall_sky_tokens").select("kind, attr, env, last_seen, last_status, last_reason").eq("dead", false);
+    const { data: lastOk } = await db.from("wall_sky_log").select("at, event").eq("attr", attr).gt("ok", 0).order("at", { ascending: false }).limit(1);
+    const { data: lastFail } = await db.from("wall_sky_log").select("at, event, statuses").eq("attr", attr).eq("ok", 0).gt("sent", 0).order("at", { ascending: false }).limit(1);
+    return J({ ok: true, attr, tokens: { start: (toks ?? []).filter((t) => t.kind === "start").length, update: (toks ?? []).filter((t) => t.kind === "update" && t.attr === attr).length },
       last_ok_at: lastOk?.[0]?.at ?? null, last_fail: lastFail?.[0] ?? null });
   }
 
@@ -159,18 +171,18 @@ Deno.serve(async (req) => {
   if (event !== "end") aps["stale-date"] = now + staleS;
   if (event === "end") aps["dismissal-date"] = now + Math.min(Math.max(Number(body.dismiss_s ?? 0), 0), 3600);
   if (event === "start") {
-    aps["attributes-type"] = ATTR_TYPE;
-    aps["attributes"] = { home: "Home", lat: 34.0852, lon: -118.3718 };
-    aps["alert"] = body.alert ?? { title: "Plane overhead", body: String(state.flight ?? "") };
+    aps["attributes-type"] = K.type;
+    aps["attributes"] = K.attributes;
+    aps["alert"] = body.alert ?? (attr === "turo" ? { title: "Turo return", body: String(state.who ?? "") } : { title: "Plane overhead", body: String(state.flight ?? "") });
     aps["input-push-token"] = 1;
   } else if (body.alert && priority === 10) {
     aps["alert"] = body.alert;
   }
-  aps["relevance-score"] = 60;
+  aps["relevance-score"] = K.relevance;
 
   const since = new Date(Date.now() - 9 * 3600e3).toISOString();
   const q = db.from("wall_sky_tokens").select("token, kind, env").eq("dead", false);
-  const { data: toks, error: te } = event === "start" ? await q.eq("kind", "start") : await q.eq("kind", "update").gte("last_seen", since);
+  const { data: toks, error: te } = event === "start" ? await q.eq("kind", "start") : await q.eq("kind", "update").eq("attr", attr).gte("last_seen", since);
   if (te) return J({ ok: false, error: te.message }, 500);
 
   const results: Array<Record<string, unknown>> = [];
@@ -182,8 +194,8 @@ Deno.serve(async (req) => {
       ...(dead || (event === "end" && t.kind === "update" && r.status === 200) ? { dead: true } : {}) }).eq("token", t.token);
   }
   const ok = results.filter((r) => r.status === 200).length;
-  await db.from("wall_sky_log").insert({ event, hex: state.hex ? String(state.hex).slice(0, 12) : null, sent: results.length, ok, statuses: results });
-  await db.from("wall_sky_current").upsert({ id: 1, event, state: event === "end" ? null : state, at: new Date().toISOString() });
+  await db.from("wall_sky_log").insert({ event, attr, hex: (state.hex ?? state.tripId) ? String(state.hex ?? state.tripId).slice(0, 12) : null, sent: results.length, ok, statuses: results });
+  await db.from("wall_sky_current").upsert({ id: K.curId, attr, event, state: event === "end" ? null : state, at: new Date().toISOString() });
   if (Math.random() < 0.02) await db.rpc("wall_sky_log_prune");
   return J({ ok: results.length > 0 && ok === results.length, sent: results.length, delivered: ok, results });
 });

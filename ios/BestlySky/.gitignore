@@ -1,3 +1,5 @@
 BestlySky.xcodeproj/
 build/
 BestlySky/Generated/
+project.manual.yml
+build-sim/
