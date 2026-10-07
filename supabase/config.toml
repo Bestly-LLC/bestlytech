@@ -115,3 +115,9 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.freellm-keys]
     verify_jwt = true
+
+[functions.code-job-git]
+    verify_jwt = false
+
+[functions.site-go]
+    verify_jwt = false
