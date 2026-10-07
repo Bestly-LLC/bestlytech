@@ -4,6 +4,8 @@
   bestly_social carousel   Tuesdays: plan, write, render and post one new 5-slide carousel
   bestly_social stats      nightly: likes + comments for every Bestly post -> bestly_social_history
   bestly_social learn      weekly: what is working, with sample sizes -> social_lessons (read by the planner)
+  bestly_social studio     Mon/Wed/Fri 11:25: promote Bestly Studio. A card, a carousel or a Montage video, filed into
+                           Studio > Drafts > To review under the house client `bestly-studio`. Never posts (Track S, 2026-10-06)
   --dry                    plan + render + upload to a dry/ folder + Instagram rehearsal; publishes nothing
   --render-only            plan + render to /tmp only (no upload, no Instagram)
 
@@ -600,9 +602,314 @@ def _learn(deadline):
     return "ok " + " | ".join(lessons)[:600]
 
 
+# ---------------------------------------------------------------- Bestly Studio promo (Track S, 2026-10-06)
+# Jared 2026-10-06: start promoting Bestly Studio (the done-for-you social content service) on Bestly's own accounts.
+# Review first: nothing here posts. Pieces are filed into Studio > Drafts > To review under the house client `bestly-studio`
+# (claim rules: docs/studio-promo/claims.md), and Jared decides. Rotation (cron, 11:25 AM):
+#   Monday a card, Wednesday a 5-slide carousel, Friday a short Montage video (brands/bestly_studio.py, text only).
+#   bestly_social studio [card|plain|carousel|video] [--dry|--render-only]   (no word = by weekday)
+# It stops making more while STUDIO_MAX_WAITING pieces wait for review, so nothing piles up. Devices on the cards are
+# real Studio screenshots of the demo client (/opt/bestly/social-kit/devices/studio0N.png), never a mocked screen.
+STUDIO_SLUG = "bestly-studio"
+STUDIO_FOOT = "bestly.tech/studio"
+STUDIO_MAX_WAITING = 4
+STUDIO_DEVICES = {"wide": ["studio02.png", "studio04.png"], "tall": ["studio01.png", "studio03.png"]}
+
+PRODUCT_STUDIO = ("Bestly Studio is a done-for-you social media service for small businesses, solo professionals and real estate "
+                  "agents: Bestly makes the posts, a person at Bestly checks them, the client approves them from their phone, and "
+                  "Bestly posts them. Voice: plain-spoken, privacy-first, calm, \"we make it, you approve it\". What Bestly Studio "
+                  "does, and the ONLY things you may say it does: it makes image posts, swipe posts (carousels) and short vertical "
+                  "videos from the photos and notes a business sends to studio@bestly.tech or plans with Bestly on a call; a person "
+                  "at Bestly checks every post before the client sees it; the client reviews each post on their own board on their "
+                  "phone, sees it the way it will look in Instagram or TikTok, and taps Approve, or taps Changes and says what to fix "
+                  "in their own words; earlier versions of a post are kept; the board has a calendar and a place to send ideas and "
+                  "clips; once a post is approved Bestly posts it to the client's Instagram account; the first call is free. "
+                  "Never claim or imply: any price, free trial or contract term; results, followers, leads, sales or growth; speed, "
+                  "turnaround, a number of posts or unlimited anything; that AI or software does it all or that no person is "
+                  "involved; any client name, quote, review or logo; privacy or security guarantees; posting anywhere except "
+                  "Instagram; listing videos, property tours or AI footage of properties. Never invent any other feature.")
+
+THEMES_STUDIO = {
+    "blank-page": "staring at a blank page on posting day",
+    "bursts": "posting in bursts, then going quiet for weeks",
+    "photos-you-have": "the photos already on your phone are enough to start a post",
+    "one-idea": "one idea per post, not five",
+    "plain-caption": "a caption is one thing said plainly, not a speech",
+    "short-video": "a short video needs one idea, not a script",
+    "pocket-review": "checking a post on your phone between jobs beats writing one at night",
+    "plain-feedback": "giving feedback on a post in plain words, not design words",
+    "same-look": "people recognize the same colors and fonts every time",
+    "customer-questions": "the questions customers keep asking are your next posts",
+    "what-changed": "post what changed this week: new hours, new stock, a finished job",
+}
+
+_LANDING = ("\n\nThe landing may use ONE fact from the Bestly Studio list above and nothing more, for example: Bestly Studio makes the "
+            "posts and you approve each one from your phone. No promise, no price, no result, no speed, no number.")
+
+
+def _studio_prompt(s, tail=""):
+    s = s.replace(PRODUCT, PRODUCT_STUDIO).replace("Bestly Cloud", "Bestly Studio")
+    s = s.replace("(cost, lock-in, time, or who holds the keys)", "(time, habit, or not knowing where to start)")
+    s = s.replace("(the mechanism that keeps it invisible)", "(the habit or mechanism that keeps it from happening)")
+    return s + tail
+
+
+DAILY_SYS_STUDIO = _studio_prompt(DAILY_SYS, _LANDING)
+CAROUSEL_SYS_STUDIO = _studio_prompt(CAROUSEL_SYS, _LANDING)
+PLAN_SINGLE_STUDIO = _studio_prompt(PLAN_SINGLE_SYS)
+PLAN_CAROUSEL_STUDIO = _studio_prompt(PLAN_CAROUSEL_SYS, "\nSlide 5 text may use ONE fact from the Bestly Studio list and no promise.")
+
+
+def _studio_client():
+    r = lib.get("approval_clients", f"select=id&slug=eq.{STUDIO_SLUG}&active=is.true") or []
+    if not r:
+        raise RuntimeError("the house client bestly-studio is missing or inactive")
+    return r[0]["id"]
+
+
+def _studio_items(cid, n=40):
+    return lib.get("approval_items", f"select=id,code,title,provenance,internal_status,stage,created_at&client_id=eq.{cid}"
+                                     f"&order=created_at.desc&limit={n}") or []
+
+
+def _studio_waiting(cid):
+    waiting = len(lib.get("approval_items", f"select=id&client_id=eq.{cid}&stage=eq.internal&internal_status=eq.pending") or [])
+    jobs = len(lib.get("studio_video_jobs", f"select=id&client_slug=eq.{STUDIO_SLUG}&status=in.(queued,working,waiting)") or [])
+    return waiting + jobs
+
+
+def _studio_theme(items):
+    briefs = [r.get("brief") or "" for r in (lib.get("studio_video_jobs", f"select=brief&client_slug=eq.{STUDIO_SLUG}"
+                                                     "&order=created_at.desc&limit=20") or [])]
+    used = [(i.get("provenance") or {}).get("theme") for i in items]
+    used += [t for b in briefs for t, d in THEMES_STUDIO.items() if d in b]
+    recent = [(i.get("provenance") or {}).get("theme") for i in items[:4]]
+    pool = [t for t in THEMES_STUDIO if t not in recent] or list(THEMES_STUDIO)
+    least = min(used.count(t) for t in pool)
+    return random.choice([t for t in pool if used.count(t) == least])
+
+
+def _studio_claims(texts):
+    """Hard AND setup problems from the bestly-studio claim rules (soft ones are allowed: a person reviews every piece)."""
+    out = []
+    for t in texts:
+        if not (t or "").strip():
+            continue
+        r = lib.rpc("claim_check", _client_slug=STUDIO_SLUG, _text=t, _context="bestly_social studio") or {}
+        if r.get("ok") is False:
+            hit = ""
+            try:
+                m = re.search((r.get("pattern") or "").replace("\\m", r"\b").replace("\\M", r"\b"), t, re.I)
+                hit = f" (you wrote '{m.group(0)}')" if m and m.group(0) else ""
+            except re.error:
+                pass
+            out.append(f"'{t[:50]}' broke the claim rule '{r.get('reason')}'{hit}: say it without that word or idea")
+    return out
+
+
+def _studio_soft(texts):
+    notes = []
+    for t in texts:
+        r = lib.rpc("claim_check", _client_slug=STUDIO_SLUG, _text=t or "", _context="bestly_social studio") or {}
+        if r.get("ok") and r.get("severity") == "soft":
+            notes.append(r.get("reason"))
+    return sorted(set(n for n in notes if n))
+
+
+def _studio_review(cap, cards, deadline):
+    """Fact check against PRODUCT_STUDIO with brand_maker's reviewer (needs 8/10). -> list of problems."""
+    from jobs import brand_maker as bm
+    cfg = {"name": "Bestly Studio", "about": PRODUCT_STUDIO}
+    return bm._review(cfg, {"caption": cap, "cards": cards}, deadline)
+
+
+def _studio_caption(system, brief, deadline):
+    msgs = [{"role": "system", "content": playbook.add(system)}, {"role": "user", "content": brief}]
+    last, cap, prov = [], "", None
+    for _ in range(3):
+        msg, prov = freellm.chat(msgs, None, max_tokens=2500, deadline=deadline)
+        cap = (msg.get("content") or "").strip().strip('"').strip()
+        cap = re.sub(r"^(caption|here is the caption)\s*:\s*", "", cap, flags=re.I).strip()
+        last = _problems(cap) + _studio_claims([cap])
+        if not last:
+            return cap, prov
+        msgs += [{"role": "assistant", "content": cap},
+                 {"role": "user", "content": "Fix these and reply with the caption only: " + "; ".join(last)}]
+    raise RuntimeError("studio caption failed the rules 3 times: " + "; ".join(last)[:400] + " | last try: " + cap[:300])
+
+
+def _studio_card_plan(theme, items, deadline):
+    def check(p):
+        e = _line_problems(p.get("headline"), "headline", 4, 10) + _line_problems(p.get("subline"), "subline", 5, 16)
+        if p.get("accent") and p["accent"] not in (p.get("headline") or ""):
+            e.append("accent must be copied exactly from the headline")
+        if not p.get("category"):
+            e.append("category missing")
+        return e or _studio_claims([p.get("headline"), p.get("subline")])
+    recent = "\n".join(f"- {i.get('title')}" for i in items[:10]) or "(none)"
+    user = f"Theme: {theme} - {THEMES_STUDIO[theme]}\n\nRecent Bestly Studio promo pieces (do not repeat their headlines or angles):\n{recent}"
+    return _ask_json(PLAN_SINGLE_STUDIO, user, check, time.time() + 300)
+
+
+def _studio_card(plan, plain=False):
+    """Render one Studio card from a plan {headline, accent, subline, category}. -> (spec, fit, file)."""
+    if plain:
+        spec = {"layout": "MID", "cat": plan["category"][:24], "kick": "Posting tip", "h": plan["headline"].strip(),
+                "accent": (plan.get("accent") or "").strip(), "p": plan["subline"].strip(), "foot": STUDIO_FOOT}
+    else:
+        layout = random.choice("ABC")
+        dev = random.choice(STUDIO_DEVICES["wide" if layout in "AC" else "tall"])
+        spec = {"layout": layout, "cat": plan["category"][:24], "h": plan["headline"].strip(),
+                "accent": (plan.get("accent") or "").strip(), "p": plan["subline"].strip(), "dev": dev, "foot": STUDIO_FOOT}
+    out = f"/tmp/bestly-studio-card-{uuid.uuid4().hex[:8]}.png"
+    return spec, _render(spec, out), out
+
+
+def _studio_carousel_plan(theme, items, deadline):
+    def check(p):
+        e = _line_problems(p.get("hook"), "hook", 4, 10)
+        if p.get("accent") and p["accent"] not in (p.get("hook") or ""):
+            e.append("accent must be copied exactly from the hook")
+        s = p.get("slides") or []
+        if len(s) != 4:
+            return e + ["slides must have exactly 4 entries (slides 2 to 5)"]
+        for i, sl in enumerate(s, start=2):
+            e += _line_problems(sl.get("h"), f"slide {i} headline", 3, 9)
+            e += _line_problems(sl.get("p"), f"slide {i} text", 8, 34, product_ok=(i == 5))
+        if len(re.findall(r"\bBestly\b", s[3].get("p") or "")) != 1:
+            e.append("slide 5 text must name Bestly Studio exactly once")
+        return e or _studio_claims([p.get("hook")] + [f"{x['h']}. {x['p']}" for x in s])
+    recent = "\n".join(f"- {i.get('title')}" for i in items[:10]) or "(none)"
+    user = f"Theme: {theme} - {THEMES_STUDIO[theme]}\n\nRecent Bestly Studio promo pieces (do not repeat their hooks or angles):\n{recent}"
+    return _ask_json(PLAN_CAROUSEL_STUDIO, user, check, time.time() + 300)
+
+
+def _studio_carousel_render(plan):
+    """5 slides: 1 hook + a wide real Studio screenshot, 3 text slides, 5 landing + a tall real Studio screenshot. -> (specs, fits, files)."""
+    kicks = ["Why it hides", "Do this", "The catch"]
+    specs = [{"layout": "S1", "cat": "1 / 5", "h": plan["hook"], "accent": plan.get("accent") or "",
+              "dev": random.choice(STUDIO_DEVICES["wide"]), "foot": STUDIO_FOOT}]
+    for i, sl in enumerate(plan["slides"][:3]):
+        specs.append({"layout": "MID", "cat": f"{i + 2} / 5", "kick": kicks[i], "num": str(i + 2), "h": sl["h"], "p": sl["p"],
+                      "foot": STUDIO_FOOT})
+    specs.append({"layout": "S5", "cat": "5 / 5", "h": plan["slides"][3]["h"], "p": plan["slides"][3]["p"],
+                  "dev": random.choice(STUDIO_DEVICES["tall"]), "foot": STUDIO_FOOT})
+    tag, files, fits = uuid.uuid4().hex[:6], [], []
+    for i, s in enumerate(specs, start=1):
+        out = f"/tmp/bestly-studio-car-{tag}-{i}.png"
+        fits.append(_render(s, out))
+        files.append(out)
+    return specs, fits, files
+
+
+def _studio_file(title, caption, media_url=None, slides=None, provenance=None, alt=None):
+    """File one piece into Studio > Drafts > To review as Spark (studio_item_create runs the bestly-studio claim gate)."""
+    tok = lib.rpc("pi_spark_session")
+    try:
+        payload = {"title": title[:200], "caption": caption, "platform": "instagram", "made_in": "bestly_social studio",
+                   "provenance": provenance or {}, "variants": {"instagram": {"caption": caption, "alt_text": alt}}}
+        if slides:
+            payload.update({"slides": slides, "media_type": "carousel"})
+        else:
+            payload.update({"media_url": media_url, "media_type": "image"})
+        r = lib.rpc("studio_item_create", p_token=tok, p_client_slug=STUDIO_SLUG, p_payload=payload)
+    finally:
+        try:
+            lib.rpc("pi_spark_session_end", p_token=tok)
+        except Exception:  # noqa: BLE001
+            pass
+    if not (r or {}).get("ok"):
+        raise RuntimeError(f"Studio refused the piece: {json.dumps(r)[:400]}")
+    if slides:
+        lib._req("PATCH", f"/rest/v1/approval_items?id=eq.{r['id']}", {"thumb_url": slides[0]})
+    return r
+
+
+def _studio_made(kind, cid, dry, render_only, deadline, plain=False):
+    items = _studio_items(cid)
+    theme = _studio_theme(items)
+    last = []
+    for attempt in range(3):
+        if kind == "carousel":
+            plan, prov = _studio_carousel_plan(theme, items, deadline)
+            title = plan["hook"]
+            cards = [{"head": plan["hook"]}] + [{"head": s["h"], "body": s["p"]} for s in plan["slides"]]
+            brief = (f"Hook: {plan['hook']}\nTheme: {theme}\nWhat the slides say, in order (stay on exactly this idea; claim nothing beyond it):\n- "
+                     + "\n- ".join([plan["hook"]] + [f"{s['h']} {s['p']}" for s in plan["slides"]]))
+            system = CAROUSEL_SYS_STUDIO
+        else:
+            plan, prov = _studio_card_plan(theme, items, deadline)
+            title = plan["headline"]
+            cards = [{"head": plan["headline"], "body": plan["subline"]}]
+            brief = f"Image headline: {plan['headline']}\nImage subline: {plan['subline']}\nTheme: {theme} - {THEMES_STUDIO[theme]}"
+            system = DAILY_SYS_STUDIO
+        cap, cprov = _studio_caption(system, brief, deadline)
+        last = _studio_review(cap, cards, deadline)
+        if not last:
+            break
+    else:
+        raise RuntimeError("Studio promo failed the fact check 3 times: " + "; ".join(last)[:400])
+    cap_full = cap.rstrip() + "\n\n" + STUDIO_FOOT
+    soft = _studio_soft([cap] + [f"{c.get('head')}. {c.get('body') or ''}" for c in cards])
+    prov_info = {"theme": theme, "kind": kind, "planner": prov, "writer": cprov, "claim_notes": soft,
+                 "made_by_job": "bestly_social studio"}
+    if kind == "carousel":
+        specs, fits, files = _studio_carousel_render(plan)
+        if render_only:
+            return f"render-only: {files} [{theme}] {json.dumps(plan)[:500]}"
+        base = f"bestly/{'dry/' if dry else ''}studio/{time.strftime('%Y-%m-%d')}-{uuid.uuid4().hex[:6]}"
+        urls = [_upload(f, f"{base}/0{i}.png") for i, f in enumerate(files, start=1)]
+        if dry:
+            return f"dry: studio carousel [{theme}] '{title}'\n{urls[0]}\n---\n{cap_full}"
+        r = _studio_file(title, cap_full, slides=urls, provenance={**prov_info, "urls": urls}, alt=title)
+    else:
+        spec, fit, out = _studio_card(plan, plain=plain)
+        if render_only:
+            return f"render-only: {out} [{theme}] {json.dumps(plan)[:400]}"
+        name = f"bestly/{'dry/' if dry else ''}studio/{time.strftime('%Y-%m-%d')}-{uuid.uuid4().hex[:6]}.png"
+        url = _upload(out, name)
+        if dry:
+            return f"dry: studio card [{theme}] '{title}'\n{url}\n---\n{cap_full}"
+        r = _studio_file(title, cap_full, media_url=url, provenance={**prov_info, "url": url, "layout": spec["layout"]},
+                         alt=f"{plan['headline']} {plan['subline']}")
+    return f"ok filed {kind} for review: '{title}' [{theme}] id {r.get('id')}"
+
+
+def _studio_video(cid, dry):
+    """Friday: ask Montage for a short text-only video (brands/bestly_studio.py). It files itself into To review."""
+    items = _studio_items(cid)
+    theme = _studio_theme(items)
+    brief = (f"One idea: {THEMES_STUDIO[theme]}. Tell it as a calm, practical tip that is useful to any small business owner "
+             "whether or not they ever hire anyone.")
+    if dry:
+        return f"dry: studio video [{theme}] brief: {brief}"
+    q = lib.rpc("montage_start", p={"client": STUDIO_SLUG, "brief": brief, "platform": "reels", "duration_s": 30,
+                                    "broll": False, "requested_by": "studio-promo rotation"}) or {}
+    if not q.get("ok"):
+        raise RuntimeError(f"Montage refused: {json.dumps(q)[:300]}")
+    return f"ok asked Montage for a studio video [{theme}] job {q.get('ref')}"
+
+
+def _studio_main(argv, dry, render_only):
+    cid = _studio_client()
+    kind = next((a for a in argv if a in ("card", "plain", "carousel", "video")), None)
+    if not kind:
+        kind = {0: "card", 2: "carousel", 4: "video"}.get(time.localtime().tm_wday)
+    if not kind:
+        return "skip: Studio promo goes out on Monday (card), Wednesday (carousel) and Friday (video)"
+    waiting = _studio_waiting(cid)
+    if waiting >= STUDIO_MAX_WAITING and not (dry or render_only):
+        return f"skip: {waiting} Studio promo pieces already wait for review (cap {STUDIO_MAX_WAITING}); nothing new until some are decided"
+    deadline = time.time() + 420
+    if kind == "video":
+        return _studio_video(cid, dry or render_only)
+    return _studio_made("carousel" if kind == "carousel" else "card", cid, dry, render_only, deadline, plain=(kind == "plain"))
+
+
+
 # ---------------------------------------------------------------- main
 def main(argv):
-    mode = next((a for a in argv if a in ("daily", "carousel", "stats", "learn")), "daily")
+    mode = next((a for a in argv if a in ("daily", "carousel", "stats", "learn", "studio")), "daily")
     dry, render_only = "--dry" in argv, "--render-only" in argv
     global DRY
     DRY = dry or render_only
@@ -611,6 +918,8 @@ def main(argv):
         return _stats()
     if mode == "learn":
         return _learn(deadline)
+    if mode == "studio":
+        return _studio_main(argv, dry, render_only)
     tue = time.localtime().tm_wday == 1
     if not DRY and mode == "daily" and tue:
         return "skip: Tuesday is carousel day"

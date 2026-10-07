@@ -43,7 +43,7 @@ if (d.num) h += `<div class="num">${esc(d.num)}</div>`;
 if (L.dev && d.dev) h += `<img class="dev" id="dev" src="devices/${esc(d.dev)}">`;
 h += `<div class="txt" id="txt" style="top:${L.top}px">${d.kick?`<div class="kick">${esc(d.kick)}</div>`:''}<h1 id="h1">${head}</h1><div class="bar"></div>${d.p?`<p style="max-width:${L.pw}px">${esc(d.p)}</p>`:''}</div>`;
 if (L.swipe) h += `<div class="swipe">Swipe &rarr;</div>`;
-h += `<div class="foot">bestly.tech</div>`;
+h += `<div class="foot">${esc(d.foot || "bestly.tech")}</div>`;
 document.getElementById('c').innerHTML = h;
 const dev = document.getElementById('dev'), txt = document.getElementById('txt'), h1 = document.getElementById('h1');
 function placeDev(w){ if(!dev) return; const s=dev.style; s.width=w+'px'; for (const k of ['right','bottom','top']) if (L.dev[k]!==undefined) s[k]=L.dev[k]+'px'; }

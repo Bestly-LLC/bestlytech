@@ -28,6 +28,7 @@ Allowed per client by `montage_brand_policy.montage_ok` (read by `montage_quote`
 | `inventoryproof` | `brands/inventoryproof.py` | `jobs/brand_maker.py` BRANDS['inventoryproof'], claim slug `inventoryproof` | `comp/brand` (BrandShort): Manrope, card grounds + accents, Proofy on the closing card |
 | `cookie-yeti` | `brands/cookie_yeti.py` | `jobs/brand_maker.py` BRANDS['cookieyeti'], claim slug `cookie-yeti` | `comp/brand`: Inter Tight, plum/teal card grounds, app icon on the closing card |
 | `bestly-cloud` | `brands/bestly_cloud.py` | `jobs/bestly_social.py` PRODUCT, `claim_check('bestly-cloud')` (severity `setup` = no rules yet = house rules only) | `comp/brand`: Bestly card kit colors/type, the real pill logo |
+| `bestly-studio` | `brands/bestly_studio.py` | `jobs/bestly_social.py` PRODUCT_STUDIO, `claim_check('bestly-studio')` (rules start unapproved), `docs/studio-promo/claims.md`; text only, one posting tip per video, filed to Drafts > To review (Friday rotation of `bestly_social studio`) | `comp/brand`: same as bestly-cloud, closing card says bestly.tech/studio |
 
 Never made by Montage: Centering YOU (`centering-you`, `demo-two`: Elizabeth films her own videos) and real estate (`listings`, `re-demo`: photo-only tours, planned).
 Brand files the videos use: `fetch-assets.sh` downloads Cookie Yeti and InventoryProof fonts, icon and Proofy into `/opt/bestly/montage-kit` (the same public files `social-render` uses); Bestly uses `/opt/bestly/social-kit`, HOKU `/opt/bestly/hoku-kit`.
@@ -54,8 +55,8 @@ VOICE_11 = {"voice_id": "<id from GET /v1/voices>", "name": "<display name>",
 - No `VOICE_11` in the module = that brand always uses Piper. Nothing else to wire: `worker.voice()` reads the attribute with `getattr`.
 
 Voices in use (premade, none cloned): HOKU Lily `pFZP5JQG7iQjIQuC4Bku`, InventoryProof Matilda `XrExE9yKIg1WjnnlVkGX`, Cookie Yeti Liam `TX3LPaxmHKxFdv7VOQHJ`,
-Bestly Cloud Eric `cjVigY5qzO86Huf0OWal`. Not available: Sarah `EXAVITQu4vr4xnSDxMaL` (the RoofGuard caller). Free premade voices to pick from for a new brand:
-Bella `hpp4J3VqNfWAUOO0d1Us` (warm, bright), Chris `iP95p4xoKVk53GoZ742B` (down-to-earth), Roger `CwhRBWXzGAHq8TQ4Fs17` (laid-back), Jessica `cgSgspJ2msm6clMCkdW9` (playful), River `SAz9YHcvj6GT2YYXdXww` (calm, neutral).
+Bestly Cloud Eric `cjVigY5qzO86Huf0OWal`, Bestly Studio Chris `iP95p4xoKVk53GoZ742B`. Not available: Sarah `EXAVITQu4vr4xnSDxMaL` (the RoofGuard caller). Free premade voices to pick from for a new brand:
+Bella `hpp4J3VqNfWAUOO0d1Us` (warm, bright), Roger `CwhRBWXzGAHq8TQ4Fs17` (laid-back), Jessica `cgSgspJ2msm6clMCkdW9` (playful), River `SAz9YHcvj6GT2YYXdXww` (calm, neutral).
 
 ### How to add a voice to a brand
 1. `GET https://api.elevenlabs.io/v1/voices` (key: Vault `elevenlabs_api_key`; the Pi reads it only through `pi_secret`). Pick a premade or library voice that fits the brand.
