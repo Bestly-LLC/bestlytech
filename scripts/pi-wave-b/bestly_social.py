@@ -618,7 +618,7 @@ STUDIO_DEVICES = {"wide": ["studio02.png", "studio04.png"], "tall": ["studio01.p
 PRODUCT_STUDIO = ("Bestly Studio is a done-for-you social media service for small businesses, solo professionals and real estate "
                   "agents: Bestly makes the posts, a person at Bestly checks them, the client approves them from their phone, and "
                   "Bestly posts them. Voice: plain-spoken, privacy-first, calm, \"we make it, you approve it\". What Bestly Studio "
-                  "does, and the ONLY things you may say it does: it makes image posts, swipe posts (carousels) and short vertical "
+                  "does, and the ONLY things you may say it does: it makes image posts, carousels and short vertical "
                   "videos from the photos and notes a business sends to studio@bestly.tech or plans with Bestly on a call; a person "
                   "at Bestly checks every post before the client sees it; the client reviews each post on their own board on their "
                   "phone, sees it the way it will look in Instagram or TikTok, and taps Approve, or taps Changes and says what to fix "
@@ -825,30 +825,39 @@ def _studio_file(title, caption, media_url=None, slides=None, provenance=None, a
     return r
 
 
+def _studio_attempt(kind, theme, items, deadline):
+    """One try at a piece: plan -> caption -> fact check. -> (plan, prov, title, cards, cap, cprov, problems)."""
+    if kind == "carousel":
+        plan, prov = _studio_carousel_plan(theme, items, deadline)
+        title = plan["hook"]
+        cards = [{"head": plan["hook"]}] + [{"head": s["h"], "body": s["p"]} for s in plan["slides"]]
+        brief = (f"Hook: {plan['hook']}\nTheme: {theme}\nWhat the slides say, in order (stay on exactly this idea; claim nothing beyond it):\n- "
+                 + "\n- ".join([plan["hook"]] + [f"{s['h']} {s['p']}" for s in plan["slides"]]))
+        system = CAROUSEL_SYS_STUDIO
+    else:
+        plan, prov = _studio_card_plan(theme, items, deadline)
+        title = plan["headline"]
+        cards = [{"head": plan["headline"], "body": plan["subline"]}]
+        brief = f"Image headline: {plan['headline']}\nImage subline: {plan['subline']}\nTheme: {theme} - {THEMES_STUDIO[theme]}"
+        system = DAILY_SYS_STUDIO
+    cap, cprov = _studio_caption(system, brief, deadline)
+    return plan, prov, title, cards, cap, cprov, _studio_review(cap, cards, deadline)
+
+
 def _studio_made(kind, cid, dry, render_only, deadline, plain=False):
     items = _studio_items(cid)
     theme = _studio_theme(items)
     last = []
     for attempt in range(3):
-        if kind == "carousel":
-            plan, prov = _studio_carousel_plan(theme, items, deadline)
-            title = plan["hook"]
-            cards = [{"head": plan["hook"]}] + [{"head": s["h"], "body": s["p"]} for s in plan["slides"]]
-            brief = (f"Hook: {plan['hook']}\nTheme: {theme}\nWhat the slides say, in order (stay on exactly this idea; claim nothing beyond it):\n- "
-                     + "\n- ".join([plan["hook"]] + [f"{s['h']} {s['p']}" for s in plan["slides"]]))
-            system = CAROUSEL_SYS_STUDIO
-        else:
-            plan, prov = _studio_card_plan(theme, items, deadline)
-            title = plan["headline"]
-            cards = [{"head": plan["headline"], "body": plan["subline"]}]
-            brief = f"Image headline: {plan['headline']}\nImage subline: {plan['subline']}\nTheme: {theme} - {THEMES_STUDIO[theme]}"
-            system = DAILY_SYS_STUDIO
-        cap, cprov = _studio_caption(system, brief, deadline)
-        last = _studio_review(cap, cards, deadline)
+        try:
+            plan, prov, title, cards, cap, cprov, last = _studio_attempt(kind, theme, items, deadline)
+        except RuntimeError as e:   # a writer that rambled or broke a rule 3 times: start the piece over
+            last = [f"try {attempt + 1}: {str(e)[:200]}"]
+            continue
         if not last:
             break
     else:
-        raise RuntimeError("Studio promo failed the fact check 3 times: " + "; ".join(last)[:400])
+        raise RuntimeError("Studio promo failed 3 tries: " + "; ".join(last)[:400])
     cap_full = cap.rstrip() + "\n\n" + STUDIO_FOOT
     soft = _studio_soft([cap] + [f"{c.get('head')}. {c.get('body') or ''}" for c in cards])
     prov_info = {"theme": theme, "kind": kind, "planner": prov, "writer": cprov, "claim_notes": soft,
@@ -900,7 +909,7 @@ def _studio_main(argv, dry, render_only):
     waiting = _studio_waiting(cid)
     if waiting >= STUDIO_MAX_WAITING and not (dry or render_only):
         return f"skip: {waiting} Studio promo pieces already wait for review (cap {STUDIO_MAX_WAITING}); nothing new until some are decided"
-    deadline = time.time() + 420
+    deadline = time.time() + 900
     if kind == "video":
         return _studio_video(cid, dry or render_only)
     return _studio_made("carousel" if kind == "carousel" else "card", cid, dry, render_only, deadline, plain=(kind == "plain"))
