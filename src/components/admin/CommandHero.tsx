@@ -80,37 +80,49 @@ export function CommandHero() {
     <section className="space-y-3" aria-label="Today at a glance">
       <NotifBanner />
       <div className={cn(cardCls, "overflow-hidden")}>
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
-            <div className="flex items-center gap-3">
-              <AdminMark className="h-12 w-12 shrink-0" />
-              <div>
-                <h2 className="text-[28px] font-bold leading-tight tracking-tight text-white">{hello}, Jared</h2>
-                <p className={text.detail}>
-                  {todos === null ? "…" : n ? (
-                    <button type="button" onClick={jumpToCalls} className={cn("rounded font-medium underline-offset-2 hover:underline", tint.blue, focusRing)}>
-                      {n} to-do{n === 1 ? "" : "s"} from calls
-                    </button>
-                  ) : "No call to-dos on you"}
-                </p>
+        <div className="flex flex-col gap-4 p-4 sm:p-6">
+          {/* Top row: greeting + join button — always side-by-side on sm+ */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+              <div className="flex items-center gap-3">
+                <AdminMark className="h-12 w-12 shrink-0" />
+                <div>
+                  <h2 className="text-[28px] font-bold leading-tight tracking-tight text-white">{hello}, Jared</h2>
+                  <p className={text.detail}>
+                    {todos === null ? "…" : n ? (
+                      <button type="button" onClick={jumpToCalls} className={cn("rounded font-medium underline-offset-2 hover:underline", tint.blue, focusRing)}>
+                        {n} to-do{n === 1 ? "" : "s"} from calls
+                      </button>
+                    ) : "No call to-dos on you"}
+                  </p>
+                </div>
+              </div>
+              {/* On narrow screens the compact chip sits beside the greeting.
+                  On wide screens WeatherNow renders the full board below this row
+                  (it detects the breakpoint itself and switches mode). */}
+              <div className="lg:hidden">
+                <WeatherNow />
               </div>
             </div>
-            {/* Beside the greeting, not under it: it is the second thing worth
-                seeing up here, and at this size it reads without stopping. */}
-            <WeatherNow />
+
+            {/* The one primary action up here. */}
+            <a href={joinUrl} target="_blank" rel="noreferrer"
+              className={cn(btnPrimary, "min-h-12 justify-start rounded-2xl px-4 py-2 sm:min-h-12")}>
+              <Video className="h-5 w-5 shrink-0" aria-hidden />
+              <span className="text-left leading-tight">
+                <span className="block">{next ? "Join next meeting" : "Open the call room"}</span>
+                <span className="block max-w-[16rem] truncate text-[13px] font-normal opacity-90">
+                  {next ? `${whenLabel(next.start)} · ${next.title}` : next === undefined ? "Checking your calendar…" : "Nothing this week"}
+                </span>
+              </span>
+            </a>
           </div>
 
-          {/* The one primary action up here. */}
-          <a href={joinUrl} target="_blank" rel="noreferrer"
-            className={cn(btnPrimary, "min-h-12 justify-start rounded-2xl px-4 py-2 sm:min-h-12")}>
-            <Video className="h-5 w-5 shrink-0" aria-hidden />
-            <span className="text-left leading-tight">
-              <span className="block">{next ? "Join next meeting" : "Open the call room"}</span>
-              <span className="block max-w-[16rem] truncate text-[13px] font-normal opacity-90">
-                {next ? `${whenLabel(next.start)} · ${next.title}` : next === undefined ? "Checking your calendar…" : "Nothing this week"}
-              </span>
-            </span>
-          </a>
+          {/* Full weather board — only visible at lg+, hidden on smaller screens
+              where the compact chip above handles it */}
+          <div className="hidden lg:block">
+            <WeatherNow />
+          </div>
         </div>
         {upcoming.length > 0 && (
           <ul className={cn("border-t", hairline, divider)} aria-label="Later">

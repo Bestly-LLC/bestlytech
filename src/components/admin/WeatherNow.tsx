@@ -20,6 +20,18 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { ChevronRight, MapPin, Navigation } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+/** True when the viewport is wide enough to show the full board inline. */
+function useWeatherExpanded() {
+  const [wide, setWide] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const handler = (e: MediaQueryListEvent) => setWide(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return wide;
+}
+
 /** Home. Everything else on this dashboard is Jared's day, so this is too. */
 const HOME: Place = { lat: 34.09, lon: -118.3617, label: "West Hollywood" };
 export type Place = { lat: number; lon: number; label: string; approx?: boolean };
@@ -179,6 +191,8 @@ export function WeatherNow({ className, useDeviceLocation = false, fixedPlace, f
     return () => { alive = false; clearInterval(t); };
   }, [place]);
 
+  const expanded = useWeatherExpanded();
+
   if (needsTap && !place) {
     // Location was blocked or timed out: one tap asks again (Safari only asks from a click).
     return (
@@ -196,6 +210,15 @@ export function WeatherNow({ className, useDeviceLocation = false, fixedPlace, f
     );
   }
   if (failed || !now || !place) return null;
+
+  /* ── wide screen: full board rendered inline, no dialog ───────────────── */
+  if (expanded && board) {
+    return (
+      <div className={cn("w-full min-w-0", className)}>
+        <WeatherBoard data={board} place={place.label} />
+      </div>
+    );
+  }
 
   const temp = f(now.temperature);
   const feels = f(now.temperatureApparent);
