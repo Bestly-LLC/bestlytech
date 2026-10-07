@@ -9,7 +9,7 @@ import {
   KeyRound, Landmark, Laptop, LineChart, ListChecks, ListTodo, Lock, Mail, MailPlus, Mails, Megaphone,
   MessageCircle, MessageSquareShare, Mic, Moon, NotebookPen, PauseCircle, PenLine, PhoneCall, PlaneLanding,
   Projector, Repeat, ScanEye, Search, Send, SendHorizontal, Server, ShieldCheck, Siren, Sparkles, SprayCan,
-  Sunrise, Skull, Trash2, Users, Wrench, XCircle, ArrowUpRight, Network, Lightbulb, Compass, Sparkle, UserPlus, Bell, Shuffle, ArrowRight, Package,
+  Star, Sunrise, Skull, Trash2, Users, Wrench, XCircle, ArrowUpRight, Network, Lightbulb, Compass, Sparkle, UserPlus, Bell, Shuffle, ArrowRight, Package,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -77,7 +77,7 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   siren: Siren, brush: Brush, "mail-plus": MailPlus, search: Search, "phone-call": PhoneCall, house: House,
   "message-circle": MessageCircle, "hand-heart": HandHeart, sunrise: Sunrise, inbox: Inbox, "send-horizontal": SendHorizontal,
   mails: Mails, "trash-2": Trash2, "house-wifi": House, projector: Projector, "scan-eye": ScanEye, "list-todo": ListTodo,
-  megaphone: Megaphone, landmark: Landmark, briefcase: Briefcase, mail: Mail, "user-plus": UserPlus, sparkle: Sparkle, bell: Bell, package: Package,
+  megaphone: Megaphone, landmark: Landmark, briefcase: Briefcase, mail: Mail, "user-plus": UserPlus, sparkle: Sparkle, bell: Bell, package: Package, star: Star,
 };
 
 const RUNS_ON: Record<string, string> = {
