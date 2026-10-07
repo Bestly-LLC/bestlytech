@@ -615,19 +615,15 @@ STUDIO_FOOT = "bestly.tech/studio"
 STUDIO_MAX_WAITING = 4
 STUDIO_DEVICES = {"wide": ["studio02.png", "studio04.png"], "tall": ["studio01.png", "studio03.png"]}
 
-PRODUCT_STUDIO = ("Bestly Studio is a done-for-you social media service for small businesses, solo professionals and real estate "
-                  "agents: Bestly makes the posts, a person at Bestly checks them, the client approves them from their phone, and "
-                  "Bestly posts them. Voice: plain-spoken, privacy-first, calm, \"we make it, you approve it\". What Bestly Studio "
-                  "does, and the ONLY things you may say it does: it makes image posts, carousels and short vertical "
-                  "videos from the photos and notes a business sends to studio@bestly.tech or plans with Bestly on a call; a person "
-                  "at Bestly checks every post before the client sees it; the client reviews each post on their own board on their "
-                  "phone, sees it the way it will look in Instagram or TikTok, and taps Approve, or taps Changes and says what to fix "
-                  "in their own words; earlier versions of a post are kept; the board has a calendar and a place to send ideas and "
-                  "clips; once a post is approved Bestly posts it to the client's Instagram account; the first call is free. "
-                  "Never claim or imply: any price, free trial or contract term; results, followers, leads, sales or growth; speed, "
-                  "turnaround, a number of posts or unlimited anything; that AI or software does it all or that no person is "
-                  "involved; any client name, quote, review or logo; privacy or security guarantees; posting anywhere except "
-                  "Instagram; listing videos, property tours or AI footage of properties. Never invent any other feature.")
+PRODUCT_STUDIO = ("Bestly Studio is a done-for-you social media service for small businesses, solo professionals and real estate agents. "
+                  "Bestly makes the posts, a person at Bestly checks them, the client approves them from their phone, and Bestly posts them. "
+                  "Voice: plain-spoken, calm, \"we make it, you approve it\". The ONLY things you may say Bestly Studio does: it makes image posts, "
+                  "carousels and short vertical videos from photos and notes the client sends; a person at Bestly checks every post; the client reviews "
+                  "each post on their own phone board, sees it the way it will look in Instagram, and taps Approve or Changes; once approved, Bestly posts it "
+                  "to the client's Instagram; the first call is free. Say nothing else about Bestly Studio: no prices, results, speed, numbers, client names, "
+                  "privacy claims, or other features.")
+# Short on purpose: a long never-say list made the free writers print their reasoning instead of the caption (2026-10-06).
+# docs/studio-promo/claims.md is the full list and claim_check('bestly-studio') enforces it in code.
 
 THEMES_STUDIO = {
     "blank-page": "staring at a blank page on posting day",
