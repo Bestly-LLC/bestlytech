@@ -74,10 +74,20 @@ export function JobCard({ job, onDecided }: { job: MacJob; onDecided: (id: strin
   const [working, setWorking] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const outRef = useRef<HTMLPreElement>(null);
+  const autoFired = useRef(false);
 
   useEffect(() => {
     if (outRef.current) outRef.current.scrollTop = outRef.current.scrollHeight;
   }, [job.output]);
+
+  // When auto-run is on, approve the job the moment it lands — no tap needed.
+  useEffect(() => {
+    if (autoRun && job.status === "proposed" && !autoFired.current) {
+      autoFired.current = true;
+      decide(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRun, job.status]);
 
   const decide = async (run: boolean) => {
     setWorking(true);
