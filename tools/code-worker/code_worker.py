@@ -118,7 +118,7 @@ def freellm_key():
     if os.environ.get("FREELLM_KEY"):
         return os.environ["FREELLM_KEY"]
     r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "bestly-pi",
-                        "cd /opt/bestly/cron/jobs && python3 -c 'import lib;print(lib.rpc(\"pi_secret\",p_name=\"Scout-FreeLLM\"))'"],
+                        "cd /opt/bestly/cron && python3 -c 'import lib;print(lib.rpc(\"pi_secret\",p_name=\"Scout-FreeLLM\"))'"],
                        capture_output=True, text=True, timeout=30)
     k = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else ""
     if not k:
