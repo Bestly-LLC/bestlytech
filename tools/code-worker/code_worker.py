@@ -252,6 +252,20 @@ def changed_files(work):
     return files, base
 
 
+SECRET_RE = re.compile(r"(sk-ant-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|eyJhbGciOi[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{40,}\.[A-Za-z0-9_-]{20,}|sb_secret_[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35})")
+
+
+def secret_hits(files):
+    """Paths whose new content matches a known key pattern. Nothing that matches is ever pushed."""
+    hits = []
+    for f in files:
+        if f.get("delete") or f.get("encoding") == "base64":
+            continue
+        if SECRET_RE.search(f.get("content") or "") or re.search(r"(^|/)\.env($|\.)", f["path"]):
+            hits.append(f["path"])
+    return hits
+
+
 def wait_for_vercel(sha):
     """bestlytech is public: Vercel posts its build result as a GitHub commit status."""
     for i in range(48):
@@ -334,6 +348,10 @@ def do_job(job, paid_on):
             rpc("code_job_finish_t", {"p_id": jid, "p_status": status, "p_result": {"reason": reason, "build_tail": err[-600:]}, "p_log": "\n---\n".join(logs)})
             return
         files, base = changed_files(work)
+        leak = secret_hits(files)
+        if leak:
+            rpc("code_job_finish_t", {"p_id": jid, "p_status": "failed", "p_result": {"reason": "stopped before saving: a file looks like it holds a secret (%s)" % ", ".join(leak[:3])}, "p_log": "\n---\n".join(logs)})
+            return
         note("Saving to GitHub")
         msg = "Scout code job: " + re.sub(r"\s+", " ", job["goal"])[:120]
         c = fn("code-job-git", {"job_id": jid, "op": "commit", "files": files, "message": msg})
