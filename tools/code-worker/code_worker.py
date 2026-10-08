@@ -138,13 +138,37 @@ def usable_models():
     return out
 
 
+AGENT_PORT = 13001
+
+
+def ensure_tunnel():
+    """opencode runs on node, and macOS Local Network privacy blocks node under launchd from reaching the Pi's LAN address
+    ("Cannot connect to API", 2026-10-07). An ssh forward to localhost needs no LAN permission. Returns the base URL."""
+    url = "http://127.0.0.1:%d" % AGENT_PORT
+    try:
+        http(url + "/v1/models", headers={"Authorization": "Bearer " + freellm_key()}, timeout=5)
+        return url
+    except Exception:
+        pass
+    subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=30", "-f", "-N",
+                    "-L", "127.0.0.1:%d:127.0.0.1:3001" % AGENT_PORT, "bestly-pi"], capture_output=True, timeout=20)
+    for _ in range(10):
+        try:
+            http(url + "/v1/models", headers={"Authorization": "Bearer " + freellm_key()}, timeout=5)
+            return url
+        except Exception:
+            time.sleep(1)
+    log("tunnel to the Pi failed; falling back to the LAN address")
+    return FREELLM
+
+
 def write_opencode_config(path, models):
     cfg = {
         "$schema": "https://opencode.ai/config.json",
         "autoupdate": False, "share": "disabled",
         "permission": {"edit": "allow", "bash": "allow", "webfetch": "allow"},
         "provider": {"freellmapi": {"npm": "@ai-sdk/openai-compatible", "name": "FreeLLMAPI",
-                                    "options": {"baseURL": FREELLM + "/v1", "apiKey": "{env:FREELLM_KEY}"},
+                                    "options": {"baseURL": ensure_tunnel() + "/v1", "apiKey": "{env:FREELLM_KEY}"},
                                     "models": {m: {"name": m, "limit": {"context": 128000, "output": 16000}} for m in models}}},
     }
     with open(path, "w") as f:
