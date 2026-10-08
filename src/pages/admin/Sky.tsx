@@ -652,6 +652,16 @@ export default function Sky() {
               </div>
             )}
             {feed && <div className="mt-1 text-white/45">Updated {time12(feed.fetchedAt)}</div>}
+            <div className="mt-2 flex gap-2">
+              <button onClick={zoomIn} className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20">
+                <Plus className="h-3 w-3" />
+                Zoom In
+              </button>
+              <button onClick={zoomOut} className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20">
+                <Minus className="h-3 w-3" />
+                Zoom Out
+              </button>
+            </div>
           </div>
         </div>
       </div>
