@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { Maximize2, Minimize2, Plane, RotateCw, Compass, LocateFixed, Loader2, Route, TrafficCone } from "lucide-react";
+import { Maximize2, Minimize2, Plane, RotateCw, Compass, LocateFixed, Loader2, Route, TrafficCone, Plus, Minus } from "lucide-react";
 
 type Air = {
   hex: string; cs?: string | null; reg?: string | null; t?: string | null; cat?: string | null;
@@ -126,6 +126,14 @@ export default function Sky() {
   });
   useEffect(() => { try { localStorage.setItem(LAYERS_KEY, JSON.stringify(layers)); } catch { /* private mode */ } }, [layers]);
   const radiusRef = useRef(15);
+  // User zoom overrides the feed radius; null = follow the wall. Step by 1mi, clamped to the same 2..25 as the wall.
+  const [zoomRadius, setZoomRadius] = useState<number | null>(null);
+  const zoomRef = useRef<number | null>(null);
+  zoomRef.current = zoomRadius;
+  const feedRadius = feed?.radius ?? 15;
+  const clampR = (n: number) => Math.max(2, Math.min(25, n));
+  const zoomIn = () => setZoomRadius((r) => clampR((r ?? feedRadius) - 1));
+  const zoomOut = () => setZoomRadius((r) => clampR((r ?? feedRadius) + 1));
   const UP_LABELS: Record<number, string> = { 0: "N↑", 90: "E↑", 180: "S↑", 270: "W↑" };
   const cycleUp = () => setMapUp((v) => (v + 90) % 360);
   const [, setFrame] = useState(0);
@@ -150,11 +158,11 @@ export default function Sky() {
       const h = hereRef.current;
       if (h) {
         // Away from home: planes around him, from the public feed through sky-area.
-        const { data: b, error: e } = await supabase.functions.invoke("sky-area", { body: { op: "planes", lat: h.lat, lon: h.lon, radius_mi: radiusRef.current } });
+        const { data: b, error: e } = await supabase.functions.invoke("sky-area", { body: { op: "planes", lat: h.lat, lon: h.lon, radius_mi: zoomRef.current ?? radiusRef.current } });
         const bb = b as { list?: Air[]; at?: number; error?: string } | null;
         if (hereRef.current !== h) return;
         if (e || !bb || bb.error) { setErr(bb?.error ?? e?.message ?? "No planes feed right now."); return; }
-        setFeed({ list: bb.list ?? [], at: (bb.at ?? Date.now() / 1000) * 1000, home: [h.lat, h.lon], radius: radiusRef.current, source: "feed", focus: null, error: null, fetchedAt: Date.now() });
+        setFeed({ list: bb.list ?? [], at: (bb.at ?? Date.now() / 1000) * 1000, home: [h.lat, h.lon], radius: zoomRef.current ?? radiusRef.current, source: "feed", focus: null, error: null, fetchedAt: Date.now() });
         setErr(null);
         return;
       }
@@ -282,7 +290,7 @@ export default function Sky() {
     }
   };
 
-  const radius = Math.min(25, Math.max(2, feed?.radius ?? 15));
+  const radius = clampR(zoomRadius ?? feedRadius);
   // Map center: him when Current location is on, else home.
   const home: [number, number] = here ? [here.lat, here.lon] : (feed?.home ?? HOME);
   const now = Date.now();
@@ -574,6 +582,20 @@ export default function Sky() {
                 <Icon className={cn("h-5 w-5", key === "loc" && locating && "animate-spin")} aria-hidden />
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* zoom in / out: steps the map radius by 1mi, same corner stack as the wall controls */}
+        <div className="pointer-events-none absolute right-3 top-[216px] sm:right-4 sm:top-[224px]" style={{ top: full ? "calc(max(0.75rem, env(safe-area-inset-top)) + 212px)" : undefined }}>
+          <div className="pointer-events-auto flex flex-col overflow-hidden rounded-2xl bg-black/55 ring-1 ring-white/10 backdrop-blur-md">
+            <button type="button" onClick={zoomIn} aria-label="Zoom in" title="Zoom in" disabled={radius <= 2}
+              className="grid h-11 w-11 place-items-center text-white/80 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400 disabled:opacity-40">
+              <Plus className="h-5 w-5" aria-hidden />
+            </button>
+            <button type="button" onClick={zoomOut} aria-label="Zoom out" title="Zoom out" disabled={radius >= 25}
+              className="grid h-11 w-11 place-items-center border-t border-white/10 text-white/80 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400 disabled:opacity-40">
+              <Minus className="h-5 w-5" aria-hidden />
+            </button>
           </div>
         </div>
 
