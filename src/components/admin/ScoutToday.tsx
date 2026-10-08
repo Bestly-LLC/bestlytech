@@ -154,24 +154,84 @@ export function ScoutToday() {
     });
   };
 
-  const notSpamRow = async (r: Row) => {
-    setBusy(r.id);
-    setRows((all) => all?.map((x) => (x.id === r.id ? { ...x, status: "dismissed", done_at: new Date().toISOString() } : x)) ?? null);
-    const { data, error } = await supabase.functions.invoke("spam-desk", { body: { op: "protect", draft_id: r.id } });
-    setBusy(null);
-    const res = data as { ok?: boolean; error?: string; protected?: string; added?: boolean; mail_id?: string } | null;
-    if (error || !res?.ok) { toast.error(res?.error ?? error?.message ?? "Could not save that"); load(); return; }
-    toast("Marked not spam. This sender is safe now.", {
-      description: r.title,
-      action: {
-        label: "Undo",
-        onClick: async () => {
-          if (res.added) await supabase.functions.invoke("spam-desk", { body: { op: "unprotect", from: res.protected, mail_id: res.mail_id } });
-          await set(r, "open", undefined, true);
-        },
-      },
-    });
-  };
+   const notSpamRow = async (r: Row) => {
+     setBusy(r.id);
+     setRows((all) => all?.map((x) => (x.id === r.id ? { ...x, status: "dismissed", done_at: new Date().toISOString() } : x)) ?? null);
+     const { data, error } = await supabase.functions.invoke("spam-desk", { body: { op: "protect", draft_id: r.id } });
+     setBusy(null);
+     const res = data as { ok?: boolean; error?: string; protected?: string; added?: boolean; mail_id?: string } | null;
+     if (error || !res?.ok) { toast.error(res?.error ?? error?.message ?? "Could not save that"); load(); return; }
+     toast("Marked not spam. This sender is safe now.", {
+       description: r.title,
+       action: {
+         label: "Undo",
+         onClick: async () => {
+           if (res.added) await supabase.functions.invoke("spam-desk", { body: { op: "unprotect", from: res.protected, mail_id: res.mail_id } });
+           await set(r, "open", undefined, true);
+         },
+       },
+     });
+   };
+
+   const unsubscribeRow = async (r: Row) => {
+     setBusy(r.id);
+     const senderEmail = r.action?.to ?? "";
+     if (!senderEmail) {
+       setBusy(null);
+       toast.error("No sender email found");
+       load();
+       return;
+     }
+     // Look up the token for this sender's email
+     const { data: tokenData, error: tokenError } = await supabase
+       .from('email_unsubscribe_tokens')
+       .select('token')
+       .eq('email', senderEmail.toLowerCase())
+       .single();
+
+     if (tokenError || !tokenData) {
+       setBusy(null);
+       toast.error("No unsubscribe token found for this sender");
+       load();
+       return;
+     }
+
+     const token = tokenData.token;
+     // Invoke the handle-email-unsubscribe function
+     const { data, error } = await supabase.functions.invoke("handle-email-unsubscribe", { body: { token } });
+     setBusy(null);
+     if (error) {
+       toast.error(error.message);
+       load();
+       return;
+     }
+     const res = data as { success?: boolean; error?: string } | null;
+     if (!res?.success) {
+       toast.error(res?.error ?? "Failed to unsubscribe");
+       load();
+       return;
+     }
+     toast("Unsubscribed from this sender", {
+       description: r.title,
+       action: {
+         label: "Undo",
+         onClick: async () => {
+           // Undo: mark token as unused and remove suppressed email
+           await supabase
+             .from('email_unsubscribe_tokens')
+             .update({ used_at: null })
+             .eq('token', token);
+           await supabase
+             .from('suppressed_emails')
+             .delete()
+             .eq('email', senderEmail.toLowerCase())
+             .eq('reason', 'unsubscribe');
+           toast.success("Unsubscribe undone");
+           load();
+         },
+       },
+     });
+   };
 
   const run = async (job: "morning" | "drafts" | "wrap") => {
     setRunning(job);
@@ -552,10 +612,11 @@ function DraftCard({ d, onSet, onSpam, onNotSpam, busy }: {
             <p className={cn(text.detail, "mt-1 break-words")}>From {a.to_name ? `${a.to_name} <${a.to}>` : a.to} · to {a.mailbox}</p>
           </div>
         </div>
-        <div className="-mx-1 mt-2 flex flex-wrap gap-1 pl-7">
-          <button className={spamBtn} disabled={busy} onClick={() => onSpam(d)}><ShieldAlert className="h-4 w-4" aria-hidden /> Spam</button>
-          <button className={ghost} disabled={busy} onClick={() => onNotSpam(d)}><Check className="h-4 w-4" aria-hidden /> Not spam</button>
-        </div>
+         <div className="-mx-1 mt-2 flex flex-wrap gap-1 pl-7">
+           <button className={spamBtn} disabled={busy} onClick={() => onSpam(d)}><ShieldAlert className="h-4 w-4" aria-hidden /> Spam</button>
+           <button className={ghost} disabled={busy} onClick={() => onNotSpam(d)}><Check className="h-4 w-4" aria-hidden /> Not spam</button>
+           <button className={spamBtn} disabled={busy} onClick={() => unsubscribeRow(d)}>Unsubscribe</button>
+         </div>
       </li>
     );
   }
@@ -587,13 +648,14 @@ function DraftCard({ d, onSet, onSpam, onNotSpam, busy }: {
             rows={Math.min(12, Math.max(4, text_.split("\n").length + 1))}
             className="w-full resize-y rounded-xl border border-white/10 bg-black/20 p-3 text-[15px] leading-relaxed text-white outline-none focus:border-white/25 focus-visible:ring-2 focus-visible:ring-[#0A84FF] bento:border-white/5 bento:bg-[var(--bento-well)]"
           />
-          <div className="-mx-1 flex flex-wrap gap-1">
-            <a href={mailto} className={solid}><Mail className="h-4 w-4" aria-hidden /> Open in Mail</a>
-            <button className={ghost} onClick={copy}><Copy className="h-4 w-4" aria-hidden /> Copy</button>
-            <button className={ghost} disabled={busy} onClick={() => onSet(d, "done", "Marked sent")}><Check className="h-4 w-4" aria-hidden /> Sent</button>
-            <button className={ghost} disabled={busy} onClick={() => onSet(d, "dismissed")}><X className="h-4 w-4" aria-hidden /> Skip</button>
-            <button className={spamBtn} disabled={busy} onClick={() => onSpam(d)}><ShieldAlert className="h-4 w-4" aria-hidden /> Spam</button>
-          </div>
+           <div className="-mx-1 flex flex-wrap gap-1">
+             <a href={mailto} className={solid}><Mail className="h-4 w-4" aria-hidden /> Open in Mail</a>
+             <button className={ghost} onClick={copy}><Copy className="h-4 w-4" aria-hidden /> Copy</button>
+             <button className={ghost} disabled={busy} onClick={() => onSet(d, "done", "Marked sent")}><Check className="h-4 w-4" aria-hidden /> Sent</button>
+             <button className={ghost} disabled={busy} onClick={() => onSet(d, "dismissed")}><X className="h-4 w-4" aria-hidden /> Skip</button>
+             <button className={spamBtn} disabled={busy} onClick={() => onSpam(d)}><ShieldAlert className="h-4 w-4" aria-hidden /> Spam</button>
+             <button className={spamBtn} disabled={busy} onClick={() => unsubscribeRow(d)}>Unsubscribe</button>
+           </div>
         </div>
       )}
     </li>
