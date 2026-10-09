@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useState } from "react";
 import { nextLoaderCard, type LoaderCardData, type LoaderCardsMode } from "./loaderDeck";
 
-/** Fast loads stay a clean mark: the card only shows once the loader has been up this long. */
-const REVEAL_MS = 400;
+/** Card shows immediately — quotes are pre-loaded so there is nothing to wait for. */
+const REVEAL_MS = 0;
 /** Still loading? A new card every 6 seconds. */
 const ROTATE_MS = 6000;
 /** Crossfade: 100 ms out, 100 ms in. */
@@ -50,7 +50,8 @@ export function LoaderCard({ mode }: { mode: LoaderCardsMode }) {
     };
 
     if (reduce) setFadeMs(0);
-    later(showNext, REVEAL_MS);
+    // REVEAL_MS is 0: show the first card right away, no delay.
+    if (REVEAL_MS === 0) showNext(); else later(showNext, REVEAL_MS);
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [mode]);
 

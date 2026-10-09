@@ -262,11 +262,10 @@ export default function PartnerPortal() {
   }, [session?.user.id]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => armNotifySound(), []);
-  // Quotes for the loaders (quotes only, never any admin data). Idle-time, once signed in.
+  // Quotes for the loaders — fetch immediately on first mount so they are ready before sign-in completes.
+  // Re-fetch when the user changes (e.g. a different partner signs in).
   useEffect(() => {
-    if (!session) return;
-    const t = window.setTimeout(() => { void loadPartnerLoaderQuotes(); }, 1500);
-    return () => window.clearTimeout(t);
+    void loadPartnerLoaderQuotes();
   }, [session?.user.id]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const key = useMemo(() => loc.pathname, [loc.pathname]);
