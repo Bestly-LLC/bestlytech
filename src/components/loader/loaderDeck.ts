@@ -217,20 +217,18 @@ export function clearLoaderFacts() {
 }
 
 /**
- * Start the admin deck: fetch once when the browser is idle, then every 10 minutes while the shell is open.
+ * Start the admin deck: fetch immediately, then every 10 minutes while the shell is open.
  * Returns a stop function (which also forgets the facts).
  */
 export function startAdminLoaderDeck(): () => void {
   let stopped = false;
-  const w = window as Window & { requestIdleCallback?: (cb: () => void) => number; cancelIdleCallback?: (id: number) => void };
   const run = () => { if (!stopped) void loadAdminLoaderDeck(); };
-  const idleId = w.requestIdleCallback ? w.requestIdleCallback(run) : window.setTimeout(run, 1500);
+  // Fetch immediately so the very first loader already has fresh quotes.
+  run();
   const timer = window.setInterval(run, REFRESH_MS);
   return () => {
     stopped = true;
     window.clearInterval(timer);
-    if (w.cancelIdleCallback && w.requestIdleCallback) w.cancelIdleCallback(idleId);
-    else window.clearTimeout(idleId);
     clearLoaderFacts();
   };
 }
