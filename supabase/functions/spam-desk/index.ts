@@ -392,6 +392,14 @@ async function opMark(a: A, by: string | null): Promise<Response> {
     v: known ? { ...known, confidence: 1 } as Verdict : null,
   });
   if (c.already) return J({ ok: true, already: true, report: c.report, message: "Already reported." });
+  // Also add to suppressed_emails to block thank-you loop-backs
+  const senderAddr = addrOf(m.from_addr);
+  if (senderAddr) {
+    await db.from('suppressed_emails').upsert(
+      { email: senderAddr, reason: 'spam-report' },
+      { onConflict: ['email'] }
+    );
+  }
   return J({ ok: true, report: { id: c.report.id, verdict, status: c.report.status }, blocked: c.blocked, message: "Reported as spam. Sender blocked." });
 }
 
