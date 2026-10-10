@@ -124,3 +124,9 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.maya-ticket]
   verify_jwt = false
+
+[functions.maya-billing]
+  verify_jwt = false
+
+[functions.maya-pay]
+  verify_jwt = false
