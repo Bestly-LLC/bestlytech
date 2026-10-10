@@ -201,6 +201,17 @@ def host_key(u):
     return host if path in ("", "home", "index.html", "index.php") else f"{host}/{path}"
 
 
+SIGSTOP = {"class", "action", "settlement", "data", "breach", "lawsuit", "unwanted", "calls", "call", "texts", "text", "tcpa", "the", "inc",
+           "llc", "co", "corp", "company", "of", "and", "a", "privacy", "security", "incident"}
+
+
+def sig(name, deadline):
+    """Same settlement listed by two sources: first two distinctive name words + deadline."""
+    n = re.sub(r"\$[\d.,]+\s*[mbk]?\b", " ", (name or "").lower().replace("\u2019", "").replace("'", ""))
+    toks = [t for t in re.findall(r"[a-z0-9]+", n) if t not in SIGSTOP]
+    return " ".join(toks[:2]) + "|" + (deadline or "")
+
+
 # ---------------------------------------------------------------- FIND: classaction.org (HTML cards)
 
 def parse_classaction(raw, today):
@@ -375,6 +386,16 @@ def find(dry, today, state):
         if hk:
             seen[hk] = True
         rows.append(r)
+    sigs = dict(state.setdefault("sigs", {}))
+    uniq = []
+    for r in rows:
+        sg = sig(r["name"], r["deadline"])
+        if sigs.get(sg, r["source_key"]) != r["source_key"]:
+            continue  # same settlement already known under another source's key
+        sigs[sg] = r["source_key"]
+        uniq.append(r)
+    rows = uniq
+    state["sigs"] = sigs if not dry else state["sigs"]
     new = [r for r in rows if r["source_key"] not in state["keys"]]
     if not dry:
         for k in range(0, len(rows), 40):
@@ -408,7 +429,7 @@ Proof required: {proof}
 
 Return JSON with exactly these keys:
 "terms": up to 6 short distinctive names (company, brand, product, app or service) that would appear in the SUBJECT or SENDER of an email from or about that company, e.g. ["Apple","iPhone"]. Real names only, 3+ characters. NEVER generic words like settlement, claim, class, inc, llc, bank, data, privacy, breach, products.
-"plausibility": "none" if the class clearly cannot include him (limited to residents of another state or country, limited to a specific city, neighborhood, property, plant area or store that does not include West Hollywood/Los Angeles, homeowner-only or landlord-only, businesses/employers/franchisees/providers only, minors only, one profession); "low" if it needs a narrow or unusual product most people never owned; "medium" for a common product, service or company many consumers use; "high" for a very broad consumer class (a major app, service, or mainstream product).
+"plausibility": (judge ONLY from the class definition. Never state or assume anything about him that is not given. Not knowing whether he was personally notified, affected or a customer is NOT a reason for none or low: a data breach or product class of a company that serves ordinary consumers is "medium") "none" if the class clearly cannot include him (limited to residents of another state or country, limited to a specific city, neighborhood, property, plant area or store that does not include West Hollywood/Los Angeles, homeowner-only or landlord-only, businesses/employers/franchisees/providers only, minors only, one profession); "low" if it needs a narrow or unusual product most people never owned; "medium" for a common product, service or company many consumers use; "high" for a very broad consumer class (a major app, service, or mainstream product).
 "no_reason": one short sentence if plausibility is none or low, else "".
 "question": ONE short plain yes/no question in second person, max 140 characters, with the key years, like "Did you own a Google Pixel phone between 2016 and 2019?". Required when plausibility is medium or high, else "".
 """
@@ -533,7 +554,8 @@ def judge_one(s, deadline):
     return "no", [], None, reason or "narrow product, no email evidence"
 
 
-def match(dry, limit):
+def match(dry, limit, state):
+    judged = state.setdefault("judged", {})
     t0 = time.time()
     deadline = t0 + MATCH_BUDGET_SEC
     todo = sb("settlement_unjudged_t", p_limit=limit) or []
@@ -543,8 +565,12 @@ def match(dry, limit):
         if time.time() > deadline:
             left += len(todo) - n
             break
+        sg = sig(s.get("name"), s.get("deadline"))
         try:
-            m, ev, q, note = judge_one(s, deadline)
+            if judged.get(sg, s["source_key"]) != s["source_key"]:
+                m, ev, q, note = "no", [], None, "duplicate listing of " + judged[sg]
+            else:
+                m, ev, q, note = judge_one(s, deadline)
         except RuntimeError as e:
             fails += 1
             left += 1
@@ -556,6 +582,7 @@ def match(dry, limit):
             continue
         fails = 0
         tally[m] += 1
+        judged.setdefault(sg, s["source_key"])
         log(f"{m:7} {s.get('name')[:60]} :: {note}")
         if not dry:
             sb("settlement_judge_t", p_settlement=s["id"], p_match=m, p_evidence=ev, p_question=q)
@@ -587,7 +614,9 @@ def main(argv):
         parts.append(f"found {found} open, {new} new")
     if "--find-only" not in argv:
         try:
-            n, tally, left, ai_down = match(dry, limit)
+            n, tally, left, ai_down = match(dry, limit, state)
+            if not dry:
+                save_state(state)
             parts.append(f"judged {n - left}: {tally['proven']} proven, {tally['likely']} likely, {tally['ask']} ask, {tally['no']} no")
             if left:
                 parts.append(f"{left} left unjudged for tomorrow")
