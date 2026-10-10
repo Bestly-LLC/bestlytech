@@ -106,8 +106,10 @@ const words = (code: string) => {
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-export function WeatherNow({ className, useDeviceLocation = false, fixedPlace, fixedNote, onPlace }: {
+export function WeatherNow({ className, useDeviceLocation = false, fixedPlace, fixedNote, onPlace, chipOnly = false }: {
   className?: string;
+  /** Always the compact chip (tap for the full board), even on wide screens. The partner hero uses it. */
+  chipOnly?: boolean;
   /** Partner portal: weather where the viewer is (browser location), not Jared's home. */
   useDeviceLocation?: boolean;
   /** Show this place instead (Jared viewing Eli's screen: Eli's last known place, not Jared's). */
@@ -212,7 +214,7 @@ export function WeatherNow({ className, useDeviceLocation = false, fixedPlace, f
   if (failed || !now || !place) return null;
 
   /* ── wide screen: full board rendered inline, no dialog ───────────────── */
-  if (expanded && board) {
+  if (expanded && board && !chipOnly) {
     return (
       <div className={cn("w-full min-w-0", className)}>
         <WeatherBoard data={board} place={place.label} compact />
@@ -252,7 +254,7 @@ export function WeatherNow({ className, useDeviceLocation = false, fixedPlace, f
         {/* where this is, iOS Weather style: arrow = where you are now, pin = a set place */}
         <p className="flex items-center gap-1 text-[0.75rem] font-semibold text-white/65 bento:text-[#55525c]">
           <PlaceIcon className={cn("h-3 w-3 shrink-0", PlaceIcon === Navigation && "fill-current")} aria-hidden />
-          <span className="truncate">{place.label}</span>
+          <span className="whitespace-nowrap">{place.label}</span>
           {place.approx && !fixedPlace && (
             <button type="button" onClick={preciseNow}
               className="ml-0.5 shrink-0 rounded-full px-1.5 text-[0.6875rem] font-medium text-[#0A84FF] hover:bg-[#0A84FF]/10 bento:text-[#007AFF]"

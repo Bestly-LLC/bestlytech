@@ -16,7 +16,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { supabase } from "@/integrations/supabase/client";
 import { reportToScout } from "@/lib/reportToScout";
 import { cn } from "@/lib/utils";
-import { Check, ChevronDown, ExternalLink, FlaskConical, ListChecks, Loader2, Pencil, Plus, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ExternalLink, FlaskConical, ListChecks, Loader2, Pencil, Plus, X } from "lucide-react";
 
 /* ───────── data ───────── */
 
@@ -196,7 +196,8 @@ const toDraft = (l?: LabsItem): Draft => ({
 });
 /** One link per line: "Label https://…" or just the URL. */
 const parseLinks = (s: string) => s.split("\n").map((line) => line.trim()).filter(Boolean).flatMap((line) => {
-  const m = line.match(/^(.*?)(https?:\/\/\S+)$/);
+  // https links, or bestly:<sheet> to open a portal sheet (bestly:ava opens Ava's scorecard + demo call)
+  const m = line.match(/^(.*?)((?:https?:\/\/|bestly:)\S+)$/);
   return m ? [{ label: m[1].trim() || m[2].replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, ""), href: m[2] }] : [];
 });
 
@@ -306,7 +307,13 @@ export function LabsSheet({ items, reload, admin }: { items: LabsItem[] | null; 
                 {empty && <p className="mt-2 text-sm text-white/50">{admin ? "Tap the pencil to add what it is." : "Jared is adding the details. Ask him on the next call."}</p>}
                 {l.links.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {l.links.map((k) => (
+                    {l.links.map((k) => k.href.startsWith("bestly:") ? (
+                      <button key={k.href} type="button"
+                        onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent("partner-open", { detail: k.href.slice(7) })); }}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#0A84FF] px-3.5 text-sm font-semibold text-[#fff] transition hover:bg-[#0A84FF]/90 active:scale-95">
+                        {k.label} <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    ) : (
                       <a key={k.href} href={k.href} target="_blank" rel="noreferrer"
                         className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#0A84FF]/15 px-3 text-sm font-medium text-[#0A84FF] transition hover:bg-[#0A84FF]/25 active:scale-95">
                         {k.label} <ExternalLink className="h-3.5 w-3.5" />
