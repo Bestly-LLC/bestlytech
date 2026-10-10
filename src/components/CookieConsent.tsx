@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
 export function CookieConsent() {
   const [showBanner, setShowBanner] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const consent = localStorage.getItem("bestly-cookie-consent");
@@ -11,6 +12,21 @@ export function CookieConsent() {
       setShowBanner(true);
     }
   }, []);
+
+  // Publish the bar's height so fixed floating UI (Talk to Maya) sits above it instead of covering Accept.
+  useEffect(() => {
+    const el = barRef.current;
+    if (!showBanner || !el) return;
+    const root = document.documentElement;
+    const set = () => root.style.setProperty("--consent-h", `${el.offsetHeight}px`);
+    set();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(set) : null;
+    ro?.observe(el);
+    return () => {
+      ro?.disconnect();
+      root.style.removeProperty("--consent-h");
+    };
+  }, [showBanner]);
 
   const acceptCookies = () => {
     localStorage.setItem("bestly-cookie-consent", "accepted");
@@ -25,7 +41,7 @@ export function CookieConsent() {
   if (!showBanner) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background p-4 shadow-lg md:p-6">
+    <div ref={barRef} className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background p-4 shadow-lg md:p-6">
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex-1">
