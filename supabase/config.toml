@@ -121,3 +121,6 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.site-go]
     verify_jwt = false
+
+[functions.maya-ticket]
+  verify_jwt = false
