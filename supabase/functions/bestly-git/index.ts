@@ -13,7 +13,7 @@
 // PAT can reach is allowed (the sites behind parentiq.io, hoascope.com, etc. need header fixes),
 // and `repos` lists them.
 //
-// Actions: whoami | repos | list | get | put | delete | commit
+// Actions: whoami | repos | list | get | put | delete | commit | search (v8: file names + code search, for Scout's search_code)
 // Auth: x-git-key header, or Authorization: Bearer <service_role_key>
 //
 // Binary files: pass encoding:"base64" alongside content (per-file on commit) and
@@ -108,6 +108,33 @@ Deno.serve(async (req) => {
         name: r.full_name, private: r.private, default_branch: r.default_branch, homepage: r.homepage, pushed_at: r.pushed_at,
       }));
       return json({ ok: true, repos: list });
+    }
+
+    // ------------------------------------------------------------- search (v8, 2026-10-10)
+    // Scout's search_code: one call across the repo. File names come from the recursive git tree; contents from
+    // GitHub code search (default branch, text matches). "a|b|c" searches each alternative (max 3).
+    if (action === "search") {
+      const terms = String(input.query ?? "").split("|").map((t) => t.trim()).filter(Boolean).slice(0, 3);
+      if (!terms.length) return json({ ok: false, error: "query required" }, 400);
+      const tree = await gh(`/repos/${REPO}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
+      const paths: string[] = tree.ok ? (((tree.body as any)?.tree ?? []) as any[]).filter((t) => t.type === "blob").map((t) => String(t.path)) : [];
+      const SKIP = /(^|\/)(node_modules|dist|build|\.git|\.next|Pods|DerivedData)\//;
+      const norm = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, "");
+      const name_hits = [...new Set(terms.flatMap((t) => paths.filter((p) => !SKIP.test(p) && norm(p).includes(norm(t)))))].slice(0, 25);
+      const content_hits: { path: string; lines: string[] }[] = [];
+      let content_error: string | undefined;
+      for (const t of terms) {
+        const q = `${/\s/.test(t) ? `"${t.replace(/"/g, "")}"` : t} repo:${REPO}`;
+        const res = await gh(`/search/code?per_page=15&q=${encodeURIComponent(q)}`, { headers: { Accept: "application/vnd.github.text-match+json" } });
+        if (!res.ok) { content_error = `code search ${res.status}`; continue; }
+        for (const it of ((res.body as any)?.items ?? []) as any[]) {
+          if (SKIP.test(String(it.path)) || content_hits.some((h) => h.path === it.path)) continue;
+          const lines = ((it.text_matches ?? []) as any[]).map((m) => String(m.fragment ?? "").replace(/\s+/g, " ").trim().slice(0, 240)).filter(Boolean).slice(0, 3);
+          content_hits.push({ path: String(it.path), lines });
+        }
+      }
+      return json({ ok: true, repo: REPO, query: terms.join("|"), name_hits, content_hits: content_hits.slice(0, 20), ...(content_error ? { content_error } : {}),
+        ...(tree.ok ? {} : { tree_error: `tree ${tree.status}` }) });
     }
 
     // ------------------------------------------------------------- whoami
