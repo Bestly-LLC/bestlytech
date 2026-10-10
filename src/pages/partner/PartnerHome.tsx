@@ -40,6 +40,7 @@ import { SCOUT_IDEAS, PartnerScout, ScoutAlert, usePartnerScout, type ScoutState
 import { ProjectSheet, ProjectsButton, ProjectsNav } from "./PartnerProjects";
 import { AvaDemoSheet } from "./PartnerAva";
 import { TodoContextSheet, callLabel } from "@/components/TodoContextSheet";
+import { AgendaPanel, LabsSheet, openLabs, useLabs, type LabsItem } from "./PartnerLabs";
 
 /* ───────── types + helpers ───────── */
 
@@ -152,6 +153,7 @@ export function PartnerHome({ session }: { session: Session }) {
   const [cloud, setCloud] = useState<CloudView>(null);
   const talkUnread = useTalkUnread(!!partner);
   const [bellOpen, setBellOpen] = useState(false);
+  const labs = useLabs();
 
   // Read once: switching tabs rewrites the address, and "view as" must survive that.
   const [asParam] = useState(() => new URLSearchParams(window.location.search).get("as")?.toLowerCase() || null);
@@ -372,7 +374,7 @@ export function PartnerHome({ session }: { session: Session }) {
           )}
 
           {tab === "home" && (
-            <HomeTab reload={load} canCheck={!!partner && !viewAs} first={first} company={partner?.company ?? null} wxFixed={wxFixed} wxNote={wxNote} onWxPlace={viewAs || !partner ? undefined : savePlace} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} openCloud={setCloud} talkUnread={talkUnread} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
+            <HomeTab reload={load} roster={partner?.roster_name ?? "eli"} labs={labs.items} canCheck={!!partner && !viewAs} first={first} company={partner?.company ?? null} wxFixed={wxFixed} wxNote={wxNote} onWxPlace={viewAs || !partner ? undefined : savePlace} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} openCloud={setCloud} talkUnread={talkUnread} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
               files={files} pipe={pipe} go={setTab} openCall={(m) => { setTab("calls"); setOpenCall(m); }}
               openMail={(m) => { setTab("mail"); setOpenMail(m); }} ask={askScout} scout={scout} />
           )}
@@ -392,6 +394,7 @@ export function PartnerHome({ session }: { session: Session }) {
       <ConnectClaude open={connectOpen} onOpenChange={setConnectOpen} />
       <BellSheet notifs={notifs} open={bellOpen} onOpenChange={setBellOpen} />
       <ProjectSheet />
+      <LabsSheet items={labs.items} reload={labs.reload} admin={admin} />
       {tab !== "scout" && <ScoutAlert scout={scout} open={() => setTab("scout")} />}
 
       {/* Mobile tab bar */}
@@ -415,13 +418,13 @@ export function PartnerHome({ session }: { session: Session }) {
 /* ───────── Home ───────── */
 
 function HomeTab(props: {
-  reload: () => void | Promise<void>; canCheck: boolean;
+  reload: () => void | Promise<void>; canCheck: boolean; roster: string; labs: LabsItem[] | null;
   wxFixed: Place | null; wxNote?: string; onWxPlace?: (p: Place) => void;
   first: string; company: string | null; callUrl: string; joinUrl: string; nextMtg: NextEvent | null; studioUnread: number; onConnect: () => void; openCloud: (v: CloudView) => void; talkUnread: number; mine: Todo[]; done: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
   meetings: Meeting[] | null; mail: MailRow[] | null; files: (Att & { mail: MailRow })[]; pipe: { deals: any[]; leads: any[] } | null;
   go: (t: Tab) => void; openCall: (m: Meeting) => void; openMail: (m: MailRow) => void; ask: (q?: string) => void; scout: ScoutState;
 }) {
-  const { reload, canCheck, wxFixed, wxNote, onWxPlace, first, company, callUrl, joinUrl, nextMtg, studioUnread, onConnect, openCloud, talkUnread, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
+  const { reload, canCheck, roster, labs, wxFixed, wxNote, onWxPlace, first, company, callUrl, joinUrl, nextMtg, studioUnread, onConnect, openCloud, talkUnread, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
   // "Check if it's done" for his own to-dos: check only, never closes anything for him
   const pc = usePartnerCheck(reload, mine as CheckRow[]);
   // Tapping a to-do opens where it came from: the call, and the moment it was said.
@@ -618,6 +621,9 @@ function HomeTab(props: {
         </Panel>
         </div>
         <div className="contents lg:col-span-1 lg:flex lg:flex-col lg:gap-5">
+        {/* Agenda: tops the right column (next to Join), right under the to-dos on a phone */}
+        <AgendaPanel roster={roster} me={props.me || "jared"} labs={labs} className="order-2 lg:order-none"
+          when={nextMtg ? `Next meeting: ${whenLabel(nextMtg.start)}` : null} />
         <Panel title="Ask Scout" icon={Binoculars} tone="order-2 lg:order-none bg-gradient-to-br from-[#0A84FF]/15 to-transparent">
           {(scout.thinking || scout.unread > 0) && (
             <button onClick={() => go("scout")} className="mb-3 flex w-full items-center gap-2 rounded-xl bg-[#0A84FF]/15 px-3 py-2.5 text-left text-sm font-medium">
@@ -678,6 +684,17 @@ function HomeTab(props: {
             </span>
           </button>
         </div>
+        {/* Labs: full width under the grid, so the 8 tiles stay two even rows */}
+        <button type="button" onClick={() => openLabs()}
+          className="group relative mt-3 flex w-full items-center gap-4 overflow-hidden rounded-[1.4rem] bg-gradient-to-br from-violet-500 to-indigo-600 p-4 text-left text-indigo-700 shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 active:scale-[0.99]">
+          <span aria-hidden className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/15" />
+          <span className="relative shrink-0 transition group-hover:scale-105">{ART.labs}</span>
+          <span className="relative min-w-0 flex-1">
+            <span className="block text-[1.05rem] font-semibold leading-tight text-[#fff]">Bestly Labs</span>
+            <span className="block text-sm text-[#fff] opacity-85">New tech on the shelf, and what we could bring to market</span>
+          </span>
+          <ChevronRight className="relative h-5 w-5 shrink-0 text-[#fff] opacity-80" aria-hidden />
+        </button>
       </section>
     </div>
   );
