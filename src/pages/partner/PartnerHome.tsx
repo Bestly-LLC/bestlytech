@@ -9,14 +9,14 @@
  *   Files  every attachment and linked doc from those emails
  *
  * Only what RLS lets a partner read. To add a tab: add it to TABS and render it in the switch.
- * To add a shortcut: add it to SHORTCUTS (art lives in partnerArt.tsx).
+ * To add a shortcut: add it to SHORTCUTS (sidebar on desktop, a list at the bottom of Home on phones).
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
   ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, Eye, ExternalLink, FileArchive, FileImage, FileSpreadsheet, FileText,
   Files as FilesIcon, Home as HomeIcon, Inbox, LayoutGrid, Link2, Loader2, LogOut, Mail, Mic, Paperclip, Presentation,
-  Bell, Binoculars, Fingerprint, Moon, Plug, Search, Sun, Users, Video,
+  Bell, Binoculars, CalendarDays, Clapperboard, Cloud, FlaskConical, Fingerprint, MessageCircle, Moon, Plug, Search, SquareKanban, Sun, Users, Video,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -65,13 +65,16 @@ const TABS: { id: Tab; label: string; icon: typeof HomeIcon }[] = [
 
 // Studio signs him in with his own passkey; everything on cloud.bestly.tech opens inside the
 // portal instead (partner-nc signs in as his seat), so he never needs a Nextcloud login.
-const SHORTCUTS = [
-  { id: "studio", href: "https://studio.bestly.tech", label: "Studio", sub: "Review queue", tone: "from-violet-500 to-fuchsia-500 text-violet-600" },
-  { id: "talk", opens: "talk" as const, label: "Talk", sub: "Chat with Jared", tone: "from-sky-400 to-blue-600 text-blue-600" },
-  { id: "ops", opens: "board" as const, label: "Ops board", sub: "What's moving", tone: "from-amber-400 to-orange-500 text-orange-600" },
-  { id: "files", opens: "cloud" as const, label: "Cloud files", sub: "Your folders", tone: "from-emerald-400 to-teal-600 text-teal-600" },
-  { id: "calendar", opens: "calendar" as const, label: "Calendar", sub: "What's booked", tone: "from-rose-400 to-pink-600 text-pink-600" },
-  { id: "ava", opens: "ava" as const, label: "Ava", sub: "Scorecard + demo call", tone: "from-teal-400 to-cyan-600 text-cyan-700" },
+// Desktop: a "Shortcuts" group in the sidebar. Phone: a list at the bottom of Home.
+// Ava lives in Bestly Labs now (her card there opens the scorecard + demo call).
+type Shortcut = { id: string; label: string; sub: string; icon: typeof HomeIcon; tint: string; href?: string; opens?: CloudView; labs?: true };
+const SHORTCUTS: Shortcut[] = [
+  { id: "studio", href: "https://studio.bestly.tech", label: "Studio", sub: "Review queue", icon: Clapperboard, tint: "bg-violet-500" },
+  { id: "talk", opens: "talk", label: "Talk", sub: "Chat with Jared", icon: MessageCircle, tint: "bg-[#0A84FF]" },
+  { id: "ops", opens: "board", label: "Ops board", sub: "What's moving", icon: SquareKanban, tint: "bg-orange-500" },
+  { id: "files", opens: "cloud", label: "Cloud files", sub: "Your folders", icon: Cloud, tint: "bg-teal-500" },
+  { id: "calendar", opens: "calendar", label: "Calendar", sub: "What's booked", icon: CalendarDays, tint: "bg-pink-500" },
+  { id: "labs", labs: true, label: "Bestly Labs", sub: "New tech, Ava included", icon: FlaskConical, tint: "bg-indigo-500" },
 ];
 
 // Projects (Vesta invites, links) live in ./PartnerProjects: sidebar folder + mobile header button.
@@ -154,6 +157,12 @@ export function PartnerHome({ session }: { session: Session }) {
   const talkUnread = useTalkUnread(!!partner);
   const [bellOpen, setBellOpen] = useState(false);
   const labs = useLabs();
+  // Labs cards can open a portal sheet (Ava's card opens her scorecard + demo call).
+  useEffect(() => {
+    const on = (e: Event) => setCloud((e as CustomEvent<CloudView>).detail);
+    window.addEventListener("partner-open", on);
+    return () => window.removeEventListener("partner-open", on);
+  }, []);
 
   // Read once: switching tabs rewrites the address, and "view as" must survive that.
   const [asParam] = useState(() => new URLSearchParams(window.location.search).get("as")?.toLowerCase() || null);
@@ -266,6 +275,11 @@ export function PartnerHome({ session }: { session: Session }) {
   }, [mail]);
 
   const askScout = (q?: string) => { setAskDraft(q); setTab("scout"); };
+  const openShortcut = (sc: Shortcut) => {
+    if (sc.labs) openLabs();
+    else if (sc.opens) setCloud(sc.opens);
+    else if (sc.href) window.open(sc.href, "_blank", "noopener");
+  };
   const shell = cn("admin-shell min-h-dvh text-white", bento ? "admin-bento bg-[#F3F2EE]" : "bg-black");
 
   if (partner === undefined) {
@@ -297,49 +311,58 @@ export function PartnerHome({ session }: { session: Session }) {
           <AdminMark className="h-8 w-8" />
           <span className="text-[1rem] font-semibold tracking-tight">Bestly <span className="text-white/60">· Partner</span></span>
         </div>
-        <nav className="mt-8 space-y-1" aria-label="Portal">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setTab(id)} aria-current={tab === id ? "page" : undefined}
-              className={cn("flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium transition",
-                tab === id ? "bg-white/[0.09] text-white bento:bg-[#111114] bento:text-[#fff]" : "text-white/60 hover:bg-white/[0.05] hover:text-white")}>
-              <Icon className="h-[18px] w-[18px]" />{label}
-              {badge[id] ? <span className="ml-auto rounded-full bg-[#0A84FF] px-2 text-xs font-semibold text-[#fff]">{badge[id]}</span>
-                : busy[id] ? <Loader2 className="ml-auto h-4 w-4 animate-spin text-white/60" aria-label="Scout is thinking" /> : null}
+        {/* Everything between the logo and Join scrolls, so a short laptop screen never hides a row */}
+        <div className="-mx-2 mt-8 min-h-0 flex-1 overflow-y-auto px-2 pb-6 [mask-image:linear-gradient(to_bottom,black_calc(100%-28px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <nav className="space-y-1" aria-label="Portal">
+            {TABS.map(({ id, label, icon: Icon }) => (
+              <button key={id} onClick={() => setTab(id)} aria-current={tab === id ? "page" : undefined}
+                className={cn("flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium transition active:scale-[0.98]",
+                  tab === id ? "bg-white/[0.09] text-white bento:bg-[#111114] bento:text-[#fff]" : "text-white/60 hover:bg-white/[0.05] hover:text-white")}>
+                <Icon className="h-[18px] w-[18px]" />{label}
+                {badge[id] ? <span className="ml-auto rounded-full bg-[#0A84FF] px-2 text-xs font-semibold text-[#fff]">{badge[id]}</span>
+                  : busy[id] ? <Loader2 className="ml-auto h-4 w-4 animate-spin text-white/60" aria-label="Scout is thinking" /> : null}
+              </button>
+            ))}
+          </nav>
+          <div className="mt-2"><ProjectsNav /></div>
+          <p className="mb-1 mt-6 px-3 text-[11px] font-semibold uppercase tracking-widest text-white/45">Shortcuts</p>
+          <ul className="space-y-0.5">
+            {SHORTCUTS.map((sc) => (
+              <li key={sc.id}><ShortcutRow sc={sc} onOpen={openShortcut} badge={sc.id === "studio" ? notifs.unread : sc.id === "talk" ? talkUnread : 0} /></li>
+            ))}
+            <li>
+              <button type="button" onClick={() => setConnectOpen(true)}
+                className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 transition hover:bg-white/[0.05] hover:text-white active:scale-[0.98]">
+                <span className="grid h-6 w-6 place-items-center rounded-[7px] bg-amber-500 text-[#fff]"><Plug className="h-3.5 w-3.5" /></span>
+                Connect my Claude
+              </button>
+            </li>
+          </ul>
+          <div className="mt-6 space-y-0.5 border-t border-white/[0.06] pt-4 bento:border-white/5">
+            <label className="flex h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
+              <Moon className="h-[18px] w-[18px]" /> Dark mode
+              <Switch className="ml-auto data-[state=checked]:bg-[#30D158]" checked={!bento} onCheckedChange={toggleTheme} aria-label="Dark mode" />
+            </label>
+            <PasskeyRow userId={session.user.id} />
+            <button onClick={signOut} className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white">
+              <LogOut className="h-4 w-4" /> Sign out
             </button>
-          ))}
-        </nav>
-        <div className="mt-2"><ProjectsNav /></div>
-        <div className="mt-6 space-y-1 border-t border-white/[0.06] pt-4 bento:border-white/5">
-          <button onClick={() => setBellOpen(true)} className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
-            <Bell className="h-[18px] w-[18px]" /> Studio
-            {notifs.unread > 0 && <span className="ml-auto rounded-full bg-red-500 px-2 text-xs font-semibold text-[#fff]">{notifs.unread}</span>}
-          </button>
-          <button onClick={() => setConnectOpen(true)} className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
-            <Plug className="h-[18px] w-[18px]" /> Connect my Claude
-          </button>
+          </div>
         </div>
-        <div className="mt-auto space-y-2">
+        <div className="border-t border-white/[0.06] pt-4 bento:border-white/5">
           <a href={joinUrl} target="_blank" rel="noreferrer"
             className="flex min-h-11 flex-col items-center justify-center rounded-xl bg-emerald-500 px-3 py-2 text-center text-[0.95rem] font-semibold text-[#052E1F] transition hover:bg-emerald-400 active:scale-[0.98]">
             <span className="flex items-center gap-2"><Video className="h-[18px] w-[18px]" /> {nextMtg ? "Join next meeting" : "Join our call"}</span>
             {nextMtg && <span className="text-xs font-medium opacity-85">{whenLabel(nextMtg.start)}</span>}
           </a>
-          <label className="flex h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-3 text-[0.95rem] font-medium text-white/60 hover:bg-white/[0.05] hover:text-white">
-            <Moon className="h-[18px] w-[18px]" /> Dark mode
-            <Switch className="ml-auto data-[state=checked]:bg-[#30D158]" checked={!bento} onCheckedChange={toggleTheme} aria-label="Dark mode" />
-          </label>
-          <PasskeyRow userId={session.user.id} />
-          <button onClick={signOut} className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white">
-            <LogOut className="h-4 w-4" /> Sign out
-          </button>
         </div>
       </aside>
 
       <main className="lg:pl-64">
         {/* Mobile header */}
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/[0.06] bg-black/70 px-4 pb-2 pt-[max(0.6rem,env(safe-area-inset-top))] backdrop-blur-xl lg:hidden bento:border-white/5 bento:bg-[#F3F2EE]/80">
-          <span className="flex items-center gap-2 text-[0.95rem] font-semibold tracking-tight">
-            <AdminMark className="h-7 w-7" /> Bestly <span className="text-white/60">· Partner</span>
+          <span className="flex items-center gap-2 whitespace-nowrap text-[0.95rem] font-semibold tracking-tight">
+            <AdminMark className="h-7 w-7" /> Bestly <span className="hidden text-white/60 min-[420px]:inline">· Partner</span>
           </span>
           <div className="flex items-center gap-1">
             <ProjectsButton />
@@ -374,7 +397,7 @@ export function PartnerHome({ session }: { session: Session }) {
           )}
 
           {tab === "home" && (
-            <HomeTab reload={load} roster={partner?.roster_name ?? "eli"} labs={labs.items} canCheck={!!partner && !viewAs} first={first} company={partner?.company ?? null} wxFixed={wxFixed} wxNote={wxNote} onWxPlace={viewAs || !partner ? undefined : savePlace} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} openCloud={setCloud} talkUnread={talkUnread} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
+            <HomeTab reload={load} openShortcut={openShortcut} shortcutBadge={(id) => (id === "studio" ? notifs.unread : id === "talk" ? talkUnread : 0)} roster={partner?.roster_name ?? "eli"} labs={labs.items} canCheck={!!partner && !viewAs} first={first} company={partner?.company ?? null} wxFixed={wxFixed} wxNote={wxNote} onWxPlace={viewAs || !partner ? undefined : savePlace} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} openCloud={setCloud} talkUnread={talkUnread} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
               files={files} pipe={pipe} go={setTab} openCall={(m) => { setTab("calls"); setOpenCall(m); }}
               openMail={(m) => { setTab("mail"); setOpenMail(m); }} ask={askScout} scout={scout} />
           )}
@@ -419,12 +442,13 @@ export function PartnerHome({ session }: { session: Session }) {
 
 function HomeTab(props: {
   reload: () => void | Promise<void>; canCheck: boolean; roster: string; labs: LabsItem[] | null;
+  openShortcut: (sc: Shortcut) => void; shortcutBadge: (id: string) => number;
   wxFixed: Place | null; wxNote?: string; onWxPlace?: (p: Place) => void;
   first: string; company: string | null; callUrl: string; joinUrl: string; nextMtg: NextEvent | null; studioUnread: number; onConnect: () => void; openCloud: (v: CloudView) => void; talkUnread: number; mine: Todo[]; done: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
   meetings: Meeting[] | null; mail: MailRow[] | null; files: (Att & { mail: MailRow })[]; pipe: { deals: any[]; leads: any[] } | null;
   go: (t: Tab) => void; openCall: (m: Meeting) => void; openMail: (m: MailRow) => void; ask: (q?: string) => void; scout: ScoutState;
 }) {
-  const { reload, canCheck, roster, labs, wxFixed, wxNote, onWxPlace, first, company, callUrl, joinUrl, nextMtg, studioUnread, onConnect, openCloud, talkUnread, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
+  const { reload, canCheck, roster, labs, openShortcut, shortcutBadge, wxFixed, wxNote, onWxPlace, first, company, callUrl, joinUrl, nextMtg, studioUnread, onConnect, openCloud, talkUnread, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
   // "Check if it's done" for his own to-dos: check only, never closes anything for him
   const pc = usePartnerCheck(reload, mine as CheckRow[]);
   // Tapping a to-do opens where it came from: the call, and the moment it was said.
@@ -446,36 +470,37 @@ function HomeTab(props: {
       <section className={cn(card, "relative overflow-hidden p-5 sm:p-7")}>
         <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#0A84FF]/20 blur-3xl bento:bg-[#0A84FF]/10" />
         <div aria-hidden className="pointer-events-none absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-emerald-400/10 blur-3xl" />
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
+        {/* Greeting on the left, the weather chip on the right (tap it for the full forecast) */}
+        <div className="relative flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
             <PartnerMark className="h-16 w-16 shrink-0 sm:h-20 sm:w-20" label="Globe" excited={excited} />
-            {/* never narrower than the greeting: the hover target must cover the whole name, or the
-                swap can't start. The weather / call button wrap below instead. */}
-            <div className="shrink-0">
+            {/* the greeting itself never wraps (its hover target must cover the whole name, or the
+                swap can't start); the line under it may wrap between its parts */}
+            <div className="min-w-0">
               <p className="text-sm text-white/60">{today}</p>
               <GreetingSwap greeting={greeting()} name={first} company={company} onExcite={setExcited}
-                className="whitespace-nowrap text-[clamp(1.3rem,6vw,2.3rem)] font-bold leading-tight tracking-tight" />
+                className="whitespace-nowrap text-[clamp(1.4rem,6vw,2.3rem)] font-bold leading-tight tracking-[-0.02em]" />
               <p className="mt-0.5 text-[0.95rem] text-white/60">
-                {mine.length ? `${mine.length} to-do${mine.length === 1 ? "" : "s"} on you` : "Nothing on you right now"}
-                {deals ? ` · ${deals} deal${deals === 1 ? "" : "s"} in motion` : ""}
+                {mine.length ? <span className="whitespace-nowrap">{mine.length} to-do{mine.length === 1 ? "" : "s"} on you</span> : "Nothing on you right now"}
+                {deals ? <> · <span className="whitespace-nowrap">{deals} deal{deals === 1 ? "" : "s"} in motion</span></> : ""}
               </p>
             </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
-            <WeatherNow useDeviceLocation fixedPlace={wxFixed} fixedNote={wxNote} onPlace={onWxPlace} className="self-start" />
-            <a href={joinUrl} target="_blank" rel="noreferrer"
-              className="inline-flex min-h-12 items-center justify-center gap-2.5 rounded-2xl bg-emerald-500 px-5 py-2 text-[#052E1F] shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)] transition hover:bg-emerald-400 active:scale-[0.98]">
-              <Video className="h-5 w-5 shrink-0" />
-              <span className="text-left leading-tight">
-                <span className="block text-[1rem] font-semibold">{nextMtg ? "Join next meeting" : "Join our call"}</span>
-                {nextMtg && <span className="block text-xs font-medium opacity-90">{whenLabel(nextMtg.start)} · {nextMtg.title}</span>}
-              </span>
-            </a>
-            <button onClick={() => ask()}
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white/[0.09] px-5 text-[1rem] font-semibold text-white transition hover:bg-white/[0.14] active:scale-[0.98] bento:bg-[#111114] bento:text-[#fff]">
-              <Binoculars className="h-5 w-5" /> Ask Scout
-            </button>
-          </div>
+          <WeatherNow chipOnly useDeviceLocation fixedPlace={wxFixed} fixedNote={wxNote} onPlace={onWxPlace} className="self-start md:shrink-0" />
+        </div>
+
+        {/* Two actions, one height, capsules: full width stacked on a phone, side by side above that */}
+        <div className="relative mt-6 flex flex-col gap-2 sm:flex-row">
+          <a href={joinUrl} target="_blank" rel="noreferrer"
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-emerald-500 px-6 text-[1rem] font-semibold text-[#052E1F] shadow-[0_8px_24px_-10px_rgba(16,185,129,0.7)] transition hover:bg-emerald-400 active:scale-[0.97]">
+            <Video className="h-5 w-5 shrink-0" />
+            <span className="whitespace-nowrap">{nextMtg ? <>Join <span className="hidden sm:inline">next </span>meeting</> : "Join our call"}</span>
+            {nextMtg && <span className="whitespace-nowrap font-medium opacity-75">· {whenLabel(nextMtg.start)}</span>}
+          </a>
+          <button onClick={() => ask()}
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-white/[0.09] px-6 text-[1rem] font-semibold text-white transition hover:bg-white/[0.14] active:scale-[0.97] bento:bg-[#111114] bento:text-[#fff] bento:hover:bg-[#2a2a2e]">
+            <Binoculars className="h-5 w-5" /> Ask Scout
+          </button>
         </div>
         <div className="relative mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {stats.map(({ label, value, icon: Icon, tab }) => {
@@ -663,57 +688,49 @@ function HomeTab(props: {
         </div>
       </div>
 
-      {/* Shortcuts */}
-      <section>
-        <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-white/60">Shortcuts</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Tile href={callUrl} art="call" label="Our call" sub="Jump into the room" tone="from-emerald-400 to-green-600 text-green-700" />
-          {SHORTCUTS.map((s) => (
-            <Tile key={s.id} art={s.id} label={s.label} sub={s.sub} tone={s.tone}
-              href={"href" in s ? (s as { href: string }).href : undefined}
-              onClick={"opens" in s ? () => openCloud((s as { opens: CloudView }).opens) : undefined}
-              badge={s.id === "studio" ? studioUnread : s.id === "talk" ? talkUnread : 0} />
+      {/* Shortcuts: the sidebar has them on desktop; on a phone they are an iOS-style list here */}
+      <section className="lg:hidden">
+        <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-white/60">Shortcuts</h2>
+        <ul className={cn(card, "divide-y divide-white/[0.06] overflow-hidden p-1.5")}>
+          {SHORTCUTS.map((sc) => (
+            <li key={sc.id}><ShortcutRow sc={sc} onOpen={openShortcut} badge={shortcutBadge(sc.id)} withSub /></li>
           ))}
-          <button onClick={onConnect}
-            className="group relative flex aspect-[5/4] sm:aspect-[8/5] lg:aspect-[2/1] flex-col justify-between overflow-hidden rounded-[1.4rem] bg-gradient-to-br from-orange-400 to-amber-600 p-4 text-left text-orange-700 shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 active:scale-[0.98]">
-            <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15" />
-            <span className="relative transition group-hover:scale-105">{ART.claude}</span>
-            <span className="relative">
-              <span className="block text-[0.975rem] font-semibold leading-tight text-[#fff]">Connect my Claude</span>
-              <span className="block text-xs text-[#fff] opacity-80">Use this portal from Claude</span>
-            </span>
-          </button>
-        </div>
-        {/* Labs: full width under the grid, so the 8 tiles stay two even rows */}
-        <button type="button" onClick={() => openLabs()}
-          className="group relative mt-3 flex w-full items-center gap-4 overflow-hidden rounded-[1.4rem] bg-gradient-to-br from-violet-500 to-indigo-600 p-4 text-left text-indigo-700 shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 active:scale-[0.99]">
-          <span aria-hidden className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/15" />
-          <span className="relative shrink-0 transition group-hover:scale-105">{ART.labs}</span>
-          <span className="relative min-w-0 flex-1">
-            <span className="block text-[1.05rem] font-semibold leading-tight text-[#fff]">Bestly Labs</span>
-            <span className="block text-sm text-[#fff] opacity-85">New tech on the shelf, and what we could bring to market</span>
-          </span>
-          <ChevronRight className="relative h-5 w-5 shrink-0 text-[#fff] opacity-80" aria-hidden />
-        </button>
+          <li>
+            <button type="button" onClick={onConnect}
+              className="flex min-h-[3.5rem] w-full items-center gap-3 rounded-xl px-3 text-left transition active:scale-[0.99] active:bg-white/[0.05]">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-amber-500 text-[#fff]"><Plug className="h-[18px] w-[18px]" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[0.975rem] font-medium">Connect my Claude</span>
+                <span className="block text-xs text-white/60">Use this portal from Claude</span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-white/40" aria-hidden />
+            </button>
+          </li>
+        </ul>
       </section>
     </div>
   );
 }
 
-function Tile({ href, onClick, art, label, sub, tone, badge = 0 }: { href?: string; onClick?: () => void; art: string; label: string; sub: string; tone: string; badge?: number }) {
-  const Box = (onClick ? "button" : "a") as any;
-  const props = onClick ? { type: "button", onClick } : { href, target: "_blank", rel: "noreferrer" };
+/** One shortcut: an iOS Settings-style tinted icon, the name, and a badge when something is waiting. */
+function ShortcutRow({ sc, onOpen, badge = 0, withSub = false }: { sc: Shortcut; onOpen: (sc: Shortcut) => void; badge?: number; withSub?: boolean }) {
+  const Icon = sc.icon;
   return (
-    <Box {...props}
-      className={cn("group relative flex aspect-[5/4] sm:aspect-[8/5] lg:aspect-[2/1] w-full flex-col justify-between overflow-hidden rounded-[1.4rem] bg-gradient-to-br p-4 text-left shadow-[0_10px_30px_-14px_rgba(0,0,0,0.6)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-14px_rgba(0,0,0,0.7)] active:scale-[0.98]", tone)}>
-      <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15" />
-      {badge > 0 && <span className="absolute right-3 top-3 min-w-[22px] rounded-full bg-red-500 px-1.5 text-center text-xs font-bold leading-[22px] text-[#fff] shadow">{badge}</span>}
-      <span className="relative transition group-hover:scale-105">{ART[art]}</span>
-      <span className="relative">
-        <span className="block text-[0.975rem] font-semibold leading-tight text-[#fff]">{label}</span>
-        <span className="block text-xs text-[#fff] opacity-80">{sub}</span>
+    <button type="button" onClick={() => onOpen(sc)}
+      className={cn("flex w-full items-center gap-3 rounded-xl px-3 text-left font-medium transition active:scale-[0.98]",
+        withSub ? "min-h-[3.5rem] active:bg-white/[0.05]" : "h-11 text-[0.95rem] text-white/60 hover:bg-white/[0.05] hover:text-white")}>
+      <span className={cn("grid shrink-0 place-items-center text-[#fff]", sc.tint, withSub ? "h-8 w-8 rounded-[9px]" : "h-6 w-6 rounded-[7px]")}>
+        <Icon className={withSub ? "h-[18px] w-[18px]" : "h-3.5 w-3.5"} />
       </span>
-    </Box>
+      {withSub ? (
+        <span className="min-w-0 flex-1">
+          <span className="block text-[0.975rem]">{sc.label}</span>
+          <span className="block text-xs font-normal text-white/60">{sc.sub}</span>
+        </span>
+      ) : <span className="min-w-0 flex-1">{sc.label}</span>}
+      {badge > 0 && <span className="rounded-full bg-red-500 px-2 text-xs font-semibold leading-5 text-[#fff]">{badge}</span>}
+      {withSub && <ChevronRight className="h-4 w-4 shrink-0 text-white/40" aria-hidden />}
+    </button>
   );
 }
 
