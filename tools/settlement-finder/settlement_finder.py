@@ -181,7 +181,7 @@ def squash(s, n=None):
 def payout_methods(text):
     t = (text or "").lower()
     out = []
-    for label, pat in (("check", r"\bcheck\b|\bchecks\b"), ("paypal", r"paypal"), ("venmo", r"venmo"), ("zelle", r"zelle"),
+    for label, pat in (("check", r"\bby check\b|\bpaper check|\bmailed check|\ba check\b|\bcheck payment"), ("paypal", r"paypal"), ("venmo", r"venmo"), ("zelle", r"zelle"),
                        ("direct deposit", r"direct deposit|\bach\b"), ("digital payment", r"digital payment|e-?payment|virtual (?:card|prepaid)"),
                        ("gift card", r"gift card"), ("store credit", r"store credit|voucher")):
         if re.search(pat, t):
@@ -294,6 +294,8 @@ def parse_tca(raw, today):
         elig = squash(" ".join(sec.get("Who's Eligible", [])), 800)
         proof_txt = squash(" ".join(sec.get("Proof of Purchase", [])), 300)
         admin = (sec.get("Claims Administrator") or [None])[0]
+        if admin and re.search(r"\bv\.|\bvs\b", admin):
+            admin = None  # that line is the case caption, not an administrator
         desc = strip_html(it.findtext("description") or "")
         d = re.match(r"\s*(.{2,60}?)\s+(?:has\s+)?(?:agreed|will pay|to pay|reached)\b", desc)
         slug = link.rstrip("/").rsplit("/", 1)[-1]
@@ -303,7 +305,8 @@ def parse_tca(raw, today):
             "class_definition": elig or None,
             "proof_required": None if not proof_txt else (False if re.match(r"(?i)^(n/?a|none|no)\b", proof_txt) else True),
             "est_payout": squash(" ".join(sec.get("Potential Award", [])), 120) or None, "deadline": dl.isoformat(),
-            "payout_methods": payout_methods(strip_html(body_html)), "status": "open", "source": "topclassactions.com",
+            "payout_methods": payout_methods(" ".join(lines[:lines.index(next(x for x in lines if x in TCA_HEADERS))] if any(x in TCA_HEADERS for x in lines) else lines)),
+            "status": "open", "source": "topclassactions.com",
             "raw": {"proof_text": proof_txt, "pub": it.findtext("pubDate"), "feed": TCA_FEED},
         })
     return rows, skipped
