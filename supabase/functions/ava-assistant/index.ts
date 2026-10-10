@@ -1219,6 +1219,16 @@ async function evidenceRetry(): Promise<number> {
   return n;
 }
 
+async function signedUrl(b: Record<string, unknown>): Promise<Response> {
+  const callId = String(b.call_id ?? "");
+  if (!callId) return jerr("call_id required", 400);
+  const { data, error } = await db.from("ava_calls").select("evidence_path").eq("id", callId).maybeSingle();
+  if (error || !data?.evidence_path) return jerr(error?.message ?? "evidence_path not found", 404);
+  const { data: signed, error: signError } = await db.storage.from("ava-evidence").createSignedUrl(data.evidence_path, 3600);
+  if (signError || !signed?.signedUrl) return jerr(signError?.message ?? "failed to create signed url", 502);
+  return Response.json({ ok: true, url: signed.signedUrl }, { headers: CORS });
+}
+
 async function evidence(b: Record<string, unknown>): Promise<Response> {
   const id = String(b.call_id ?? "");
   if (!id) return Response.json({ ok: true, saved: await evidenceRetry() }, { headers: CORS });
@@ -1796,6 +1806,7 @@ Deno.serve(async (req) => {
   if (body.action === "spam_complaint") return spamComplaint(body);
   if (body.action === "spam_letter") return spamLetter(body);
   if (body.action === "evidence") return evidence(body);
+  if (body.action === "signed_url") return signedUrl(body);
   if (body.action === "cal_status") return calStatus();
   if (body.action === "cal_secret_put") return calSecretPut(body);
   if (body.action === "cal_save") return calSave(body);
