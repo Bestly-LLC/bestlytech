@@ -36,7 +36,7 @@ const SAY_CAP = 40;
 const VOICE_ID = /^[A-Za-z0-9]{10,40}$/;
 const OWNER_ID = /^[A-Za-z0-9]{10,100}$/;   // shared-library owner ids are 64 characters
 type Src = "ava" | "rg";
-const LABEL: Record<Src, string> = { ava: "Ava", rg: "RoofGuard Ava" };
+const LABEL: Record<Src, string> = { ava: "Ava", rg: "Reese" };
 const URL_OF: Record<Src, string> = { ava: "https://bestly.tech/admin/ava", rg: "https://bestly.tech/admin/roofguard" };
 /** Same speech settings both Avas were set up with (flash v2 is the only English-safe fast model). */
 const tts = (voice_id: string) => ({ voice_id, model_id: "eleven_flash_v2", stability: 0.55, similarity_boost: 0.8, optimize_streaming_latency: 4, speed: 1.05 });

@@ -104,15 +104,15 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto border-white/10 bg-[#0b0d12] p-0 text-white sm:max-w-xl bento:bg-[#F3F2EE]">
         <div className="border-b border-white/[0.06] px-5 pb-4 pt-[max(1.25rem,env(safe-area-inset-top))]">
-          <SheetTitle className="text-lg font-semibold text-white">Ava</SheetTitle>
+          <SheetTitle className="text-lg font-semibold text-white">Reese</SheetTitle>
           <SheetDescription className="mt-1 text-sm text-white/60">
             {view === "score" ? "How she's doing against the goal: 6 meetings booked with you every week."
-              : view === "meetings" ? "The meetings Ava booked for you. Put them on your Google Calendar with a Meet link."
-              : view === "says" ? "Everything Ava is allowed to say on a RoofGuard call. For anything else, she takes a message."
-              : "Type a number and Ava calls it in a few seconds. Whoever answers plays the person who looks after the roofs at their company (or a sample hospital), and Ava runs a real RoofGuard call with them."}
+              : view === "meetings" ? "The meetings Reese booked for you. Put them on your Google Calendar with a Meet link."
+              : view === "says" ? "Everything Reese is allowed to say on a RoofGuard call. For anything else, she takes a message."
+              : "Type a number and Reese calls it in a few seconds. Whoever answers plays the person who looks after the roofs at their company (or a sample hospital), and Reese runs a real RoofGuard call with them."}
           </SheetDescription>
-          <div role="tablist" aria-label="Ava" className="mt-3 flex max-w-full overflow-x-auto rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:inline-flex">
-            {([["score", "Scorecard"], ["meetings", "Meetings"], ["demo", "Demo call"], ["says", "What Ava says"]] as const).map(([id, label]) => (
+          <div role="tablist" aria-label="Reese" className="mt-3 flex max-w-full overflow-x-auto rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:inline-flex">
+            {([["score", "Scorecard"], ["meetings", "Meetings"], ["demo", "Demo call"], ["says", "What Reese says"]] as const).map(([id, label]) => (
               <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}
                 data-state={view === id ? "active" : "inactive"}
                 className={cn("min-h-[2.75rem] shrink-0 whitespace-nowrap rounded-lg px-3 text-sm sm:min-w-[5.5rem] sm:px-4 font-medium transition-colors",
@@ -136,23 +136,23 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
                 <span className="mb-1.5 block text-sm font-medium text-white/80">Their first name <span className="text-white/60">(optional)</span></span>
                 <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" placeholder="e.g. Bill" maxLength={40}
                   className="h-[3.25rem] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[1.0625rem] text-white outline-none placeholder:text-white/55 focus:border-white/30 bento:bg-[var(--bento-well)]" />
-                <span className="mt-1.5 block text-xs text-white/60">Ava asks for them by name, like a real cold call.</span>
+                <span className="mt-1.5 block text-xs text-white/60">Reese asks for them by name, like a real cold call.</span>
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium text-white/80">Their company <span className="text-white/60">(optional)</span></span>
                 <input value={company} onChange={(e) => setCompany(e.target.value)} autoComplete="off" placeholder="e.g. Sunset Plaza Properties" maxLength={60}
                   className="h-[3.25rem] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[1.0625rem] text-white outline-none placeholder:text-white/55 focus:border-white/30 bento:bg-[var(--bento-well)]" />
-                <span className="mt-1.5 block text-xs text-white/60">Ava calls about their buildings. Leave it empty for a sample hospital.</span>
+                <span className="mt-1.5 block text-xs text-white/60">Reese calls about their buildings. Leave it empty for a sample hospital.</span>
               </label>
               {err && <p role="alert" className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</p>}
               <button type="submit" disabled={!valid || busy}
                 className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-5 text-[1.0625rem] font-semibold text-[#052E1F] transition active:scale-[0.98] disabled:opacity-40">
                 {busy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <PhoneCall className="h-5 w-5" aria-hidden />}
-                {busy ? "Calling…" : "Have Ava call"}
+                {busy ? "Calling…" : "Have Reese call"}
               </button>
               <ul className="space-y-1.5 rounded-2xl bg-white/[0.04] p-4 text-sm text-white/65">
                 <li className="font-medium text-white/85">It's a practice call</li>
-                <li>They play the person who looks after the roofs. Ava asks real questions and keeps the conversation going.</li>
+                <li>They play the person who looks after the roofs. Reese asks real questions and keeps the conversation going.</li>
                 <li>Play the receptionist first: "Who's calling?"</li>
                 <li>Push back: "We already have a roofer."</li>
                 <li>Step out of the role and ask how she works. She answers, then picks back up.</li>
@@ -201,7 +201,7 @@ export function AvaDemoSheet({ open, onOpenChange }: { open: boolean; onOpenChan
               )}
 
               <LiveTranscript lines={phase === "done" && result?.transcript?.length ? result.transcript : lines} live={phase === "calling"}
-                them={name.trim() || "Them"} className={phase === "calling" ? "max-h-[55vh]" : ""} />
+                them={name.trim() || "Them"} agent="Reese" className={phase === "calling" ? "max-h-[55vh]" : ""} />
 
               {phase === "done" && (
                 <button type="button" onClick={reset}

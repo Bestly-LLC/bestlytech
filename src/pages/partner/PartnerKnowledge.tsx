@@ -54,13 +54,13 @@ export function AvaKnowledge() {
     if (!draft) return;
     const topic = draft.topic.trim(), fact = draft.fact.trim();
     if (!topic) { setFormErr("Add a topic."); return; }
-    if (!fact) { setFormErr("Add what Ava can say."); return; }
+    if (!fact) { setFormErr("Add what Reese can say."); return; }
     setBusy(true); setFormErr(null);
     const { error } = await rpc("ava_knowledge_propose", { p_topic: topic, p_fact: fact, p_id: draft.id });
     setBusy(false);
     if (error) { setFormErr(plain(error, "That didn't save. Try again in a minute.")); return; }
     setDraft(null);
-    setNote(draft.id ? "Updated. Jared reviews it before Ava uses it." : "Sent. Jared reviews it before Ava uses it.");
+    setNote(draft.id ? "Updated. Jared reviews it before Reese uses it." : "Sent. Jared reviews it before Reese uses it.");
     void load();
   };
 
@@ -80,7 +80,7 @@ export function AvaKnowledge() {
     <div className="space-y-4">
       <button type="button" onClick={() => { setFormErr(null); setNote(null); setDraft({ id: null, topic: "", fact: "" }); }}
         className={cn(BTN, "min-h-[3rem] w-full bg-emerald-500 text-[#052E1F]")}>
-        <Plus className="h-4 w-4" aria-hidden />Suggest something Ava can say</button>
+        <Plus className="h-4 w-4" aria-hidden />Suggest something Reese can say</button>
 
       {note && <p role="status" className="flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />{note}</p>}
       {rowErr && <p role="alert" className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">{rowErr}</p>}
@@ -118,10 +118,10 @@ export function AvaKnowledge() {
       )}
 
       {items && (
-        <section aria-label="What Ava can say" className={CARD}>
-          <h3 className="px-5 pt-4 text-xs font-semibold uppercase tracking-wider text-white/60">What Ava can say now</h3>
+        <section aria-label="What Reese can say" className={CARD}>
+          <h3 className="px-5 pt-4 text-xs font-semibold uppercase tracking-wider text-white/60">What Reese can say now</h3>
           {live.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-white/60">Nothing yet. Ava takes a message for everything.</p>
+            <p className="px-5 py-4 text-sm text-white/60">Nothing yet. Reese takes a message for everything.</p>
           ) : (
             <ul className="divide-y divide-white/5">
               {live.map((it) => (
@@ -138,8 +138,8 @@ export function AvaKnowledge() {
       <Sheet open={!!draft} onOpenChange={(o) => { if (!o && !busy) setDraft(null); }}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto border-white/10 bg-[#0b0d12] p-0 text-white sm:max-w-md bento:bg-[#F3F2EE]">
           <div className="border-b border-white/[0.06] px-5 pb-4 pt-[max(1.25rem,env(safe-area-inset-top))]">
-            <SheetTitle className="text-lg font-semibold text-white">{draft?.id ? "Edit your suggestion" : "Suggest something Ava can say"}</SheetTitle>
-            <SheetDescription className="mt-1 text-sm text-white/60">Jared reviews it before Ava uses it. Plain facts only, nothing private.</SheetDescription>
+            <SheetTitle className="text-lg font-semibold text-white">{draft?.id ? "Edit your suggestion" : "Suggest something Reese can say"}</SheetTitle>
+            <SheetDescription className="mt-1 text-sm text-white/60">Jared reviews it before Reese uses it. Plain facts only, nothing private.</SheetDescription>
           </div>
           <form className="flex-1 space-y-4 px-5 py-5" onSubmit={(e) => { e.preventDefault(); if (!busy) void save(); }}>
             <label className="block">
@@ -148,7 +148,7 @@ export function AvaKnowledge() {
                 className={cn(FIELD, "h-[3.25rem]")} />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-sm font-medium text-white/80">What Ava can say</span>
+              <span className="mb-1.5 block text-sm font-medium text-white/80">What Reese can say</span>
               <textarea value={draft?.fact ?? ""} rows={5} maxLength={600} placeholder="One or two plain sentences" onChange={(e) => setDraft((d) => d && { ...d, fact: e.target.value })}
                 className={cn(FIELD, "py-3 leading-relaxed")} />
               <span className="mt-1 block text-right text-xs tabular-nums text-white/55"><span className="whitespace-nowrap">{(draft?.fact ?? "").length} / 600</span></span>

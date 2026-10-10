@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { ScrollSheet } from "./AvaSheet";
 import { coachChanged, openCall, onOpenCoach, takePendingFocus } from "./coachBus";
+import { agentName } from "./AvaShared";
 import { APRICOT, Score, pct, plural, ring, rpc, when12, type Arm, type Play, type PlayStatus, type Source } from "./coachShared";
 
 type Filter = "waiting" | "testing" | "live" | "off";
@@ -393,7 +394,7 @@ export function RuleSheet({ source, open, edit, onClose, onSaved }: { source: So
   return (
     <ScrollSheet open={open} onClose={requestClose}
       title={<><span className="grid h-8 w-8 place-items-center rounded-lg" style={{ background: `${APRICOT}26`, color: APRICOT }}><GraduationCap className="h-4 w-4" aria-hidden /></span>{edit ? "Edit rule" : "New rule"}</>}
-      description={source === "ava" ? "One short instruction for Ava." : "One short instruction for RoofGuard Ava."}>
+      description={`One short instruction for ${agentName(source)}.`}>
       <form className="space-y-5 pb-4 pt-1" onSubmit={(e) => { e.preventDefault(); if (!saving && !bigAsk && text && !reason && text.length <= MAX) void save(); }}>
         {discardAsk && (
           <div role="alertdialog" aria-label="Discard your changes?" className="rounded-2xl bg-white/[0.06] p-3 ring-1 ring-white/15">

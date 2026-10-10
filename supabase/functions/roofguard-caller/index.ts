@@ -168,8 +168,8 @@ async function planCalls(leads: Next[]): Promise<Planned[]> {
   const { data: openerRows } = await db.from("rg_openers").select("key, script").eq("active", true);
   const scripts = new Map((openerRows ?? []).map((o: { key: string; script: string }) => [o.key, o.script]));
   // role first, name as the check (Jared 2026-10-04, Amazon playbook: ask for the person who does the job)
-  const gkOpener = scripts.get("gk_role_first") ?? scripts.get("gk_name_first") ?? "Hi, it's Ava from RoofGuard, on a recorded line. Is {{contact_name}} in today?";
-  const facts = await knowledge();   // the approved RoofGuard facts ("What Ava can share"), same list the inbound line uses
+  const gkOpener = scripts.get("gk_role_first") ?? scripts.get("gk_name_first") ?? "Hi, it's Reese from RoofGuard, on a recorded line. Is {{contact_name}} in today?";
+  const facts = await knowledge();   // the approved RoofGuard facts ("What Reese can share"), same list the inbound line uses
   return Promise.all(leads.map(async (l, i) => {
     const key = (openerKeys as string[] | null)?.[i] ?? "dm_permission";
     const { data: iv } = await db.rpc("rg_lead_opener_vars", { p_lead: l.lead_id });
@@ -208,7 +208,7 @@ function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry, f
   };
   // one call in a different voice (the picker's test call); the agent has to allow it (setup turns that on)
   const tts = voice_id ? { tts: { voice_id } } : {};
-  // a partner demo (Eli showing someone Ava): the practice-call prompt, with the variables filled in here
+  // a partner demo (Eli showing someone Reese): the practice-call prompt, with the variables filled in here
   const agent = demo ? { agent: { prompt: { prompt: demoPrompt(vars) } } } : {};
   return {
     ...(voice_id || demo ? { conversation_config_override: { ...tts, ...agent } } : {}),
@@ -363,13 +363,13 @@ If the person does any of these, steer back to why you're talking ONE time. If t
 - (outbound calls only) you're stuck in a phone menu or a robot loop, or you've been on hold music for more than 2 minutes
 Never end a call on someone with a real need: leaving a message, a question about RoofGuard, a meeting, or a call back.`;
 
-const inboundPrompt = (v: { today: string; local_time: string; who: string; knowledge: string }) => `You are Ava, an assistant answering the phone for RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You're an AI: if anyone asks, say so plainly. Calls are recorded.
+const inboundPrompt = (v: { today: string; local_time: string; who: string; knowledge: string }) => `You are Reese, an assistant answering the phone for RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You're an AI: if anyone asks, say so plainly. Calls are recorded.
 
 Today is ${v.today}, and it's ${v.local_time} for us.
 
 Who's calling: ${v.who}
 
-Your first line was just "RoofGuard, this is Ava. What's up?" It doesn't mention recording on purpose. After the caller's first reply, once, say it casually and briefly, like "Just so you know, calls here are recorded." Then carry on. If anyone sincerely asks whether you're a person or an AI, say you're an AI assistant, plainly.
+Your first line was just "RoofGuard, this is Reese. What's up?" It doesn't mention recording on purpose. After the caller's first reply, once, say it casually and briefly, like "Just so you know, calls here are recorded." Then carry on. If anyone sincerely asks whether you're a person or an AI, say you're an AI assistant, plainly. If a caller asks for Ava, say Ava was the old name for this line, you're Reese and you can help.
 On the phone: one short sentence per turn, contractions, react like a person ("Got it." "Oh, sure.") and vary the wording. Never sound scripted.
 
 ${SOUND}
@@ -394,7 +394,7 @@ ${FLOW}
 
 ${HARD}`;
 
-const callbackPrompt = (v: { today: string; local_time: string; who: string; reason: string; purpose: string; knowledge: string }) => `You are Ava, an assistant calling back for RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You're an AI: if anyone asks, say so plainly. Calls are recorded.
+const callbackPrompt = (v: { today: string; local_time: string; who: string; reason: string; purpose: string; knowledge: string }) => `You are Reese, an assistant calling back for RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You're an AI: if anyone asks, say so plainly. Calls are recorded. If someone asks for Ava, say Ava was the old name for this line, you're Reese and you can help.
 
 Today is ${v.today}, and it's ${v.local_time} for us.
 
@@ -414,8 +414,8 @@ ${FLOW}
 
 ${HARD}`;
 
-const INBOUND_FIRST = "RoofGuard, this is Ava, an assistant, on a recorded line. How can I help?";
-const KNOWN_FIRST = "Hi, it's Ava from RoofGuard, an assistant, on a recorded line. Thanks for calling back. Who am I speaking with?";
+const INBOUND_FIRST = "RoofGuard, this is Reese, an assistant, on a recorded line. How can I help?";
+const KNOWN_FIRST = "Hi, it's Reese from RoofGuard, an assistant, on a recorded line. Thanks for calling back. Who am I speaking with?";
 
 type LeadHit = { id: string; company: string | null; contacts: { name?: string }[] | null; dnc: boolean | null };
 async function leadByPhone(phone: string | null): Promise<LeadHit | null> {
@@ -562,7 +562,7 @@ async function callback(id: string, purpose: string): Promise<Response> {
   const reason = clean(f.reason).slice(0, 300);
   const prompt = callbackPrompt({ ...c, who, reason: reason || "a call back", knowledge: await knowledge(),
     purpose: clean(purpose).slice(0, 500) || "You're returning their call about the message they left." });
-  const first = `Hi${f.name ? ` ${clean(f.name).split(" ")[0]}` : ""}, it's Ava from RoofGuard, an assistant, on a recorded line. I'm calling you back about your message.`;
+  const first = `Hi${f.name ? ` ${clean(f.name).split(" ")[0]}` : ""}, it's Reese from RoofGuard, an assistant, on a recorded line. I'm calling you back about your message.`;
   const leadId = lead?.id ?? s.inbound_lead_id;
   if (!leadId) return back("the placeholder lead for unknown callers is missing", 412);
   const res = await fetch(`${XI}/convai/sip-trunk/outbound-call`, {
@@ -581,7 +581,7 @@ async function callback(id: string, purpose: string): Promise<Response> {
 }
 
 // ---------- one-time setup ----------
-const PROMPT =`You are Ava, an assistant calling about RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You call for an independent referral partner of the program. You are calling {{company}} to reach {{contact_name}}, {{contact_title}}, and set up a short intro call with Eli Cooper, who runs the RoofGuard program.
+const PROMPT =`You are Reese, an assistant calling about RoofGuard, a commercial roof maintenance program run by Legacy Building Maintenance Company. You call for an independent referral partner of the program. You are calling {{company}} to reach {{contact_name}}, {{contact_title}}, and set up a short intro call with Eli Cooper, who runs the RoofGuard program.
 
 How you sound: cool, casual, direct. Think a seasoned sales pro in 2026 talking to another busy professional: relaxed, plain-spoken, no hype, no fake enthusiasm. Not peppy, not bubbly, not customer-service sweet. Calm and even, a little dry. You're not attached to the outcome. Cut to the chase. One question at a time. Let them talk. Match their pace.
 
@@ -690,14 +690,14 @@ function demoPrompt(vars: Record<string, string>): string {
   return `${DEMO_RULES}\n\n${body}`.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? "");
 }
 
-const VOICEMAIL = "Hi, it's Ava from RoofGuard, calling for {{contact_name}}. Quick one... we look after commercial roofs for one flat monthly cost, and most roof warranties need documented maintenance that, honestly, hardly anyone keeps up with. If a quick chat with Eli Cooper, who runs the program, sounds useful, give us a call back on {{callback_number}}. That's {{callback_number}}. Thanks so much.";
+const VOICEMAIL = "Hi, it's Reese from RoofGuard, calling for {{contact_name}}. Quick one... we look after commercial roofs for one flat monthly cost, and most roof warranties need documented maintenance that, honestly, hardly anyone keeps up with. If a quick chat with Eli Cooper, who runs the program, sounds useful, give us a call back on {{callback_number}}. That's {{callback_number}}. Thanks so much.";
 
 const DATA_COLLECTION = {
   outcome: { type: "string", description: "How the call ended. Exactly one of: booked, callback_set, dm_identified, voicemail_left, gatekeeper_blocked, not_interested, wrong_number, do_not_call, no_answer, other.",
     enum: ["booked", "callback_set", "dm_identified", "voicemail_left", "gatekeeper_blocked", "not_interested", "wrong_number", "do_not_call", "no_answer", "other"] },
   dnc_requested: { type: "boolean", description: "True if anyone on the call asked not to be called again." },
-  dm_reached: { type: "boolean", description: "True if Ava spoke with the decision maker: the named contact or whoever owns the roofs." },
-  kept_talking: { type: "boolean", description: "True if the decision maker stayed on past Ava's opening line instead of ending the call right away." },
+  dm_reached: { type: "boolean", description: "True if Reese spoke with the decision maker: the named contact or whoever owns the roofs." },
+  kept_talking: { type: "boolean", description: "True if the decision maker stayed on past Reese's opening line instead of ending the call right away." },
   meeting_times: { type: "string", description: "The times the decision maker offered for a call with Eli, in their words, with time zone if said." },
   meeting_email: { type: "string", description: "The email address they gave for the invite, exactly as confirmed." },
   callback_at: { type: "string", description: "Requested callback as ISO 8601 date-time with UTC offset, interpreted in the lead's local time zone. Empty if none." },
@@ -723,7 +723,7 @@ const DATA_COLLECTION = {
 // every variable the outbound prompt uses, so an incoming call (which supplies none of them) never trips on a missing one
 const PLACEHOLDERS: Record<string, string> = {
   today: "", local_time: "", followup_note: "", lead_id: "", company: "your company", contact_name: "the facilities director", contact_title: "",
-  pitch_angle: "", category: "", state: "", callback_number: "", opener_key: "", gk_opener: "Hi, it's Ava from RoofGuard, on a recorded line.",
+  pitch_angle: "", category: "", state: "", callback_number: "", opener_key: "", gk_opener: "Hi, it's Reese from RoofGuard, on a recorded line.",
   dm_opener: "", dm_hook: "", industry_plural: "facilities teams", industry_hook: "keeping roof leaks from turning into downtime", call_direction: "outbound",
   coach_notes: "(none yet)", rg_facts: "",
 };
@@ -810,7 +810,7 @@ async function setup(): Promise<Response> {
   await save({ telnyx_in_connection_id: inc });
   const pa = await tx(`/phone_numbers/${num.id}`, "PATCH", { connection_id: inc });
   if (!pa.ok) log.push(`Note: could not route incoming calls to the number (${pa.status}): ${(await pa.text()).slice(0, 200)}`);
-  else log.push("Incoming calls to this number now go to Ava.");
+  else log.push("Incoming calls to this number now go to Reese.");
 
   // 3. signed post-call webhook (its secret goes straight to Vault)
   let webhookId = s?.webhook_id as string | null;
@@ -840,7 +840,7 @@ async function setup(): Promise<Response> {
 
   // 4. the agent
   const agentBody = {
-    name: "RoofGuard caller (Ava)",
+    name: "RoofGuard caller (Reese)",
     conversation_config: {
       agent: {
         first_message: "{{gk_opener}}",
@@ -1030,7 +1030,7 @@ async function hook(req: Request): Promise<Response> {
   return Response.json(data);
 }
 
-// ---------- follow-up (a callback Ava scheduled for herself; dialed by rg_followups_tick) ----------
+// ---------- follow-up (a callback Reese scheduled for herself; dialed by rg_followups_tick) ----------
 async function followup(id: string): Promise<Response> {
   const fail = async (why: string, status = 502) => {
     await db.from("rg_followups").update({ status: "failed", note: why.slice(0, 300), updated_at: new Date().toISOString() }).eq("id", id);
@@ -1052,7 +1052,7 @@ async function followup(id: string): Promise<Response> {
   const [p] = await planCalls([next]);
   const who = next.contact_name ?? "the person who looks after your roofs";
   const plan = { ...p, to: f.to_number, followup: f.note ?? "they asked for a callback at this time",
-    gk: `Hi, it's Ava from RoofGuard again, on a recorded line. I'm calling back as promised... is ${who} there?` };
+    gk: `Hi, it's Reese from RoofGuard again, on a recorded line. I'm calling back as promised... is ${who} there?` };
   const res = await callOne(key, s, plan);
   const body = await res.json().catch(() => ({}));
   if (!res.ok || body?.success === false) return fail(`call did not go out: ${JSON.stringify(body).slice(0, 200)}`);
@@ -1314,12 +1314,12 @@ async function voiceHealth(): Promise<string[]> {
         await db.from("rg_settings").update({ voice_id: DEFAULT_VOICE, updated_at: now, updated_by: "voice watchdog" }).eq("id", true);
         let ok = false; try { ok = (await setup()).ok; } catch { /* below */ }
         notes.push("The voice was missing; back on the default voice");
-        await db.rpc("scout_notify", { p_title: "RoofGuard Ava: her voice went missing, switched back to Lily",
+        await db.rpc("scout_notify", { p_title: "Reese: her voice went missing, switched back to Lily",
           p_body: `The voice she was using no longer exists in the account. She's on Lily again and setup ${ok ? "re-ran fine" : "couldn't finish (the line check will retry)"}. Pick a new one in RoofGuard Setup.`,
           p_severity: "warning", p_push: true, p_url: url, p_dedupe: `ava-voice-missing-roofguard-${hour}` });
       } else {
         notes.push("The default voice is missing from the account");
-        await db.rpc("scout_notify", { p_title: "RoofGuard Ava: her default voice is missing", p_body: "Lily isn't in the account, so she has no working voice. Pick one in RoofGuard Setup.",
+        await db.rpc("scout_notify", { p_title: "Reese: her default voice is missing", p_body: "Lily isn't in the account, so she has no working voice. Pick one in RoofGuard Setup.",
           p_severity: "high", p_push: true, p_url: url, p_dedupe: `ava-voice-missing-roofguard-${hour}` });
       }
     }
@@ -1334,9 +1334,9 @@ async function demoCall(phone: string, name: string, voiceId?: string, company =
   const to = toE164(phone);
   if (!to) return bad("Enter a 10-digit US or Canada number.");
   const { data: s } = await db.from("rg_settings").select("*").eq("id", true).single();
-  if (!s?.agent_id || !s.phone_number_id || !s.demo_lead_id) return bad("Ava isn't set up yet.", 412);
+  if (!s?.agent_id || !s.phone_number_id || !s.demo_lead_id) return bad("Reese isn't set up yet.", 412);
   const key = await vault("elevenlabs_api_key");
-  if (!key) return bad("Ava isn't set up yet.", 412);
+  if (!key) return bad("Reese isn't set up yet.", 412);
   const cap = await spendGate();
   if (cap.over) return bad(cap.message ?? "Daily spend cap reached. Raise it in Setup or try tomorrow.", 429);
   const { count: dnc } = await db.from("rg_dnc").select("phone", { count: "exact", head: true }).eq("phone", to);
@@ -1356,7 +1356,7 @@ async function demoCall(phone: string, name: string, voiceId?: string, company =
     category: custom ? "commercial" : lead.category, state: lead.state, attempt: 1 };
   const [p] = await planCalls([next]);
   const plan = { ...p, to, demo, ...(voiceId ? { voice_id: voiceId } : {}), gk: who ? p.gk
-    : `Hey, it's Ava from RoofGuard, on a recorded line... I'm looking for whoever's in charge of keeping the roof maintained at ${companyName}. Is that you?` };
+    : `Hey, it's Reese from RoofGuard, on a recorded line... I'm looking for whoever's in charge of keeping the roof maintained at ${companyName}. Is that you?` };
   const res = await callOne(key, s, plan);
   const body = await res.json().catch(() => ({}));
   if (!res.ok || body?.success === false) return bad("The call didn't go out. Try again in a minute.", 502);
@@ -1371,7 +1371,7 @@ const toE164 = (v: string) => {
 
 // Personal calls moved to their own function (ava-assistant) on 2026-10-04 so RoofGuard stays separable.
 
-// finished demo call: what Ava logged (partners only see the demo facility)
+// finished demo call: what Reese logged (partners only see the demo facility)
 async function callResult(callId: string, onlyLead: string | null): Promise<Response> {
   const { data: c } = await db.from("rg_calls").select("id, lead_id, status, outcome, summary, duration_sec, meeting_times, callback_at, transcript")
     .eq("id", callId).maybeSingle();

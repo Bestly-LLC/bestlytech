@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, Settings } from "lucide-react";
 import { ScrollSheet } from "./AvaSheet";
-import { SpendCapEditor, fmtPhone, rpcArgs, type Source } from "./AvaShared";
+import { SpendCapEditor, agentName, fmtPhone, rpcArgs, type Source } from "./AvaShared";
 import { LIGHTS_REFRESH } from "./AvaStatusLights";
 import { CalendarSettingsControls } from "./AvaCalendars";
 import { CellForwardingControls, CellSwitch } from "./AvaCell";
@@ -184,7 +184,7 @@ function MorningBrief() {
 export function AvaSettingsSheet({ source, open, onOpenChange }: { source: Source; open: boolean; onOpenChange: (o: boolean) => void }) {
   const personal = source === "ava";
   return (
-    <ScrollSheet open={open} onClose={() => onOpenChange(false)} title={<><Settings className="h-5 w-5 text-white/70" aria-hidden />{personal ? "Ava settings" : "RoofGuard Ava settings"}</>}
+    <ScrollSheet open={open} onClose={() => onOpenChange(false)} title={<><Settings className="h-5 w-5 text-white/70" aria-hidden />{agentName(source)} settings</>}
       description={personal ? "Things you set once. Each one saves as you change it." : "Limits for the RoofGuard line. Each one saves as you change it."}>
       <div className="pb-4">
         <Group title="Voice agent" hint={"Pushes her latest script, voice and tools to the phone agent. About 30\u00A0seconds."}><VoiceAgent source={source} /></Group>

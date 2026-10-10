@@ -84,7 +84,7 @@ export function AvaTopBar({ onCalled, extra, onOpenSettings, onOpenSetup }: { on
           </button>
         )}
         {num && (
-          <button type="button" onClick={() => void copy()} aria-label={`RoofGuard Ava's number ${fmt(num)}, copy`}
+          <button type="button" onClick={() => void copy()} aria-label={`Reese's number ${fmt(num)}, copy`}
             className="group inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white/[0.04] px-3.5 ring-1 ring-white/10 transition hover:bg-white/[0.07]">
             <span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500/15 text-emerald-300"><Phone className="h-3.5 w-3.5" aria-hidden /></span>
             <span className="text-left leading-tight">
@@ -121,7 +121,7 @@ export function AvaTopBar({ onCalled, extra, onOpenSettings, onOpenSetup }: { on
               </button>
             </PopoverTrigger>
             <PopoverContent align="end" className="admin-shell w-72 border-white/10 bg-[#111114] p-4 text-white">
-              <div className="text-[13px] font-semibold">What Ava has cost</div>
+              <div className="text-[13px] font-semibold">What Reese has cost</div>
               <dl className="mt-2 space-y-1.5 text-sm">
                 {[
                   ["Today", costs.today], ["This month (calls)", costs.month],
@@ -497,14 +497,14 @@ function InCall({ call, onNew, onDone, onRedial, redialBusy, redialErr }: { call
   const label = !st ? (miss > 20 ? "Can't reach the call right now" : call.incoming ? "Connecting…" : "Dialing…")
     : ended ? (st.status === "failed" ? "Call failed" : "Call ended")
     : st.status === "in-progress" || st.status === "processing" ? "On the call" : call.incoming ? "Answering" : "Ringing…";
-  const who = call.fn === "roofguard-caller" ? "RoofGuard Ava" : "Ava";
+  const who = call.fn === "roofguard-caller" ? "Reese" : "Ava";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <SheetTitle className="sr-only">Call with {call.who}</SheetTitle>
-      <SheetDescription className="sr-only">Live transcript of Ava's call</SheetDescription>
+      <SheetDescription className="sr-only">Live transcript of {who}'s call</SheetDescription>
       <div className="shrink-0 text-center">
-        <AvaOrb size={96} speaking={!ended} className="mx-auto mb-2" label={ended ? "Ava, call ended" : "Ava, on the call"} />
+        <AvaOrb size={96} speaking={!ended} className="mx-auto mb-2" label={ended ? `${who}, call ended` : `${who}, on the call`} />
         <div className="flex items-center justify-center gap-2 text-[13px] text-white/50">
           {call.incoming ? <><PhoneIncoming className="h-3.5 w-3.5" aria-hidden />{who} answering{call.kind ? ` · ${call.kind}` : ""}</> : <>{who} calling{call.kind ? ` · ${call.kind}` : ""}</>}
         </div>

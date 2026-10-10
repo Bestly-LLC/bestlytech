@@ -110,7 +110,7 @@ export function CoachReviews({ source, pending, onReviewed }: { source: Source; 
             {running ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Sparkles className="h-4 w-4" aria-hidden />}{running ? "Reviewing…" : "Review now"}</button>
         )}
       </header>
-      <p className="px-4 pb-1 pt-1 text-xs text-white/60">The Coach reviews each call about 10&nbsp;minutes after it ends, on free AI. "Review now" does the waiting ones right away (up to 6 per Ava), which can take a minute.</p>
+      <p className="px-4 pb-1 pt-1 text-xs text-white/60">The Coach reviews each call about 10&nbsp;minutes after it ends, on free AI. "Review now" does the waiting ones right away (up to 6 per line), which can take a minute.</p>
       <div aria-live="polite" className="px-4">
         {running && <p className="py-1 text-sm text-white/70">Reviewing the waiting calls. You can keep using the page.</p>}
         {note && <p role={note.ok ? "status" : "alert"} className={cn("flex items-start gap-1.5 py-1 text-sm", note.ok ? "text-emerald-300" : "text-amber-200")}>

@@ -109,7 +109,7 @@ export function AvaMeetings() {
         ) : st.connected && st.needs_reconnect ? (
           <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-amber-500/10 p-4 ring-1 ring-amber-400/30">
             <AlertTriangle className="h-5 w-5 shrink-0 text-amber-300" aria-hidden />
-            <p className="min-w-[200px] flex-1 text-sm text-amber-100">Ava can't add meetings to your calendar until you reconnect Google. It takes a few seconds.</p>
+            <p className="min-w-[200px] flex-1 text-sm text-amber-100">Reese can't add meetings to your calendar until you reconnect Google. It takes a few seconds.</p>
             <button type="button" onClick={() => void connect()} disabled={connecting} className={cn(BTN, "bg-amber-400 text-[#2B1D00]")}>
               {connecting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}Reconnect Google Calendar</button>
           </div>
@@ -121,7 +121,7 @@ export function AvaMeetings() {
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <p className="min-w-[200px] flex-1 text-sm text-white/70">Connect your Google Calendar once. Then each meeting Ava books can go on it with a Google Meet link, plus a private prep note 15 minutes before.</p>
+            <p className="min-w-[200px] flex-1 text-sm text-white/70">Connect your Google Calendar once. Then each meeting Reese books can go on it with a Google Meet link, plus a private prep note 15 minutes before.</p>
             <button type="button" onClick={() => void connect()} disabled={connecting} className={cn(BTN, "bg-emerald-500 text-[#052E1F]")}>
               {connecting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CalendarPlus className="h-4 w-4" aria-hidden />}Connect Google Calendar</button>
           </div>
@@ -133,7 +133,7 @@ export function AvaMeetings() {
       {err && <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load your meetings. Pull down to refresh in a minute.</div>}
       {!k && !err && <div className="h-32 animate-pulse rounded-3xl bg-white/[0.03] ring-1 ring-white/10" aria-label="Loading meetings" />}
       {k && k.booked_list.length === 0 && (
-        <p className="rounded-3xl bg-white/[0.03] p-5 text-sm text-white/60 ring-1 ring-white/10">No meetings yet. They show up here the moment Ava books one.</p>
+        <p className="rounded-3xl bg-white/[0.03] p-5 text-sm text-white/60 ring-1 ring-white/10">No meetings yet. They show up here the moment Reese books one.</p>
       )}
       {k && k.booked_list.length > 0 && (
         <ul className="space-y-3">
