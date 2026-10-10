@@ -79,6 +79,17 @@ export const ART: Record<string, ReactNode> = {
       <path d="M39 18c3 1 6 4 7 7" stroke="currentColor" strokeWidth="3.4" strokeOpacity=".55" />
     </Svg>
   ),
+  // Bestly Labs: a flask with bubbles rising
+  labs: (
+    <Svg>
+      <path d="M25 9h14M28 9v15L13 48c-2 4 0 8 5 8h28c5 0 7-4 5-8L36 24V9" fill={W} />
+      <path d="M18 42h28l4 7c1 2 0 3-2 3H16c-2 0-3-1-2-3z" fill="currentColor" fillOpacity=".55" />
+      <circle cx="27" cy="36" r="2.6" fill="currentColor" />
+      <circle cx="36" cy="31" r="2" fill="currentColor" fillOpacity=".7" />
+      <circle cx="47" cy="12" r="3" fill={W} fillOpacity=".7" />
+      <circle cx="53" cy="20" r="2" fill={W} fillOpacity=".5" />
+    </Svg>
+  ),
   // Connect my Claude: a plug meeting a socket, with a spark
   claude: (
     <Svg>
