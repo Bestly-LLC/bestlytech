@@ -6,12 +6,12 @@ Built 2026-10-06. Spark's main video tool (`make_montage` in `supabase/functions
 - OpenMontage is pinned at commit `9327439` in `/mnt/ssd/apps/openmontage` (`make setup`; Remotion arm64; Piper).
   Never edit that tree (AGPL). `om_render.py` copies `comp/<brand>` to `remotion-composer/projects/bestly-<brand>`
   (git-excluded) and renders with OpenMontage's `VideoCompose` in atelier mode, adding the Pi's Chromium.
-- Voices: `/mnt/ssd/montage/voices` (`python -m piper.download_voices en_US-hfc_female-medium --data-dir ...`).
+- Piper voices (manual switch only): `/mnt/ssd/montage/voices` (`python -m piper.download_voices en_US-hfc_female-medium --data-dir ...`).
 - Jobs: `studio_video_jobs` (migration `20261006200000_montage_spark_ltx.sql`). Job files: `/mnt/ssd/montage/jobs/<id>`.
 
 ## Flow
 1. `montage_claim` -> brand writer (`brands/<slug>.py`, free AI via `/opt/bestly/cron/freellm.py`, the brand's claim rules + fact check).
-2. Piper voices each scene; scene lengths follow the voice; a quiet synthesized pad sits under it.
+2. ElevenLabs voices each scene (held, not Piper, if it cannot; see Voice); scene lengths follow the voice; a quiet synthesized pad sits under it.
 3. b-roll (optional): `montage_clip_request` orders vertical LTX clips and parks the job; `montage_claim` resumes it
    when no clip is still queued/rendering (or after 90 min, with plain cards for missing clips).
 4. Render + OpenMontage review, then our checks (1080x1920, length, loudness, size), thumbnail, upload to `review`.
@@ -40,10 +40,11 @@ Brand files the videos use: `fetch-assets.sh` downloads Cookie Yeti and Inventor
 4. Render one free text-only job through `montage_start`, look at frames, then name the brand in `make_montage`'s description in `studio-chat`.
 (`comp/<slug>` is still supported: leave `COMP_DIR` unset and om_render copies `comp/<slug>`.)
 
-## Voice (ElevenLabs first, Piper as the backup)
-`worker.voice()` picks ONE provider per video (never mixes voices). Track V, 2026-10-06.
+## Voice (ElevenLabs only; a video waits instead of using Piper)
+`worker.voice()` uses ONE provider per video (never mixes voices). Track V, 2026-10-06. **Piper fallback retired 2026-10-10** (Jared, answer 20 of
+`docs/elevenlabs-studio-opusplan.md`: "pause everywhere"). Montage never falls back to Piper by itself any more.
 
-A brand module gives its ElevenLabs voice as `VOICE_11` (next to the Piper `VOICE`, which stays as the fallback):
+A brand module gives its ElevenLabs voice as `VOICE_11` (next to the Piper `VOICE`, which only the manual `piper` switch below uses):
 ```python
 VOICE_11 = {"voice_id": "<id from GET /v1/voices>", "name": "<display name>",
             "stability": 0.5, "similarity_boost": 0.75, "style": 0.0, "speed": 1.0}
@@ -52,7 +53,8 @@ VOICE_11 = {"voice_id": "<id from GET /v1/voices>", "name": "<display name>",
   reuse the RoofGuard caller's voice (Sarah).
 - `stability`, `similarity_boost`, `style`, `speed`: optional (defaults above), sent as the request's `voice_settings`
   (`use_speaker_boost` is always true). `speed` is 0.7 to 1.2.
-- No `VOICE_11` in the module = that brand always uses Piper. Nothing else to wire: `worker.voice()` reads the attribute with `getattr`.
+- No `VOICE_11` in the module = the job FAILS with that reason (add one, or flip the manual switch). The worker caches imported brand modules:
+  restart `bestly-montage` after editing a brand file.
 
 Voices in use (premade, none cloned): HOKU Lily `pFZP5JQG7iQjIQuC4Bku`, InventoryProof Matilda `XrExE9yKIg1WjnnlVkGX`, Cookie Yeti Liam `TX3LPaxmHKxFdv7VOQHJ`,
 Bestly Cloud Eric `cjVigY5qzO86Huf0OWal`, Bestly Studio Chris `iP95p4xoKVk53GoZ742B`. Not available: Sarah `EXAVITQu4vr4xnSDxMaL` (the RoofGuard caller). Free premade voices to pick from for a new brand:
@@ -60,27 +62,44 @@ Bella `hpp4J3VqNfWAUOO0d1Us` (warm, bright), Roger `CwhRBWXzGAHq8TQ4Fs17` (laid-
 
 ### How to add a voice to a brand
 1. `GET https://api.elevenlabs.io/v1/voices` (key: Vault `elevenlabs_api_key`; the Pi reads it only through `pi_secret`). Pick a premade or library voice that fits the brand.
-2. Add `VOICE_11 = {...}` to `brands/<slug>.py`, keep the old `VOICE` line.
-3. Check the client's `montage_brand_policy.ai_voice_ok` is true (otherwise Piper is used, on purpose).
+2. Add `VOICE_11 = {...}` to `brands/<slug>.py` (keep the old `VOICE` line), restart `bestly-montage`.
+3. Check the client's `montage_brand_policy.ai_voice_ok` is true and its `voiceover` switch is on in Studio > Settings > Audio.
 4. Render one free text-only job (`montage_start`), confirm the job log says `voice: elevenlabs <name> (<n> chars)`.
 
-### Rules (worker.voice)
+### Rules (worker._eleven)
 ElevenLabs is used only when ALL hold: `montage_settings` row `voice` says `"provider":"elevenlabs"`; the client's `ai_voice_ok` is true;
-the brand has `VOICE_11`; the key resolves through `pi_secret`; `GET /v1/user/subscription` answers; and the credits left AFTER this video
-(`character_limit - character_count - chars x rate`) stay at or above `reserve_pct`% of `character_limit` (the calls' share). Rate is 1 credit/char
-for multilingual and v3 models, 0.5 for `eleven_flash_*` / `eleven_turbo_*`.
-Per scene: `POST /v1/text-to-speech/{voice_id}?output_format=mp3_44100_128` with `model_id`, `voice_settings`, `previous_text`/`next_text`; 30 s timeout,
-2 retries on 429/5xx. Any failure on any scene throws all ElevenLabs audio away and the whole video is voiced by Piper (the unchanged path). Scene timing
-still follows the audio length. Re-cuts follow the same rules. The job log carries `voice: elevenlabs <name> (<n> chars)` or `voice: piper (<reason>)`, and the
-estimated cost (`chars x 22 / 131000`) is added to `cost_usd`.
-ElevenLabs clips are silence-trimmed and the finished narration is levelled to -16 LUFS (ElevenLabs arrives near -24, Piper near -16). The narration mix uses
-`apad=whole_dur` (an open-ended `apad` hung ffmpeg on ElevenLabs audio). `montage_file` keeps the voice cost: `cost_usd` = LTX actuals + the job's own cost. Observed bill on the
-Creator plan: about 0.5 credit per character on multilingual v2 (1,060 credits for about 2,200 characters), the worker still budgets 1 per character (the safe side).
-Alerts (`scout_notify`, titles start "Montage:"): low credits = warning, push, dedupe `montage-voice-low-<date>`; outage/error = info, no push, dedupe `montage-voice-down-<date>`.
+the `studio_audio_features` row (owner = the brand slug, feature `voiceover`) is not off; the brand has `VOICE_11`; the key resolves through `pi_secret`;
+`GET /v1/user/subscription` answers; and the credits left AFTER this video (`character_limit - character_count - chars x rate`) stay at or above
+`reserve_pct`% of `character_limit` (the 30% kept for Ava's calls; same reserve for all audio). Rate is 1 credit/char for multilingual and v3 models,
+0.5 for `eleven_flash_*` / `eleven_turbo_*`. Per scene: `POST /v1/text-to-speech/{voice_id}?output_format=mp3_44100_128` with `model_id`,
+`voice_settings`, `previous_text`/`next_text`; 30 s timeout, 2 retries on 429/5xx. Scenes already paid for are cached in the job folder
+(`v00.mp3` + `.key`) so a retry does not pay twice.
+
+### What happens when ElevenLabs cannot read the video (HELD, not Piper)
+Anything that stops ElevenLabs puts the job in status `held` (`held_reason`, `held_since`, `held_check_at` on `studio_video_jobs`):
+
+| Cause | Kind | Spark alert (`scout_notify`, title "Spark: ...", dedupe `montage.voice-<kind>-<date>`, once a day) |
+|---|---|---|
+| credits would drop under the reserve | `low` | warning + push (plan credits are money) |
+| key missing, subscription check fails, any scene errors (outage, bad voice id), settings unreadable | `down` | info, no push |
+| Studio voiceover switch is off for the brand | `switch` | info, no push |
+
+- The worker claims a held job again when `held_check_at` is due (every 30 minutes), re-runs only the voice step from the saved script and
+  carries on to the render, or re-holds. It posts to the requester's thread on the first hold and when it resumes.
+- After 7 days held the job fails (`error` says why) and Spark sends a warning.
+- `montage_status` / Spark say "On hold: <reason>" with how long it has been held.
+- Permanent no (client `ai_voice_ok` false, brand without `VOICE_11`): the job fails at once with that reason.
+- Every video's voiceover is logged as a `studio_audio_jobs` row (`requested_by 'montage'`, feature `voiceover`, status `done` or `held`,
+  credits and `cost_usd`). Montage is pre-approved daily automation for house brands: no per-video quote or yes.
+- The estimated cost (`credits x 22 / 131000`) is added to the job's `cost_usd`. Observed bill on the Creator plan: about 0.5 credit per
+  character on multilingual v2 (the worker still budgets 1 per character, the safe side).
+- ElevenLabs clips are silence-trimmed and the finished narration is levelled to -16 LUFS. The narration mix uses `apad=whole_dur`
+  (an open-ended `apad` hung ffmpeg on ElevenLabs audio).
 
 ### Settings row (no deploy needed)
 `montage_settings` (service role only): key `voice` = `{"provider":"elevenlabs","model":"eleven_multilingual_v2","reserve_pct":30}`.
-Flip `provider` to `"piper"` to switch ElevenLabs off, or `model` to `"eleven_flash_v2_5"` to halve the cost.
+`provider: "piper"` is the MANUAL switch: every video is then voiced by Piper (log line `voice: piper (manual switch ...)`). It is never chosen automatically.
+`model: "eleven_flash_v2_5"` halves the cost.
 
 ## Watchdogs
 - cron `montage-watch` every 5 min (requeue stalled jobs 3x, then fail + push; push if work waits and the worker is quiet).
