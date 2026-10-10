@@ -53,7 +53,7 @@ RUN_LOCK = "/tmp/bestly-settlement-finder.run.lock"
 CA_URL = "https://www.classaction.org/settlements"
 TCA_FEED = "https://topclassactions.com/category/lawsuit-settlements/open-lawsuit-settlements/feed/"
 SOURCE_GAP_SEC = 4          # polite pause between requests to different pages/hosts
-MATCH_CAP = 40              # settlements judged per run (rest wait for tomorrow)
+MATCH_CAP = 60              # settlements judged per run (rest wait for tomorrow)
 MATCH_BUDGET_SEC = 40 * 60  # stop judging after this long
 MAIL_LIMIT = 15
 
@@ -395,7 +395,8 @@ def find(dry, today, state):
 
 TRIAGE_SYS = (
     "You triage class action settlements for ONE specific person. All that is known about him: an adult individual "
-    "consumer living in Los Angeles County, California, USA (not a business, not a minor). Assume nothing else. "
+    "consumer living in West Hollywood (Los Angeles), California, USA (not a business, not a minor). Assume nothing else; "
+    "in particular do not assume he owns a home. "
     "Reply with ONE JSON object and nothing else.")
 
 TRIAGE_USER = """Settlement: {name}
@@ -407,7 +408,7 @@ Proof required: {proof}
 
 Return JSON with exactly these keys:
 "terms": up to 6 short distinctive names (company, brand, product, app or service) that would appear in the SUBJECT or SENDER of an email from or about that company, e.g. ["Apple","iPhone"]. Real names only, 3+ characters. NEVER generic words like settlement, claim, class, inc, llc, bank, data, privacy, breach, products.
-"plausibility": "none" if the class clearly cannot include him (limited to residents of another state or country, businesses/employers/franchisees/providers only, minors only, one profession, one local store elsewhere); "low" if it needs a narrow or unusual product most people never owned; "medium" for a common product, service or company many consumers use; "high" for a very broad consumer class (a major app, service, or mainstream product).
+"plausibility": "none" if the class clearly cannot include him (limited to residents of another state or country, limited to a specific city, neighborhood, property, plant area or store that does not include West Hollywood/Los Angeles, homeowner-only or landlord-only, businesses/employers/franchisees/providers only, minors only, one profession); "low" if it needs a narrow or unusual product most people never owned; "medium" for a common product, service or company many consumers use; "high" for a very broad consumer class (a major app, service, or mainstream product).
 "no_reason": one short sentence if plausibility is none or low, else "".
 "question": ONE short plain yes/no question in second person, max 140 characters, with the key years, like "Did you own a Google Pixel phone between 2016 and 2019?". Required when plausibility is medium or high, else "".
 """

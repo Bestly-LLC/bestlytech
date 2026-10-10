@@ -12,7 +12,7 @@ It reads public listing pages and his email *search RPC* (sender/subject only) a
    category (their HTML page sits behind a Cloudflare challenge, which is not bypassed). Obeys robots.txt, one request per
    source, 4 s apart, normal User-Agent, retries with backoff. Keeps only rows with a claim deadline today or later.
    `settlement_upsert_t` with stable keys `ca:<slug>` / `tca:<slug>`. Rows whose deadline has passed are marked `closed`.
-2. **Match** - `settlement_unjudged_t` (up to 40 per run, soonest deadline first). Per settlement: AI triage (search terms,
+2. **Match** - `settlement_unjudged_t` (up to 60 per run, soonest deadline first). Per settlement: AI triage (search terms,
    plausibility, one yes/no question) -> `settlement_mail_search_t` -> AI judge -> `settlement_judge_t`.
    - `proven`: a receipt/order/account/statement email, inside the class period (evidence = the real email subject + date)
    - `likely`: transactional emails that strongly suggest it
