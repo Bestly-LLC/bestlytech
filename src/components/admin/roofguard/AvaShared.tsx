@@ -26,6 +26,11 @@ import { requestDial } from "./avaDial";
 import { checkRoofguardFact } from "@/lib/roofguardRules";
 
 export type Source = "ava" | "roofguard";
+/** Phone lines with a watchdog row in ava_line_health: the two Avas' sources plus Maya (her page only uses the line pill). */
+export type LineSource = Source | "maya";
+
+/** The name Jared sees for each phone agent. Internal names (source, tables, files) stay as they are. */
+export const agentName = (source?: LineSource | string | null) => source === "roofguard" ? "Reese" : source === "maya" ? "Maya" : "Ava";
 
 /** Small label on calls Ava made in Jared's cloned voice (ava_calls.voice = 'jared'). Icon plus words, apricot like the Orb's glow. */
 export function YourVoiceTag({ className }: { className?: string }) {
@@ -110,7 +115,7 @@ function usePoll(fn: () => void, ms: number) {
 
 // ---------- LineStatus ----------
 export type LineHealth = { ok: boolean; problems: string[] | null; healed: boolean; checked_at: string; last_ok_at: string | null };
-export function useLineHealth(source: Source) {
+export function useLineHealth(source: LineSource) {
   const [row, setRow] = useState<LineHealth | null | undefined>(undefined);
   const load = useCallback(async () => {
     const { data } = await table("ava_line_health").select<LineHealth>("ok, problems, healed, checked_at, last_ok_at").eq("source", source).maybeSingle();
@@ -121,7 +126,7 @@ export function useLineHealth(source: Source) {
 }
 
 /** Green "Answering calls" or amber "Not answering, fixing…". Icon plus words, never color alone. */
-export function LineStatus({ source, className }: { source: Source; className?: string }) {
+export function LineStatus({ source, className }: { source: LineSource; className?: string }) {
   const row = useLineHealth(source);
   const stale = !!row && Date.now() - Date.parse(row.checked_at) > 35 * 60000;   // the watchdog runs every 10 minutes
   let tone = "bg-white/[0.05] text-white/60 ring-white/10", Icon = Loader2, text = "Checking the line…", spin = true;
@@ -134,7 +139,7 @@ export function LineStatus({ source, className }: { source: Source; className?: 
       <Icon className={cn("h-4 w-4 shrink-0", spin && "animate-spin")} aria-hidden />
       <span className="leading-tight">
         <span className="block whitespace-nowrap text-[15px] font-semibold">{text}</span>
-        {row && !row.ok && row.problems?.[0] && <span className="block max-w-[260px] truncate text-[11px] opacity-80">{row.problems[0]}</span>}
+        {row && !row.ok && row.problems?.[0] && <span className="block max-w-[260px] text-[11px] opacity-80">{row.problems[0]}</span>}
       </span>
     </span>
   );
