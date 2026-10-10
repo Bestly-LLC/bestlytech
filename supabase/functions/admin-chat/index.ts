@@ -1,5 +1,5 @@
 import { SECRET_KEY, isServiceRequest } from "../_shared/keys.ts";
-import { llm, llmChat, llmVision, LlmUnavailable, thinkingLeak, stripToolSyntax, hasToolSyntax, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0. v36: llmVision for the free look tool
+import { llm, llmChat, llmVision, LlmUnavailable, thinkingLeak, stripToolSyntax, hasToolSyntax, rescueToolCalls, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0. v36: llmVision for the free look tool
 // admin-chat — Scout, the assistant inside bestly.tech/admin.
 //
 // Rules, in order of how much trouble breaking them causes:
@@ -298,6 +298,13 @@ const TOOLS = [
       properties: { repo: { type: "string", enum: ["site", "hoku"] }, path: { type: "string" }, find: { type: "string" }, line_start: { type: "number" }, line_end: { type: "number" } },
       required: ["path"],
     },
+  },
+  {
+    name: "search_code",
+    description: "Find code across a whole repo in one call (v43). Use this FIRST when you don't know which file holds something: " +
+      "it returns file paths whose NAME matches and files whose CONTENT matches, with the matching lines. Then read_file the best hit. " +
+      "query: words or a symbol (e.g. LiveActivity, widgetURL, \"Replies ready\"). Several alternatives: separate with |.",
+    input_schema: { type: "object", properties: { repo: { type: "string", enum: ["site", "hoku"] }, query: { type: "string" } }, required: ["query"] },
   },
   {
     name: "commit_files",
@@ -1196,13 +1203,13 @@ ${convo}`;
  * Unchanged: no commit_files, db_write or mac_command; free Mac jobs always wait for his Run tap.
  */
 const FREE_TOOLS = new Set([
-  "today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "notify", "mark_done",
+  "today", "incidents", "run_sql", "list_files", "read_file", "search_code", "meeting_transcript", "notify", "mark_done",
   "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn", "ask_user", "make_video",
   "send_email", "look", "report_spam",
   "search_mail", "read_email",   // v41
   "commit_files", "db_write", "mac_command", "code_job",   // v38/v42: the same hands as paid Scout (same confirmation rules, same AUTOPILOT_NEVER)
 ]);
-const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "meeting_transcript", "look", "search_mail", "read_email"]);
+const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "search_code", "meeting_transcript", "look", "search_mail", "read_email"]);
 const FREE_STEPS = 26;           // v41: a TASK gets 25 tool calls a hop (QUESTION_CALLS for a question); the 85 s budget still bounds each hop
 const FREE_BUDGET_MS = 85_000;   // freeTry (up to 30s) + this + the 20s summary must stay under the 150s platform limit
 const REFUSES = /\b(can'?t|cannot|can not|unable to|not able to|don'?t have (access|the ability))\b|\bmanually\b|\byou('ll| will)? (need|have) to\b/i;
@@ -1220,7 +1227,49 @@ const CLAIMS_DONE = new RegExp(
 const ALREADY = /\b(already|no longer|on its own|since then|has stopped|stopped failing|succeed(ed|s|ing)|not happening|recovered)\b/i;
 const PLACEHOLDER = /\[(?:[A-Z][A-Za-z ]{1,20})\]|(?<!Model )\bX\b(?=\s+[a-z])|<[a-z_ ]{2,20}>/;
 /** His latest message is a plain yes: only then may a free-model action carry confirmed:true (auto-run aside). */
-const PLAIN_YES = /^\s*(yes|yep|yeah|ya|ok|okay|sure|do it|go ahead|go for it|approved?|confirm(ed)?|please do|keep going)\b/i;
+// v43: "keep going" is no longer a yes (it means continue). "Yes, keep going" still is (it starts with yes).
+const PLAIN_YES = /^\s*(yes|yep|yeah|ya|ok|okay|sure|do it|go ahead|go for it|approved?|confirm(ed)?|please do)\b/i;
+/** v43: Scout's last reply asked him something (a yes/no button, a question, a NEEDS_YES), so "keep going" doesn't answer it. */
+const ASKED_HIM = /^\s*OPTIONS:[^\n]*\b(yes|no|do it|not now|go ahead|apply|approve)\b|\?[ \t]*$|^\s*(NEEDS_YES|QUESTIONS):/im;
+/**
+ * v43: he typed that he wants paid AI / Opus / Sonnet for this ("use paid AI", "fix with paid ai", "use Op. 5.5",
+ * "plan with opus and execute with sonnet"). Oct 7-10: 20 such asks, paid ran once, because free-first ignored them.
+ * A question about it ("are you using paid AI?") is not an ask.
+ */
+const WANTS_PAID = /\b(use|using|switch(?: it)? to|with|try|on|go)\s+(?:the\s+)?(?:paid|pair)(?:\s*ai)?\b|\b(use|with|plan with|execute with|switch to)\s+(?:claude\s+)?(opus|sonnet|claude)\b|\bop(?:us)?\.?\s?5(?:\.5)?\b/i;
+const ASKS_ABOUT_PAID = /^\s*(are|is|was|were|did|do|does|am)\b[^?]*\bpaid\b[^?]*\?\s*$/i;
+/** v43: a reply that is the model's plan or next step, not an answer ("We need to find…", "Let's read X", "Next: search…"). */
+const NARRATES_STEP = /^\s*(?:we (?:need|should|must) to|we're in the|let'?s|need to|next,? (?:we|i|let)|i(?:'ll| will) (?:now )?(?:read|check|search|look|list|open|find)|first,? (?:we|i|let)|maybe (?:it|the|there))\b|\blet'?s (?:read|list|search|check|look|open|find|try|grep|see)\b|\b(?:use|call) (?:read_file|list_files|search_code|run_sql)\b/i;
+
+/**
+ * v43: turn a step the free model wrote as text into the real call. Named calls (<invoke>, {"name":…}) go through
+ * rescueToolCalls; a bare argument object ({ "repo": "site", "path": "src/x.tsx", "find": "live" }) is matched to the
+ * tool by its keys. Only tools offered this turn, and only reads: a write written as text is never run on a guess.
+ */
+function textToolCall(content: string, allowed: Set<string>): { id: string; name: string; args: Record<string, unknown>; raw: string } | null {
+  const text = String(content ?? "");
+  if (!text.includes("{") && !/<\s*(?:antml:)?invoke\b/i.test(text)) return null;
+  const reads = new Set([...allowed].filter((n) => FREE_READS.has(n)));
+  const named = rescueToolCalls(text, reads);
+  if (named.length) return named[0];
+  const objs = text.match(/\{[^{}]{2,600}\}/g) ?? [];
+  for (const raw of objs.reverse()) {
+    let a: Record<string, unknown>;
+    try { a = JSON.parse(raw); } catch { continue; }
+    if (!a || typeof a !== "object" || Array.isArray(a)) continue;
+    let name = "";
+    if (typeof a.query === "string" && /^\s*(select|with)\b/i.test(a.query)) name = "run_sql";
+    else if (typeof a.sql === "string") { name = "run_sql"; a = { query: a.sql }; }
+    else if (typeof a.path === "string" && (a.list === true || a.path.endsWith("/") || !/\.[a-z0-9]{1,6}$/i.test(a.path))) name = "list_files";
+    else if (typeof a.path === "string") name = "read_file";
+    else if (typeof a.query === "string") name = "search_code";
+    if (!name || !reads.has(name)) continue;
+    delete (a as any).list;
+    return { id: `textcall_${Date.now()}`, name, args: a, raw: JSON.stringify(a) };
+  }
+  return null;
+}
+
 /** v38: three failed tries hand the job to paid Scout (Part B, point 4). */
 const TRY_MAX = 3;
 /** A free commit needs this much of the 150 s request left to be watched through the build (and reverted if it fails). */
@@ -1275,7 +1324,7 @@ const FREE_DESC: Record<string, string> = {
   code_job: "Hand a coding job to the Code Worker (Mac mini, free coding AI, build must pass, pushes to main, reports here): multi-file changes, new sites, other Bestly-LLC repos. repo: site, hoku or Bestly-LLC/name; new_site {name} for a new site. confirmed:true only after his yes.",
   mac_command: "Give the MacBook Air mail agent a job: mail_drain, restart_mail, ping, run_named. confirmed:true only after his yes (or auto-run).",
 };
-const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "ask_user"]);
+const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "search_code", "ask_user"]);
 
 function freeToolDefs(autopilot: boolean, convo: string) {
   const want = new Set(ALWAYS_TOOLS);
@@ -1342,7 +1391,7 @@ const ANSWER_NOW = "Answer now from what you found. If you're missing something,
 /** Same read twice in one run is the loop that burned 2.1M tokens on Oct 7. */
 const PAGING = /\bsubstr(?:ing)?\s*\(\s*[^,()]+,\s*(?:[2-9]|\d{2,})\b|\bsubstring\s*\([^)]*\bfrom\s+(?:[2-9]|\d{2,})\b|\blimit\s+1\s+offset\s+[1-9]|\boffset\s+[1-9]\d*\s+limit\s+1\b/i;
 const DOING: Record<string, string> = {
-  run_sql: "checking the database", search_mail: "searching your mail", read_email: "reading an email", read_file: "reading the code",
+  run_sql: "checking the database", search_mail: "searching your mail", read_email: "reading an email", read_file: "reading the code", search_code: "searching the code",
   list_files: "looking through the files", today: "checking your queue", incidents: "checking open incidents", meeting_transcript: "reading the call transcript",
   commit_files: "committing a code change", db_write: "updating data", mac_run: "preparing a Mac mini job", pi_command: "talking to the Pi",
   send_email: "sending an email", look: "looking at your files", notify: "sending a notification", code_job: "handing code to the Mac mini",
@@ -1609,10 +1658,22 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     inTokens += r.inTokens ?? 0;
     if (forceAnswer) r.toolCalls = [];   // told to answer: any call it still wrote is dropped
 
+    // v43 (audit, Oct 10): the free model often WRITES its next step instead of calling it ("Let's read X. { "repo": "site",
+    // "path": "..." }"). That text used to go to Jared as the answer, the step never ran, and he had to type "Keep going"
+    // (32 such replies Oct 7-10). Run the step it wrote; if it only narrated a plan, send it back to do it.
+    if (!r.toolCalls.length && !forceAnswer) {
+      const t = textToolCall(r.content, allowed);
+      if (t) r.toolCalls = [t];
+    }
+
     if (!r.toolCalls.length) {
       const reply = r.content.trim();
       if (!reply) { fails++; if (forceAnswer || fails > 2) break; continue; }
       const nudge = (why: string) => { msgs.push({ role: "assistant", content: reply }); msgs.push({ role: "user", content: why }); nudges++; };
+      if (!forceAnswer && NARRATES_STEP.test(reply) && nudges < 3) {
+        nudge("You wrote your plan or your next step as text. Jared can't see your tools and shouldn't have to say keep going: call the tool now. When the job is done (or you truly need him), reply with the result, not the plan.");
+        continue;
+      }
       // v41: status filler is not an answer ("No action needed", "it will pick up", "still working").
       if (/\bno (further )?action (is )?(needed|required)\b|\bit will pick (it|this) up\b|\bstill (working|finding out)\b|\bi'?ll keep (going|working)\b/i.test(reply) && nudges < 2) { nudge("That is status filler, not an answer. Give Jared the actual answer from what you found, or say exactly what is missing."); continue; }
       // v41: a question about a person, email, invoice, task or call must be answered from something it READ this turn.
@@ -1889,6 +1950,16 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
         .eq("key", key).eq("status", "open").select("key, title");
       out = error ? { ok: false, error: error.message }
         : (data?.length ? { ok: true, resolved: data, note: args.note ?? null } : { ok: false, error: `no open incident with key ${key}` });
+      break;
+    }
+    case "search_code": {
+      // v43: one call across the whole repo (file names from the git tree + GitHub code search), instead of read_file one guess at a time.
+      const q = String(args.query ?? "").trim();
+      if (!q) { out = { ok: false, error: "query required" }; break; }
+      const r = await gitCall({ action: "search", repo, query: q.slice(0, 200) });
+      out = (r as any).ok === false ? r
+        : { ok: true, query: q, name_hits: (r as any).name_hits ?? [], content_hits: (r as any).content_hits ?? [],
+            hint: ((r as any).name_hits?.length || (r as any).content_hits?.length) ? "read_file the best hit (pass find to jump to the line)." : "Nothing matched. Try another word for the same thing, or a part of the name." };
       break;
     }
     case "list_files": {
@@ -2555,8 +2626,12 @@ Deno.serve(async (req) => {
   // v13 autopilot: the fix ladder (service key only) runs Scout as the admin with no one watching.
   // Nothing that needs a yes can run on autopilot; that is enforced below, not left to the model.
   const autopilot = body.autopilot === true && svcCall;
+  // v43: the run watchdog (scout_run_rescue, every 2 min) re-fires a free run whose hop chain died mid-job (8 times Oct 7-10:
+  // the note froze on "Working…" until he typed Keep going). Service key only, an existing thread, a hop number: it acts as
+  // the admin exactly like that hop would have, and stops by itself if he has written since (supersededSince).
+  const resumeCall = !autopilot && svcCall && body.resume === true && !!body.thread_id && Number.isInteger(body.auto_continue);
   let uid: string | undefined;
-  if (autopilot) {
+  if (autopilot || resumeCall) {
     const { data: adm } = await db.from("user_roles").select("user_id").eq("role", "admin").order("user_id").limit(1).maybeSingle();
     uid = (adm as any)?.user_id;
     if (!uid) return J({ ok: false, error: "no admin to act as" }, 500);
@@ -2585,7 +2660,17 @@ Deno.serve(async (req) => {
   const autoHop = !autopilot && Number.isInteger(body.auto_continue) ? Math.max(0, Number(body.auto_continue)) : 0;
   if (autoHop) body.body = "keep going";
   const keepGoing = !autopilot && /^\s*keep going\b/i.test(String(body.body ?? ""));
-  autoRunOn = (prefs as any)?.auto_run === true || keepGoing;
+  // v43 (2026-10-10 audit): "keep going" means CONTINUE, never yes. It used to switch auto-run on for the turn, so the generic
+  // "Keep going" button approved actions he never saw. And when Scout's last reply asked him something (Yes | No, Do it | Not now),
+  // a "keep going" is not an answer: that turn runs without auto-run, so the action waits for a real yes (Oct 10: Scout asked
+  // "apply the change? Yes | No", he sent Keep going, it committed the wrong Live Activity file).
+  let unansweredAsk = false;
+  if (keepGoing && !autoHop && body.thread_id) {
+    const { data: lastBot } = await db.from("admin_chat_messages").select("body").eq("thread_id", String(body.thread_id))
+      .eq("role", "assistant").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    unansweredAsk = !!lastBot && ASKED_HIM.test(String((lastBot as any).body ?? ""));
+  }
+  autoRunOn = (prefs as any)?.auto_run === true && !unansweredAsk;
   // v30: the Paid AI switch is the ONLY gate. scout_prefs() returns the truth (it turns itself off when the hour or the
   // daily cap runs out). No more hidden per-chat passes: a "Yes, use paid AI" tap flips the switch on for an hour.
   const paidOn = (prefs as any)?.paid_ai_ok === true;
@@ -2596,11 +2681,13 @@ Deno.serve(async (req) => {
   // v38: a fresh request (fresh time budget) that hands a job to paid Scout after three failed free tries. Only while the switch is on.
   const paidHandoff = !autopilot && body.paid_handoff === true;
   if (paidHandoff && !paidOn) return J({ ok: true, thread_id: String(body.thread_id ?? ""), stopped: "paid ai is off" });
+  const paidAsked = !autopilot && !autoHop && WANTS_PAID.test(text) && !ASKS_ABOUT_PAID.test(text);
   // v38: with the Paid AI switch ON, free Scout still goes first; paid is for after three failed tries. Switch taps and the cap override
   // are not jobs and keep their old path.
   const freeFirst = paidOn && !autopilot && !paidHandoff
     && !/^(always,? stop asking|yes,? use paid ai|no,? skip it|raise today'?s cap( by \$?5)?|override( (this|it|the cap))?)\.?!?$/i.test(text)
-    && !/^yes, do it:.*paid ai/i.test(text);
+    && !/^yes, do it:.*paid ai/i.test(text)
+    && !paidAsked;   // v43: he asked for paid AI in so many words: paid answers this one, no free try first
   // v28.5: safety net for attachments. If he attached a file in the last few minutes and this message arrived
   // without it (an old page still open, a read that failed in the browser), fetch and read it here.
   if (!autopilot && !/^\[(File|Video): /m.test(text)) text = await withRecentFiles(text).catch(() => text);
@@ -2671,7 +2758,8 @@ Deno.serve(async (req) => {
         paidOk = await flip(60, "cap_raised");
         routerBeat(`Cap raised to $${Number((b as any)?.cap ?? 0).toFixed(2)} for today`);
         if (!paidOk) return await say("I raised today's cap but the Paid AI switch didn't turn on. Try \"Yes, use paid AI\".", { capped: true });
-      } else if (/^always,? stop asking\.?$/i.test(text) || /^(yes,? use paid ai|use paid ai for this one)\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))) {
+      } else if (/^always,? stop asking\.?$/i.test(text) || /^(yes,? use paid ai|use paid ai for this one)\.?$/i.test(text) || (/^yes, do it:/i.test(text) && /paid ai/i.test(text))
+        || paidAsked) {   // v43: typing "use paid AI" (or Opus/Sonnet) is the same yes as the button: switch on for an hour
         const always = /^always/i.test(text);
         paidOk = await flip(always ? null : 60, always ? "always" : "yes_tap");
         if (paidOk) {
@@ -2742,7 +2830,7 @@ Deno.serve(async (req) => {
           const hop = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/admin-chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: req.headers.get("Authorization") ?? "", apikey: req.headers.get("apikey") ?? "" },
-            body: JSON.stringify({ thread_id: threadId, body: goalText || "keep going", page: body.page, paid_handoff: true, chain_from: String(body.chain_from ?? runSince ?? new Date(0).toISOString()) }),
+            body: JSON.stringify({ thread_id: threadId, body: goalText || "keep going", page: body.page, paid_handoff: true, chain_from: String(body.chain_from ?? runSince ?? new Date(0).toISOString()), ...(resumeCall ? { resume: true } : {}) }),
           }).then((r) => r.text()).catch(() => null);
           const er = (globalThis as any).EdgeRuntime;
           if (er?.waitUntil) er.waitUntil(hop); else return hop;
@@ -2800,10 +2888,19 @@ Deno.serve(async (req) => {
             const hop = new Promise((r) => setTimeout(r, agent.paused ? 30_000 : 0)).then(() => fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/admin-chat`, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: req.headers.get("Authorization") ?? "", apikey: req.headers.get("apikey") ?? "" },
-              body: JSON.stringify({ thread_id: threadId, body: "keep going", page: body.page, auto_continue: autoHop + 1, chain_from: chainFrom }),
+              body: JSON.stringify({ thread_id: threadId, body: "keep going", page: body.page, auto_continue: autoHop + 1, chain_from: chainFrom, ...(resumeCall ? { resume: true } : {}) }),
             })).then((r) => r.text()).catch(() => null);
             const er = (globalThis as any).EdgeRuntime;
             if (er?.waitUntil) er.waitUntil(hop); else await hop;
+            return res;
+          }
+          // v43: Paid AI switch ON and free stopped finding anything new (or ran out of rounds): that is a failed try, not a
+          // reason to hand him a "Keep going" button. Paid takes it now with everything free found (run_state is kept).
+          if (freeFirst) {
+            await endRun(st);
+            const res = await say(`${agent.answer.replace(/^\s*OPTIONS:.*$/m, "").trim()}\nFree AI stopped making progress, so paid AI is taking it from here.`, { free: true, tools: agent.tools ?? [], handoff: true });
+            if (await interrupted()) return res;
+            await fireHandoff(st.goal || text);
             return res;
           }
           // Out of hops or time, or it stopped finding anything new: say what it has and let him decide. Memory stays for "Keep going".
@@ -2902,7 +2999,10 @@ Deno.serve(async (req) => {
     + (autoRunOn ? AUTO_RUN_ON : ASK_PLAINLY)
     + `\n\n# Paid AI switch\nThe Paid AI switch is ON${paidUntil ? ` until ${new Date(paidUntil).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" })}` : ""}, so you (Claude, paid) are answering. If he asks what AI is running, say exactly that. Never claim paid AI is off while you are answering.`
     + (ASKS_FOR_QUESTIONS.test(text) ? `\n\n# He wants questions first\n${ASK_FIRST_NOTE}` : "")
-    + (keepGoing ? "\n\n# He said keep going\nThat is his yes for everything the job needs right now. Carry on from where you stopped and do it; don't ask again." : "");
+    + (keepGoing && unansweredAsk
+      ? "\n\n# He said keep going, but did not answer your question\nYour last reply asked him something. \"Keep going\" carries the job on; it is NOT a yes to what you asked. Do everything that needs no yes, then ask that one question again in one plain line with OPTIONS: Do it | Not now."
+      : keepGoing ? "\n\n# He said keep going\nCarry on from where you stopped, to the end of the job. Don't recap. It means continue, not yes: anything that needs his yes still needs it (unless auto-run is on)." : "")
+    + (paidAsked ? "\n\n# He asked for paid AI for this\nYou are paid Scout (Claude). Take the job he has been asking about in this chat (re-read his first message and every correction since) and finish it. If it is a code change, plan it in two or three lines, then do it." : "");
 
   // v38: what the free AI already tried on this job (three failed tries hand it here). Read once, then cleared.
   const handed = await loadRunState(threadId).catch(() => null);
