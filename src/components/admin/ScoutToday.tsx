@@ -75,13 +75,23 @@ export function ScoutToday() {
 
   const load = useCallback(async () => {
     const since = new Date(Date.parse(today + "T12:00:00Z") - 7 * 864e5).toISOString().slice(0, 10);
-    const [{ data }, { count }] = await Promise.all([
+    // Open call to-dos stay until they are done or the sweep expires them (21 days), the same window
+    // the hero count and the partner portal use. The 7-day window is only for picks, drafts and wraps:
+    // with it, a to-do from a call 8+ days ago vanished here while Eli's portal still listed it.
+    const callsSince = new Date(Date.parse(today + "T12:00:00Z") - 21 * 864e5).toISOString().slice(0, 10);
+    const [{ data }, { data: openCalls }, { count }] = await Promise.all([
       // newest first, so today's rows can never be cut off by an old pile; aged-out rows (status expired) never load
       supabase.from("scout_daily" as never).select("*").gte("day", since).neq("status", "expired").order("created_at", { ascending: false }).limit(400),
+      supabase.from("scout_daily" as never).select("*").eq("kind", "call").eq("status", "open").gte("day", callsSince)
+        .order("created_at", { ascending: false }).limit(200),
       supabase.from("monitor_issues" as never).select("key", { count: "exact", head: true })
         .eq("self_healed", true).gte("resolved_at", new Date(Date.now() - 864e5).toISOString()),
     ]);
-    setRows((((data ?? []) as unknown) as Row[]).slice().reverse());   // back to oldest-first for display
+    const seen = new Set<string>();
+    const merged = [...((data ?? []) as unknown as Row[]), ...((openCalls ?? []) as unknown as Row[])]
+      .filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)))
+      .sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));   // oldest-first for display
+    setRows(merged);
     setHealed(count ?? 0);
   }, [today]);
 
