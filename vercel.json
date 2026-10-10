@@ -14,6 +14,10 @@
       "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/site-go?s=:slug"
     },
     {
+      "source": "/pay/:token",
+      "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/maya-pay?t=:token"
+    },
+    {
       "source": "/tesla/callback",
       "destination": "/tesla/callback.html"
     },
