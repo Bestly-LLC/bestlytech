@@ -1,11 +1,21 @@
 // Maya watch (every 10 min): phone line + support desk.
 // Line: ElevenLabs agent, number assignment (heals), Telnyx FQDN (heals), number on connection.
 // Desk: file_ticket tool still attached (heals by re-attaching), ticket endpoint alive, overdue tickets.
+// Billing (Phase 3): the six billing tools still attached (heals by re-attaching), maya-billing refuses a fake call,
+// and maya-billing's own health check (Stripe key, portal, tables, email, ElevenLabs key) passes.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const AGENT_ID = "agent_3701m4jbjnyef6ga4ys73xtbz37s";
 const EL_PHONE_ID = "phnum_2501m4jea1d1enjt3tkyq4nps914";
 const TICKET_TOOL = "tool_7901m4m0e2dvf0x9y469gf3cb4zn";
+const BILLING_TOOLS = [
+  "tool_0901m4m3jga1fr99d0sv8kxr5saw", // verify_start
+  "tool_9701m4m3jjxpf2jsf44rh3tt858x", // verify_check
+  "tool_3201m4m3jnjffkd9rd6tp7hsmqbd", // billing_status
+  "tool_5801m4m3jradf2nvg595bypbcv89", // send_pay_link
+  "tool_8901m4m3jtvwfdb82kta0c5jmsv8", // cancel_or_pause
+  "tool_3101m4m3jx58f4s9cdq89qavw7av", // refund
+];
 const TELNYX_CONN = "3067494961063659261";
 const NUMBER = "+12136410074";
 const EL_FQDN = "sip.rtc.elevenlabs.io";
@@ -15,6 +25,7 @@ Deno.serve(async () => {
   const problems: string[] = [];
   const fixed: string[] = [];
   const desk: string[] = [];
+  const billing: string[] = [];
   try {
     const { data: elKey } = await sb.rpc("ava_secret", { p_name: "elevenlabs_api_key" });
     const { data: tnKey } = await sb.rpc("ava_secret", { p_name: "telnyx_api_key" });
@@ -27,11 +38,17 @@ Deno.serve(async () => {
     else {
       const aj = await a.json();
       const ids: string[] = aj?.conversation_config?.agent?.prompt?.tool_ids ?? [];
-      if (!ids.includes(TICKET_TOOL)) {
+      const missing = [TICKET_TOOL, ...BILLING_TOOLS].filter((t) => !ids.includes(t));
+      if (missing.length) {
         const fix = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`, { method: "PATCH", headers: el,
-          body: JSON.stringify({ conversation_config: { agent: { prompt: { tool_ids: [...ids, TICKET_TOOL] } } } }) });
-        if (fix.ok) fixed.push("Re-attached my ticket tool.");
-        else desk.push("My ticket tool came off and re-attaching failed, so callers' requests aren't being saved.");
+          body: JSON.stringify({ conversation_config: { agent: { prompt: { tool_ids: [...ids, ...missing] } } } }) });
+        const ticketGone = missing.includes(TICKET_TOOL);
+        const billingGone = missing.some((t) => t !== TICKET_TOOL);
+        if (fix.ok) fixed.push(`Re-attached ${missing.length} of my tools${ticketGone ? " (ticket)" : ""}${billingGone ? " (billing)" : ""}.`);
+        else {
+          if (ticketGone) desk.push("My ticket tool came off and re-attaching failed, so callers' requests aren't being saved.");
+          if (billingGone) billing.push("My billing tools came off and re-attaching failed, so I can't help with accounts on calls.");
+        }
       }
     }
 
@@ -72,6 +89,20 @@ Deno.serve(async () => {
     const t = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maya-ticket`, { method: "POST",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversation_id: "conv_watchprobe", kind: "support", issue: "probe" }) });
     if (t.status !== 401) desk.push(`My ticket endpoint answered ${t.status} instead of refusing a fake call.`);
+
+    // 5b. Billing endpoint: a fake call must be refused with 401, and its own health check must pass.
+    const b = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maya-billing`, { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "billing_status", conversation_id: "conv_watchprobe" }) });
+    if (b.status !== 401) billing.push(`My billing endpoint answered ${b.status} instead of refusing a fake call.`);
+    const h = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maya-billing`, { method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` }, body: JSON.stringify({ action: "health" }) });
+    if (!h.ok) {
+      const hj = await h.json().catch(() => ({}));
+      billing.push(`My billing health check failed (${h.status})${hj?.problems?.length ? ": " + hj.problems.join("; ") : ""}.`);
+    } else {
+      const hj = await h.json().catch(() => ({}));
+      if (hj?.ok === false) billing.push(`My billing health check found: ${(hj.problems ?? []).join("; ")}.`);
+    }
   } catch (e) {
     problems.push(`Check crashed: ${String(e).slice(0, 200)}`);
   }
@@ -83,7 +114,7 @@ Deno.serve(async () => {
 
   const ok = problems.length === 0;
   const now = new Date().toISOString();
-  const row: Record<string, unknown> = { source: "maya", ok, problems: [...problems, ...fixed, ...desk], healed: fixed.length > 0, checked_at: now };
+  const row: Record<string, unknown> = { source: "maya", ok, problems: [...problems, ...fixed, ...desk, ...billing], healed: fixed.length > 0, checked_at: now };
   if (ok) row.last_ok_at = now;
   await sb.from("ava_line_health").upsert(row, { onConflict: "source" });
 
@@ -96,6 +127,10 @@ Deno.serve(async () => {
     p_title: "Maya: caller requests may not be saving", p_body: desk.join(" "), p_area: "maya" });
   else await sb.rpc("bestly_raise", { p_key: "maya.desk", p_kind: "resolved", p_severity: "info", p_title: "Maya: ticket desk OK", p_area: "maya" });
 
+  if (billing.length) await sb.rpc("bestly_raise", { p_key: "maya.billing.health", p_kind: "problem", p_severity: "warning",
+    p_title: "Maya: my account and billing tools may not be working", p_body: billing.join(" ").slice(0, 400), p_area: "maya", p_needs_jared: "Check Stripe, the email sender and the ElevenLabs tools; calls fall back to billing tickets meanwhile." });
+  else await sb.rpc("bestly_raise", { p_key: "maya.billing.health", p_kind: "resolved", p_severity: "info", p_title: "Maya: billing tools OK", p_area: "maya" });
+
   if (late?.length) await sb.rpc("bestly_raise", { p_key: "maya.overdue", p_kind: "problem", p_severity: "warning",
     p_title: `Maya: ${late.length} caller${late.length > 1 ? "s are" : " is"} past the follow-up time I promised`,
     p_body: late.slice(0, 5).map((x: any) => `${x.code} ${x.kind}${x.name ? " " + x.name : ""}`).join(", "), p_area: "maya", p_needs_jared: "Follow up, then mark the ticket done." });
@@ -106,5 +141,5 @@ Deno.serve(async () => {
     p_body: privSoon.map((x: any) => `${x.code}${x.name ? " " + x.name : ""}`).join(", "), p_area: "maya", p_needs_jared: "Legal deadline (CCPA, 45 days)." });
   else await sb.rpc("bestly_raise", { p_key: "maya.privacy", p_kind: "resolved", p_severity: "info", p_title: "Maya: privacy requests on track", p_area: "maya" });
 
-  return new Response(JSON.stringify({ ok, problems, fixed, desk, overdue: late?.length ?? 0 }), { headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ ok, problems, fixed, desk, billing, overdue: late?.length ?? 0 }), { headers: { "Content-Type": "application/json" } });
 });
