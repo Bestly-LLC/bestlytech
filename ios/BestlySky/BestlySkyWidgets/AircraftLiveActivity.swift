@@ -16,7 +16,7 @@ struct AircraftLiveActivity: Widget {
             LockScreenAircraft(s: context.state, stale: context.isStale)
                 .activityBackgroundTint(Color.black.opacity(0.82))
                 .activitySystemActionForegroundColor(.white)
-                .widgetURL(URL(string: "bestlysky://aircraft"))
+                .widgetURL(URL(string: "bestlysky://checkin"))
         } dynamicIsland: { context in
             let s = context.state
             let tint = Color(skyHex: s.tint)
@@ -83,7 +83,7 @@ struct AircraftLiveActivity: Widget {
                     .accessibilityLabel("\(s.flight), \(s.compass)")
             }
             .keylineTint(tint)
-            .widgetURL(URL(string: "bestlysky://aircraft"))
+            .widgetURL(URL(string: "bestlysky://checkin"))
         }
     }
 }
