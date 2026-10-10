@@ -322,7 +322,7 @@ export function MessageSheet({ item, onClose, onDeleted }: { item: Msg | null; o
     <ScrollSheet open onClose={onClose}
       title={<><CallNo n={item.call_no} className="text-[13px]" />{item.name}{item.forwarded && <ForwardedTag className="font-normal" />}{item.bridge && <BridgeTag org={item.bridgeOrg} className="font-normal" />}{item.voice === "jared" && <YourVoiceTag className="font-normal" />}</>}
       description={<>
-        {item.direction === "inbound" ? (item.forwarded ? "Called your cell, forwarded to Ava" : "Called in") : item.direction === "callback" ? "Ava called back" : "Ava called"} · {whenShort(item.at)}
+        {item.direction === "inbound" ? (item.forwarded ? `Called your cell, forwarded to ${agentName(source)}` : "Called in") : item.direction === "callback" ? `${agentName(source)} called back` : `${agentName(source)} called`} · {whenShort(item.at)}
         {item.phone ? ` · ${fmtPhone(item.phone)}` : ""}{item.duration_sec != null ? ` · ${mmss(item.duration_sec)}` : ""}</>}>
       <div className="space-y-4 pt-1">
         {item.message && (
@@ -352,7 +352,7 @@ export function MessageSheet({ item, onClose, onDeleted }: { item: Msg | null; o
 
         {item.purpose && <p className="text-sm text-white/60"><span className="text-white/55">Why she called: </span>{item.purpose}</p>}
         {item.hasRecording && <Recording callId={item.id} fn={item.source === "ava" ? "ava-assistant" : "roofguard-caller"} />}
-        <ShareCall callId={item.id} fn={item.source === "ava" ? "ava-assistant" : "roofguard-caller"} callNo={item.call_no} lines={item.transcript} hasRecording={item.hasRecording} />
+        <ShareCall callId={item.id} fn={item.source === "ava" ? "ava-assistant" : "roofguard-caller"} callNo={item.call_no} lines={item.transcript} hasRecording={item.hasRecording} agent={agentName(item.source)} />
         {item.summary && <p className="text-[15px] leading-relaxed text-white/85">{item.summary}</p>}
         {!noCallAgain && (
           <button type="button" onClick={callAgain}
@@ -444,13 +444,13 @@ export function FollowupsList({ source, onChanged, className }: { source: Source
       </header>
       {err && <p role="alert" className="px-4 py-3 text-sm text-red-300">Could not load follow-ups: {err}</p>}
       {rows.length === 0 && !err && (
-        <p className="px-4 py-8 text-center text-sm text-white/60">No follow-ups. When a caller asks for a call back, Ava suggests one here. Nothing is dialed until you approve it.</p>
+        <p className="px-4 py-8 text-center text-sm text-white/60">No follow-ups. When a caller asks for a call back, {agentName(source)} suggests one here. Nothing is dialed until you approve it.</p>
       )}
       <ul className="divide-y divide-white/5">
         {open.map((f) => <FollowupRow key={f.id} f={f} nos={nos} act={act} />)}
         {done.map((f) => <FollowupRow key={f.id} f={f} nos={nos} act={act} />)}
       </ul>
-      {rows.length > 0 && <p className="border-t border-white/5 px-4 py-2 text-[11px] text-white/55">Ava only calls after you tap. Suggested calls wait here until you do.</p>}
+      {rows.length > 0 && <p className="border-t border-white/5 px-4 py-2 text-[11px] text-white/55">{agentName(source)} only calls after you tap. Suggested calls wait here until you do.</p>}
     </section>
   );
 }
@@ -527,7 +527,7 @@ function FollowupRow({ f, nos, act }: { f: Followup; nos: Map<string, number>; a
           <p className="text-[15px] font-semibold text-white">Call {who} now?</p>
           <p className="mt-0.5 text-sm text-white/60">
             {to
-              ? <>Ava calls <span className="whitespace-nowrap tabular-nums">{fmtPhone(tenDigits(newPhone) ? newPhone : to)}</span> from her own line as {source_label(f.source)}, and says she&rsquo;s an AI on a recorded line.</>
+              ? <>{agentName(f.source)} calls <span className="whitespace-nowrap tabular-nums">{fmtPhone(tenDigits(newPhone) ? newPhone : to)}</span> from her own line as {source_label(f.source)}, and says she&rsquo;s an AI on a recorded line.</>
               : <>They called with their number withheld, so there&rsquo;s nothing to dial. Add the number they asked you to ring.</>}
           </p>
           {askPhone ? <PhoneField /> : (
@@ -551,7 +551,7 @@ function FollowupRow({ f, nos, act }: { f: Followup; nos: Map<string, number>; a
           </div>
           <label className="mt-2 block"><span className="mb-1 block text-xs text-white/60">Or pick one</span>
             <input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} className={inputCls} /></label>
-          <p className="mt-1 text-[11px] text-white/55">Ava calls at that time. You get a Scout reminder 15&nbsp;minutes before.</p>
+          <p className="mt-1 text-[11px] text-white/55">{agentName(f.source)} calls at that time. You get a Scout reminder 15&nbsp;minutes before.</p>
           {err && <p role="alert" className="mt-2 text-sm text-red-300">{err}</p>}
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setMode(null)} disabled={busy} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>Cancel</button>
@@ -563,7 +563,7 @@ function FollowupRow({ f, nos, act }: { f: Followup; nos: Map<string, number>; a
       {mode === "dismiss" && (
         <div role="alertdialog" aria-label={`Dismiss the follow-up for ${who}?`} className="mt-2 rounded-2xl bg-white/[0.04] p-3 ring-1 ring-white/10">
           <p className="text-[15px] font-semibold text-white">Dismiss this follow-up?</p>
-          <p className="mt-0.5 text-sm text-white/60">Ava won't call. The message stays in your list.</p>
+          <p className="mt-0.5 text-sm text-white/60">{agentName(f.source)} won't call. The message stays in your list.</p>
           {err && <p role="alert" className="mt-2 text-sm text-red-300">{err}</p>}
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setMode(null)} disabled={busy} className={cn(btn, "bg-white/10 text-white hover:bg-white/15")}>Keep</button>
@@ -626,7 +626,7 @@ export function KnowledgeList({ source, className, collapsible }: { source: Sour
     <>
       {source === "roofguard" && pending.length > 0 && <SuggestedByEli items={pending} onDone={() => void load()} />}
       {err && <p role="alert" className="px-4 py-3 text-sm text-red-300">Could not load: {err}</p>}
-      {rows.length === 0 && !err && <p className="px-4 py-8 text-center text-sm text-white/60">Nothing yet. Ava takes a message for anything she can't answer.</p>}
+      {rows.length === 0 && !err && <p className="px-4 py-8 text-center text-sm text-white/60">Nothing yet. {agentName(source)} takes a message for anything she can't answer.</p>}
       <ul className="divide-y divide-white/5">
         {shown.map((f) => (
           <li key={f.id} className="flex items-start gap-2 pl-4 pr-2">
@@ -643,13 +643,13 @@ export function KnowledgeList({ source, className, collapsible }: { source: Sour
         <button type="button" onClick={() => setExpanded((e) => !e)} className="min-h-[44px] w-full border-t border-white/5 text-sm text-white/60 hover:bg-white/5">
           {expanded ? "Show fewer" : `Show all ${rows.length}`}</button>
       )}
-      <p className="border-t border-white/5 px-4 py-2 text-[11px] text-white/55">Ava never shares anything outside this list.</p>
+      <p className="border-t border-white/5 px-4 py-2 text-[11px] text-white/55">{agentName(source)} never shares anything outside this list.</p>
       <FactSheet f={edit} own={own} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); void load(); }} />
     </>
   );
   if (collapsible) {
     return (
-      <CollapsibleSection id={`ava-knowledge-${source}`} title="What Ava can share" icon={<ShieldCheck className="h-4 w-4 text-emerald-300" />} className={className}
+      <CollapsibleSection id={`ava-knowledge-${source}`} title={`What ${agentName(source)} can share`} icon={<ShieldCheck className="h-4 w-4 text-emerald-300" />} className={className}
         badge={pending.length > 0 ? <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs tabular-nums text-amber-200">{pending.length}&nbsp;waiting</span> : undefined}
         summary={err ? "Couldn't load" : <><span className="tabular-nums">{live}</span>&nbsp;of&nbsp;<span className="tabular-nums">{rows.length}</span> facts on</>}>
         <div className="flex justify-end px-2 pt-1">{addBtn}</div>
@@ -658,10 +658,10 @@ export function KnowledgeList({ source, className, collapsible }: { source: Sour
     );
   }
   return (
-    <section aria-label="What Ava can share" className={cn("rounded-3xl bg-white/[0.03] ring-1 ring-white/10", className)}>
+    <section aria-label={`What ${agentName(source)} can share`} className={cn("rounded-3xl bg-white/[0.03] ring-1 ring-white/10", className)}>
       <header className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
         <ShieldCheck className="h-4 w-4 text-emerald-300" aria-hidden />
-        <h3 className="text-[15px] font-semibold text-white">What Ava can share</h3>
+        <h3 className="text-[15px] font-semibold text-white">What {agentName(source)} can share</h3>
         <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs tabular-nums text-white/70">{live}&nbsp;on</span>
         {pending.length > 0 && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs tabular-nums text-amber-200">{pending.length}&nbsp;waiting</span>}
         <span className="ml-auto">{addBtn}</span>
@@ -687,7 +687,7 @@ function SuggestedByEli({ items, onDone }: { items: Fact[]; onDone: () => void }
   return (
     <div className="border-b border-white/5 bg-amber-500/[0.06] px-4 py-3" aria-label="Suggested by Eli">
       <h4 className="text-xs font-semibold uppercase tracking-wider text-amber-200">Suggested by Eli</h4>
-      <p className="mt-0.5 text-xs text-white/60">Ava can't say these until you approve them.</p>
+      <p className="mt-0.5 text-xs text-white/60">Reese can't say these until you approve them.</p>
       <ul className="mt-2 space-y-3">
         {items.map((f) => {
           const warns = checkRoofguardFact(`${f.topic}. ${f.fact}`);
@@ -737,7 +737,7 @@ function FactSheet({ f, own, onClose, onSaved }: { f: Partial<Fact> | null; own:
   const save = async () => {
     const topic = (v.topic ?? "").trim(), fact = (v.fact ?? "").trim();
     if (!topic) { setErr("Add a topic."); return; }
-    if (!fact) { setErr("Add what Ava can say."); return; }
+    if (!fact) { setErr(`Add what ${own === "personal" ? "Ava" : "Reese"} can say.`); return; }
     setBusy(true);
     const row = { topic, fact, scope: v.scope ?? own, active: v.active ?? true };
     const { error } = v.id ? await table("ava_knowledge").update(row).eq("id", v.id) : await table("ava_knowledge").insert(row);
@@ -760,20 +760,20 @@ function FactSheet({ f, own, onClose, onSaved }: { f: Partial<Fact> | null; own:
         <div className="mt-4 space-y-3">
           <label className="block"><span className="mb-1 block text-xs text-white/60">Topic</span>
             <input className={inputCls} value={v.topic ?? ""} maxLength={60} onChange={(e) => setV({ ...v, topic: e.target.value })} placeholder="e.g. Pricing" /></label>
-          <label className="block"><span className="mb-1 block text-xs text-white/60">What Ava can say</span>
+          <label className="block"><span className="mb-1 block text-xs text-white/60">What {own === "personal" ? "Ava" : "Reese"} can say</span>
             <textarea rows={4} className={cn(inputCls, "h-auto py-2")} value={v.fact ?? ""} maxLength={600} onChange={(e) => setV({ ...v, fact: e.target.value })}
               placeholder="One or two plain sentences" /></label>
           <div>
             <span className="mb-1 block text-xs text-white/60">Who can use it</span>
             <div role="radiogroup" aria-label="Who can use it" className="grid grid-cols-2 rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10">
-              {([[own, own === "personal" ? "This Ava" : "RoofGuard Ava"], ["both", "Both Avas"]] as const).map(([id, label]) => (
+              {([[own, own === "personal" ? "Ava only" : "Reese only"], ["both", "Ava and Reese"]] as const).map(([id, label]) => (
                 <button key={id} type="button" role="radio" aria-checked={(v.scope ?? own) === id} onClick={() => setV({ ...v, scope: id })}
                   className={cn("min-h-[44px] rounded-lg text-sm font-medium transition-colors", (v.scope ?? own) === id ? "bg-white text-black shadow-sm" : "text-white/65 hover:text-white")}>{label}</button>
               ))}
             </div>
           </div>
           <div className="flex items-center rounded-xl bg-white/[0.04] pl-3 ring-1 ring-white/10">
-            <span className="min-w-0 flex-1 text-sm text-white">On<span className="block text-[11px] text-white/50">Off keeps it saved but Ava won't use it.</span></span>
+            <span className="min-w-0 flex-1 text-sm text-white">On<span className="block text-[11px] text-white/50">Off keeps it saved but {own === "personal" ? "Ava" : "Reese"} won't use it.</span></span>
             <Toggle on={v.active ?? true} onChange={(a) => setV({ ...v, active: a })} label="On" />
           </div>
           {err && <p role="alert" className="text-sm text-red-300">{err}</p>}
@@ -783,7 +783,7 @@ function FactSheet({ f, own, onClose, onSaved }: { f: Partial<Fact> | null; own:
           {v.id && ask && (
             <div role="alertdialog" aria-label="Delete this fact?" className="rounded-2xl bg-[#FF453A]/[0.08] p-4 ring-1 ring-[#FF453A]/30">
               <p className="text-[15px] font-semibold text-white">Delete this fact?</p>
-              <p className="mt-0.5 text-sm text-white/60">Ava stops using it right away. Turn it off instead to keep it saved.</p>
+              <p className="mt-0.5 text-sm text-white/60">{own === "personal" ? "Ava" : "Reese"} stops using it right away. Turn it off instead to keep it saved.</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => setAsk(false)} disabled={busy} className="min-h-[44px] rounded-xl bg-white/10 text-[15px] font-medium text-white hover:bg-white/15">Cancel</button>
                 <button type="button" onClick={() => void remove()} disabled={busy} autoFocus className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#FF453A] text-[15px] font-semibold text-white hover:bg-[#ff5a50] disabled:opacity-60">

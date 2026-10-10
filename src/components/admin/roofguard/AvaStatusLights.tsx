@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { rpcArgs, type Source } from "./AvaShared";
+import { agentName, rpcArgs, type Source } from "./AvaShared";
 import { openCoach } from "./coachBus";
 import { openSection } from "./CollapsibleSection";
 
@@ -135,7 +135,7 @@ export function AvaStatusLights({ source, onOpenSettings, onOpenSetup, className
   const mobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const sum = useMemo(() => (lights ? summarize(lights) : null), [lights]);
-  const who = source === "ava" ? "Ava" : "RoofGuard Ava";
+  const who = agentName(source);
 
   const go = (run: () => void) => { setOpen(false); setTimeout(run, mobile ? 250 : 60); };
   const pillCls = cn("inline-flex min-h-[44px] items-center gap-2.5 rounded-2xl px-3.5 ring-1 transition-colors motion-reduce:transition-none", ring,

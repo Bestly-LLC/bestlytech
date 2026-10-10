@@ -150,7 +150,7 @@ export function AvaReview() {
       </Card>
 
       {/* ROI */}
-      <Card label="Return on Ava" title="Is she paying for herself?" aside={<ClipboardCheck className="h-4 w-4 text-white/30" aria-hidden />}>
+      <Card label="Return on Reese" title="Is she paying for herself?" aside={<ClipboardCheck className="h-4 w-4 text-white/30" aria-hidden />}>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-4">
           <Stat k="Spent so far" v={usd(roi.spend_total, 2)} sub={`${usd(roi.spend_per_week, 2)} a week lately`} />
           <Stat k="Cost per meeting" v={usd(roi.cost_per_meeting, 2)} sub={`${roi.meetings} booked, ${roi.dials} dials`} />

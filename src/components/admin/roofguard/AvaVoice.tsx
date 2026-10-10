@@ -29,8 +29,8 @@ type VoicesRes = { ok: boolean; error?: string; current: Voice; library: Voice[]
 
 const CFG = {
   ava: { fn: "ava-assistant" as const, use: "Use for Ava", name: "Ava", line: "Hey, it's Ava, Jared's assistant. He's tied up right now, can I take a message?" },
-  roofguard: { fn: "roofguard-caller" as const, use: "Use for RoofGuard", name: "RoofGuard Ava",
-    line: "Hey, it's Ava from RoofGuard. I'm looking for whoever's in charge of keeping your roof maintained." },
+  roofguard: { fn: "roofguard-caller" as const, use: "Use for RoofGuard", name: "Reese",
+    line: "Hey, it's Reese from RoofGuard. I'm looking for whoever's in charge of keeping your roof maintained." },
 };
 const ACCENTS = [["any", "Any accent"], ["american", "American"], ["british", "British"], ["australian", "Australian"]] as const;
 const GENDERS = [["female", "Female"], ["male", "Male"], ["any", "Any"]] as const;
@@ -319,7 +319,7 @@ export function VoicePicker({ source, openSignal }: { source: Source; defaultOpe
   useEffect(() => { void refresh(); }, [refresh]);
   const summary = source === "ava"
     ? (sum ? <>Her everyday voice · Your voice: {sum.mine} (Claims Closer calls shops with it)</> : "Pick how she sounds, record your voice")
-    : "Pick how RoofGuard Ava sounds on calls";
+    : "Pick how Reese sounds on calls";
   return (
     <CollapsibleSection id={`ava-voice-${source}`} anchorId={`voice-studio-${source}`} title={source === "ava" && sum ? `Voice: ${sum.name}` : "Voice"} icon={<AvaOrb size={28} />} summary={summary} openSignal={openSignal}>
       <VoiceBody source={source} onChanged={() => void refresh()} />

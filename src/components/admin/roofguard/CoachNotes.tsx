@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { openCall } from "./coachBus";
 import { CollapsibleSection } from "./CollapsibleSection";
+import { agentName } from "./AvaShared";
 import { ring, rpc, when12, type Source } from "./coachShared";
 
 type NoteRow = { id: string; vote: "up" | "down"; said: string; note: string | null;
@@ -75,7 +76,7 @@ export function CoachNotes({ source }: { source: Source }) {
     <CollapsibleSection id={`${source}-coach-notes`} title="Your notes on her lines" summary={summary} badge={pill}
       className="rounded-2xl" bodyClassName="pb-1">
       <p className="px-4 pb-1 pt-3 text-xs text-white/60">
-        Thumbs you gave on Ava's own lines, in any transcript. She gets them with her next review, and a line you
+        Thumbs you gave on {agentName(source)}'s own lines, in any transcript. She gets them with her next review, and a line you
         thumb after a call was already reviewed sends that call back for another look.
       </p>
       {err ? <p role="alert" className="px-4 py-3 text-sm text-red-200">Could not load your notes: {err}</p>

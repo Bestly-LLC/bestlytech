@@ -18,6 +18,7 @@ import { AlertTriangle, ArrowDownRight, ArrowUpRight, Check, CheckCircle2, Chevr
 import { CollapsibleSection } from "./CollapsibleSection";
 import { PlaybookManager, StatusPill } from "./CoachPlaybook";
 import { CoachReviews } from "./CoachReviews";
+import { agentName } from "./AvaShared";
 import { CoachNotes } from "./CoachNotes";
 import { onCoachChanged, onOpenCoach, openCoach } from "./coachBus";
 import {
@@ -87,7 +88,7 @@ function CoachStatus({ m, c }: { m: Manage | null; c: Coach }) {
 }
 
 function CoachHeader({ source, c, m, admin }: { source: Source; c: Coach; m: Manage | null; admin: boolean }) {
-  const name = source === "roofguard" ? "RoofGuard Ava" : "Ava";
+  const name = agentName(source);
   const total = c.weeks.reduce((n, w) => n + (w.n ?? 0), 0);
   return (
     <>

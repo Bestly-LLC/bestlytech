@@ -104,7 +104,7 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
   const live = useKpis();
   const k = data ?? live.k, err = data ? null : live.err, reload = live.reload;
   const [saving, setSaving] = useState(false);
-  if (err) return <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load Ava's scorecard: {err}</div>;
+  if (err) return <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load Reese's scorecard: {err}</div>;
   if (!k) return <div className="h-48 animate-pulse rounded-3xl bg-white/[0.03] ring-1 ring-white/10" aria-label="Loading scorecard" />;
 
   const st = STATUS[k.status], hire = HIRE[k.hire];
@@ -157,8 +157,8 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
         </p>
         <p className="mt-2 text-xs leading-relaxed text-white/60">
           {admin
-            ? `Your door-to-door LOA was about 1 close per ${k.loa.door_dials_per_meeting} doors (55 doors, 30 contacts, 7 decision makers, 4.5 pitches, 2.5 accounts a week). Cold calls convert worse than walking in, so Ava starts at 1 per 50.`
-            : "Cold calls convert worse than walking in, so Ava starts at 1 meeting per 50 dials."}
+            ? `Your door-to-door LOA was about 1 close per ${k.loa.door_dials_per_meeting} doors (55 doors, 30 contacts, 7 decision makers, 4.5 pitches, 2.5 accounts a week). Cold calls convert worse than walking in, so Reese starts at 1 per 50.`
+            : "Cold calls convert worse than walking in, so Reese starts at 1 meeting per 50 dials."}
           {measured ? ` This number is now hers: ${k.loa.booked_all} booked from ${k.loa.dials_all} real dials.` : ` Her own number replaces it as real calls come in (${k.loa.dials_all} so far).`}
         </p>
         {k.status !== "hit" && k.days_left > 0 && k.loa.rest_per_day != null && (
@@ -231,7 +231,7 @@ export function AvaScorecard({ admin = false, narrow = false, data }: { admin?: 
         {/* booked meetings */}
         <section className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10" aria-label="Meetings booked">
           <h3 className="mb-3 flex items-center gap-2 text-[0.9375rem] font-semibold text-white"><CalendarCheck className="h-4 w-4 text-emerald-300" aria-hidden />Meetings for Eli</h3>
-          {k.booked_list.length === 0 ? <p className="text-sm text-white/60">None yet. They land here the moment Ava books one.</p> : (
+          {k.booked_list.length === 0 ? <p className="text-sm text-white/60">None yet. They land here the moment Reese books one.</p> : (
             <ul className="divide-y divide-white/5">
               {k.booked_list.map((b, i) => (
                 <li key={i} className="py-2">

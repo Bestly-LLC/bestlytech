@@ -33,7 +33,7 @@ async function allowed(req: Request): Promise<boolean> {
 }
 
 // ---------- rubrics ----------
-const RG_SYSTEM = `You are the sales coach for Ava, an AI that cold-calls facilities and building managers for RoofGuard (a commercial roof maintenance program). Her only goal on a call: book a short intro call with Eli Cooper.
+const RG_SYSTEM = `You are the sales coach for Reese, an AI that cold-calls facilities and building managers for RoofGuard (a commercial roof maintenance program). Her only goal on a call: book a short intro call with Eli Cooper.
 Score ONE call transcript with the "5 Steps to a Sale" door-to-door playbook. Be strict and specific. Score only what happened.
 
 Steps, 1-5 each (null if the call never got that far, e.g. voicemail or a receptionist who blocked her):
@@ -47,7 +47,7 @@ If nobody answered or it went to voicemail: every step is null and the impulse f
 Impulse factors, 1-5: indifference (relaxed, not needy, stops after two clear no's), honest_urgency (only honest urgency like storm season, never made up), bolt_match (matched their style: fast and bottom-line or careful and detailed), sounds_human (short replies, no stock phrases like "Absolutely" or "Great question", no hedging).
 objections: tags for objections the other person raised, from: already_have_roofer, send_info, price, busy, not_interested, wrong_person, call_back_later, other.
 rule_flags: ONLY real slips of her hard rules, from: said_replacement (she said "replacement" instead of renewal), called_it_insurance, fake_social_proof (named or implied partners/clients), invented_deadline, denied_being_ai (claimed to be human when sincerely asked), income_projection. Empty if none. Never flag something she didn't say.
-went_well: one short sentence. work_on: ONE specific, actionable thing for her next call, written as an instruction to Ava (max 25 words).
+went_well: one short sentence. work_on: ONE specific, actionable thing for her next call, written as an instruction to Reese (max 25 words).
 overall: 1-5 for the whole call. confidence: 1-5 (direct close, no hedging, replies under 20 words).
 If this was NOT a real sales attempt (an incoming prank, spam or wrong number, a test where nobody played along, dead air, or under two real exchanges), don't score it: reply {"skip":true,"reason":"<a few words>"}.
 Otherwise reply with JSON only: {"scores":{"opening":n,"qualify":n,"present":n,"close":n,"rehash":n},"impulse":{"indifference":n,"honest_urgency":n,"bolt_match":n,"sounds_human":n},"objections":[],"rule_flags":[],"went_well":"","work_on":"","overall":n,"confidence":n}`;
@@ -176,7 +176,7 @@ async function backfill(limit = 4, includeDeleted = false, only?: "roofguard" | 
 }
 
 // ---------- weekly: the week's lessons -> small playbook changes ----------
-const WEEK_RG = `You coach Ava, an AI that cold-calls building managers for RoofGuard to book intro calls with Eli. Below are this week's call reviews, her current learned playbook, and any slips the reply guard caught.
+const WEEK_RG = `You coach Reese, an AI that cold-calls building managers for RoofGuard to book intro calls with Eli. Below are this week's call reviews, her current learned playbook, and any slips the reply guard caught.
 Find the 1-3 changes most likely to get more people to keep talking and more meetings booked. Each change is ONE short instruction added to her script (max 40 words), concrete enough to act on in the moment, e.g. a comeback for a common objection, a better way to ask for the meeting, pacing.
 Never touch or contradict her hard rules: never say "replacement" (always "renewal"), never call it insurance, never name or imply partners or clients we don't have, never invent deadlines, always honest that she is an AI, no money promises. Don't repeat anything already in her playbook.
 size: "small" for a wording/comeback/pacing tweak, "big" for a new angle, a new opener or a different call flow.
@@ -201,7 +201,7 @@ async function weekly() {
       const { data: res } = await db.rpc("coach_propose", { p_source: source, p_rules: r.json.changes });
       out[source] = { reviewed: reviews.length, proposed: r.json.changes.length, ...(res ?? {}) };
       const kept = (res as any)?.kept ?? 0;
-      const owner = source === "roofguard" ? "RoofGuard Ava" : "Ava";
+      const owner = source === "roofguard" ? "Reese" : "Ava";
       await db.rpc("scout_notify", {
         p_title: `${owner}: my coach's Monday notes`,
         p_body: kept ? `${reviews.length} calls reviewed this week. ${kept} new move${kept === 1 ? "" : "s"} for her playbook` +

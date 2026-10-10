@@ -424,7 +424,7 @@ function CallingCard() {
             <Step n={3} done={linesChecked} title={linesChecked ? `Line types checked · ${c.mobile} mobiles skipped` : `Check which of the ${c.unverified} numbers are business lines (Telnyx lookup, a fraction of a cent each); mobiles are never called`}>
               {keysIn && !linesChecked && <Btn busy={busy} id="line_types" onClick={() => void action("line_types", "Checking line types… up to 400 per run, about 90 seconds. Press again if some remain.")}>Check line types</Btn>}
             </Step>
-            <Step n={4} done={tested} title={tested ? `Test call done (${c.test_calls})` : "Test call: Ava calls your phone with a real lead's script"}>
+            <Step n={4} done={tested} title={tested ? `Test call done (${c.test_calls})` : "Test call: Reese calls your phone with a real lead's script"}>
               <div className="flex flex-wrap items-center gap-2">
                 <input value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="Your cell, e.g. (816) 500-7236" inputMode="tel"
                   className="w-56 rounded-lg bg-black/20 px-2.5 py-1.5 text-xs text-white placeholder:text-white/30 ring-1 ring-white/10 focus:outline-none focus:ring-white/25" />
@@ -432,7 +432,7 @@ function CallingCard() {
                 {setUp && s.test_phone && <Btn busy={busy} id="test_call" onClick={() => void action("test_call", "Calling your phone now…")}>Call my phone</Btn>}
               </div>
             </Step>
-            <Step n={5} done={hasCallback} title="Callback number Ava reads out in voicemails (required on automated calls)">
+            <Step n={5} done={hasCallback} title="Callback number Reese reads out in voicemails (required on automated calls)">
               <div className="flex flex-wrap items-center gap-2">
                 <input value={cbNumber} onChange={(e) => setCbNumber(e.target.value)} placeholder="Number prospects can call back" inputMode="tel"
                   className="w-56 rounded-lg bg-black/20 px-2.5 py-1.5 text-xs text-white placeholder:text-white/30 ring-1 ring-white/10 focus:outline-none focus:ring-white/25" />
@@ -530,9 +530,9 @@ export default function RoofGuard() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-4">
-      <AvaOrb size={72} label="RoofGuard Ava" />
+      <AvaOrb size={72} label="Reese" />
       <div className="min-w-0 flex-1">
-      <PageHeader title="RoofGuard" description="Ava, the AI caller: who she's calling, what she's saying, and how each call ended."
+      <PageHeader title="RoofGuard" description="Reese, the AI caller: who she's calling, what she's saying, and how each call ended."
         actions={tab !== "leads" ? undefined : <div className="flex gap-2">
           <button type="button" onClick={() => void kick()} disabled={kicking || left === 0}
             className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm text-white ring-1 ring-white/15 hover:bg-white/15 disabled:opacity-40">

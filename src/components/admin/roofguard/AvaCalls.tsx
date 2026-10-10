@@ -214,13 +214,13 @@ async function fetchRecording(callId: string, fn: string): Promise<Blob | null> 
  * Share uses the system share sheet with the two files (Messages, AirDrop, Mail...). Where a browser can't share files,
  * it falls back to downloading them. Download saves both files.
  */
-export function ShareCall({ callId, fn, callNo, lines, hasRecording = true }: { callId: string; fn: string; callNo?: number | null; lines: Line[]; hasRecording?: boolean }) {
+export function ShareCall({ callId, fn, callNo, lines, hasRecording = true, agent = "Ava" }: { callId: string; fn: string; callNo?: number | null; lines: Line[]; hasRecording?: boolean; agent?: string }) {
   const [busy, setBusy] = useState<"share" | "download" | null>(null);
   const [note, setNote] = useState<string | null>(null);
   useEffect(() => { setNote(null); }, [callId]);
   const name = `Call ${callNo != null ? `#${callNo}` : "recording"}`;
   const files = async (): Promise<File[]> => {
-    const text = lines.filter((l) => l.text?.trim()).map((l) => `${l.role === "agent" ? "Ava" : "Caller"}: ${l.text.trim()}`).join("\n\n");
+    const text = lines.filter((l) => l.text?.trim()).map((l) => `${l.role === "agent" ? agent : "Caller"}: ${l.text.trim()}`).join("\n\n");
     const out: File[] = [];
     if (text) out.push(new File([text + "\n"], `${name} transcript.txt`, { type: "text/plain" }));
     if (hasRecording) {
@@ -394,7 +394,7 @@ export function ReplyGuard({ source }: { source: "ava" | "roofguard" }) {
       const { error } = await rpcArgs("admin_playbook_set", { p_source: source, p_id: r.playbook_id, p_action: action });
       if (error) say(r.id, false, error.message); else { say(r.id, true, action === "approve" ? "Rule approved." : "Rule declined."); coachChanged(source); }
     } else if (action === "scout") {
-      const about = `Reply guard, ${source === "ava" ? "personal Ava" : "RoofGuard Ava"}, call ${r.call_no != null ? "#" + r.call_no : "(unnumbered)"}: ${incidentText(r)}.` +
+      const about = `Reply guard, ${source === "ava" ? "personal Ava" : "Reese"}, call ${r.call_no != null ? "#" + r.call_no : "(unnumbered)"}: ${incidentText(r)}.` +
         `${r.excerpt ? ` What she said: "${r.excerpt.replace(/\s+/g, " ").slice(0, 300)}".` : ""}${r.healed ? ` The guard already did: ${r.healed}.` : ""}`;
       askScout("Fix this Reply guard issue so it doesn't happen again.", { about });
       const { error } = await rpcArgs("admin_incident_set", { p_id: r.id, p_action: "scout", p_ref: `asked ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}` });
@@ -584,7 +584,7 @@ export function AvaCalls({ callingOn, onOpenSetup }: { callingOn: boolean | null
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/10">
         <span className="flex items-center gap-2 text-[15px] font-semibold text-white">
           <AvaOrb size={30} speaking={!!callingOn} className={callingOn ? undefined : "opacity-60 grayscale"} />
-          Ava ·{callingOn == null ? "…" : callingOn ? "Calling" : "Paused"}
+          Reese ·{callingOn == null ? "…" : callingOn ? "Calling" : "Paused"}
         </span>
         <span className="text-sm text-white/55"><span className="tabular-nums text-white/80">{today.calls}</span> calls today · <span className="tabular-nums text-white/80">{today.booked}</span> booked</span>
         {!callingOn && callingOn != null && (
@@ -643,7 +643,7 @@ function IncomingCalls({ rows, onOpen }: { rows: RgIncoming[]; onOpen: (r: RgInc
                   <DirIcon direction={r.direction} />
                   <CallNo n={r.call_no} />
                   <span className="min-w-0 flex-1 truncate text-[15px] text-white">{m.name}
-                    <span className="ml-2 text-xs text-white/45">{r.direction === "callback" ? "Ava called back" : "Called in"}</span></span>
+                    <span className="ml-2 text-xs text-white/45">{r.direction === "callback" ? "Reese called back" : "Called in"}</span></span>
                   {r.duration_sec != null && <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-white/45">{mmss(r.duration_sec)}</span>}
                   <span className="shrink-0 whitespace-nowrap text-xs text-white/40">{ago(r.at)}</span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-white/25" aria-hidden />
@@ -693,8 +693,8 @@ function LiveBanner({ call }: { call: LiveCall }) {
 function Followups({ rows }: { rows: Followup[] }) {
   const up = rows.filter((f) => f.status === "scheduled" || f.status === "dialing");
   return (
-    <section aria-label="Scheduled by Ava" className="rounded-3xl bg-sky-500/[0.05] p-4 ring-1 ring-sky-500/25">
-      <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-sky-200"><AlarmClock className="h-4 w-4" aria-hidden />Scheduled by Ava</h3>
+    <section aria-label="Scheduled by Reese" className="rounded-3xl bg-sky-500/[0.05] p-4 ring-1 ring-sky-500/25">
+      <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-sky-200"><AlarmClock className="h-4 w-4" aria-hidden />Scheduled by Reese</h3>
       <ul className="divide-y divide-white/5">
         {up.map((f) => (
           <li key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
@@ -705,7 +705,7 @@ function Followups({ rows }: { rows: Followup[] }) {
           </li>
         ))}
       </ul>
-      <p className="mt-1 text-[11px] text-white/40">Ava calls back on time by herself. You get a Scout reminder 15 minutes before.</p>
+      <p className="mt-1 text-[11px] text-white/40">Reese calls back on time by herself. You get a Scout reminder 15 minutes before.</p>
     </section>
   );
 }
@@ -871,7 +871,7 @@ function CallSheet({ row, nos, focusId, onClose, onDeleted }: { row: BoardRow | 
                 {c.opener_key && <span>· opener: {c.opener_key.replace(/^dm_/, "")}</span>}
               </div>
               <Recording callId={c.call_id} />
-              <ShareCall callId={c.call_id} fn="roofguard-caller" callNo={nos.get(c.call_id)} lines={c.transcript ?? []} />
+              <ShareCall callId={c.call_id} fn="roofguard-caller" callNo={nos.get(c.call_id)} lines={c.transcript ?? []} agent="Reese" />
               {c.summary && <p className="text-[15px] leading-relaxed text-white/85">{c.summary}</p>}
               <div className="divide-y divide-white/5 rounded-2xl bg-white/[0.03] px-4 ring-1 ring-white/10">
                 {c.dm_name && <Fact icon={<UserRound className="h-4 w-4" />} label="Decision maker">{c.dm_name}{c.dm_title ? `, ${c.dm_title}` : ""}</Fact>}
