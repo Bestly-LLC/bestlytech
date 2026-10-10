@@ -11,7 +11,7 @@ import { BadgeDollarSign, Brush, FileWarning,
   Car,
   Mic,
   Handshake,
-  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, ShieldAlert, Siren, CarFront, Flower2, PhoneCall,
+  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, ShieldAlert, Siren, CarFront, Flower2, PhoneCall, Headset,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -36,6 +36,7 @@ import { openHokuAdmin, HOKU_ADMIN_URL } from "@/lib/openHokuAdmin";
 import { AvaOrbIcon } from "@/components/admin/roofguard/AvaOrb";
 
 type CountKeys =
+  | "maya"
   | "leads"
   | "contacts"
   | "cySubscribers";
@@ -101,21 +102,28 @@ const avaItems = [
   { title: "Ava", url: "/admin/ava", icon: AvaOrbIcon },
 ];
 
-// RoofGuard: the AI sales caller (its own Ava, leads, phone finder). Kept separable so it can be split off.
+// Maya: Bestly Sales & Service phone agent (support for every Bestly product, privacy requests, Bestly Agent demos).
+// The badge is open tickets plus open leads waiting on Jared.
+const mayaItems = [
+  { title: "Maya", url: "/admin/maya", icon: Headset, countKey: "maya" as CountKeys },
+];
+
+// RoofGuard: the AI sales caller (Reese: leads, phone finder). Kept separable so it can be split off.
 const roofguardItems = [
-  { title: "RoofGuard", url: "/admin/roofguard", icon: PhoneCall },
+  { title: "Reese", url: "/admin/roofguard", icon: PhoneCall },
 ];
 
 // Signs you straight into the HOKU store admin (see lib/openHokuAdmin).
 const hokuItems = [
   { title: "HOKU admin", url: HOKU_ADMIN_URL, icon: ShoppingBag, sso: true },
 ];
-const ALL_NAV_URLS = [...workItems, ...avaItems, ...vestaItems, ...roofguardItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems].map((i) => i.url);
+const ALL_NAV_URLS = [...workItems, ...avaItems, ...mayaItems, ...vestaItems, ...roofguardItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems].map((i) => i.url);
 
 
 export const ADMIN_NAV_SECTIONS = [
   { label: "Work", items: workItems },
   { label: "Ava", items: avaItems },
+  { label: "Maya", items: mayaItems },
   { label: "HOKU", items: hokuItems },
   { label: "Vesta", items: vestaItems },
   { label: "RoofGuard", items: roofguardItems },
@@ -135,8 +143,16 @@ function readOrder(): string[] {
   try { const v = JSON.parse(localStorage.getItem(ORDER_KEY) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
 }
 function orderedSections(order: string[]) {
-  const rank = (l: string) => { const i = order.indexOf(l); return i < 0 ? 999 + ADMIN_NAV_SECTIONS.findIndex((s) => s.label === l) : i; };
-  return [...ADMIN_NAV_SECTIONS].sort((a, b) => rank(a.label) - rank(b.label));
+  const byLabel = new Map(ADMIN_NAV_SECTIONS.map((s) => [s.label, s]));
+  const out = order.filter((l, i) => byLabel.has(l) && order.indexOf(l) === i);
+  // A section the saved order has never seen (a new one) lands right after the section that precedes it in the default
+  // list, so Maya shows up under Ava instead of at the very bottom.
+  ADMIN_NAV_SECTIONS.forEach((s, i) => {
+    if (out.includes(s.label)) return;
+    const prev = ADMIN_NAV_SECTIONS.slice(0, i).reverse().find((p) => out.includes(p.label));
+    out.splice(prev ? out.indexOf(prev.label) + 1 : out.length, 0, s.label);
+  });
+  return out.map((l) => byLabel.get(l)!);
 }
 
 /* Attention dots: anything waiting (admin_today) or unread in the bell points at a page. */
@@ -199,6 +215,10 @@ export function AdminSidebar() {
       for (const b of ((bell ?? []) as unknown as { url: string | null; severity: string; title: string }[])) {
         if (b.severity === "warning" || b.severity === "critical" || b.severity === "error") bump(b.url, b.severity === "warning" ? "amber" : "red", b.title);
       }
+      // Maya: open tickets plus open leads (she is the phone line; these are the people waiting on a follow-up).
+      const { data: mayaC } = await supabase.rpc("admin_maya_counts" as never);
+      const mc = mayaC as unknown as { open?: number; leads?: number } | null;
+      const mayaN = mc && typeof mc.open === "number" ? mc.open + (mc.leads ?? 0) : null;
       // Team: any bot gone quiet puts a red dot on the Team page.
       const { data: teamRed } = await supabase.rpc("admin_team_red_count" as never);
       if (typeof teamRed === "number" && teamRed > 0) {
@@ -208,6 +228,7 @@ export function AdminSidebar() {
       const keys: CountKeys[] = ["leads", "contacts", "cySubscribers"];
       setCounts((prev) => {
         const next = { ...prev };
+        if (mayaN !== null) next.maya = mayaN;
         results.forEach((r, i) => {
           if (!r.error && typeof r.count === "number") next[keys[i]] = r.count;
         });

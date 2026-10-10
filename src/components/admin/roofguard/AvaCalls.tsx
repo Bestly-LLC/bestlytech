@@ -20,7 +20,7 @@ import {
   AlarmClock, AlertTriangle, Download, Share, Ban, Calendar, CheckCircle2, ChevronRight, CircleDashed, Clock, FlaskConical, GraduationCap, Headphones, Loader2,
   Mail, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, Play, ShieldAlert, ThumbsDown, ThumbsUp, Trash2, UserRound, Voicemail, Wrench, XCircle,
 } from "lucide-react";
-import { DirIcon, FollowupsList, KnowledgeList, MessageSheet, MessagesList, rgIncomingToMsg, type Msg, type RgIncoming } from "./AvaShared";
+import { agentName, DirIcon, FollowupsList, KnowledgeList, MessageSheet, MessagesList, rgIncomingToMsg, type Msg, type RgIncoming } from "./AvaShared";
 import { askScout } from "../scoutBus";
 import { ScrollSheet } from "./AvaSheet";
 import { callPhase, type CallPhase, type LiveSource } from "./AvaLive";
@@ -152,8 +152,8 @@ function TurnVote({ source, callId, conversationId, turn, said, votes, setVotes 
  *  `inline`: no scroller of its own (inside a sheet whose body already scrolls, a second scroller would swallow touch drags).
  *  Otherwise it scrolls at the height its className gives it, and only blocks scroll chaining while it truly overflows.
  *  Pass `source` plus a call id or conversation id to put thumbs on Ava's lines. */
-export function LiveTranscript({ lines, live, className, them = "Them", inline, source, callId, conversationId }:
-  { lines: Line[]; live?: boolean; className?: string; them?: string; inline?: boolean;
+export function LiveTranscript({ lines, live, className, them = "Them", inline, source, callId, conversationId, agent }:
+  { lines: Line[]; live?: boolean; className?: string; them?: string; inline?: boolean; agent?: string;
     source?: LiveSource; callId?: string | null; conversationId?: string | null }) {
   const box = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
@@ -182,7 +182,7 @@ export function LiveTranscript({ lines, live, className, them = "Them", inline, 
           <div key={i} className={cn("flex", ava ? "justify-start" : "justify-end")}>
             <div className={cn("max-w-[85%] rounded-2xl px-3 py-2 text-[15px] leading-snug",
               ava ? "rounded-bl-md bg-white/[0.07] text-white" : "rounded-br-md bg-sky-500/20 text-sky-50")}>
-              <div className="mb-0.5 text-[11px] font-medium text-white/45">{ava ? "Ava" : them}<span className="tabular-nums"> · {mmss(l.t)}</span></div>
+              <div className="mb-0.5 text-[11px] font-medium text-white/45">{ava ? (agent ?? agentName(source)) : them}<span className="tabular-nums"> · {mmss(l.t)}</span></div>
               {l.text}
               {ava && votable && <TurnVote source={source} callId={callId} conversationId={conversationId}
                 turn={i} said={l.text} votes={votes} setVotes={setVotes} />}
