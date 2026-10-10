@@ -3,14 +3,18 @@
 systemd bestly-montage runs this forever. Each loop it checks in (agent_beats 'montage'), claims the oldest queued job
 from studio_video_jobs (montage_claim) and makes the video:
   writing    brand module writes the script with free AI and passes the brand's claim rules + fact check
-  voicing    ElevenLabs reads each scene (Piper, local and free, takes over for the whole video if credits are low or ElevenLabs
-             fails); scene lengths follow the voice
+  voicing    ElevenLabs reads each scene; scene lengths follow the voice. No automatic Piper fallback (Jared 2026-10-10,
+             answer 20 of docs/elevenlabs-studio-opusplan.md): when ElevenLabs is unavailable, below the 30% reserve or fails,
+             the job goes `held`, Spark tells Jared once a day, and this worker re-checks every 30 min and resumes by itself
+             (7 days held -> failed + alert). Piper only runs when montage_settings voice.provider = 'piper' (manual switch).
   rendering  OpenMontage VideoCompose, atelier mode, our hand-authored brand composition (om_render.py)
   checking   OpenMontage's post-render review + our own ffprobe / loudness / size checks
   filing     MP4 + thumbnail to storage, then montage_file puts it in Studio > Drafts > To review
 A heartbeat goes out every minute while it works. Supabase cron montage-watch requeues a job whose heartbeat stops
 (3 tries) and alerts as Montage if the worker itself goes quiet; systemd restarts the process.
 """
+import datetime
+import hashlib
 import json
 import os
 import random
@@ -91,11 +95,23 @@ def dur(path):
 
 EL_API = "https://api.elevenlabs.io"
 EL_USD_PER_CREDIT = 22 / 131000      # Creator plan: $22 for 131,000 credits
+HOLD_RECHECK_MIN = 30                # a held job is looked at again every 30 minutes
+HOLD_GIVE_UP_DAYS = 7                # after 7 days held the job fails (+ alert)
 _el_key = {}
 
 
+class VoiceHeld(Exception):
+    """ElevenLabs cannot read this video right now. The job is HELD (not voiced by Piper) and retried by the worker.
+    kind: 'low' (credits under the reserve: money, pushes once a day), 'down' (outage / error / no key: info, no push),
+    'switch' (the Studio voiceover switch is off for this brand: info, no push). cost/credits = what a partial run already spent."""
+
+    def __init__(self, reason, kind="down", cost=0.0, credits=0.0, voice=None):
+        super().__init__(reason)
+        self.reason, self.kind, self.cost, self.credits, self.voice = reason, kind, cost, credits, voice or {}
+
+
 def _el_secret():
-    """ElevenLabs key through pi_secret (Vault). Never raises: no key just means "use Piper"."""
+    """ElevenLabs key through pi_secret (Vault). Never raises; an empty key means the job is held ('down')."""
     if "k" not in _el_key:
         try:
             _el_key["k"] = lib.rpc("pi_secret", p_name="elevenlabs_api_key") or ""
@@ -127,67 +143,91 @@ def _el_call(method, path, key, body=None, timeout=30, retries=2):
 
 
 def _voice_alert(kind, why):
-    """kind 'low' = credits protect Ava's calls (warning + push, once a day); 'down' = outage or error (info, no push, once a day)."""
-    day = time.strftime("%Y-%m-%d", time.gmtime())
+    """Spark's alert when a video is held (scout_notify, title starts "Spark:", owner prefix montage.voice -> Spark).
+    'low' = plan credits are money: warning + push, once a day. 'down' (outage / error) and 'switch' (voiceover switch off):
+    info, no push, once a day each."""
+    day = time.strftime("%Y-%m-%d")
     try:
         if kind == "low":
-            lib.notify("Montage: ElevenLabs credits are low, videos use the Piper voice", why[:400], severity="warning", push=True,
-                       url="/admin/team", dedupe=f"montage-voice-low-{day}")
+            lib.notify("Spark: videos are on hold, ElevenLabs credits are low", why[:600], severity="warning", push=True,
+                       url="/admin/team", dedupe=f"montage.voice-low-{day}")
+        elif kind == "switch":
+            lib.notify("Spark: a video is on hold, the voiceover switch is off", why[:600], severity="info", push=False,
+                       url="/admin/team", dedupe=f"montage.voice-switch-{day}")
         else:
-            lib.notify("Montage: ElevenLabs did not answer, this video used the Piper voice", why[:400], severity="info", push=False,
-                       url="/admin/team", dedupe=f"montage-voice-down-{day}")
-    except Exception as e:  # noqa: BLE001  (an alert must never fail a video)
+            lib.notify("Spark: a video is on hold, ElevenLabs did not answer", why[:600], severity="info", push=False,
+                       url="/admin/team", dedupe=f"montage.voice-down-{day}")
+    except Exception as e:  # noqa: BLE001  (an alert must never break the loop)
         print("voice alert failed:", e, flush=True)
 
 
+def _feature_on(client_slug):
+    """Studio > Settings > Audio switch for this brand's 'voiceover' (studio_audio_features). True/False, or None when the
+    table (or the row) does not exist yet: then only montage_brand_policy.ai_voice_ok decides."""
+    try:
+        rows = lib.get("studio_audio_features", f"select=enabled&owner_slug=eq.{client_slug}&feature=eq.voiceover") or []
+    except Exception as e:  # noqa: BLE001
+        if "HTTP 404" in str(e) or "PGRST2" in str(e) or "does not exist" in str(e):
+            return None
+        raise
+    return bool(rows[0]["enabled"]) if rows else None
+
+
 def _eleven(brand, lines, jd, client_slug):
-    """Try ElevenLabs for the whole video. Returns (wavs, info) on success, (None, info) when Piper must take over.
-    info = {"line": job-log text, "chars": credits-worth of characters actually sent, "cost": estimated USD}.
-    Rules: setting says elevenlabs + client ai_voice_ok + brand VOICE_11 + key + subscription answers + credits left after
-    this video stay >= reserve_pct of the limit (that reserve is Ava's calls). One voice per video, never mixed."""
-    info = {"line": "", "chars": 0, "cost": 0.0}
+    """ElevenLabs for the whole video: returns (wavs, info) on success, (None, info) ONLY when the manual Piper switch is set
+    (montage_settings voice.provider = 'piper'). Everything else that stops ElevenLabs raises VoiceHeld (held + retried) or, for
+    a permanent no (client policy forbids AI voice, brand has no ElevenLabs voice), RuntimeError (the job fails with that reason).
+    info = {"line": job-log text, "chars", "credits": credits actually spent now, "cost": estimated USD, "voice_id", "voice_name", "model"}.
+    Rules: setting says elevenlabs + client ai_voice_ok + Studio voiceover switch not off + brand VOICE_11 + key + subscription answers +
+    credits left after this video stay >= reserve_pct of the limit (that reserve is Ava's calls). One voice per video, never mixed."""
+    info = {"line": "", "chars": 0, "credits": 0.0, "cost": 0.0}
     try:
         st = (lib.get("montage_settings", "select=value&key=eq.voice") or [{}])[0].get("value") or {}
     except Exception as e:  # noqa: BLE001
-        info["line"] = f"voice: piper (settings unreadable: {str(e)[:80]})"
+        raise VoiceHeld(f"the voice settings could not be read ({str(e)[:100]})", "down")
+    if st.get("provider") == "piper":      # the ONLY way Piper runs now: a person flipped the setting
+        info["line"] = "voice: piper (manual switch: montage_settings voice.provider = piper)"
         return None, info
     if st.get("provider") != "elevenlabs":
-        info["line"] = f"voice: piper (setting is {st.get('provider') or 'unset'})"
-        return None, info
+        raise VoiceHeld(f"montage_settings voice.provider is {st.get('provider') or 'unset'}, not elevenlabs or piper", "down")
     v11 = getattr(brand, "VOICE_11", None)
     if not v11 or not v11.get("voice_id"):
-        info["line"] = "voice: piper (brand has no ElevenLabs voice)"
-        return None, info
+        raise RuntimeError("this brand has no ElevenLabs voice (VOICE_11 in its brand module). Add one, or flip montage_settings "
+                           "voice.provider to piper by hand; Montage no longer picks Piper on its own")
     try:
         pol = (lib.get("montage_brand_policy", f"select=ai_voice_ok&client_slug=eq.{client_slug}") or [{}])[0]
-    except Exception:  # noqa: BLE001
-        pol = {}
+    except Exception as e:  # noqa: BLE001
+        raise VoiceHeld(f"the client voice policy could not be read ({str(e)[:100]})", "down")
     if not pol.get("ai_voice_ok"):
-        info["line"] = "voice: piper (client policy does not allow an AI voice)"
-        return None, info
+        raise RuntimeError(f"client policy for '{client_slug}' does not allow an AI voice (montage_brand_policy.ai_voice_ok), so this video cannot be voiced")
+    try:
+        on = _feature_on(client_slug)
+    except Exception as e:  # noqa: BLE001
+        raise VoiceHeld(f"the Studio audio switches could not be read ({str(e)[:100]})", "down")
+    if on is False:
+        raise VoiceHeld(f"the voiceover switch for '{client_slug}' is off in Studio > Settings > Audio (only Jared can turn it on)", "switch")
     model = st.get("model") or "eleven_multilingual_v2"
     rate = 0.5 if model.startswith(("eleven_flash", "eleven_turbo")) else 1.0
     reserve = float(st.get("reserve_pct", 30))
+    info.update(voice_id=v11["voice_id"], voice_name=v11.get("name") or v11["voice_id"], model=model)
     key = _el_secret()
     if not key:
-        info["line"] = "voice: piper (no ElevenLabs key)"
-        _voice_alert("down", "No ElevenLabs key could be read from Vault, so this video used the free Piper voice.")
-        return None, info
+        raise VoiceHeld("no ElevenLabs key could be read from Vault (pi_secret elevenlabs_api_key)", "down", voice=info)
     chars = sum(len(t) for t in lines)
     try:
         sub = json.loads(_el_call("GET", "/v1/user/subscription", key, timeout=20))
         limit, used = int(sub["character_limit"]), int(sub["character_count"])
     except Exception as e:  # noqa: BLE001
-        info["line"] = f"voice: piper (ElevenLabs subscription check failed: {str(e)[:100]})"
-        _voice_alert("down", f"ElevenLabs subscription check failed ({str(e)[:160]}). The video used Piper; nothing else is affected.")
-        return None, info
+        raise VoiceHeld(f"the ElevenLabs subscription check failed ({str(e)[:100]})", "down", voice=info)
     left_after = limit - used - chars * rate
     if left_after < limit * reserve / 100:
-        info["line"] = (f"voice: piper (credits low: {limit - used} left, this video needs {int(chars * rate)}, "
-                        f"reserve {reserve:g}% = {int(limit * reserve / 100)} is kept for calls)")
-        _voice_alert("low", f"{limit - used:,} of {limit:,} ElevenLabs credits left; a video needs about {int(chars * rate)} and the last "
-                            f"{reserve:g}% is kept for Ava's calls, so videos use the Piper voice until the credits reset.")
-        return None, info
+        try:
+            reset = time.strftime("%b %-d, %-I:%M %p", time.localtime(int(sub["next_character_count_reset_unix"])))
+        except Exception:  # noqa: BLE001
+            reset = "the next reset"
+        raise VoiceHeld(f"ElevenLabs plan credits are low: {limit - used:,} of {limit:,} left, this video needs about {int(chars * rate):,}, "
+                        f"and the last {reserve:g}% ({int(limit * reserve / 100):,}) is kept for Ava's calls. Credits reset {reset}",
+                        "low", voice=info)
     ss = {"stability": v11.get("stability", 0.5), "similarity_boost": v11.get("similarity_boost", 0.75),
           "style": v11.get("style", 0.0), "speed": v11.get("speed", 1.0), "use_speaker_boost": True}
     wavs = []
@@ -198,11 +238,20 @@ def _eleven(brand, lines, jd, client_slug):
                 body["previous_text"] = " ".join(lines[max(0, i - 2):i])
             if i + 1 < len(lines):
                 body["next_text"] = lines[i + 1]
-            mp3 = _el_call("POST", f"/v1/text-to-speech/{v11['voice_id']}?output_format=mp3_44100_128", key, body)
-            info["chars"] += len(text)
-            m, w = f"{jd}/v{i:02d}.mp3", f"{jd}/v{i:02d}.wav"
-            with open(m, "wb") as f:
-                f.write(mp3)
+            m, w, kf = f"{jd}/v{i:02d}.mp3", f"{jd}/v{i:02d}.wav", f"{jd}/v{i:02d}.key"
+            ck = hashlib.sha1(json.dumps([v11["voice_id"], body], sort_keys=True).encode()).hexdigest()
+            try:
+                cached = os.path.exists(m) and open(kf).read() == ck      # a scene already paid for in an earlier try is reused
+            except OSError:
+                cached = False
+            if not cached:
+                mp3 = _el_call("POST", f"/v1/text-to-speech/{v11['voice_id']}?output_format=mp3_44100_128", key, body)
+                info["chars"] += len(text)
+                info["credits"] += len(text) * rate
+                with open(m, "wb") as f:
+                    f.write(mp3)
+                with open(kf, "w") as f:
+                    f.write(ck)
             # ElevenLabs pads each clip with ~0.3 s of silence at both ends; trim to the speech (keeps 0.05 s / 0.15 s) so the
             # gaps between scenes match what Piper gave and nothing sounds like a dead pause.
             subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", m, "-af",
@@ -210,20 +259,11 @@ def _eleven(brand, lines, jd, client_slug):
                             "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.15,areverse",
                             "-ar", "44100", "-ac", "1", w], check=True, timeout=60)
             wavs.append((w, dur(w)))
-    except Exception as e:  # noqa: BLE001  (any scene failing throws all ElevenLabs audio away)
-        for i in range(len(lines)):
-            for ext in ("mp3", "wav"):
-                try:
-                    os.remove(f"{jd}/v{i:02d}.{ext}")
-                except OSError:
-                    pass
-        info["cost"] = info["chars"] * rate * EL_USD_PER_CREDIT
-        info["line"] = f"voice: piper (ElevenLabs failed on line {len(wavs) + 1}: {str(e)[:120]})"
-        _voice_alert("down", f"ElevenLabs failed on line {len(wavs) + 1} of {len(lines)} ({str(e)[:160]}). "
-                             "The whole video used the Piper voice; nothing else is affected.")
-        return None, info
-    info["cost"] = chars * rate * EL_USD_PER_CREDIT
-    info["line"] = f"voice: elevenlabs {v11.get('name') or v11['voice_id']} ({chars} chars)"
+    except Exception as e:  # noqa: BLE001  (any scene failing holds the whole video; scenes already paid for stay cached)
+        raise VoiceHeld(f"ElevenLabs failed on line {len(wavs) + 1} of {len(lines)} ({str(e)[:120]})", "down",
+                        cost=info["credits"] * EL_USD_PER_CREDIT, credits=info["credits"], voice=info)
+    info["cost"] = info["credits"] * EL_USD_PER_CREDIT
+    info["line"] = f"voice: elevenlabs {info['voice_name']} ({chars} chars)"
     return wavs, info
 
 
@@ -257,8 +297,9 @@ def _level(path, target=-16.0):
 
 
 def voice(brand, script, jd, job_id, client_slug=None):
-    """Read every scene (ElevenLabs when the rules allow, else Piper, one provider for the whole video), lay the scenes out to
-    fit the voice, build narration.wav + a quiet pad. Returns (total_seconds, info); info["line"] is the voice line for the job log."""
+    """Read every scene with ElevenLabs (Piper only when montage_settings voice.provider = 'piper'; otherwise a problem raises
+    VoiceHeld and the job is held), lay the scenes out to fit the voice, build narration.wav + a quiet pad.
+    Returns (total_seconds, info); info["line"] is the voice line for the job log."""
     pub = f"{jd}/public"
     lines = [s["say"] for s in script["scenes"]] + [script["end"]["say"]]
     wavs, info = _eleven(brand, lines, jd, client_slug or "")
@@ -294,7 +335,8 @@ def voice(brand, script, jd, job_id, client_slug=None):
                     "-ac", "2", f"{pub}/pad.wav"], check=True)
     if info["provider"] == "elevenlabs":
         _level(f"{pub}/narration.wav")
-    json.dump({k: info.get(k) for k in ("provider", "line", "chars", "cost")}, open(f"{jd}/voice.json", "w"))
+    json.dump({k: info.get(k) for k in ("provider", "line", "chars", "credits", "cost", "voice_id", "voice_name", "model")},
+              open(f"{jd}/voice.json", "w"))
     return total, info
 
 
@@ -308,6 +350,61 @@ def _voice_report(job_id, info):
         except Exception as e:  # noqa: BLE001
             print("cost lookup failed:", e, flush=True)
     report(job_id, **p)
+
+
+def hold(job, h):
+    """Park a video whose voice cannot be made right now (VoiceHeld). First hold: tell the requester's thread and Spark's alert.
+    Every later look (every 30 min) only refreshes the reason and the next check. After 7 days held the job fails + alert."""
+    jid, now = job["id"], time.time()
+    since = None
+    if job.get("held_since"):
+        try:
+            since = datetime.datetime.fromisoformat(str(job["held_since"]).replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            since = None
+    spent = {}
+    if h.cost:
+        try:
+            cur = float(((lib.get("studio_video_jobs", f"select=cost_usd&id=eq.{jid}") or [{}])[0].get("cost_usd")) or 0)
+            spent["cost_usd"] = round(cur + h.cost, 4)
+        except Exception as e:  # noqa: BLE001
+            print("cost lookup failed:", e, flush=True)
+    audio_log(job, "held", h.voice, held_reason=h.reason, credits=h.credits, cost=h.cost)
+    if since and now - since > HOLD_GIVE_UP_DAYS * 86400:
+        err = f"held {HOLD_GIVE_UP_DAYS} days without a voice, stopped: {h.reason}"
+        report(jid, status="failed", stage="failed", error=err[:2000], note=err[:400], **spent)
+        audio_log(job, "failed", h.voice, held_reason=err)
+        lib.notify("Spark: a video was stopped after a week on hold", f"{job['client_slug']}: {err[:420]} Ask Spark to make it again once the voice works.",
+                   severity="warning", push=False, url="/admin/team", dedupe=f"montage.voice-giveup-{jid}")
+        return f"job {jid} failed after {HOLD_GIVE_UP_DAYS} days held"
+    check_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + HOLD_RECHECK_MIN * 60))
+    first = since is None
+    same = (job.get("held_reason") or "")[:25] == h.reason[:25]
+    p = dict(status="held", stage="held", held_reason=h.reason, held_check_at=check_at, **spent)
+    if first or not same:
+        p["note"] = f"on hold ({h.kind}): {h.reason}"[:480]
+    report(jid, **p)
+    if first:
+        try:
+            lib.rpc("montage_post", p_id=jid, body=f"I am holding this video: {h.reason}. I did not switch to a cheaper voice. I check again every "
+                    f"{HOLD_RECHECK_MIN} minutes and finish it on my own as soon as the voice works (I stop after {HOLD_GIVE_UP_DAYS} days).")
+        except Exception as e:  # noqa: BLE001
+            print("hold post failed:", e, flush=True)
+    why = h.reason
+    if h.kind == "low":
+        why = (f"{h.reason}. Plan credits (Creator, $22 a month) are what Montage and Ava's calls share, and Montage will not go past the plan. "
+               "Video voiceovers wait and restart on their own when the credits reset; nothing else is affected.")
+    elif h.kind == "switch":
+        why = f"{h.reason}. The video resumes by itself once the switch is on."
+    else:
+        why = f"{h.reason}. Videos wait and try again every {HOLD_RECHECK_MIN} minutes; nothing else is affected."
+    _voice_alert(h.kind, why)
+    return f"held {jid} ({h.kind}): {h.reason[:120]}"
+
+
+def audio_log(job, status, vinfo=None, held_reason=None, credits=None, cost=None):
+    """Spend and state of each video's voiceover go into studio_audio_jobs (requested_by 'montage'). Wired in once the table exists."""
+    return None
 
 
 def upload(path, name, ctype):
@@ -423,16 +520,25 @@ def process(job):
                 vinfo = json.load(open(f"{jd}/voice.json"))
             except (OSError, ValueError):
                 pass
-        else:  # voice files lost (reboot, cleanup): re-read the same script, never re-order clips
+        else:  # held for its voice, or voice files lost (reboot, cleanup): read the same script again, never re-order clips
             total, vinfo = voice(brand, script, jd, jid, job["client_slug"])
             _voice_report(jid, vinfo)
-        note("b-roll is back from the LTX box; picking the video up again")
+            audio_log(job, "done", vinfo)
+            if job.get("held_since"):
+                note("the voice works again; picking the video up")
+                try:
+                    lib.rpc("montage_post", p_id=jid, body="The voice is available again, so I am finishing this video now.")
+                except Exception as e:  # noqa: BLE001
+                    print("resume post failed:", e, flush=True)
+        if not job.get("held_since"):
+            note("b-roll is back from the LTX box; picking the video up again")
     else:
         report(jid, stage="writing", note="re-cutting with the change note" if job.get("parent_job_id") else "writing the script with free AI")
         script = brand.write(job, note)
         report(jid, stage="voicing", script=script, note=f"script ok via {script['provider']} (editor {script['score']:g}/10)")
         total, vinfo = voice(brand, script, jd, jid, job["client_slug"])
         _voice_report(jid, vinfo)
+        audio_log(job, "done", vinfo)
         if job.get("broll") and not job.get("parent_job_id") and all(s.get("shot") for s in script["scenes"]):
             shots = [{"scene": i, "seconds": max(3, min(10, int(s["end"] - s["start"] + 0.99))),
                       "prompt": f"{s['shot']} {brand.SHOT_STYLE}"} for i, s in enumerate(script["scenes"])]
@@ -513,6 +619,15 @@ def main():
         beat(True, f"started {job['id']}")
         try:
             msg = process(job)
+            beat(True, msg)
+            print(msg, flush=True)
+        except VoiceHeld as h:        # not a failure: the video waits for its voice (see hold())
+            try:
+                msg = hold(job, h)
+            except Exception as e:  # noqa: BLE001  (even if the hold bookkeeping breaks, put the job back instead of leaving it 'working')
+                print("hold failed:", e, flush=True)
+                report(job["id"], status="held", stage="held", held_reason=h.reason[:400])
+                msg = f"held {job['id']}: {h.reason[:120]}"
             beat(True, msg)
             print(msg, flush=True)
         except Exception as e:  # noqa: BLE001
