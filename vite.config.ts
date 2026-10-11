@@ -28,9 +28,9 @@ const SHARE_ROUTES = [
   {
     file: "agent.html",
     path: "/agent",
-    title: "Bestly Agent: an AI that answers your business phone",
+    title: "Bestly Agent: an AI receptionist that answers your phone and does the work",
     description:
-      "Bestly Agent picks up every call, day or night, talks like a real person, and does the work while it talks: books the appointment, updates your software, and texts the confirmation.",
+      "Bestly Agent answers every call, day or night, and does the work inside the apps you already use: books the appointment in your calendar, updates your customer list, and texts the confirmation.",
     image: "/og-agent.png",
   },
 ];
