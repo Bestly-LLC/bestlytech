@@ -162,15 +162,15 @@ def _voice_alert(kind, why):
 
 
 def _feature_on(client_slug):
-    """Studio > Settings > Audio switch for this brand's 'voiceover' (studio_audio_features). True/False, or None when the
-    table (or the row) does not exist yet: then only montage_brand_policy.ai_voice_ok decides."""
+    """Studio > Settings > Audio switch for this brand's 'voiceover' (studio_audio_features). True / False, or None when the table does
+    not exist yet (then only montage_brand_policy.ai_voice_ok decides). The table's own rule applies: a brand with no row has every switch off."""
     try:
         rows = lib.get("studio_audio_features", f"select=enabled&owner_slug=eq.{client_slug}&feature=eq.voiceover") or []
     except Exception as e:  # noqa: BLE001
-        if "HTTP 404" in str(e) or "PGRST2" in str(e) or "does not exist" in str(e):
+        if "HTTP 404" in str(e) or "PGRST205" in str(e) or "does not exist" in str(e):
             return None
         raise
-    return bool(rows[0]["enabled"]) if rows else None
+    return bool(rows[0]["enabled"]) if rows else False
 
 
 def _eleven(brand, lines, jd, client_slug):
@@ -418,9 +418,10 @@ def _rest_audio(method, query, body=None):
 
 
 def audio_log(job, status, vinfo=None, held_reason=None, credits=None, cost=None):
-    """Each video's voiceover is one studio_audio_jobs row (owner = the brand slug, feature 'voiceover', requested_by 'montage'),
-    status 'held' while it waits and 'done' / 'failed' at the end, with credits and cost_usd added up across tries. Montage is
-    pre-approved daily automation for house brands, so there is no quote/confirm step. Never raises; silent until the table exists."""
+    """Each video's voiceover is one studio_audio_jobs row (owner_slug = the brand, feature 'voiceover', engine 'elevenlabs',
+    requested_by 'montage'), status 'held' while it waits and 'done' / 'failed' at the end, with credits and cost_usd added up across
+    tries. Montage is pre-approved daily automation for house brands, so there is no quote / confirm step (billed_usd stays 0, house).
+    Never raises; silent until the table exists."""
     try:
         vinfo = vinfo or {}
         if credits is None:
@@ -431,25 +432,30 @@ def audio_log(job, status, vinfo=None, held_reason=None, credits=None, cost=None
             credits = cost = 0.0
         rows = _rest_audio("GET", f"?select=code,actual_credits,cost_usd&requested_by=eq.montage&inputs-%3E%3Emontage_job_id=eq.{job['id']}&limit=1") or []
         now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        prov = {"tool": "montage", "ai_generated": True, "provider": vinfo.get("provider") or "elevenlabs", "model": vinfo.get("model"),
-                "voice_name": vinfo.get("voice_name"), "montage_job_id": job["id"]}
-        patch = {"status": status, "held_reason": (held_reason or None), "voice_id": vinfo.get("voice_id")}
+        meta = {k: v for k, v in {"tool": "montage", "provider": vinfo.get("provider") or "elevenlabs", "model": vinfo.get("model"),
+                                  "voice_name": vinfo.get("voice_name"), "montage_job_id": job["id"]}.items() if v}
+        patch = {"status": status, "held_reason": held_reason if status == "held" else None,
+                 "error": held_reason if status == "failed" else None}
+        if vinfo.get("voice_id"):
+            patch["voice_id"] = vinfo["voice_id"]
         if status in ("done", "failed"):
             patch["finished_at"] = now
         if rows:
             r = rows[0]
             patch["actual_credits"] = round(float(r.get("actual_credits") or 0) + credits, 1)
             patch["cost_usd"] = round(float(r.get("cost_usd") or 0) + cost, 4)
-            _rest_audio("PATCH", f"?code=eq.{r['code']}", {k: v for k, v in patch.items() if v is not None or k == "held_reason"})
+            patch["meta"] = meta
+            _rest_audio("PATCH", f"?code=eq.{r['code']}", patch)
         else:
-            code = "".join(random.choice("abcdefghjkmnpqrstuvwxyz23456789") for _ in range(7))
-            lines = (job.get("script") or {}).get("scenes") or []
-            chars = sum(len(x.get("say", "")) for x in lines) + len(((job.get("script") or {}).get("end") or {}).get("say", ""))
-            _rest_audio("POST", "", {"code": code, "owner_slug": job["client_slug"], "feature": "voiceover", "requested_by": "montage",
+            sc = job.get("script") or {}
+            chars = sum(len(x.get("say", "")) for x in (sc.get("scenes") or [])) + len((sc.get("end") or {}).get("say", ""))
+            rate = 0.5 if str(vinfo.get("model") or "").startswith(("eleven_flash", "eleven_turbo")) else 1.0
+            _rest_audio("POST", "", {"owner_slug": job["client_slug"], "feature": "voiceover", "requested_by": "montage", "engine": "elevenlabs",
                                      "inputs": {"montage_job_id": job["id"], "pipeline": "montage", "chars": chars or None},
-                                     "est_credits": round(chars * (0.5 if str(vinfo.get("model") or "").startswith(("eleven_flash", "eleven_turbo")) else 1.0), 1) or None,
-                                     "actual_credits": round(credits, 1), "cost_usd": round(cost, 4), "billed_usd": 0,
-                                     "provenance": prov, **{k: v for k, v in patch.items() if v is not None or k == "held_reason"}})
+                                     "est_credits": round(chars * rate, 1) or None, "actual_credits": round(credits, 1), "cost_usd": round(cost, 4),
+                                     "billed_usd": 0, "confirmed_at": now, "started_at": now, "meta": meta,
+                                     "provenance": {"ai_generated": True, "feature": "voiceover", "voice_id": vinfo.get("voice_id"),
+                                                    "voice_name": vinfo.get("voice_name"), "model": vinfo.get("model")}, **patch})
     except Exception as e:  # noqa: BLE001  (logging must never fail or hold a video)
         if not any(t in str(e) for t in ("HTTP 404", "PGRST205", "does not exist")):
             print("audio_log failed:", e, flush=True)
