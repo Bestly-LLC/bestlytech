@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
 import { track } from "./track";
 import { Lines } from "./Lines";
-import { LeoWidget, preloadLeo } from "./LeoWidget";
+import { LeoBar, LeoWidget, preloadLeo } from "./LeoWidget";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 type Msg = { id: number | string; role: "user" | "assistant"; content: string; status?: string };
@@ -113,8 +113,13 @@ function Chips({ list, onPick, disabled }: { list: string[]; onPick: (s: string)
   );
 }
 
-/** Slim button in the bottom bar, above the Pickup / Return tags. */
-export function AskButton({ onOpen }: { onOpen: () => void }) {
+/**
+ * The helper in the bottom bar, above the Pickup / Return tags. Trip links with Leo get the docked Leo bar
+ * (`leo`; `active` while the widget is open keeps its space without showing it twice); driver pages and the
+ * token-less /lax page keep the slim text-helper button.
+ */
+export function AskButton({ onOpen, leo = false, home = false, active = false }: { onOpen: () => void; leo?: boolean; home?: boolean; active?: boolean }) {
+  if (leo) return <LeoBar home={home} hidden={active} onOpen={onOpen} />;
   return (
     <button type="button" onClick={onOpen}
       className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white/[0.08] text-[15px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98] motion-reduce:transition-none">
