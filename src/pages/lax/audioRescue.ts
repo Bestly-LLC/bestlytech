@@ -17,15 +17,39 @@ let installed = false;
 
 const stuck = (c: Ctx) => c.state !== "running" && c.state !== "closed";
 
-/** Resume every suspended context. Call this from inside a tap handler. */
-export function resumeAllAudio() {
-  for (const c of live) if (stuck(c)) void c.resume().catch(() => { /* not allowed yet */ });
+/**
+ * Second failure (2026-10-11, conv_3301m4pn7gkkfsjscgd9ef707nak): context running, mic fine (guest said "Hello"), 12 s of
+ * Leo audio sent, phone silent. The SDK plays Leo through a hidden <audio> fed by a MediaStream and calls play() on it
+ * after its awaits, in parallel with mic setup. If play() runs before the mic is live, iOS refuses it, the error is
+ * swallowed, and the element stays paused for the whole call. So paused stream players count as locked too, get
+ * play() on every tap, and get one more play() once the session is up (mic capturing = iOS allows it).
+ */
+function streamPlayers(): HTMLAudioElement[] {
+  if (typeof document === "undefined") return [];
+  return Array.from(document.querySelectorAll("audio")).filter((a) => a.srcObject instanceof MediaStream);
+}
+const pausedPlayers = () => streamPlayers().filter((a) => a.paused);
+
+/** play() every paused Leo player. Safe outside a tap: it just fails quietly until one comes. */
+export function playStreamPlayers() {
+  for (const a of pausedPlayers()) void a.play().catch(() => { /* needs a tap */ });
 }
 
-/** True when an audio context exists but is not playing (iOS waiting for a tap). */
+/** Resume every suspended context and paused player. Call this from inside a tap handler. */
+export function resumeAllAudio() {
+  for (const c of live) if (stuck(c)) void c.resume().catch(() => { /* not allowed yet */ });
+  playStreamPlayers();
+}
+
+/** True when audio exists but is not playing (iOS waiting for a tap): a stuck context or a paused player. */
 export function audioLocked() {
   for (const c of live) if (stuck(c)) return true;
-  return false;
+  return pausedPlayers().length > 0;
+}
+
+/** What the audio looks like right now, for the diag log. */
+export function audioState() {
+  return { contexts: Array.from(live).map((c) => c.state).join(",") || "none", players: streamPlayers().map((a) => (a.paused ? "paused" : "playing")).join(",") || "none" };
 }
 
 /** Install once, before the voice SDK is imported. Safe to call more than once and on any browser. */
