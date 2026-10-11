@@ -10,7 +10,7 @@
 //   {op:"check",   limit?:40, max_lookups?:N}                              Telnyx line type (only fit leads, daily cap)
 //   {op:"handoff"}                                                         top each campaign's queue up to its daily target
 //   {op:"tick"}                                                            nightly worker: read, check, hand off when drained
-//   {op:"watch",   dry?:true}                                              watchdog: self-heal once, then alert "Hunter: ..."
+//   {op:"watch",   dry?:true}                                              watchdog: self-heal once, then alert "Hunter: ..." (also judges scoring and Jev, see hunter-score)
 //
 // Callers: pg_cron (hunter-find nightly, hunter-tick every 3 min overnight, hunter-handoff, hunter-watch).
 // Auth: Vault edge_proxy_key (x-proxy-key) or the service key, same as roofguard-enrich.
@@ -713,6 +713,16 @@ async function queueState() {
   return (camps ?? []).map((c: { slug: string; name: string; daily_target: number }) => ({ ...c, queued: have.get(c.slug) ?? 0 }));
 }
 
+async function callScore(body: Record<string, unknown>): Promise<{ ok?: boolean; error?: string } | null> {
+  try {
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/hunter-score`, {
+      method: "POST", signal: AbortSignal.timeout(120_000),
+      headers: { "content-type": "application/json", authorization: `Bearer ${SB_SECRET}`, apikey: SB_SECRET }, body: JSON.stringify(body),
+    });
+    return await r.json();
+  } catch (e) { return { ok: false, error: String(e).slice(0, 100) }; }
+}
+
 async function opWatch(body: { dry?: boolean }) {
   const dry = !!body.dry;
   const problems: string[] = [], fixed: string[] = [];
@@ -722,13 +732,32 @@ async function opWatch(body: { dry?: boolean }) {
   // 1. a source failing 2 nights: retry it once
   const sources = await getSources();
   for (const [slug, s] of Object.entries(sources)) {
-    if (!s.enabled || slug === "apollo" || s.fail_streak < 2) continue;
+    if (!s.enabled || slug === "apollo" || slug === "lead_scorer" || slug === "jev" || s.fail_streak < 2) continue;
     if (slug === "website_reader") { const r = await opRead({ limit: 10, budget_ms: 40_000 }); if (r.ok) fixed.push("Retried the website reader and it worked."); else problems.push("The website reader has failed 2 nights in a row (free AI unavailable)."); continue; }
     // the map server can only be asked through pg_net, which this call is itself running on, so the retry is a fresh request;
     // its answer is read by the next find run. A source that failed two nights is reported either way.
     if (!dry) await opFind({ sources: [slug], limit: 40 });
     problems.push(`${slug} has failed ${s.fail_streak} nights in a row (last error: ${String(s.last_error ?? "see Hunter runs").slice(0, 80)}). I sent one more request.`);
   }
+
+  // 1b. scoring (Phase 1.5). Scoring never blocks the night: the scorer falls back to the free AI per lead on its own.
+  //     Here the watchdog only judges the streaks. Lead scoring failing 2 nights: run one pass. Jev key saved but failing: one test call;
+  //     if Jev still fails the free AI keeps scoring and I say so (a rejected key needs a fresh one pasted on the Jev card).
+  const scoreProblems: string[] = [], scoreFixed: string[] = [];
+  const scorer = sources.lead_scorer, jevSrc = sources.jev;
+  if (scorer?.enabled && scorer.fail_streak >= 2) {
+    const r = dry ? { ok: false } : await callScore({ op: "run", limit: 30 });
+    if (r?.ok) scoreFixed.push("Scoring had failed 2 nights; I ran a pass and it worked.");
+    else scoreProblems.push(`Scoring has failed ${scorer.fail_streak} nights in a row (${String(scorer.last_error ?? "see Hunter runs").slice(0, 80)}). New leads are not getting odds, so the queue is ordered by fit score.`);
+  }
+  let jevKeySaved = false;
+  { const { data: k } = await db.rpc("hunter_secret", { p_name: "jev_api_key" }); jevKeySaved = typeof k === "string" && k.length > 8; }
+  if (jevKeySaved && jevSrc?.enabled && jevSrc.fail_streak >= 2) {
+    const r = dry ? { ok: false } : await callScore({ op: "test" });
+    if (r?.ok) scoreFixed.push("Jev had failed 2 nights; a test call worked, so it is back.");
+    else scoreProblems.push(`Jev has failed ${jevSrc.fail_streak} nights in a row (${String(r?.error ?? jevSrc.last_error ?? "no answer").slice(0, 90)}). Scoring continues with free AI estimates.`);
+  }
+  problems.push(...scoreProblems); fixed.push(...scoreFixed);
 
   // 2. queue depth under 50% of target: run one more pass, then judge
   let state = await queueState();
@@ -752,8 +781,12 @@ async function opWatch(body: { dry?: boolean }) {
     if (empty) await raise("hunter.queue", true, "Hunter: nothing is queued for Maya", "Zero leads queued after an extra pass. " + problems.join(" "));
     else if (short().length) await raise("hunter.queue", true, `Hunter: Maya's queue is under half full`, problems.join(" "));
     else await raise("hunter.queue", false, fixed.length ? "Hunter: I refilled Maya's queue" : "Hunter: Maya's queue is OK", fixed.join(" "), fixed.length > 0);
+    if (scoreProblems.some((p) => p.startsWith("Scoring"))) await raise("hunter.scoring", true, "Hunter: scoring failed 2 nights", scoreProblems.find((p) => p.startsWith("Scoring")));
+    else if (scorer?.enabled) await raise("hunter.scoring", false, scoreFixed.some((p) => p.startsWith("Scoring")) ? "Hunter: scoring is working again" : "Hunter: scoring OK", scoreFixed.join(" "), scoreFixed.length > 0);
+    if (scoreProblems.some((p) => p.startsWith("Jev"))) await raise("hunter.jev", true, "Hunter: Jev is failing, using free AI estimates", scoreProblems.find((p) => p.startsWith("Jev")), true);
+    else if (jevKeySaved) await raise("hunter.jev", false, "Hunter: Jev OK", scoreFixed.join(" "), scoreFixed.some((p) => p.startsWith("Jev")));
     for (const [slug, s] of Object.entries(sources)) {
-      if (!s.enabled || slug === "apollo") continue;
+      if (!s.enabled || slug === "apollo" || slug === "lead_scorer" || slug === "jev") continue;
       const bad = problems.find((p) => p.startsWith(slug));
       if (bad) await raise(`hunter.source.${slug}`, true, `Hunter: ${slug} keeps failing`, bad);
       else await raise(`hunter.source.${slug}`, false, `Hunter: ${slug} OK`);
