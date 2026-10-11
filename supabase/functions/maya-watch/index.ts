@@ -3,6 +3,8 @@
 // Desk: file_ticket tool still attached (heals by re-attaching), ticket endpoint alive, overdue tickets.
 // Billing (Phase 3): the six billing tools still attached (heals by re-attaching), maya-billing refuses a fake call,
 // and maya-billing's own health check (Stripe key, portal, tables, email, ElevenLabs key) passes.
+// Website: her two site tools (navigate_site_page, open_site_modal) still attached, and the widget allowlist still
+// holds bestly.tech + www.bestly.tech (heals both). Alert key maya.site.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const AGENT_ID = "agent_3701m4jbjnyef6ga4ys73xtbz37s";
@@ -16,6 +18,11 @@ const BILLING_TOOLS = [
   "tool_8901m4m3jtvwfdb82kta0c5jmsv8", // cancel_or_pause
   "tool_3101m4m3jx58f4s9cdq89qavw7av", // refund
 ];
+const SITE_TOOLS = [
+  "tool_5301m4p1ran1f7z97a2ky50g2z15", // navigate_site_page (client tool, bestly.tech widget)
+  "tool_9401m4p1rvxkeg6tt8k0zjbeat0h", // open_site_modal (client tool, bestly.tech widget)
+];
+const SITE_HOSTS = ["bestly.tech", "www.bestly.tech"];
 const TELNYX_CONN = "3067494961063659261";
 const NUMBER = "+12136410074";
 const EL_FQDN = "sip.rtc.elevenlabs.io";
@@ -26,6 +33,7 @@ Deno.serve(async () => {
   const fixed: string[] = [];
   const desk: string[] = [];
   const billing: string[] = [];
+  const site: string[] = [];
   try {
     const { data: elKey } = await sb.rpc("ava_secret", { p_name: "elevenlabs_api_key" });
     const { data: tnKey } = await sb.rpc("ava_secret", { p_name: "telnyx_api_key" });
@@ -38,17 +46,29 @@ Deno.serve(async () => {
     else {
       const aj = await a.json();
       const ids: string[] = aj?.conversation_config?.agent?.prompt?.tool_ids ?? [];
-      const missing = [TICKET_TOOL, ...BILLING_TOOLS].filter((t) => !ids.includes(t));
+      const missing = [TICKET_TOOL, ...BILLING_TOOLS, ...SITE_TOOLS].filter((t) => !ids.includes(t));
       if (missing.length) {
         const fix = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`, { method: "PATCH", headers: el,
           body: JSON.stringify({ conversation_config: { agent: { prompt: { tool_ids: [...ids, ...missing] } } } }) });
         const ticketGone = missing.includes(TICKET_TOOL);
-        const billingGone = missing.some((t) => t !== TICKET_TOOL);
-        if (fix.ok) fixed.push(`Re-attached ${missing.length} of my tools${ticketGone ? " (ticket)" : ""}${billingGone ? " (billing)" : ""}.`);
+        const billingGone = missing.some((t) => BILLING_TOOLS.includes(t));
+        const siteGone = missing.some((t) => SITE_TOOLS.includes(t));
+        if (fix.ok) fixed.push(`Re-attached ${missing.length} of my tools${ticketGone ? " (ticket)" : ""}${billingGone ? " (billing)" : ""}${siteGone ? " (website)" : ""}.`);
         else {
           if (ticketGone) desk.push("My ticket tool came off and re-attaching failed, so callers' requests aren't being saved.");
           if (billingGone) billing.push("My billing tools came off and re-attaching failed, so I can't help with accounts on calls.");
+          if (siteGone) site.push("My website tools came off and re-attaching failed, so I can't move visitors around bestly.tech.");
         }
+      }
+      // Widget allowlist: if it drifts, the Talk to Maya button on bestly.tech stops connecting (heal: add the hosts back).
+      const auth = aj?.platform_settings?.auth ?? {};
+      const list: { hostname: string }[] = Array.isArray(auth.allowlist) ? auth.allowlist : [];
+      const lacking = SITE_HOSTS.filter((h) => !list.some((x) => x?.hostname === h));
+      if (list.length && lacking.length) {
+        const fix = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`, { method: "PATCH", headers: el,
+          body: JSON.stringify({ platform_settings: { auth: { ...auth, allowlist: [...list, ...lacking.map((hostname) => ({ hostname }))] } } }) });
+        if (fix.ok) fixed.push(`Put ${lacking.join(" and ")} back on my website allowlist.`);
+        else site.push(`My website allowlist lost ${lacking.join(" and ")} and re-adding failed, so Talk to Maya won't connect there.`);
       }
     }
 
@@ -114,7 +134,7 @@ Deno.serve(async () => {
 
   const ok = problems.length === 0;
   const now = new Date().toISOString();
-  const row: Record<string, unknown> = { source: "maya", ok, problems: [...problems, ...fixed, ...desk, ...billing], healed: fixed.length > 0, checked_at: now };
+  const row: Record<string, unknown> = { source: "maya", ok, problems: [...problems, ...fixed, ...desk, ...billing, ...site], healed: fixed.length > 0, checked_at: now };
   if (ok) row.last_ok_at = now;
   await sb.from("ava_line_health").upsert(row, { onConflict: "source" });
 
@@ -131,6 +151,10 @@ Deno.serve(async () => {
     p_title: "Maya: my account and billing tools may not be working", p_body: billing.join(" ").slice(0, 400), p_area: "maya", p_needs_jared: "Check Stripe, the email sender and the ElevenLabs tools; calls fall back to billing tickets meanwhile." });
   else await sb.rpc("bestly_raise", { p_key: "maya.billing.health", p_kind: "resolved", p_severity: "info", p_title: "Maya: billing tools OK", p_area: "maya" });
 
+  if (site.length) await sb.rpc("bestly_raise", { p_key: "maya.site", p_kind: "problem", p_severity: "warning",
+    p_title: "Maya: my bestly.tech chat may not be working", p_body: site.join(" ").slice(0, 400), p_area: "maya" });
+  else await sb.rpc("bestly_raise", { p_key: "maya.site", p_kind: "resolved", p_severity: "info", p_title: "Maya: website tools OK", p_area: "maya" });
+
   if (late?.length) await sb.rpc("bestly_raise", { p_key: "maya.overdue", p_kind: "problem", p_severity: "warning",
     p_title: `Maya: ${late.length} caller${late.length > 1 ? "s are" : " is"} past the follow-up time I promised`,
     p_body: late.slice(0, 5).map((x: any) => `${x.code} ${x.kind}${x.name ? " " + x.name : ""}`).join(", "), p_area: "maya", p_needs_jared: "Follow up, then mark the ticket done." });
@@ -141,5 +165,5 @@ Deno.serve(async () => {
     p_body: privSoon.map((x: any) => `${x.code}${x.name ? " " + x.name : ""}`).join(", "), p_area: "maya", p_needs_jared: "Legal deadline (CCPA, 45 days)." });
   else await sb.rpc("bestly_raise", { p_key: "maya.privacy", p_kind: "resolved", p_severity: "info", p_title: "Maya: privacy requests on track", p_area: "maya" });
 
-  return new Response(JSON.stringify({ ok, problems, fixed, desk, billing, overdue: late?.length ?? 0 }), { headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ ok, problems, fixed, desk, billing, site, overdue: late?.length ?? 0 }), { headers: { "Content-Type": "application/json" } });
 });
