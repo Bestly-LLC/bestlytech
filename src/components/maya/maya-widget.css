@@ -200,3 +200,33 @@ elevenlabs-convai {
   50% { transform: scale(1.06); filter: saturate(1.25); }
 }
 @media (prefers-reduced-motion: reduce) { .maya-orb-live { animation: none; } }
+
+/* ---------- Maya intro (what she is, before she starts) ---------- */
+.maya-scrim { background: rgba(10, 11, 30, 0.32); }
+.maya-intro {
+  right: 16px;
+  bottom: calc(84px + var(--consent-h, 0px) + env(safe-area-inset-bottom, 0px));
+  width: 400px;
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  border-radius: 28px;
+  background: rgba(16, 17, 38, 0.9);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 30px 80px -24px rgba(8, 9, 30, 0.6), 0 0 70px -20px rgba(142, 155, 255, 0.4);
+  transform-origin: bottom right; /* grows out of the launcher it came from */
+}
+@media (max-width: 1023px) {
+  .maya-intro {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    bottom: calc(8px + var(--consent-h, 0px) + env(safe-area-inset-bottom, 0px));
+    border-radius: 26px;
+    transform-origin: bottom center;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .maya-intro { background: #121326; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
