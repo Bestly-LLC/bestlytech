@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ElementType } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Mic } from "lucide-react";
 import "./maya-widget.css";
+import { mayaProductForPath, resolveSiteModal, resolveSitePage } from "./siteTools";
 
 /**
  * "Talk to Maya" - Bestly's voice + chat agent (ElevenLabs), on public marketing pages only.
@@ -15,8 +16,11 @@ import "./maya-widget.css";
  *   blob: or a second script CDN. They match the pinned embed version.
  * - Passes the page the visitor is on as dynamic variables (page_product, page_path). It never
  *   sets call_mode: Maya defaults to inbound.
- * - Allowed routes are an explicit allowlist. Never add /admin, /partner, token pages (/brief,
+ * - Allowed routes are an explicit allowlist (siteTools.ts). Never add /admin, /partner, token pages (/brief,
  *   /intake, /shield/request) or anything authenticated.
+ * - Maya's client tools (navigate_site_page, open_site_modal) are registered on the embed's
+ *   `elevenlabs-convai:call` event. They move the visitor with in-app navigation so the call keeps going, and only
+ *   to pages on that same allowlist. See siteTools.ts.
  */
 
 const MAYA_AGENT_ID = "agent_3701m4jbjnyef6ga4ys73xtbz37s";
@@ -26,35 +30,6 @@ const MAYA_PHONE_TEL = "tel:+12136410074";
 const MAYA_EMBED_VERSION = "0.18.3";
 const MAYA_EMBED_SRC = `https://unpkg.com/@elevenlabs/convai-widget-embed@${MAYA_EMBED_VERSION}/dist/index.js`;
 const MAYA_EMBED_SRI = "sha384-BpmvKCW/TFrpO8oObmUgZzUCIMHI00QbpGA4/jfXcfTosbgtuEUN1wYT7nNIsV3v";
-
-/** Public pages that get the widget, and what Maya is told the visitor is looking at. */
-const PAGE_PRODUCT: Record<string, string> = {
-  "/": "Bestly home page",
-  "/about": "About Bestly",
-  "/products": "Bestly products",
-  "/apps": "Bestly products",
-  "/cookie-yeti": "Cookie Yeti",
-  "/inventory-proof": "InventoryProof",
-  "/hoku": "HOKU",
-  "/cloud": "Bestly Cloud",
-  "/in-house-cloud": "Bestly Cloud",
-  "/get-started": "Bestly Cloud",
-  "/studio": "Bestly Studio",
-  "/neckpilot": "NeckPilot",
-  "/services": "Bestly services",
-  "/apple-modernization": "Apple modernization service",
-  "/marketplace-setup": "Marketplace setup service",
-  "/contact": "Contact page",
-  "/support": "Cookie Yeti support",
-};
-
-const NEVER_PREFIXES = ["/admin", "/partner"];
-
-function mayaProductForPath(pathname: string): string | null {
-  const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
-  if (NEVER_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`))) return null;
-  return PAGE_PRODUCT[path] ?? null;
-}
 
 /** Widget copy: short, never truncated, and Maya is clearly identified as AI. */
 const TEXT_CONTENTS = JSON.stringify({
@@ -124,9 +99,59 @@ type Phase = "idle" | "loading" | "ready" | "error";
 
 export function MayaWidget() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const product = mayaProductForPath(pathname);
   const [phase, setPhase] = useState<Phase>("idle");
   const mounted = useRef(true);
+  const widgetEl = useRef<HTMLElement | null>(null);
+  // Tools run long after render; read the latest route and navigate through refs, never a stale closure.
+  const pathRef = useRef(pathname);
+  pathRef.current = pathname;
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+
+  // Register Maya's client tools on the embed. The event fires each time a conversation starts.
+  useEffect(() => {
+    const el = widgetEl.current;
+    if (phase !== "ready" || !el) return;
+
+    const go = (path: string, hash = "") => {
+      if (path !== pathRef.current) navigateRef.current(path);
+      if (hash) {
+        // Wait a frame for the new page to render, then bring the section into view.
+        requestAnimationFrame(() =>
+          setTimeout(() => document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" }), 120),
+        );
+      } else if (path !== pathRef.current) {
+        window.scrollTo({ top: 0 });
+      }
+    };
+
+    const clientTools = {
+      navigate_site_page: async (params: { page_path?: unknown } = {}) => {
+        const r = resolveSitePage(params?.page_path, window.location.hostname);
+        if ("say" in r) return r.say;
+        const already = r.path === pathRef.current;
+        go(r.path, r.hash);
+        return already && !r.hash ? `They are already on the ${r.name} page.` : `Opened the ${r.name} page.`;
+      },
+      open_site_modal: async (params: { modal_type?: unknown } = {}) => {
+        const r = resolveSiteModal(params?.modal_type, pathRef.current);
+        if (!r.ok) return r.say;
+        go(r.path);
+        return r.say;
+      },
+    };
+
+    const onCall = (event: Event) => {
+      const detail = (event as CustomEvent<{ config?: Record<string, unknown> }>).detail;
+      if (!detail?.config) return;
+      const existing = (detail.config.clientTools as Record<string, unknown> | undefined) ?? {};
+      detail.config.clientTools = { ...existing, ...clientTools };
+    };
+    el.addEventListener("elevenlabs-convai:call", onCall);
+    return () => el.removeEventListener("elevenlabs-convai:call", onCall);
+  }, [phase]);
 
   useEffect(() => {
     mounted.current = true;
@@ -170,6 +195,7 @@ export function MayaWidget() {
     <div className="maya">
       {phase === "ready" ? (
         <ConvaiElement
+          ref={widgetEl}
           agent-id={MAYA_AGENT_ID}
           dynamic-variables={dynamicVariables}
           text-contents={TEXT_CONTENTS}
