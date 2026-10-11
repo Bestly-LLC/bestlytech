@@ -7,16 +7,19 @@ Installed as /opt/bestly/cron/jobs/settlement_finder.py (+ jobs/settlement-finde
            classaction.org/settlements          (HTML cards)
            topclassactions.com open-settlements (public RSS feed; the HTML page is behind a Cloudflare challenge
                                                  and is never fetched)
-  MATCH  settlement_unjudged_t -> his own email search (settlement_mail_search_t, subject/sender only)
-         -> free AI ladder (freellm.py) -> settlement_judge_t   (proven | likely | ask | no)
+  MATCH  settlement_unjudged_t -> AI triage (terms, class period, fact_key) -> known answers (settlement_facts_t)
+         -> his email by class-period dates incl. body text (settlement_mail_search2_t), devices on his home network
+            (settlement_devices_t), Turo vehicles (settlement_vehicles_t) -> AI judge -> code checks on the cited rows
+         -> settlement_judge2_t   (proven | likely | ask | no).  A fact he already answered settles the claim at once.
 
 HARD LIMITS: never files or submits a claim, never fills a form, never solves a CAPTCHA, never emails anyone.
-It only reads public listing pages and the email-search RPC and writes verdicts. Free models only.
+It only reads public listing pages and the evidence RPCs and writes verdicts. Free models only. Evidence rows always come
+from real rows (an email's subject and date, a device name, a vehicle), never from AI text.
 
 Auth: the house db-watchdog token (db_watchdog_ok) read from /home/pi/.bestly/db_watchdog_token (mode 600),
 sent with the project's publishable key. The token is never printed or logged.
 
-  python3 settlement_finder.py [--dry] [--find-only] [--match-only] [--limit N]
+  python3 settlement_finder.py [--dry] [--find-only] [--match-only] [--limit N] [--rejudge-asks]
 """
 import fcntl
 import gzip
@@ -55,7 +58,7 @@ TCA_FEED = "https://topclassactions.com/category/lawsuit-settlements/open-lawsui
 SOURCE_GAP_SEC = 4          # polite pause between requests to different pages/hosts
 MATCH_CAP = 60              # settlements judged per run (rest wait for tomorrow)
 MATCH_BUDGET_SEC = 40 * 60  # stop judging after this long
-MAIL_LIMIT = 15
+MAIL_LIMIT = 15  # legacy (settlement_mail_search_t); the matcher now uses settlement_mail_search2_t
 
 _robots = {}
 
@@ -427,32 +430,49 @@ Who qualifies: {cls}
 Claim deadline: {deadline}
 Proof required: {proof}
 
+Facts already known about him (key (answer): question). Reuse a key when it is exactly the same fact:
+{facts}
+
 Return JSON with exactly these keys:
-"terms": up to 6 short distinctive names (company, brand, product, app or service) that would appear in the SUBJECT or SENDER of an email from or about that company, e.g. ["Apple","iPhone"]. Real names only, 3+ characters. NEVER generic words like settlement, claim, class, inc, llc, bank, data, privacy, breach, products.
+"terms": up to 6 short distinctive names (company, brand, product, app or service) that would appear in the SUBJECT, SENDER or BODY of an email from or about that company, e.g. ["Apple","iPhone"]. Real names only, 3+ characters. NEVER generic words like settlement, claim, class, inc, llc, bank, data, privacy, breach, products.
 "plausibility": (judge ONLY from the class definition. Never state or assume anything about him that is not given. Not knowing whether he was personally notified, affected or a customer is NOT a reason for none or low: a data breach or product class of a company that serves ordinary consumers is "medium") "none" if the class clearly cannot include him (limited to residents of another state or country, limited to a specific city, neighborhood, property, plant area or store that does not include West Hollywood/Los Angeles, homeowner-only or landlord-only, businesses/employers/franchisees/providers only, minors only, one profession); "low" if it needs a narrow or unusual product most people never owned; "medium" for a common product, service or company many consumers use; "high" for a very broad consumer class (a major app, service, or mainstream product).
 "no_reason": one short sentence if plausibility is none or low, else "".
+"kind": one of "breach" (data breach / privacy incident notice class), "device" (a physical gadget or appliance), "vehicle", "service" (an app, website, account or subscription), "purchase" (goods or food bought in a store or online), "calls" (unwanted calls or texts), "other".
+"period_start" and "period_end": the class period as YYYY-MM-DD when the class definition states one (use the 1st of the month when only a month is given, "" when open-ended or unknown).
 "question": ONE short plain yes/no question in second person, max 140 characters, with the key years, like "Did you own a Google Pixel phone between 2016 and 2019?". Required when plausibility is medium or high, else "".
+"fact_key": a short lowercase slug (letters, digits, hyphens, max 40 characters) for the ONE underlying fact that decides whether he is in the class, e.g. "owned-iphone", "used-facebook", "flo-app-user", "jeep-3-6l-owner", "chase-card", "ca-resident". Reuse a key from the known facts when it is the same fact. Prefer broad facts that other settlements can share, but NEVER so broad that a "yes" would be untrue for this class: when the class needs a specific period, store, state or model, put it in the key (for example "levoit-purifier-owner") or keep it as its own key. Required when plausibility is medium or high, else "".
+"fact_question": the plain yes/no question for exactly that fact, second person, max 140 characters, true for EVERY settlement that would share the key, like "Have you ever owned an iPhone?". Required when fact_key is set, else "".
 """
 
 JUDGE_SYS = (
     "You check whether ONE specific person (an adult consumer in Los Angeles County, California) is covered by a class action "
-    "settlement, using ONLY the email headers given (sender, subject, date). You see no email bodies. Be conservative. "
-    "Never invent facts. Reply with ONE JSON object and nothing else.")
+    "settlement, using ONLY the numbered candidates given (his email search hits with a short snippet, devices seen on his home "
+    "network, vehicles on his Turo host account). Be conservative. Never invent facts. Reply with ONE JSON object and nothing else.")
 
 JUDGE_USER = """Settlement: {name}
 Defendant: {defendant}
+Kind: {kind}
 Who qualifies: {cls}
+Class period: {period}
 
-His emails that matched the search terms (numbered):
-{emails}
+Candidates (E = an email of his, D = a device on his home network, V = a vehicle):
+{cands}
 
 Return JSON with exactly these keys:
-"match": "proven" ONLY if one or more of these emails clearly shows he bought, ordered, subscribed to, or used the product/service/account at issue (a receipt, order or shipping confirmation, subscription or account notice, statement) AND the email date falls inside the class period; "likely" if the emails strongly suggest he is a customer/user but you cannot confirm the period or the exact product; "none" if the emails are only marketing/newsletters/unrelated or prove nothing. Marketing and newsletters are NEVER proof.
-"email_idx": list of the email numbers you relied on (empty when match is none).
-"transactional": true if the cited emails are receipts/orders/shipping/account/statement emails, false if marketing/newsletter/other.
-"in_class_period": true / false / null (null if the class period is unknown or unclear).
+"match": "proven" ONLY when
+  (a) kind is breach and one of the E emails is a data-breach / security-incident NOTICE sent by or on behalf of that company to him, or
+  (b) an E email is a receipt, order, shipping, subscription, account or statement email from that company for the product/service at issue and its date is inside the class period, or
+  (c) a D device or V vehicle clearly IS the product at issue (same brand and model, and inside the model years or dates of the class).
+"likely" when the candidates strongly suggest he is a customer/user or owner but you cannot confirm the period, model or product. "none" when the candidates are only marketing, newsletters, unrelated mentions or prove nothing. Marketing and newsletters are NEVER proof.
+"evidence": list of the candidate labels you relied on, like ["E2","D1"] (empty when match is none).
+"transactional": true if the cited E emails are receipts/orders/shipping/account/statement emails, false if marketing/newsletter/other.
+"breach_notice": true if a cited E email is a data-breach notice from that company.
+"in_class_period": true / false / null (null if the period is unknown or unclear).
 "reason": one short sentence.
 """
+
+BREACH_RX = re.compile(r"breach|security incident|data incident|unauthori[sz]ed|compromis|cyber|notice of (?:data|privacy)|your (?:personal )?information", re.I)
+MAIL_PROMPT_CAP = 20
 
 
 def _json_obj(text):
@@ -474,7 +494,7 @@ def ai_json(system, user, deadline):
     last = None
     for _ in range(2):
         msg, who = freellm.chat([{"role": "system", "content": system}, {"role": "user", "content": user}],
-                                max_tokens=700, deadline=deadline, json_mode=True)
+                                max_tokens=900, deadline=deadline, json_mode=True)
         try:
             obj = _json_obj(msg.get("content"))
             if isinstance(obj, list) and obj and isinstance(obj[0], dict):
@@ -515,51 +535,212 @@ def short_question(q, s):
     return f"Have you ever bought from or used {squash(who, 60)}?"
 
 
-def evidence_from(emails, idxs):
-    ev = []
-    for i in idxs:
-        e = emails[i - 1]
-        ev.append({"kind": "email", "ref": e["id"],
-                   "summary": squash(f"{e.get('from')}: {e.get('subject')} ({(e.get('sent_at') or '')[:10]})", 240)})
-    return ev
+def fact_slug(k):
+    k = re.sub(r"[^a-z0-9]+", "-", str(k or "").lower()).strip("-")[:40].strip("-")
+    return k or None
 
 
-def judge_one(s, deadline):
-    """Returns (match, evidence, question, note). Raises RuntimeError if the AI is unavailable (stay unjudged)."""
+def iso_date(v):
+    v = str(v or "").strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+        try:
+            return date.fromisoformat(v)
+        except ValueError:
+            return None
+    return None
+
+
+_MON = "(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
+
+
+def extract_period(text):
+    """Fallback when the AI gave no usable dates: pull dates out of the class definition. Returns (start, end) or (None, None)."""
+    found = []
+    for m in re.finditer(r"\b(" + _MON + r")\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b", text or "", re.I):
+        d = parse_date(f"{m.group(1)} {m.group(2)}, {m.group(3)}")
+        if d:
+            found.append(d)
+    if not found:
+        for m in re.finditer(r"\b(" + _MON + r")\.?,?\s+(\d{4})\b", text or "", re.I):
+            d = parse_date(f"{m.group(1)} 1, {m.group(2)}")
+            if d:
+                found.append(d)
+    if len(found) >= 2:
+        return min(found), max(found)
+    return None, None
+
+
+def period_of(tri, s):
+    a, b = iso_date(tri.get("period_start")), iso_date(tri.get("period_end"))
+    if not a:
+        a, b2 = extract_period(s.get("class_definition") or "")
+        b = b or b2
+    return a, b
+
+
+def mail_row_date(e):
+    try:
+        return date.fromisoformat((e.get("sent_at") or "")[:10])
+    except ValueError:
+        return None
+
+
+def head_hit(e, terms):
+    h = f"{e.get('from') or ''} {e.get('subject') or ''}".lower()
+    return any(t.lower() in h for t in terms)
+
+
+def evidence_email(e):
+    return {"kind": "email", "ref": e["id"],
+            "summary": squash(f"{e.get('from')}: {e.get('subject')} ({(e.get('sent_at') or '')[:10]})", 240)}
+
+
+def evidence_device(d):
+    brand = f" ({d['brand']})" if d.get("brand") else ""
+    return {"kind": "device", "ref": d.get("name"), "summary": squash(f"Seen on your home network: {d.get('name')}{brand}", 240)}
+
+
+def evidence_vehicle(v):
+    return {"kind": "vehicle", "ref": v.get("name"), "summary": squash(f"On your Turo host account: {v.get('name')}", 240)}
+
+
+GENERIC_WORDS = {"home", "network", "hub", "light", "lights", "mini", "battery", "device", "plugin", "jared", "jareds", "bridge", "series",
+                 "bathroom", "balcony", "kitchen", "living", "studio", "desk", "entry", "front", "door", "lock", "smart", "pure", "cool"}
+
+
+def word_overlap(text, name, brand=None):
+    """True when a distinctive word of the device/vehicle name (the brand only when the name has none) appears in the
+    settlement text. Guards against the AI citing an unrelated device."""
+    t = (text or "").lower()
+    words = [w for w in re.findall(r"[a-z0-9]{4,}", str(name or "").lower()) if w not in GENERIC_WORDS]
+    if not words and brand:
+        words = [w for w in re.findall(r"[a-z0-9]{4,}", str(brand).lower())]
+    return any(w in t for w in words)
+
+
+class Run:
+    """Per-run context: known facts, the evidence sources that are fetched once."""
+
+    def __init__(self):
+        self.facts = {}
+        self.devices = []
+        self.vehicles = []
+
+    def load(self):
+        try:
+            for f in sb("settlement_facts_t") or []:
+                self.facts[f["key"]] = {"question": f.get("question"), "answer": f.get("answer")}
+        except Exception as e:  # noqa: BLE001
+            log(f"facts unavailable ({str(e)[:120]})")
+        try:
+            self.devices = sb("settlement_devices_t") or []
+        except Exception as e:  # noqa: BLE001
+            log(f"devices unavailable ({str(e)[:120]})")
+        try:
+            self.vehicles = sb("settlement_vehicles_t") or []
+        except Exception as e:  # noqa: BLE001
+            log(f"vehicles unavailable ({str(e)[:120]})")
+        log(f"facts known {len(self.facts)} ({sum(1 for f in self.facts.values() if f['answer'] is not None)} answered), "
+            f"devices {len(self.devices)}, vehicles {len(self.vehicles)}")
+
+    def facts_block(self):
+        if not self.facts:
+            return "(none yet)"
+        lines = []
+        for k, f in sorted(self.facts.items())[:80]:
+            a = {True: "yes", False: "no", None: "unanswered"}[f["answer"]]
+            lines.append(f"- {k} ({a}): {squash(f.get('question'), 110)}")
+        return "\n".join(lines)
+
+
+def judge_one(s, deadline, run):
+    """Returns (match, evidence, question, note, fact_key, fact_question). Raises RuntimeError if the AI is unavailable
+    (the settlement stays unjudged). Evidence rows always come from real rows (email, device, vehicle), never from AI text."""
     ctx = {"name": s.get("name"), "defendant": s.get("defendant") or "unknown", "administrator": s.get("administrator") or "unknown",
            "cls": squash(s.get("class_definition") or "not stated", 900), "deadline": s.get("deadline") or "unknown",
-           "proof": {True: "yes", False: "no", None: "unknown"}[s.get("proof_required")]}
+           "proof": {True: "yes", False: "no", None: "unknown"}[s.get("proof_required")], "facts": run.facts_block()}
     tri, _ = ai_json(TRIAGE_SYS, TRIAGE_USER.format(**ctx), deadline)
     plaus = str(tri.get("plausibility", "")).lower()
     if plaus not in ("none", "low", "medium", "high"):
         raise RuntimeError(f"bad plausibility {plaus!r}")
     reason = squash(tri.get("no_reason") or "", 200)
     if plaus == "none":
-        return "no", [], None, reason or "class cannot include him"
+        return "no", [], None, reason or "class cannot include him", None, None
+    kind = str(tri.get("kind") or "other").lower()
+    fkey = fact_slug(tri.get("fact_key")) if plaus in ("medium", "high") else None
+    fq = squash(tri.get("fact_question") or "", 160) or None
+    question = short_question(tri.get("question"), s)
+    known = run.facts.get(fkey) if fkey else None
+    if known and known["answer"] is not None:
+        # answered once already: no search needed, the RPC applies the answer (yes -> ready, no -> skipped)
+        return "ask", [], question, f"fact {fkey} already answered {'yes' if known['answer'] else 'no'}", fkey, fq
     terms = clean_terms(tri.get("terms"), fallback_terms(s))
-    emails = []
+    p_start, p_end = period_of(tri, s)
+    breach = kind == "breach"
+
+    # ---- his email: class-period window first (not for breach notices, which arrive after the breach), then everything
+    emails, windowed = [], False
     if terms:
-        emails = sb("settlement_mail_search_t", p_terms=terms, p_limit=MAIL_LIMIT) or []
-    if emails:
-        lines = "\n".join(f"{i}. {e.get('from')} | {squash(e.get('subject'), 160)} | {(e.get('sent_at') or '')[:10]}"
-                          for i, e in enumerate(emails, 1))
-        j, _ = ai_json(JUDGE_SYS, JUDGE_USER.format(name=ctx["name"], defendant=ctx["defendant"], cls=ctx["cls"], emails=lines), deadline)
-        idxs = [i for i in (j.get("email_idx") or []) if isinstance(i, int) and 1 <= i <= len(emails)]
+        if p_start and not breach:
+            win_end = (p_end or datetime.now(TZ).date()).isoformat()
+            emails = sb("settlement_mail_search2_t", p_terms=terms, p_since=p_start.isoformat(), p_until=win_end, p_body=True, p_limit=40) or []
+            windowed = bool(emails)
+        if not emails:
+            emails = sb("settlement_mail_search2_t", p_terms=terms, p_body=True, p_limit=40) or []
+    emails.sort(key=lambda e: (not head_hit(e, terms), -(mail_row_date(e) or date.min).toordinal()))
+    emails = emails[:MAIL_PROMPT_CAP]
+    devices = run.devices if kind in ("device", "purchase", "service", "other") else []
+    vehicles = run.vehicles if kind == "vehicle" else []
+
+    cands = []
+    for i, e in enumerate(emails, 1):
+        cands.append(f"E{i}. {squash(e.get('from'), 60)} | {squash(e.get('subject'), 140)} | {(e.get('sent_at') or '')[:10]} | {squash(e.get('snippet'), 170)}")
+    for i, d in enumerate(devices, 1):
+        cands.append(f"D{i}. {d.get('name')}" + (f" (brand {d['brand']})" if d.get("brand") else ""))
+    for i, v in enumerate(vehicles, 1):
+        cands.append(f"V{i}. {v.get('name')} (make {v.get('make')}, model {v.get('model')}, year {v.get('year')})")
+    verdict = None
+    if cands:
+        period = (f"{p_start.isoformat()} to {(p_end.isoformat() if p_end else 'present')}" if p_start else "not stated")
+        j, _ = ai_json(JUDGE_SYS, JUDGE_USER.format(name=ctx["name"], defendant=ctx["defendant"], kind=kind, cls=ctx["cls"],
+                                                    period=period, cands="\n".join(cands)), deadline)
         m = str(j.get("match", "none")).lower()
-        trans, period = j.get("transactional") is True, j.get("in_class_period")
-        if m == "proven" and idxs and trans and period is True:
-            return "proven", evidence_from(emails, idxs), None, squash(j.get("reason") or "", 160)
-        if m in ("proven", "likely") and idxs and trans:
-            return "likely", evidence_from(emails, idxs), None, squash(j.get("reason") or "", 160)
-        if m in ("proven", "likely") and idxs:
-            # cited emails are not transactional: not enough to call it likely; ask instead
-            return "ask", [], short_question(tri.get("question"), s), "emails were not receipts/accounts"
+        labels = [str(x).upper() for x in (j.get("evidence") or []) if re.fullmatch(r"[EDV]\d{1,2}", str(x).upper())]
+        e_used = [emails[int(l[1:]) - 1] for l in labels if l[0] == "E" and 1 <= int(l[1:]) <= len(emails)]
+        d_used = [devices[int(l[1:]) - 1] for l in labels if l[0] == "D" and 1 <= int(l[1:]) <= len(devices)]
+        v_used = [vehicles[int(l[1:]) - 1] for l in labels if l[0] == "V" and 1 <= int(l[1:]) <= len(vehicles)]
+        class_text = f"{s.get('name')} {s.get('defendant')} {s.get('class_definition')}"
+        # code-side checks: an AI "proven" is only accepted when the cited real rows pass them
+        e_ok = [e for e in e_used if head_hit(e, terms)]
+        d_ok = [d for d in d_used if word_overlap(class_text, d.get("name"), d.get("brand"))]
+        v_ok = [v for v in v_used if word_overlap(class_text, f"{v.get('make')} {v.get('model')}")]
+        in_period = lambda e: bool(p_start) and p_start <= (mail_row_date(e) or date.min) <= (p_end or datetime.now(TZ).date())  # noqa: E731
+        trans = j.get("transactional") is True
+        proven_email = [e for e in e_ok if (breach and j.get("breach_notice") is True and BREACH_RX.search(f"{e.get('subject')} {e.get('snippet')}"))
+                        or (trans and not breach and j.get("in_class_period") is True and in_period(e))]
+        reason_txt = squash(j.get("reason") or "", 160)
+        if m == "proven" and (proven_email or ((d_ok or v_ok) and j.get("in_class_period") is not False)):
+            ev = [evidence_email(e) for e in (proven_email or [])] + [evidence_device(d) for d in d_ok] + [evidence_vehicle(v) for v in v_ok]
+            verdict = ("proven", ev, None, reason_txt or "real record inside the class")
+        elif m in ("proven", "likely") and (e_ok or d_ok or v_ok) and (trans or j.get("breach_notice") is True or d_ok or v_ok):
+            ev = [evidence_email(e) for e in e_ok] + [evidence_device(d) for d in d_ok] + [evidence_vehicle(v) for v in v_ok]
+            verdict = ("likely", ev, None, reason_txt or "records suggest it, not confirmed")
+    if verdict:
+        return verdict + (fkey, fq)
     if plaus in ("medium", "high"):
-        return "ask", [], short_question(tri.get("question"), s), "broad class, nothing in email proves it"
-    return "no", [], None, reason or "narrow product, no email evidence"
+        return "ask", [], question, "broad class, nothing in his records proves it", fkey, fq
+    return "no", [], None, reason or "narrow product, no trace in his records", None, None
 
 
-def match(dry, limit, state):
+def record(s, m, ev, q, fkey, fq, run, dry):
+    if fkey and m == "ask":
+        run.facts.setdefault(fkey, {"question": fq or q, "answer": None})
+    if dry:
+        return
+    sb("settlement_judge2_t", p_settlement=s["id"], p_match=m, p_evidence=ev, p_question=q, p_fact_key=fkey, p_fact_question=fq)
+
+
+def match(dry, limit, state, run):
     judged = state.setdefault("judged", {})
     t0 = time.time()
     deadline = t0 + MATCH_BUDGET_SEC
@@ -573,9 +754,9 @@ def match(dry, limit, state):
         sg = sig(s.get("name"), s.get("deadline"))
         try:
             if judged.get(sg, s["source_key"]) != s["source_key"]:
-                m, ev, q, note = "no", [], None, "duplicate listing of " + judged[sg]
+                m, ev, q, note, fkey, fq = "no", [], None, "duplicate listing of " + judged[sg], None, None
             else:
-                m, ev, q, note = judge_one(s, deadline)
+                m, ev, q, note, fkey, fq = judge_one(s, deadline, run)
         except Exception as e:  # noqa: BLE001  one bad AI reply must never kill the run; it stays unjudged for tomorrow
             fails += 1
             left += 1
@@ -588,10 +769,37 @@ def match(dry, limit, state):
         fails = 0
         tally[m] += 1
         judged.setdefault(sg, s["source_key"])
-        log(f"{m:7} {s.get('name')[:60]} :: {note}")
-        if not dry:
-            sb("settlement_judge_t", p_settlement=s["id"], p_match=m, p_evidence=ev, p_question=q)
+        log(f"{m:7} {s.get('name')[:60]} :: {note}" + (f" [{fkey}]" if fkey else ""))
+        record(s, m, ev, q, fkey, fq, run, dry)
     return len(todo), tally, left, ai_down
+
+
+def rejudge_asks(dry, state, run):
+    """One-off: give every claim still waiting at 'ask' a fact_key and look for proof again with the deeper search.
+    A claim that is now provable moves to ready; one whose fact is already answered is settled by the answer."""
+    deadline = time.time() + MATCH_BUDGET_SEC
+    todo = sb("settlement_rejudge_list_t", p_limit=100) or []
+    tally = {"proven": 0, "likely": 0, "ask": 0, "no": 0}
+    left, fails = 0, 0
+    for n, s in enumerate(todo):
+        if time.time() > deadline:
+            left += len(todo) - n
+            break
+        try:
+            m, ev, q, note, fkey, fq = judge_one(s, deadline, run)
+        except Exception as e:  # noqa: BLE001
+            fails += 1
+            left += 1
+            log(f"left as ask: {s.get('name')[:60]} ({str(e)[:160]})")
+            if fails >= 4 and sum(tally.values()) == 0:
+                left += len(todo) - n - 1
+                break
+            continue
+        fails = 0
+        tally[m] += 1
+        log(f"{m:7} {s.get('name')[:60]} :: {note}" + (f" [{fkey}]" if fkey else ""))
+        record(s, m, ev, q, fkey, fq, run, dry)
+    return len(todo), tally, left
 
 
 # ---------------------------------------------------------------- entry point (runjob.py calls main(argv) -> summary)
@@ -611,6 +819,14 @@ def main(argv):
     state = load_state()
     parts, notes, ai_down, tally = [], [], False, None
     found = new = 0
+    if "--rejudge-asks" in argv:
+        run = Run()
+        run.load()
+        n, tally, left = rejudge_asks(dry, state, run)
+        parts.append(f"re-judged {n - left} asks: {tally['proven']} proven, {tally['likely']} likely, {tally['ask']} still ask, {tally['no']} no")
+        if left:
+            parts.append(f"{left} left as ask")
+        return ", ".join(parts) + (" [dry run, nothing written]" if dry else "")
     if "--match-only" not in argv:
         rows, notes, new = find(dry, today, state)
         found = len(rows)
@@ -619,7 +835,9 @@ def main(argv):
         parts.append(f"found {found} open, {new} new")
     if "--find-only" not in argv:
         try:
-            n, tally, left, ai_down = match(dry, limit, state)
+            run = Run()
+            run.load()
+            n, tally, left, ai_down = match(dry, limit, state, run)
             if not dry:
                 save_state(state)
             parts.append(f"judged {n - left}: {tally['proven']} proven, {tally['likely']} likely, {tally['ask']} ask, {tally['no']} no")
