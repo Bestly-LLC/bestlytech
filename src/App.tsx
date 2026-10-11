@@ -118,6 +118,7 @@ const HunterScores = lazyPage(() => import("./pages/admin/HunterScores"));
 const AgentNew = lazyPage(() => import("./pages/admin/AgentNew"));
 const ClaimsCloser = lazyPage(() => import("./pages/admin/ClaimsCloser"));
 const Settlements = lazyPage(() => import("./pages/admin/Settlements"));
+const SkyTouch = lazyPage(() => import("./pages/admin/SkyTouch"));
 const Wall = lazyPage(() => import("./pages/admin/Wall"));
 const Sky = lazyPage(() => import("./pages/admin/Sky"));
 const Security = lazyPage(() => import("./pages/admin/Security"));
@@ -283,6 +284,7 @@ const App = () => {
                   <Route path="turo" element={<AdminTuro />} />
                   <Route path="claims" element={<ClaimsCloser />} />
                   <Route path="settlements" element={<Settlements />} />
+                  <Route path="skytouch" element={<SkyTouch />} />
                   <Route path="turo/lax-pass" element={<LaxPassRedirect />} />
                   <Route path="turo/settings" element={<LaxPass />} />
                   <Route path="playbook" element={<AdminPlaybook />} />
