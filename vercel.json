@@ -70,6 +70,10 @@
       "destination": "/arrivekey/privacy.html"
     },
     {
+      "source": "/agent",
+      "destination": "/agent.html"
+    },
+    {
       "source": "/((?!api/|assets/|models/).*)",
       "destination": "/index.html"
     }

@@ -74,6 +74,7 @@ export default function BestlyAgent() {
         title="Bestly Agent: an AI that answers your business phone"
         description="Bestly Agent picks up every call, day or night, talks like a real person, and does the work while it talks: books the appointment, updates your software, and texts the confirmation."
         path="/agent"
+        image="/og-agent.png"
       />
 
       {/* 1. Hero */}
