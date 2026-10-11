@@ -7,9 +7,11 @@
  *                     block a soft, feathered glow for a few seconds. Reduce Motion: jumps, no pulse.
  *  - describeScreen(): what the visitor is looking at right now (page + visible headings + their words), so Maya
  *                     can talk over the slide instead of reciting the knowledge base.
- *  - presenterTools(): the four client tools (navigate_site_page, open_site_modal, show_section, describe_screen),
+ *  - presenterTools(): the client tools (navigate_site_page, open_site_modal, show_section, describe_screen,
+ *                     cloud_calculator),
  *                     each returning one plain sentence for Maya.
  */
+import { getCalc, type CalcChange } from "@/components/cloud/calcBridge";
 import {
   findSection, loadSiteIndex, mayaProductForPath, normalizePath, resolveSiteModal, resolveSitePage,
 } from "./siteTools";
@@ -73,7 +75,11 @@ function placeGlow(block: HTMLElement) {
 }
 
 export function spotlight(h: HTMLElement): void {
-  const block = blockFor(h);
+  spotlightBlock(blockFor(h));
+}
+
+/** Glide a block into view and give it the feathered glow. */
+export function spotlightBlock(block: HTMLElement): void {
   block.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "center" });
   glow?.remove();
   clearTimeout(glowTimer);
@@ -202,5 +208,32 @@ export function presenterTools(deps: PresenterDeps) {
     },
 
     describe_screen: async () => describeScreen(deps.path()),
+
+    // Drive the Bestly Cloud savings calculator like a person would, and read back exactly what it shows.
+    cloud_calculator: async (params: P) => {
+      const list = (v: unknown) => String(v ?? "").split(/,|;|\band\b/i).map((x) => x.trim()).filter(Boolean).slice(0, 20);
+      const num = Number(String(params?.team_size ?? "").replace(/[^0-9.]/g, ""));
+      const billing = String(params?.billing ?? "").toLowerCase();
+      const plan = String(params?.plan ?? "").toLowerCase();
+      const change: CalcChange = {
+        teamSize: num > 0 ? num : undefined,
+        only: params?.apps_paying_for ? list(params.apps_paying_for) : undefined,
+        add: params?.add_apps ? list(params.add_apps) : undefined,
+        remove: params?.remove_apps ? list(params.remove_apps) : undefined,
+        billing: billing.startsWith("month") ? "monthly" : billing.startsWith("annual") || billing.startsWith("year") ? "annual" : undefined,
+        plan: plan.startsWith("self") ? "selfhosted" : plan.startsWith("manag") ? "managed" : undefined,
+      };
+      const moved = goTo(deps, "/cloud");
+      if (moved) await sleep(450);
+      const calc = await getCalc(5000);
+      if (!calc) return "The savings calculator didn't load. Describe the savings in general terms and offer a call instead.";
+      const el = calc.element();
+      if (el) spotlightBlock(el);
+      const nothing = Object.values(change).every((v) => v == null);
+      const r = nothing ? calc.read() : await calc.apply(change);
+      if (el) spotlightBlock(el);
+      deps.onShow?.("Bestly Cloud savings calculator");
+      return `${r.say} Lead with the savings number in plain words, then ask the next thing you don't know yet (team size, the apps they pay for, or monthly vs annual billing). Never quote a number that is not in this result.`;
+    },
   };
 }

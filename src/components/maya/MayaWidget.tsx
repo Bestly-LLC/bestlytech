@@ -6,6 +6,7 @@ import { mayaProductForPath } from "./siteTools";
 import { presenterTools } from "./presenter";
 import { getMayaSession, mayaDiag, SESSION_FRESH_MS } from "./mayaSession";
 import { MayaScreen, MayaScreenLauncher } from "./MayaScreen";
+import { MayaIntro } from "./MayaIntro";
 
 /** Review flag for the Leo-style Maya screen: ?maya=screen turns it on for this tab, ?maya=widget turns it off. */
 const SCREEN_KEY = "maya:screen";
@@ -134,7 +135,8 @@ export function MayaWidget() {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const screen = useScreenFlag();
-  const [screenOpen, setScreenOpen] = useState(false);
+  // closed -> intro (what she is) -> open with voice (default) or typing
+  const [screenStage, setScreenStage] = useState<"closed" | "intro" | "voice" | "text">("closed");
   const mounted = useRef(true);
   const widgetEl = useRef<HTMLElement | null>(null);
   const callStartedAt = useRef(0);
@@ -227,7 +229,17 @@ export function MayaWidget() {
   if (!product) return null;
 
   if (screen) {
-    return screenOpen ? <MayaScreen onClose={() => setScreenOpen(false)} /> : <MayaScreenLauncher onOpen={() => setScreenOpen(true)} />;
+    if (screenStage === "voice" || screenStage === "text") {
+      return <MayaScreen startWith={screenStage} onClose={() => setScreenStage("closed")} />;
+    }
+    return (
+      <>
+        <MayaScreenLauncher onOpen={() => setScreenStage("intro")} />
+        {screenStage === "intro" && (
+          <MayaIntro onTalk={() => setScreenStage("voice")} onType={() => setScreenStage("text")} onClose={() => setScreenStage("closed")} />
+        )}
+      </>
+    );
   }
 
   const dynamicVariables = JSON.stringify({ page_product: product, page_path: pathname });

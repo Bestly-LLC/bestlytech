@@ -23,6 +23,7 @@ import { AlertCircle, ArrowUp, ChevronDown, Loader2, Mic, MicOff, PhoneOff, Pres
 import { mayaProductForPath, normalizePath } from "./siteTools";
 import { findHeading, presenterTools, spotlight } from "./presenter";
 import { getMayaSession, mayaDiag } from "./mayaSession";
+import { CALC_CHANGED } from "@/components/cloud/calcBridge";
 
 type Any = Record<string, unknown>;
 type Item = { id: number; kind: "maya" | "you"; text: string } | { id: number; kind: "note"; text: string };
@@ -58,6 +59,7 @@ function labelFor(tool: string): string {
     case "show_section": return "Finding that on the site";
     case "navigate_site_page": case "open_site_modal": return "Opening the page";
     case "describe_screen": return "Looking at your screen";
+    case "cloud_calculator": return "Running your numbers";
     case "file_ticket": return "Saving that for the team";
     case "verify_start": case "verify_check": return "Checking your account";
     default: return "Working on it";
@@ -66,7 +68,7 @@ function labelFor(tool: string): string {
 
 const isPhone = () => typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
 
-export function MayaScreen({ onClose }: { onClose: () => void }) {
+export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => void; startWith?: "voice" | "text" }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [greeting] = useState(() => greetingFor(mayaProductForPath(window.location.pathname)));
@@ -193,6 +195,23 @@ export function MayaScreen({ onClose }: { onClose: () => void }) {
     else root.classList.remove("maya-docked");
     return () => root.classList.remove("maya-docked");
   }, [mini]);
+
+  // Opened from the intro: voice by default ("Start talking"), or ready to type ("Type instead").
+  useEffect(() => {
+    if (startWith === "voice") void start(true);
+    else window.setTimeout(() => input.current?.focus(), 250);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The visitor moved the savings calculator by hand: Maya hears the new numbers, so she can talk about them.
+  useEffect(() => {
+    const f = (e: Event) => {
+      const say = String((e as CustomEvent<string>).detail ?? "");
+      try { if (say) conv.current?.sendContextualUpdate(`The visitor changed the savings calculator themselves. ${say}`); } catch { /* not connected */ }
+    };
+    window.addEventListener(CALC_CHANGED, f);
+    return () => window.removeEventListener(CALC_CHANGED, f);
+  }, []);
 
   useEffect(() => {
     loadMayaSdk().catch(() => {}); // iPhone plays audio only from a context unlocked in a tap; load before the tap.
