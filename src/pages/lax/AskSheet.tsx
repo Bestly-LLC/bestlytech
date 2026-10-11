@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
 import { track } from "./track";
 import { Lines } from "./Lines";
+import { LeoVoice } from "./LeoVoice";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 type Msg = { id: number | string; role: "user" | "assistant"; content: string; status?: string };
@@ -487,6 +488,8 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
             className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-2.5 py-1.5 font-semibold text-white"><RotateCcw className="h-3.5 w-3.5" aria-hidden />Reset</button>
         </div>
       )}
+      {/* Leo, the voice helper: personal trip links and the host's demo pages only (his tools are scoped to one trip). */}
+      {token && !driver && <LeoVoice token={token} />}
       {msgs.length === 0 ? (
         <div>
           <p className="text-[15px] leading-relaxed text-white/75">{driver ? "Ask anything about your phone key or getting into the car. I can check your key and send a fresh one if it's not working." : home ? "Ask anything about your phone key, finding the car, driving it, or returning it." : "Ask anything about getting to the garage, the lobby door, the car, or returning it."} Answers come from your trip guide.</p>

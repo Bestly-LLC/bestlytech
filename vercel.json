@@ -174,6 +174,24 @@
       ]
     },
     {
+      "source": "/(t|lax|d)/:path*",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com; script-src-elem 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.us.elevenlabs.io wss://api.us.elevenlabs.io https://api.elevenlabs.io wss://api.elevenlabs.io https://livekit.rtc.elevenlabs.io wss://livekit.rtc.elevenlabs.io https://*.supabase.co wss://*.supabase.co https://ntfy.sh https://api.bigdatacloud.net https://api-bdc.io https://*.api.radio-browser.info https://static.cloudflareinsights.com; media-src 'self' blob: data: https://*.supabase.co https://storage.googleapis.com https://storage.googleapis.com; frame-src 'self' blob: https://*.supabase.co https://www.youtube-nocookie.com https://www.youtube.com; worker-src 'self'; frame-ancestors 'none';"
+        }
+      ]
+    },
+    {
+      "source": "/lax",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com; script-src-elem 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.us.elevenlabs.io wss://api.us.elevenlabs.io https://api.elevenlabs.io wss://api.elevenlabs.io https://livekit.rtc.elevenlabs.io wss://livekit.rtc.elevenlabs.io https://*.supabase.co wss://*.supabase.co https://ntfy.sh https://api.bigdatacloud.net https://api-bdc.io https://*.api.radio-browser.info https://static.cloudflareinsights.com; media-src 'self' blob: data: https://*.supabase.co https://storage.googleapis.com https://storage.googleapis.com; frame-src 'self' blob: https://*.supabase.co https://www.youtube-nocookie.com https://www.youtube.com; worker-src 'self'; frame-ancestors 'none';"
+        }
+      ]
+    },
+    {
       "source": "/(about|products|apps|cookie-yeti|inventory-proof|hoku|cloud|in-house-cloud|get-started|studio|neckpilot|services|apple-modernization|marketplace-setup|contact|support)",
       "headers": [
         {
