@@ -43,7 +43,7 @@ export function Carousel({ id, labels, children, className = "" }: { id: string;
       items.current.forEach((k, i) => { if (!k) return; const x = Math.abs(k.offsetLeft - PAD - el.scrollLeft); if (x < d) { d = x; best = i; } });
       return best;
     };
-    let touching = false, start = { x: 0, t: 0, i: 0 }, timer = 0, tries = 0;
+    let touching = false, start = { x: 0, t: 0, i: 0 }, timer = 0, tries = 0, lastLeft = -1;
     const settle = () => {
       if (touching) return;
       const want = wanted.current ?? nearest();
@@ -51,17 +51,23 @@ export function Carousel({ id, labels, children, className = "" }: { id: string;
       if (!kid) return;
       const target = Math.max(0, Math.min(kid.offsetLeft - PAD, el.scrollWidth - el.clientWidth));
       if (Math.abs(el.scrollLeft - target) > 2) {
+        // 2026-10-10: a smooth scroll that is still gliding is not a failure. iPhone fires settle() mid-glide (scroll events pause
+        // for a beat), which used to burn the 3 tries and report a "misaligned" card that had been fine (every report had off: 0).
+        // Count a try only when the scroller has NOT moved since the last check, i.e. it is really stuck.
+        const moving = Math.abs(el.scrollLeft - lastLeft) > 1;
+        lastLeft = el.scrollLeft;
+        if (moving) { window.clearTimeout(timer); timer = window.setTimeout(settle, 140); return; }
         // Self-heal: smooth first; if it still won't land, jump there and report it (watchdog → Scout).
         if (++tries > 3) { el.scrollLeft = target; track(undefined, "carousel_misaligned", { id, off: Math.round(el.scrollLeft - target) }); tries = 0; }
         else el.scrollTo({ left: target, behavior: reduce ? "auto" : "smooth" });
         return;
       }
-      tries = 0;
+      tries = 0; lastLeft = -1;
       wanted.current = null;
       setSettled(want);
     };
     const onScroll = () => { window.clearTimeout(timer); timer = window.setTimeout(settle, 110); };
-    const onStart = (e: TouchEvent) => { touching = true; wanted.current = null; start = { x: e.touches[0].clientX, t: Date.now(), i: nearest() }; };
+    const onStart = (e: TouchEvent) => { touching = true; wanted.current = null; lastLeft = -1; tries = 0; start = { x: e.touches[0].clientX, t: Date.now(), i: nearest() }; };
     const onEnd = (e: TouchEvent) => {
       touching = false;
       const dx = start.x - (e.changedTouches[0]?.clientX ?? start.x);
