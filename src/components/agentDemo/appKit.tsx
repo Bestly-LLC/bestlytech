@@ -168,6 +168,13 @@ export function Toasts({ toasts, t }: { toasts: ToastItem[]; t: number }) {
  * running when the next change arrives is picked up from where it visually is, so it can be interrupted.
  * Reduce Motion: no movement, only a short crossfade.
  */
+/**
+ * A critically damped spring (damping 1.0, response 0.4 s: Apple's "reposition" spring) written as a CSS linear()
+ * easing, so the Web Animations API can run it. No overshoot, it settles in about half a second, and because every move
+ * starts from the card's live on-screen position it can be interrupted by the next move without a jump.
+ */
+const SPRING = "linear(0, 0.0463, 0.1491, 0.272, 0.3948, 0.5073, 0.6053, 0.6877, 0.7554, 0.8101, 0.8535, 0.8877, 0.9144, 0.935, 0.9509, 0.963, 0.9722, 0.9792, 0.9844, 0.9884, 0.9914, 0.9936, 0.9952, 0.9965, 1)";
+
 export function useFlip(depKey: string) {
   const root = useRef<HTMLDivElement | null>(null);
   const els = useRef(new Map<string, HTMLElement>());
@@ -187,7 +194,7 @@ export function useFlip(depKey: string) {
       next.set(key, here);
       const was = prev.current.get(key);
       if (!was) {
-        if (prev.current.size) el.animate([{ opacity: 0, transform: "scale(.96)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: "cubic-bezier(.32,.72,0,1)" });
+        if (prev.current.size) el.animate([{ opacity: 0, transform: "scale(.96)" }, { opacity: 1, transform: "none" }], { duration: 360, easing: SPRING });
         return;
       }
       const dx = was.x + m.m41 - here.x;
@@ -199,7 +206,7 @@ export function useFlip(depKey: string) {
       } else {
         el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }], {
           duration: 520,
-          easing: "cubic-bezier(.32,.72,0,1)",
+          easing: SPRING,
         });
       }
     });

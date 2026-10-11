@@ -117,7 +117,7 @@ export default function BestlyAgent() {
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-24">
           <AnimatedSection animation="fade-in" immediate>
             <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-primary">Bestly Agent</p>
-            <h1 className="font-modern [text-wrap:balance] text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+            <h1 className="font-modern [text-wrap:balance] text-4xl font-semibold tracking-[-0.03em] [word-spacing:0.03em] text-foreground sm:text-5xl lg:text-6xl">
               An AI receptionist that answers your phone and does the work.
             </h1>
             <p className="mt-6 max-w-xl text-lg text-muted-foreground">
@@ -197,7 +197,7 @@ export default function BestlyAgent() {
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
           <AnimatedSection animation="fade-in" className="mb-12 max-w-2xl">
             <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">What she does</p>
-            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-[-0.025em] [word-spacing:0.04em] text-foreground sm:text-4xl">
               Like a great receptionist who also knows your software.
             </h2>
           </AnimatedSection>
@@ -208,7 +208,7 @@ export default function BestlyAgent() {
                   <span className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <d.icon className="h-5 w-5" aria-hidden="true" />
                   </span>
-                  <h3 className="font-modern text-xl font-semibold text-foreground">{d.title}</h3>
+                  <h3 className="font-modern text-xl font-semibold tracking-[-0.012em] [word-spacing:0.05em] text-foreground">{d.title}</h3>
                   <p className="mt-3 text-muted-foreground">{d.body}</p>
                 </div>
               </AnimatedSection>
@@ -222,7 +222,7 @@ export default function BestlyAgent() {
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
           <AnimatedSection animation="fade-in" className="mb-12 max-w-3xl">
             <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Not just a chatbot</p>
-            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-[-0.025em] [word-spacing:0.04em] text-foreground sm:text-4xl">
               She works inside the apps you already use.
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
@@ -266,7 +266,7 @@ export default function BestlyAgent() {
         <div className="mx-auto grid max-w-7xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8 lg:py-24">
           <AnimatedSection animation="fade-in">
             <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Everywhere your customers are</p>
-            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-[-0.025em] [word-spacing:0.04em] text-foreground sm:text-4xl">
               One agent for calls, texts, chat and email.
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
@@ -303,7 +303,7 @@ export default function BestlyAgent() {
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
           <AnimatedSection animation="fade-in" className="mb-12 max-w-2xl">
             <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Any industry</p>
-            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-[-0.025em] [word-spacing:0.04em] text-foreground sm:text-4xl">
               Works for any business that gets phone calls.
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">Pick one to watch that call play out above.</p>
@@ -316,10 +316,10 @@ export default function BestlyAgent() {
                   <button
                     type="button"
                     onClick={() => watch(x.id, false)}
-                    className="group flex h-full min-h-[44px] w-full flex-col rounded-2xl border border-border bg-card p-6 text-left transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+                    className="group flex h-full min-h-[44px] w-full flex-col rounded-2xl border border-border bg-card p-6 text-left transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0 active:translate-y-0 active:scale-[0.985] active:shadow-none active:duration-75"
                   >
                     <BizLogo slug={BRANDS[x.id].logo} size={44} className="mb-4 rounded-xl shadow-sm" />
-                    <span className="font-modern text-xl font-semibold text-foreground">{sc.chip}</span>
+                    <span className="font-modern text-xl font-semibold tracking-[-0.012em] [word-spacing:0.05em] text-foreground">{sc.chip}</span>
                     <span className="mt-2 block text-muted-foreground">{x.line}</span>
                     <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
                       Watch this call <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true" />
@@ -332,12 +332,12 @@ export default function BestlyAgent() {
               <button
                 type="button"
                 onClick={openMaya}
-                className="group flex h-full min-h-[44px] w-full flex-col rounded-2xl border border-dashed border-primary/40 bg-primary/[0.04] p-6 text-left transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+                className="group flex h-full min-h-[44px] w-full flex-col rounded-2xl border border-dashed border-primary/40 bg-primary/[0.04] p-6 text-left transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0 active:translate-y-0 active:scale-[0.985] active:shadow-none active:duration-75"
               >
                 <span className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                   <Plus className="h-5 w-5" aria-hidden="true" />
                 </span>
-                <span className="font-modern text-xl font-semibold text-foreground">Yours</span>
+                <span className="font-modern text-xl font-semibold tracking-[-0.012em] [word-spacing:0.05em] text-foreground">Yours</span>
                 <span className="mt-2 block text-muted-foreground">Tell Maya what you do and she&rsquo;ll show you how it would work.</span>
                 <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
                   Talk to Maya <Mic className="h-4 w-4" aria-hidden="true" />
@@ -353,7 +353,7 @@ export default function BestlyAgent() {
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
           <AnimatedSection animation="fade-in" className="mb-12 max-w-2xl">
             <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">How it works</p>
-            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">We set it all up for you.</h2>
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-[-0.025em] [word-spacing:0.04em] text-foreground sm:text-4xl">We set it all up for you.</h2>
           </AnimatedSection>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {steps.map((s, i) => (
@@ -362,7 +362,7 @@ export default function BestlyAgent() {
                   <span className="mb-5 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                     {s.n}
                   </span>
-                  <h3 className="font-modern text-xl font-semibold text-foreground">{s.title}</h3>
+                  <h3 className="font-modern text-xl font-semibold tracking-[-0.012em] [word-spacing:0.05em] text-foreground">{s.title}</h3>
                   <p className="mt-3 text-muted-foreground">{s.body}</p>
                 </div>
               </AnimatedSection>
@@ -376,7 +376,7 @@ export default function BestlyAgent() {
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
           <AnimatedSection animation="fade-in" className="mb-12 max-w-2xl">
             <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Questions</p>
-            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">What people ask us first.</h2>
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-[-0.025em] [word-spacing:0.04em] text-foreground sm:text-4xl">What people ask us first.</h2>
           </AnimatedSection>
           <dl className="grid gap-5 md:grid-cols-2">
             {faqs.map((f, i) => (
@@ -406,7 +406,7 @@ export default function BestlyAgent() {
           </AnimatedSection>
           <AnimatedSection animation="fade-in" delay={80}>
             <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Live</p>
-            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Try her right now.</h2>
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-[-0.025em] [word-spacing:0.04em] text-foreground sm:text-4xl">Try her right now.</h2>
             <p className="mt-4 max-w-xl text-lg text-muted-foreground">
               Maya is a Bestly Agent. Ask her anything, or pretend you are one of your own customers.
             </p>
@@ -429,7 +429,7 @@ export default function BestlyAgent() {
       <section className="bg-secondary/20">
         <div className="mx-auto max-w-3xl px-4 py-20 text-center sm:px-6 lg:py-24">
           <AnimatedSection animation="fade-in">
-            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Get your own agent.</h2>
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-[-0.025em] [word-spacing:0.04em] text-foreground sm:text-4xl">Get your own agent.</h2>
             <p className="mt-4 text-lg text-muted-foreground">
               Tell us about your business. We set up your agent, connect your apps and test her, and you keep your phone
               number. If it is not a fit, we will tell you.

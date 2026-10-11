@@ -6,15 +6,14 @@ import { BizLogo, Toasts, type ToastItem } from "./appKit";
 export type SidebarItem = { id: string; label: string; icon: LucideIcon; badge?: string };
 
 /**
- * A believable, fictional macOS-style app window: traffic lights, a title bar, a slim menu strip with the scenario
- * clock and the "Bestly Agent connected" dot, a sidebar, and the app itself. It is a picture of software, not
+ * A believable, fictional macOS-style app window: one unified title bar and toolbar (traffic lights, the app's icon and
+ * name, the scenario clock), a source-list sidebar with a "Bestly Agent connected" card at the bottom, and the app itself. It is a picture of software, not
  * software: nothing in it is focusable, and the transcript says everything it shows.
  */
 export function DesktopWindow({
   appName,
   logo,
   brand,
-  windowTitle,
   clock,
   accent,
   sidebar,
@@ -29,7 +28,6 @@ export function DesktopWindow({
   /** Logo slug and short name of the business, for the title bar and the sidebar. */
   logo: string;
   brand: string;
-  windowTitle: string;
   clock: string;
   accent: string;
   sidebar: SidebarItem[];
@@ -59,25 +57,9 @@ export function DesktopWindow({
           </div>
           <div className="adw-title">
             <BizLogo slug={logo} size={16} />
-            <span>{windowTitle}</span>
+            <span>{appName}</span>
           </div>
-          <div />
-        </div>
-        <div className="adw-menu">
-          <span className="adw-menu-app">{appName}</span>
-          <span className="adw-menu-items">
-            <span>File</span>
-            <span>Edit</span>
-            <span>View</span>
-            <span>Window</span>
-          </span>
-          <span className="adw-menu-right">
-            <span className="adw-conn">
-              <i />
-              Bestly Agent connected
-            </span>
-            <span className="adw-clock">{clock}</span>
-          </span>
+          <div className="adw-clock">{clock}</div>
         </div>
         <div className="adw-body">
           <nav className="adw-side">
@@ -92,6 +74,16 @@ export function DesktopWindow({
                 {s.badge ? <span className="adw-side-b">{s.badge}</span> : null}
               </div>
             ))}
+            <div className="adw-agent">
+              <span className="adw-agent-orb" aria-hidden="true" />
+              <span className="adw-agent-t">
+                <b>Bestly Agent</b>
+                <span>
+                  <i />
+                  Connected
+                </span>
+              </span>
+            </div>
           </nav>
           <div className="adw-main">{children}</div>
           <Toasts toasts={toasts} t={t} />

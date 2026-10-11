@@ -219,7 +219,6 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
               appName={scenario.appName}
               logo={brand.logo}
               brand={brand.short}
-              windowTitle={scenario.windowTitle}
               clock={scenario.clock}
               accent={app.accent}
               sidebar={app.sidebar}
