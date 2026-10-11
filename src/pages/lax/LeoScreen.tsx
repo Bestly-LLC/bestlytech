@@ -23,10 +23,12 @@ import { createPortal } from "react-dom";
 import {
   AlertCircle, ArrowUp, Armchair, BatteryMedium, Check, ChevronDown, Flame, KeyRound, ListChecks, Loader2, Lock, LockOpen,
   MapPin, Mic, MicOff, Navigation, PhoneOff, Power, ShieldAlert, Snowflake, Thermometer, X, Zap,
+  Volume2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { TripContext } from "./AskSheet";
 import { LeoMiniPill, LeoOrb, THEME, leoGreeting, loadLeoSdk, takeLeoMode, type LeoMini, type LeoTheme } from "./LeoWidget";
+import { audioLocked, resumeAllAudio } from "./audioRescue";
 import { track } from "./track";
 import { MINIMIZE, askPage, emitLeoCar, useLeoDid } from "./leoBridge";
 import { useDemoOpen } from "./demoState";
@@ -70,6 +72,9 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
   const [working, setWorking] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [mini, setMini] = useState(false);
+  // iPhone kept Leo's audio paused (no tap reached it): show a big "Tap to hear Leo" until it plays. See audioRescue.ts.
+  const [locked, setLocked] = useState(false);
+  const lockLogged = useRef(false);
   const [text, setText] = useState("");
   // Demo pages with "open demo" on: Leo may unlock the pretend car, so the controls card gets an Unlock button.
   const demoOpen = useDemoOpen().open;
@@ -159,6 +164,12 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
         if (!s?.ok || !s.signed_url || !s.key) throw new Error(String(s?.error ?? "Leo didn't load. Try again in a minute, or message your host in the Turo app."));
         const history = items.filter((x) => x.kind === "leo" || x.kind === "you").slice(-6)
           .map((x) => `${x.kind === "you" ? "Guest" : "Leo"}: ${(x as { text: string }).text}`).join("\n");
+        // If the phone holds the audio paused, setup waits here for a tap: offer one after a moment.
+        const lockTimer = withVoice ? window.setTimeout(() => {
+          if (!audioLocked()) return;
+          setLocked(true);
+          if (!lockLogged.current) { lockLogged.current = true; diag(token, "audio_locked", { msg: "voice setup waiting for a tap (iOS audio)" }); }
+        }, 2500) : 0;
         const c = await Conversation.startSession({
           signedUrl: String(s.signed_url),
           textOnly: !withVoice,
@@ -192,6 +203,7 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
           },
           onError: (msg: string) => { diag(token, "sdk", { msg: String(msg).slice(0, 300) }); },
         } as never) as Conv;
+        window.clearTimeout(lockTimer);
         conv.current = c;
         setVoice(withVoice);
         return c;
@@ -208,6 +220,13 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
     return starting.current;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, home, greeting, context?.stage, items, push, showCard, showResult, pageAction]);
+
+  // Clear the tap prompt as soon as the audio is actually running (the page-wide tap listener resumes it).
+  useEffect(() => {
+    if (!locked) return;
+    const id = window.setInterval(() => { if (!audioLocked()) setLocked(false); }, 400);
+    return () => window.clearInterval(id);
+  }, [locked]);
 
   const endCall = useCallback(async () => {
     const c = conv.current; conv.current = null;
@@ -349,6 +368,13 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
       </div>
 
       <footer className="relative mx-auto w-full max-w-md px-4 pt-2" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+        {locked && (
+          <button type="button" onClick={() => { resumeAllAudio(); window.setTimeout(() => { if (!audioLocked()) setLocked(false); }, 300); }}
+            className="mb-2 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold shadow-lg shadow-black/25 active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+            style={{ background: theme.accent, color: theme.onAccent }}>
+            <Volume2 className="h-5 w-5" aria-hidden />Tap to hear Leo
+          </button>
+        )}
         {voice && phase === "live" && (
           <div className="mb-2 flex items-center gap-2 rounded-2xl bg-white/[0.06] p-2 pl-3 ring-1 ring-white/10">
             <span className="flex-1 text-[15px] font-medium">{speaking ? "Leo is talking" : muted ? "You're muted" : "Listening, go ahead"}</span>
