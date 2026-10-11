@@ -845,8 +845,9 @@ def polite_get(url):
     finally:
         _last_fetch[0] = time.time()
     h = raw[:600000].decode("utf-8", "replace")
-    if CHALLENGE_RX.search(h[:6000]) and len(strip_html(h)) < 1500:
-        return None, "blocked"
+    vis = strip_html(h)
+    if CHALLENGE_RX.search(vis[:3000]) and len(vis) < 2500:
+        return None, "blocked"  # a Cloudflare-style challenge page: not worked around
     return h, "ok"
 
 
@@ -864,6 +865,9 @@ def page_text(h, cap):
         if n > cap:
             break
     head = squash(strip_html(title.group(1)), 120) + "\n" if title else ""
+    md = re.search(r'(?is)<meta[^>]+name="description"[^>]+content="([^"]{40,})"', h)  # JS-only sites still describe themselves here
+    if md:
+        head += squash(html.unescape(md.group(1)), 400) + "\n"
     return (head + "\n".join(out))[:cap]
 
 
