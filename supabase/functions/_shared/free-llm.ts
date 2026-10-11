@@ -38,6 +38,8 @@ export interface LlmRequest {
   paidModel?: string;
   deadlineMs?: number;
   validate?: (json: any) => string | null;
+  /** v12 (2026-10-10): providers to leave out of this call. scout-daily reflect retries without FreeLLM when FreeLLM timed out the first time. */
+  skip?: Provider[];
 }
 
 export interface LlmResult {
@@ -334,8 +336,40 @@ const THINK_META: RegExp[] = [
   /\bi recall\b|\bperhaps i (?:can|should)\b|\bi think (?:i|we|for)\b/i,
   /\bjared'?s last message\b|\breply to jared\b/i,
 ];
-export function thinkingLeak(text: string): boolean {
+/**
+ * 2026-10-10 audit (47 threads, Oct 7-10): 37 replies that narrated a step ("We need to find where... Let's read X"),
+ * 32 that were raw tool JSON ({ "repo": "site", "path": "..." }), none caught: they were short (the leak test below needs
+ * a meta phrase or 600+ characters) or had no prose at all. Both are the model's next step, never an answer.
+ */
+const TOOLISH_KEYS = /"(?:name|arguments|tool|function|path|repo|query|sql|find|line_start|line_end|command|script|input|args|confirmed|mail_id|id)"\s*:/i;
+export function rawToolJson(text: string): boolean {
+  const t = String(text ?? "").replace(/```(?:json)?/gi, "").trim();
+  if (t.length < 2) return false;
+  // gpt-oss harmony leakage: "assistantcommentary to=functions.read_file json{...}"
+  if (/\bto=functions\.\w+|<\|(?:call|channel|constrain|message)\|>|\bcommentary to=/i.test(t)) return true;
+  const blobs = t.match(/\{[^{}]*\}/g) ?? [];
+  const toolBlobs = blobs.filter((b) => TOOLISH_KEYS.test(b));
+  if (!toolBlobs.length) return false;
+  // Whatever is left once the JSON blobs are removed (and a trailing OPTIONS line) is too little to be an answer.
+  const rest = t.replace(/\{[^{}]*\}/g, " ").replace(/^\s*OPTIONS:.*$/gim, " ").replace(/\s+/g, " ").trim();
+  return rest.length < 40;
+}
+const STEP_START = /^\s*(?:we(?:['\u2019]re| are| need| should| must| have to| can| could| will| got| see| now)\b|we['\u2019]ll\b|let['\u2019]?s\b|need to\b|next,? (?:we|i|let)|first,? (?:we|i|let)|i(?:['\u2019]ll| will| need to| should| can)\s+(?:now\s+)?(?:read|check|search|look|list|open|find|grep|query|fetch)\b|maybe (?:it|the|there)\b)/i;
+const STEP_ACTION = /\b(?:let['\u2019]?s|need to|should|will|going to|must)\s+(?:now\s+)?(?:read|list|search|check|look|open|find|grep|query|fetch|see|run|call|use|inspect|examine|view|get|try|scan)\b/i;
+export function narratesStep(text: string): boolean {
+  const t = String(text ?? "").replace(/^\s*OPTIONS:.*$/gim, "").trim();
+  if (t.length < 8 || t.length > 1200) return false;
+  if (!STEP_START.test(t.slice(0, 140))) return false;
+  const blob = /\{[^{}]{2,}\}/.test(t) && TOOLISH_KEYS.test(t);
+  return blob || STEP_ACTION.test(t.slice(0, 500));
+}
+/**
+ * chat: true when the caller declared tools (llmChat). Then a step the model wrote as text is NOT a leak here: the caller
+ * (admin-chat textToolCall / its nudge) turns it into the real call or sends it back, so it must reach the caller.
+ */
+export function thinkingLeak(text: string, chat = false): boolean {
   const t = String(text ?? "");
+  if (!chat && (rawToolJson(t) || narratesStep(t))) return true;
   if (t.length < 60) return false;
   const hits = THINK_META.filter((re) => re.test(t)).length;
   if (THINK_START.test(t.slice(0, 120))) return hits >= 1 || t.length > 600;
@@ -590,6 +624,7 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
     const skip = (outcome: Outcome) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0 });
     if (left < 3000) { skip("timeout"); continue; }
     const p = prov[rung.provider];
+    if (req.skip?.includes(rung.provider)) { skip("skipped_off"); continue; }
     if (p && !p.enabled) { skip("skipped_off"); continue; }
     if (privacy === "private" && p && !p.private_ok) { skip("skipped_privacy"); continue; }
     if (pass === 0 && p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now()) { cooled.push(rung); skip("rate_limited"); continue; }
@@ -839,7 +874,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       }
       // 2026-10-07: reasoning written as content. With tool calls it is just noise beside them, so drop it;
       // on its own it is a miss and the next model answers (logged "invalid" so no provider gets paused).
-      const leaked = thinkingLeak(content);
+      const leaked = thinkingLeak(content, toolNames.size > 0);
       if (leaked && toolCalls.length) content = "";
       const inT = Number(j.usage?.prompt_tokens ?? 0), outT = Number(j.usage?.completion_tokens ?? 0);
       const c: Call = { text: content, model: String(j.model ?? rung.model), inT, outT, cost: 0 };

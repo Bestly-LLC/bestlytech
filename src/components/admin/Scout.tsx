@@ -31,7 +31,7 @@ import { copyText } from "@/lib/copyForClaude";
 import { RecorderBar, useRecorder, useNow, clock, listNames, type RecentRecording } from "./ScoutRecorder";
 import { JobCard, useJobFollow, useMacJobs, type MacJob } from "./ScoutJobs";
 import { AttachBar, AttachButton, FileChips, splitFiles, useScoutFiles } from "./ScoutAttach";
-import { ScoutAutoRunBar } from "./ScoutAutoRun";
+import { ScoutAutoRunBar, refreshScoutPrefs } from "./ScoutAutoRun";
 import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, type ScoutAsk } from "./scoutBus";
 import { NeedsYouCard, useNeedsYou, type TodayRow } from "./ScoutNeedsYou";
 import { dotHex, markScoutThreadRead, publishScoutDot, scoutDotColor, useScoutUnread } from "./scoutUnread";
@@ -243,28 +243,13 @@ export function splitOptions(body: string): { text: string; options: string[] } 
   return { text: body.replace(OPTION_LINE, "").trimEnd(), options };
 }
 
-/**
- * What to show when Scout forgets its OPTIONS line.
- *
- * The system prompt asks for one on every reply that leaves a decision, but a prompt is
- * a request, not a guarantee, and the reply it forgets on is usually the "want me to keep
- * going?" - the exact moment Jared would otherwise have to type. So the buttons are
- * generated here instead of hoped for, matched to what the message is actually doing.
+/*
+ * Quick replies (v44, 2026-10-10 audit). Until now, when a reply carried no OPTIONS line this file made up buttons from the
+ * last message alone ("Keep going | What else needs me?"). Jared tapped Keep going to a yes/no question, it approved the
+ * action, and a wrong commit shipped; 59% of offered buttons were ignored. The server now writes 2-3 specific next steps
+ * from the whole thread (adhdShape) and puts them on the OPTIONS line; if it cannot, there is no line, and this window
+ * shows NO buttons rather than generic ones. Nothing here invents a button.
  */
-export function fallbackOptions(text: string): string[] {
-  const t = text.trim();
-  if (!t) return [];
-  const tail = t.slice(-400).toLowerCase();
-
-  // "Want me to keep going", "should I", "shall I", "ready for me to"
-  if (/\b(want me to|should i|shall i|ready for me to|do you want me to|keep going|carry on|continue\?)/.test(tail)) {
-    return ["Yes, keep going", "Not now", "Show me first"];
-  }
-  // Anything else phrased as a question still deserves a tap rather than typing.
-  if (t.endsWith("?")) return ["Yes", "No", "Tell me more"];
-  // A plain answer or status: the useful next tap is forward, not a yes/no.
-  return ["Keep going", "What else needs me?"];
-}
 
 /**
  * Turn a Scout exchange into a prompt Jared can paste to Claude to get the thing fixed.
@@ -723,6 +708,7 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
 
       endKind.current = error ? "error" : (data as { continuing?: boolean })?.continuing ? "continuing" : "ok";
       setBusy(false);
+      refreshScoutPrefs();   // v44: a typed "use paid AI" flips the Paid AI pill on the server; show it now, not on the next 30 s poll
       // Done: the happy pop (played below, once, when the window stops running). A problem: the alert.
       // Still carrying on by itself: quiet until it really finishes.
       if (error) playNotifySound();
@@ -1648,7 +1634,7 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
                 return <QuestionCard questions={asked.questions} onSubmit={(msg) => send(msg)} disabled={running} />;
               }
               const { text: botText, options } = splitOptions(asked.text);
-              const chips = options.length ? options : fallbackOptions(botText);
+              const chips = options;   // v44: only what the server wrote for this thread; never a made-up fallback
               const lastAsk = [...msgs].reverse().find((m) => m.role === "user")?.body;
               return (
                 <div className="mb-2 flex flex-wrap items-center gap-1.5">
