@@ -24,7 +24,7 @@ verbatim in the listing); LIKELY when the listing claims FSD (a field or a sente
 Anything else is excluded. The free AI only reads free text; code re-checks every quote it cites and can only make the grade stricter
 (a subscription/trial/capable-only reading from either the rules or the AI rejects the listing).
 
-Flags: --dry (read only: no log writes, no notification, no heartbeat), --limit N (cap detail fetches per source, default 40).
+Flags: --dry (read only: no log writes, no notification, no heartbeat), --limit N (cap detail fetches per source, default 150).
 """
 import html
 import json
@@ -604,7 +604,7 @@ def line(m):
 
 def main(argv):
     dry = "--dry" in argv
-    limit = 40
+    limit = 150
     if "--limit" in argv:
         limit = int(argv[argv.index("--limit") + 1])
     cfg = lib.rpc("model_y_settings_get") or {"enabled": True, "max_price": 30000, "radius_mi": 100}
