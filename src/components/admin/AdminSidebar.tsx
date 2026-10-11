@@ -11,7 +11,7 @@ import { BadgeDollarSign, Brush, FileWarning,
   Car,
   Mic,
   Handshake,
-  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, ShieldAlert, Siren, CarFront, Flower2, PhoneCall, Headset, Crosshair,
+  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, ShieldAlert, Siren, CarFront, Flower2, PhoneCall, Headset, Crosshair, Gauge,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -29,7 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AdminMark } from "@/components/AdminMark";
 import { BookOpen, GripVertical, Network, Plane, Plus, Projector } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
 import { openHokuAdmin, HOKU_ADMIN_URL } from "@/lib/openHokuAdmin";
@@ -45,7 +45,11 @@ export const dashboardItem = { title: "Command Center", url: "/admin", icon: Lay
 
 // Work: Leads is the CRM (every funnel in one pipeline); inbound messages, waitlist, meetings and settings sit beside it.
 const workItems = [
-  { title: "Leads", url: "/admin/leads", icon: Users, countKey: "leads" as CountKeys },
+  {
+    title: "Leads", url: "/admin/leads", icon: Users, countKey: "leads" as CountKeys,
+    // Hunter is its own sub-area under Leads: finds, checks and queues the leads Maya calls (free, no Claude tokens).
+    nested: [{ title: "Hunter", url: "/admin/leads/hunter", icon: Crosshair, nested: [{ title: "Jev scores", url: "/admin/leads/hunter/scores", icon: Gauge }] }],
+  },
   { title: "Contacts", url: "/admin/contacts", icon: Mail, countKey: "contacts" as CountKeys },
   { title: "Waitlist", url: "/admin/waitlist", icon: ListChecks },
   { title: "Meetings", url: "/admin/meetings", icon: Mic },
@@ -105,8 +109,6 @@ const agentItems = [
   { title: "Ava (Personal)", url: "/admin/ava", icon: AvaOrbIcon },
   { title: "Maya (Bestly)", url: "/admin/maya", icon: Headset, countKey: "maya" as CountKeys },
   { title: "Reese (RoofGuard)", url: "/admin/roofguard", icon: PhoneCall },
-  // Hunter: finds, checks and queues the leads Maya calls (free, no Claude tokens).
-  { title: "Hunter (Leads)", url: "/admin/hunter", icon: Crosshair },
 ];
 
 // Money coming in to Jared personally (Oct 10 2026): Nickel's class action settlements. Its own section near the top
@@ -119,7 +121,8 @@ const moneyItems = [
 const hokuItems = [
   { title: "HOKU admin", url: HOKU_ADMIN_URL, icon: ShoppingBag, sso: true },
 ];
-const ALL_NAV_URLS = [...workItems, ...agentItems, ...moneyItems, ...vestaItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems].map((i) => i.url);
+const flatNav = (items: Array<{ url: string; nested?: any[] }>): string[] => items.flatMap((i) => [i.url, ...flatNav(i.nested ?? [])]);
+const ALL_NAV_URLS = flatNav([...workItems, ...agentItems, ...moneyItems, ...vestaItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems]);
 
 
 // A saved order that still lists the old "Ava" / "Maya" / "RoofGuard" sections just drops them; "Agents" is new to it,
@@ -167,7 +170,7 @@ function pathOf(url: string | null | undefined) {
 }
 
 type AgentNav = { slug: string; name: string; purpose: string; kind: "legacy" | "template"; page_url: string | null; status: string; orb_hue: number; unread: number };
-type NavItem = { title: string; url: string; icon: any; countKey?: CountKeys; sso?: boolean; orbHue?: number; badge?: number };
+type NavItem = { title: string; url: string; icon: any; countKey?: CountKeys; sso?: boolean; orbHue?: number; badge?: number; nested?: NavItem[] };
 
 /** Sidebar items for the Agents group: "<name> (<purpose>)". Legacy agents keep their own icons; template agents get an orb tinted with their hue. */
 function agentNavItems(rows: AgentNav[] | null): NavItem[] {
@@ -345,7 +348,9 @@ export function AdminSidebar() {
     if (path === "/admin/cookie-yeti") return currentPath === "/admin/cookie-yeti";
     if (path === "/admin/home-hub") return currentPath === "/admin/home-hub";
     // Lead detail pages (a cloud deal, a marketplace submission) belong to Leads.
-    if (path === "/admin/leads") return ["/admin/leads", "/admin/cloud", "/admin/submissions", "/admin/hires"].some((p) => currentPath.startsWith(p));
+    if (path === "/admin/leads") return !currentPath.startsWith("/admin/leads/hunter") && ["/admin/leads", "/admin/cloud", "/admin/submissions", "/admin/hires"].some((p) => currentPath.startsWith(p));
+    // Hunter's overview lights up only on its own page; "Jev scores" lights up on the score screen.
+    if (path === "/admin/leads/hunter") return currentPath === "/admin/leads/hunter" || currentPath === "/admin/hunter";
     // A deeper nav item wins: on /admin/turo/lax-pass only "Guest Trips" lights up, not "Turo Watch".
     const under = (p: string) => currentPath === p || currentPath.startsWith(p + "/");
     if (!under(path)) return false;
@@ -422,7 +427,7 @@ export function AdminSidebar() {
     window.addEventListener("pointercancel", onUp);
   };
 
-  const renderItem = (item: NavItem) => {
+  const renderOne = (item: NavItem, depth = 0) => {
     if (item.sso) {
       return (
         <SidebarMenuItem key={item.title}>
@@ -450,7 +455,7 @@ export function AdminSidebar() {
     const active = isActive(item.url);
     const count = item.countKey ? counts[item.countKey] ?? 0 : item.badge ?? 0;
     // A page gets a dot when something waiting points at it (the home page only for its own items).
-    const hits = Object.entries(attention).filter(([p]) => (item.url === "/admin" ? p === "/admin" : p === item.url || p.startsWith(item.url + "/")));
+    const hits = Object.entries(attention).filter(([p]) => (item.url === "/admin" ? p === "/admin" : item.url === "/admin/leads" && p.startsWith("/admin/leads/hunter") ? false : p === item.url || p.startsWith(item.url + "/")));
     const dot = hits.length
       ? { level: hits.reduce<Level>((l, [, v]) => (LEVEL_RANK[v.level] > LEVEL_RANK[l] ? v.level : l), "blue"), n: hits.reduce((n, [, v]) => n + v.n, 0), why: hits[0][1].why }
       : null;
@@ -466,6 +471,7 @@ export function AdminSidebar() {
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all relative",
               "bento:rounded-full bento:py-2.5",
+              depth > 0 && !collapsed && "min-h-[2.25rem] py-1.5 text-[0.8125rem]",
               active
                 ? "bg-[hsl(var(--wow-indigo)/0.12)] text-white font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[0.1875rem] before:rounded-full before:bg-[hsl(var(--wow-indigo-light))] before:shadow-[0_0_8px_hsl(var(--wow-indigo-light)/0.6)] bento:bg-[#111114] bento:text-[#fff] bento:before:hidden bento:hover:bg-[#111114] bento:hover:text-[#fff]"
                 : "text-white/55 hover:text-white hover:bg-white/[0.05] bento:text-white/70"
@@ -498,6 +504,25 @@ export function AdminSidebar() {
       </SidebarMenuItem>
     );
   };
+
+  // An item with nested children (Leads > Hunter > Jev scores) draws them under it, indented behind a hairline.
+  // In the icon rail they sit flat, so every page stays one tap away.
+  const renderItem = (item: NavItem, depth = 0): React.ReactNode => (
+    <Fragment key={item.title}>
+      {renderOne(item, depth)}
+      {item.nested?.length
+        ? collapsed
+          ? item.nested.map((n) => renderItem(n, depth + 1))
+          : (
+            <li className="list-none">
+              <ul className="ml-[1.5rem] space-y-0.5 border-l border-white/10 pl-1.5" aria-label={`${item.title} pages`}>
+                {item.nested.map((n) => renderItem(n, depth + 1))}
+              </ul>
+            </li>
+          )
+        : null}
+    </Fragment>
+  );
 
   return (
     <Sidebar collapsible="icon" variant={bento ? "floating" : "sidebar"} className="bento:p-3">
@@ -556,7 +581,7 @@ export function AdminSidebar() {
                 )}
               </SidebarGroupLabel>
               <SidebarGroupContent>
-                <SidebarMenu>{(section.label === "Agents" ? agentNavItems(agents) : (section.items as NavItem[])).map(renderItem)}</SidebarMenu>
+                <SidebarMenu>{(section.label === "Agents" ? agentNavItems(agents) : (section.items as NavItem[])).map((it) => renderItem(it))}</SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
           </div>
