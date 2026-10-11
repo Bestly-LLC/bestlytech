@@ -179,6 +179,18 @@ class Research(unittest.TestCase):
         self.assertFalse(R.hook_ok("I noticed you clean casinos in Reno.", "clean casinos in Reno", page))
         self.assertFalse(R.hook_ok("I saw you replaced the roof.", "We clean schools and clinics", page))
 
+    def test_hook_must_speak_to_the_reader(self):
+        page = "Capitol Cleaning has provided commercial cleaning in Oklahoma City for over 30 years."
+        self.assertFalse(R.hook_ok("I noticed that Capitol Cleaning has been providing commercial cleaning in Oklahoma City.", "commercial cleaning in Oklahoma City for over 30 years", page))
+        self.assertTrue(R.hook_ok("I noticed you have provided commercial cleaning in Oklahoma City for over 30 years.", "commercial cleaning in Oklahoma City for over 30 years", page))
+
+    def test_near_duplicate_company_names_count_as_known(self):
+        known = {"reliablemaintenance", "kunzjanitorial"}
+        self.assertTrue(R.name_known("reliablemaintenancecompany", known))
+        self.assertTrue(R.name_known("kunzjanitorial", known))
+        self.assertFalse(R.name_known("capitolcleaning", known))
+        self.assertFalse(R.name_known("reliabledrains", known))
+
     def test_metros_rotate_and_stay_in_region(self):
         for d in range(0, 40):
             for m in R.metros_for(date.fromordinal(date(2026, 10, 1).toordinal() + d)):

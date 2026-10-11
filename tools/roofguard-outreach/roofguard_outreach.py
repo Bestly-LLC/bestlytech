@@ -446,6 +446,8 @@ def hook_ok(hook, quote, page_text):
     """The first-line hook must be a short plain sentence whose proper nouns and numbers all appear on their page, anchored by a verbatim quote."""
     if not hook or not quote or len(hook) > 220 or len(quote) < 12 or quote not in page_text:
         return False
+    if not re.search(r"\b(you|your)\b", hook, re.I):  # written to them, not about them in the third person
+        return False
     if violations("", hook + "\n" + FOOTER):
         return False
     for tok in re.findall(r"\b[A-Z][a-zA-Z&']{2,}\b|\b\d[\d,.\-]*\b", hook)[1:]:
@@ -509,6 +511,14 @@ def call_score(lead):
     return s
 
 
+def name_known(key, known_names):
+    """True if this company name is, or is nearly, one already in the ledger (e.g. "Reliable Maintenance" vs "Reliable Maintenance Company")."""
+    for k in known_names:
+        if k == key or (len(k) >= 8 and len(key) >= 8 and (key.startswith(k) or k.startswith(key))):
+            return True
+    return False
+
+
 def find_leads(today, want, known_domains, known_names, mail_seen, deadline, log):
     """-> (leads, stats). Stops as soon as `want` emailable leads are found (plus a few phone-only ones)."""
     stats = {"searches": 0, "search_fail": 0, "pages": 0, "checked": 0, "skipped_known": 0, "no_fit": 0, "no_email": 0}
@@ -552,7 +562,7 @@ def find_leads(today, want, known_domains, known_names, mail_seen, deadline, log
                         stats["no_fit"] += 1
                         continue
                     key = re.sub(r"[^a-z0-9]", "", lead["company"].lower())
-                    if not key or key in known_names or dom in known_domains:
+                    if not key or dom in known_domains or name_known(key, known_names):
                         stats["skipped_known"] += 1
                         continue
                     # earlier contact whose ledger record was lost: any mail to or from this domain at all means "do not start a new loop"
