@@ -195,6 +195,31 @@ function watchClose(el: HTMLElement, onClose: () => void) {
   }, 125);
 }
 
+/**
+ * Diagnostics: send the exact reason Leo fails on a real device (CSP block or the widget's own error line) to
+ * trip-voice op "diag" -> leo_client_diag. Host devices are never tracked as guests, so without this an iPhone
+ * failure leaves no trace (Jared, 2026-10-11).
+ */
+function reportProblems(el: HTMLElement, token: string): () => void {
+  const sent = new Set<string>();
+  const send = (kind: string, detail: Record<string, string>) => {
+    const k = kind + JSON.stringify(detail);
+    if (sent.has(k) || sent.size > 8) return;
+    sent.add(k);
+    void supabase.functions.invoke("trip-voice", { body: { op: "diag", token, kind, detail } }).catch(() => {});
+  };
+  const onCsp = (e: SecurityPolicyViolationEvent) =>
+    send("csp", { blocked: String(e.blockedURI), directive: e.effectiveDirective, source: `${e.sourceFile}:${e.lineNumber}`, msg: e.sample });
+  document.addEventListener("securitypolicyviolation", onCsp);
+  const t = window.setInterval(() => {
+    const txt = el.shadowRoot?.textContent ?? "";
+    const i = txt.indexOf("An error occurred");
+    if (i >= 0) send("widget", { msg: txt.slice(i, i + 300).replace(/\s+/g, " ") });
+  }, 700);
+  const stop = window.setTimeout(() => window.clearInterval(t), 120_000);
+  return () => { document.removeEventListener("securitypolicyviolation", onCsp); window.clearInterval(t); window.clearTimeout(stop); };
+}
+
 /** Render at the top of <body>: trip pages fade their own content while a sheet is open, and that must not reach Leo. */
 const top = (n: ReactNode) => (typeof document === "undefined" ? n : createPortal(n, document.body));
 
@@ -237,7 +262,7 @@ export function LeoWidget({ token, context, home, onClose }: { token: string; co
   const theme = THEME[home ? "home" : "lax"];
   return top(
     <Convai
-      ref={(el: HTMLElement | null) => { if (el && !el.dataset.called) { el.dataset.called = "1"; autoCall(el, mode); watchClose(el, onClose); } }}
+      ref={(el: HTMLElement | null) => { if (el && !el.dataset.called) { el.dataset.called = "1"; autoCall(el, mode); watchClose(el, onClose); reportProblems(el, token); } }}
       style={theme.vars}
       signed-url={s.url}
       dynamic-variables={JSON.stringify({ trip_key: s.key })}
