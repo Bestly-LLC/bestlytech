@@ -165,18 +165,21 @@ def llm_json(system, user):
         have = set()
     models = [m for m in LLM_MODELS if m in have] or LLM_MODELS
     last = None
-    for m in models:
-        try:
-            j = http(base + "/v1/chat/completions", {"model": m, "temperature": 0, "max_tokens": 1800,
-                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}, hdr, timeout=60)
-            txt = j["choices"][0]["message"]["content"]
-            a, b = txt.find("{"), txt.rfind("}")
-            if a < 0 or b <= a:
-                raise ValueError("no JSON in reply")
-            return json.loads(txt[a:b + 1])
-        except Exception as e:
-            last = e
-            log("llm", m, "failed:", str(e)[:160])
+    for attempt in range(2):
+        for m in models:
+            try:
+                j = http(base + "/v1/chat/completions", {"model": m, "temperature": 0, "max_tokens": 1800,
+                         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}, hdr, timeout=60)
+                txt = j["choices"][0]["message"]["content"]
+                x, y = txt.find("{"), txt.rfind("}")
+                if x < 0 or y <= x:
+                    raise ValueError("no JSON in reply")
+                return json.loads(txt[x:y + 1])
+            except Exception as e:
+                last = e
+                log("llm", m, "failed:", str(e)[:160])
+        if attempt == 0:
+            time.sleep(25)     # the free tier is often rate-limited for a minute; try the ladder once more
     raise RuntimeError("all free models failed: %s" % last)
 
 
@@ -577,7 +580,8 @@ def map_field(f, V, intended, st):
 
 
 LLM_SYSTEM = (
-    "You help fill ONE class action settlement claim form for one person. You never invent facts and never write free text. "
+    "You help fill ONE class action settlement claim form for one person. The person has already personally confirmed that they are a member "
+    "of the settlement class described in class_definition (that confirmation is what authorizes this filing). You never invent facts and never write free text. "
     "For each unknown field choose exactly one answer:\n"
     "- {\"id\":N,\"source\":\"profile.<key>\"} where key is one of full_name, first, last, email, phone, street, unit, city, state, zip, country "
     "(only when the field clearly asks for exactly that).\n"
