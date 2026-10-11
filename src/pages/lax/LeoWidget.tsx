@@ -14,6 +14,10 @@
 import { useEffect, useState } from "react";
 import { Loader2, Maximize2, MessageCircle, Phone } from "lucide-react";
 import type { TripContext } from "./AskSheet";
+import { installAudioRescue } from "./audioRescue";
+
+// Before the SDK can load: track its audio contexts so a stuck (silent) one resumes on the next tap. See audioRescue.ts.
+installAudioRescue();
 
 /** Leo's opening line: says who he is, then offers the two things that fit this moment of the trip. */
 export function leoGreeting(ctx: TripContext | undefined, home: boolean): string {
@@ -129,11 +133,10 @@ export function LeoMiniPill({ theme, mini, floating = false }: { theme: LeoTheme
   );
 }
 
-/** Import the voice SDK early (idle, about 2 seconds after the trip page opens) so the guest's first tap unlocks audio. */
+/** Import the voice SDK as soon as the trip page opens, so its iPhone audio unlock is armed before the guest's first tap.
+ * (It used to wait 2 to 6 seconds; a quick tap on Call Leo beat it and the call was silent.) */
 let sdk: Promise<typeof import("@elevenlabs/client")> | null = null;
 export function loadLeoSdk() { return (sdk ??= import("@elevenlabs/client")); }
 export function preloadLeo() {
-  const go = () => { void loadLeoSdk().catch(() => { sdk = null; }); };
-  const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
-  window.setTimeout(() => (w.requestIdleCallback ? w.requestIdleCallback(go, { timeout: 4000 }) : go()), 2000);
+  void loadLeoSdk().catch(() => { sdk = null; });
 }
