@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { KeyRound, Loader2, ShieldAlert, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
+import { setDemoLocked } from "./demoState";
 
 const ACCENT = "var(--trip-accent)";
 const VERSION = "2026-09-24-valet";
@@ -54,7 +55,7 @@ export function UnlockStart({ token, demo }: { token?: string; demo?: boolean })
     if (active) return;
     setBusy(true); setMsg(null); setClosed(false);
     try {
-      if (demo) { await new Promise((r) => setTimeout(r, 1500)); startWindow(); return; }
+      if (demo) { await new Promise((r) => setTimeout(r, 1500)); setDemoLocked(false); startWindow(); return; }
       const { data } = await rpc("trip_unlock_start", { p_token: token });
       const r = data as { ok: boolean; id?: number; error?: string } | null;
       if (!r?.ok || !r.id) { setMsg(r?.error ?? "Couldn't reach the car."); return; }

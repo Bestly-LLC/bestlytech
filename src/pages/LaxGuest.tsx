@@ -38,7 +38,10 @@ import { PhoneHandoff } from "./lax/PhoneHandoff";
 import { HostPanel } from "./lax/HostPanel";
 import { UnlockStart } from "./lax/Valet";
 import { renderPassImage } from "./lax/passImage";
-import { DemoBar, demoKind, demoPass, demoPub, isDemo, useDemoStage, useDemoWeather, useRealDemoKey } from "./lax/demo";
+import { DemoBar, STAGES, demoKind, demoPass, demoPub, isDemo, useDemoOpenLoader, useDemoStage, useDemoWeather, useRealDemoKey } from "./lax/demo";
+import { applyLeoCar, clearDemoInside, setDemoLocked, subscribeDemo, useDemoOpen } from "./lax/demoState";
+import { sharedPageAction, tellLeo, useLeoCar, useLeoPage } from "./lax/leoBridge";
+import { CHARGERS } from "./lax/places";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
 type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; find_hold?: boolean; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; trip_changed_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
@@ -156,6 +159,16 @@ function Step({ n, when, title, children }: { n: number; when: string; title: Re
   );
 }
 
+/** What Leo is told when the guest taps a car button on the page: [what they tapped, how it went]. */
+const TAP_SAID: Partial<Record<CarAction, [string, string]>> = {
+  cool: ["Cool it down (A/C to 68°F)", "the A/C is on for 20 minutes"],
+  warm: ["Warm it up (heat to 74°F)", "the heat is on for 20 minutes"],
+  seat: ["Heated seat", "the driver seat heater is on"],
+  off: ["Turn off (climate)", "the climate is off"],
+  honk: ["Honk", "the horn honked"], flash: ["Flash", "the lights flashed"],
+  lock: ["Lock", "the car is locked"], unlock: ["Unlock", "the car is unlocked"],
+};
+
 export default function LaxGuest() {
   const { slug = "", token = "" } = useParams();
   const [pub, setPub] = useState<Pub | null>(null);
@@ -169,6 +182,11 @@ export default function LaxGuest() {
   const stageRef = useRef(stage); stageRef.current = stage;
   // Host only: a real Tesla key on the demo (null for everyone else).
   useRealDemoKey(demo, () => setPub(demoPub(dKind, stageRef.current) as Pub));
+  // "Open demo" (no restrictions for a few days) and the shared pretend car: Leo's tools and the page buttons write the same
+  // demoState, and any change there rebuilds the fake page data so the car card, A/C buttons and lock state follow.
+  useDemoOpenLoader(demo);
+  const demoOpen = useDemoOpen().open;
+  useEffect(() => (demo ? subscribeDemo(() => setPub(demoPub(dKind, stageRef.current) as Pub)) : undefined), [demo, dKind]);
   // Errors on guests' phones go to the trip-apps health board (max 3 per visit; never from the host).
   useEffect(() => {
     let n = 0;
@@ -275,7 +293,7 @@ export default function LaxGuest() {
     return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", f); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, slug]);
-  const carCommand = async (action: CarAction, onStage?: (s: string) => void) => {
+  const carCommandRaw = async (action: CarAction, onStage?: (s: string) => void) => {
     if (demo) {
       // Host on the demo page (signed in, or the host link's pass): the A/C buttons drive Blue Steel for real, unless a
       // guest has it. Everyone else gets the pretend version (the server answers null for them).
@@ -297,7 +315,10 @@ export default function LaxGuest() {
           throw new Error("The car is taking a while. Try again in a minute.");
         }
       }
-      onStage?.("Demo: nothing is sent to the car"); await new Promise((r) => setTimeout(r, 1200)); return;
+      onStage?.("Demo: nothing is sent to the car"); await new Promise((r) => setTimeout(r, 1200));
+      if (action === "lock") setDemoLocked(true);
+      if (action === "unlock") setDemoLocked(false);
+      return;
     }
     // Supercharger: the one closest to where the car is now (falls back to the fixed nearby one if Tesla can't list sites).
     if (token && (action === "nav_charger" || action === "nav_charger_lax")) {
@@ -332,6 +353,12 @@ export default function LaxGuest() {
     }
     throw new Error("The car is taking a while. Try again in a minute.");
   };
+  // Every car button on the page goes through here, so Leo (if he is open) hears what the guest tapped and stays in step.
+  const carCommand = async (action: CarAction, onStage?: (s: string) => void) => {
+    const said = TAP_SAID[action];
+    try { await carCommandRaw(action, onStage); if (said) tellLeo(said[0], said[1]); }
+    catch (e) { if (said) tellLeo(said[0], `it failed. ${(e as Error)?.message ?? ""}`.trim()); throw e; }
+  };
   // Controls open but no fresh reading yet: ask for one (never wakes the car).
   const refreshed = useRef(false);
   useEffect(() => {
@@ -361,7 +388,7 @@ export default function LaxGuest() {
   const wxCar = demoCar ? demoState : pub?.car ?? null;
   const showWx = !wxCar || !!(wxCar.climate_until && +new Date(wxCar.climate_until) > Date.now()) || climateNeed(wxCar.inside_f, demo ? wxCar.outside_f : outsideF ?? wxCar.outside_f) !== "comfy";
   // "Set Up" done at the car (the car unlocked/moved by itself after the key was accepted), or 45 min into the trip.
-  const carConnected = !!pub?.car_connected_at || (!!pub?.trip && Date.now() > +new Date(pub.trip.starts_at) + 45 * 60e3);
+  const carConnected = !demoOpen && (!!pub?.car_connected_at || (!!pub?.trip && Date.now() > +new Date(pub.trip.starts_at) + 45 * 60e3));
   // Lobby QR (Jared's rule): OPEN from booking until the phone key is set up at the car (they tapped "Set Up" and
   // the Bluetooth key connected, i.e. they're past the lobby). Then it folds, still one tap away. Gone after the trip.
   // The page decides open/closed (not a remembered tap), so it always matches where the guest is.
@@ -403,6 +430,40 @@ export default function LaxGuest() {
     } finally { setSaving(false); }
   };
 
+  // ---- Leo controls the page (leo:page) and the page follows what Leo does to the car (leo:car). See lax/leoBridge.ts. ----
+  const isHomePage = !!token && !!pub?.ok && pub.kind === "home"; // HomeGuest answers the page actions there; the demo ones live here
+  useLeoPage((action, value) => {
+    if (action === "demo_stage") {
+      if (!demo) return { say: "That's only on the demo page.", stay: true };
+      const list = STAGES[dKind];
+      const v = (value ?? "").trim().toLowerCase();
+      const hit = list.find((x) => x.id === v) ?? list.find((x) => x.label.toLowerCase() === v) ?? list.find((x) => v.length > 2 && x.label.toLowerCase().includes(v));
+      if (!hit) return { say: `I don't know that stage. The stages are: ${list.map((x) => x.id).join(", ")}.`, stay: true };
+      setStage(hit.id);
+      return { say: `Switched the demo to: ${hit.label}.`, stay: true };
+    }
+    if (action === "demo_weather") {
+      if (!demo) return { say: "That's only on the demo page.", stay: true };
+      const v = (value ?? "").trim().toLowerCase();
+      if (v !== "hot" && v !== "cold" && v !== "nice") return { say: "Weather can be hot, cold or nice.", stay: true };
+      setWeather(v); clearDemoInside(); setPub(demoPub(dKind, stageRef.current) as Pub);
+      return { say: `Set the demo weather to ${v}.`, stay: true };
+    }
+    if (isHomePage) return undefined;
+    return sharedPageAction(action, {
+      openSheet,
+      qr: ended || qrPhase === "done" ? "done" : pub?.ready ? "ready" : "soon",
+      next: guide.next, doNext,
+      hasClimate: () => !!document.getElementById("climate"),
+      send: live ? async () => { await carCommand(CHARGERS.lax.action as CarAction); return "sent the nearest Supercharger to the car's navigation."; } : undefined,
+    }, value) ?? { say: "I can't do that on this page.", stay: true };
+  });
+  useLeoCar((r) => {
+    if (demo) { applyLeoCar(r); return; }
+    // Real trip: Leo just changed the car, so read the page data again now and once more when the car has had time to report.
+    void reload(); window.setTimeout(() => void reload(), 5000);
+  });
+
   const shadow = { textShadow: "0 2px 12px rgba(26,17,64,0.85), 0 1px 2px rgba(26,17,64,0.9)" };
 
   // Home pickup: while loading, show the Hollywood-hills loader if we know it's a home trip (matches trip.html's splash).
@@ -415,7 +476,7 @@ export default function LaxGuest() {
   // Home pickup (733 N Kings Rd): same page system, home look. No QR code, shuttle or garage.
   if (token && pub?.ok && pub.kind === "home") return <>
     <HomeGuest pub={pub} token={token} run={carCommand} demo={demoParam} demoPage={demo} reload={reload} />
-    {demo && <DemoBar kind="home" stage={stage} onStage={setStage} weather={weather} onWeather={(w) => { setWeather(w); setPub(demoPub(dKind, stageRef.current) as Pub); }} />}
+    {demo && <DemoBar kind="home" stage={stage} onStage={setStage} weather={weather} onWeather={(w) => { setWeather(w); clearDemoInside(); setPub(demoPub(dKind, stageRef.current) as Pub); }} />}
   </>;
 
   return (
@@ -438,7 +499,7 @@ export default function LaxGuest() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-md px-5 pb-48 pt-5">
+      <main className={`mx-auto max-w-md px-5 ${token ? "pb-64" : "pb-48"} pt-5`}>
         <HostPanel token={token || undefined} />
         {!pub ? (
           <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-white/60" /></div>
@@ -542,13 +603,13 @@ export default function LaxGuest() {
               <RangeCheck rc={pub.range_check} kind="lax" className="mt-3" warnOnly />
             </ChargingCard>}
 
-            <HomeGuide pickupBattery={pub.pickup_battery} kind="lax" valet={token ? (demo ? (key?.state === "added" ? <UnlockStart demo /> : null) : <UnlockStart token={token} />) : null}>
+            <HomeGuide pickupBattery={pub.pickup_battery} kind="lax" valet={token ? (demo ? (key?.state === "added" || demoOpen ? <UnlockStart demo /> : null) : <UnlockStart token={token} />) : null}>
               {token && pub.kind === "lax" && key && (
                 <Fold icon={Users} title="Someone else driving?" sub="Add them in Turo first, then get their key here">
                   <ExtraDrivers token={token} embedded />
                 </Fold>
               )}
-              <Fold icon={PlayCircle} title="How-to videos" sub="2-minute videos from Tesla">
+              <Fold id="guide-videos" icon={PlayCircle} title="How-to videos" sub="2-minute videos from Tesla">
                 <VideoList />
               </Fold>
               {token && pub.trip && new Date(pub.trip.starts_at) > new Date() && (
@@ -679,11 +740,11 @@ export default function LaxGuest() {
               )}
             
             </TripSheet>
-            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} hideTags={ended} only={tripTab(pub?.trip, ended, pub?.car_connected_at, pub?.key?.state)}
+            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton leo={!!token} active={sheet === "ask"} onOpen={() => openSheet("ask")} />} hidePickup={!!token} hideTags={ended} only={tripTab(pub?.trip, ended, pub?.car_connected_at, pub?.key?.state)}
               glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
-            {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} weather={weather} onWeather={(w) => { setWeather(w); setPub(demoPub(dKind, stageRef.current) as Pub); }} />}
+            {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} weather={weather} onWeather={(w) => { setWeather(w); clearDemoInside(); setPub(demoPub(dKind, stageRef.current) as Pub); }} />}
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug}
-              context={{ stage: tripTab(pub?.trip, ended, pub?.car_connected_at, key?.state ?? pub?.key?.state), keyState: key?.state ?? pub?.key?.state }} />
+              context={{ stage: tripTab(pub?.trip, ended, pub?.car_connected_at, key?.state ?? pub?.key?.state), keyState: key?.state ?? pub?.key?.state, keyLink: key?.link ?? pub?.key?.link ?? null }} />
             {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
             {token && !ended && <InstallToast token={token} kind="lax" />}
             {token && !ended && <PhoneHandoff token={token} keyReady={!!key && ["ready", "making"].includes(key.state)} />}

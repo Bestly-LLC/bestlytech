@@ -11,7 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
 import { track } from "./track";
 import { Lines } from "./Lines";
-import { LeoWidget, preloadLeo } from "./LeoWidget";
+import { LeoBar, preloadLeo } from "./LeoWidget";
+import { LeoScreen } from "./LeoScreen";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 type Msg = { id: number | string; role: "user" | "assistant"; content: string; status?: string };
@@ -113,8 +114,13 @@ function Chips({ list, onPick, disabled }: { list: string[]; onPick: (s: string)
   );
 }
 
-/** Slim button in the bottom bar, above the Pickup / Return tags. */
-export function AskButton({ onOpen }: { onOpen: () => void }) {
+/**
+ * The helper in the bottom bar, above the Pickup / Return tags. Trip links with Leo get the docked Leo bar
+ * (`leo`; `active` while the widget is open keeps its space without showing it twice); driver pages and the
+ * token-less /lax page keep the slim text-helper button.
+ */
+export function AskButton({ onOpen, leo = false, home = false, active = false }: { onOpen: () => void; leo?: boolean; home?: boolean; active?: boolean }) {
+  if (leo) return <LeoBar home={home} hidden={active} onOpen={onOpen} />;
   return (
     <button type="button" onClick={onOpen}
       className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white/[0.08] text-[15px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98] motion-reduce:transition-none">
@@ -375,14 +381,18 @@ function Dots() {
 
 const DRIVER_CHIPS = ["My key link doesn't work", "I accepted, but the car isn't in my Tesla app", "How do I unlock the car?", "Where is the car?"];
 /** The trip's stage and key state, so Leo can open with what fits (see leoGreeting in LeoWidget). */
-export type TripContext = { stage: "pickup" | "return" | null; keyState?: string | null };
+export type TripContext = { stage: "pickup" | "return" | null; keyState?: string | null; keyLink?: string | null };
 
 export function AskSheet({ open, onClose, token, slug, home = false, driver = false, context }: { open: boolean; onClose: () => void; token?: string; slug?: string; home?: boolean; driver?: boolean; context?: TripContext }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
-  // Leo (official ElevenLabs widget) is the helper on personal trip links and demo pages; driver pages and the
-  // token-less /lax page keep this text helper, since Leo's tools need a trip.
+  // Leo (full-screen LeoScreen) is the helper on personal trip links and demo pages; driver pages and the token-less
+  // /lax page keep this text helper, since Leo's tools need a trip. Once opened, Leo stays mounted until the guest
+  // closes him: when he hands off to the page's pickup / return sheet (which closes this sheet), the call keeps going
+  // and he shrinks to a pill at the top.
   const leo = !!token && !driver;
   useEffect(() => { if (leo) preloadLeo(); }, [leo]);
+  const [leoOn, setLeoOn] = useState(false);
+  useEffect(() => { if (leo && open) setLeoOn(true); }, [leo, open]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState<number | null>(null);
@@ -482,7 +492,9 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
     return null;
   })();
 
-  if (leo) return open && token ? <LeoWidget token={token} context={context} home={home} onClose={onClose} /> : null;
+  if (leo) return leoOn && token
+    ? <LeoScreen token={token} context={context} home={home} pageOpen={open} onEnd={() => { setLeoOn(false); if (open) onClose(); }} />
+    : null;
 
   return (
     <TripSheet open={open} onClose={onClose} kicker="Trip helper" title="Talk to our team 24/7" footer={footer} bodyRef={body}>

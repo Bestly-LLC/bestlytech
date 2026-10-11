@@ -8,6 +8,7 @@ import { Armchair, ArrowRight, BatteryMedium, Car, CheckCircle2, Cloud, CloudDri
 import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
+import { setDemoClimate } from "./demoState";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 const LA = "America/Los_Angeles";
@@ -569,6 +570,8 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car, ou
   const [stage, setStage] = useState<string | null>(null);
   const [secs, setSecs] = useState(0);
   // Demo: pretend the car turned on, so the countdown can be previewed.
+  // On /t/demo-* the pretend car is shared with Leo (demoState.ts) and arrives in the car prop, so there is no local copy.
+  const sharedDemo = demo && typeof window !== "undefined" && /\/t\/demo-/.test(window.location.pathname);
   const [demoOn, setDemoOn] = useState<{ mode: string; until: string } | null>(null);
   useEffect(() => {
     if (!busy) return;
@@ -577,7 +580,7 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car, ou
     return () => window.clearInterval(t);
   }, [busy]);
   const now = useNow(true);
-  const session = demoOn ?? (car?.climate_until && car.climate_mode ? { mode: car.climate_mode, until: car.climate_until } : null);
+  const session = (sharedDemo ? null : demoOn) ?? (car?.climate_until && car.climate_mode ? { mode: car.climate_mode, until: car.climate_until } : null);
   const shownFor = useRef<string | null>(null); // a session we've already shown as ended never comes back
   const running = session && +new Date(session.until) > now && shownFor.current !== session.until ? session : null;
   // After "off" (or the 20-minute auto-off), keep the panel up for a few seconds: fan winds down, timer freezes.
@@ -606,7 +609,10 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car, ou
       // The demo page passes onAction too: for the host it drives the real car, for everyone else it pretends.
       if (onAction) await onAction(id, setStage);
       else await new Promise((r) => setTimeout(r, 900));
-      if (demo) setDemoOn(id === "off" ? null : { mode: id, until: new Date(Date.now() + CLIMATE_MINUTES * 60000).toISOString() });
+      if (demo) {
+        if (sharedDemo) setDemoClimate(id);
+        else setDemoOn(id === "off" ? null : { mode: id, until: new Date(Date.now() + CLIMATE_MINUTES * 60000).toISOString() });
+      }
       if (id === "off" && was) { shownFor.current = was.until; setStopped({ ...was, at: Date.now(), auto: false }); lastSession.current = null; }
       setDone(id === "off" ? "Climate is off." : null);
     } catch (e) {
@@ -684,6 +690,9 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false, l
               <p className="mt-1 flex items-center gap-1.5 text-[13px] text-white/80"><BatteryMedium className="h-4 w-4 shrink-0 text-emerald-300" /><b className="text-white">{car.battery}%</b>{car.range != null && <span className="whitespace-nowrap">· {Math.round(car.range)} mi</span>}</p>
             )}
             <p className="mt-1 text-[11px] text-white/65">{asleep ? "Parked · " : ""}Updated {ago(car.observed_at)}</p>
+            {demo && car.locked != null && (
+              <p className="mt-1 flex items-center gap-1.5 text-[12px] font-medium text-white/80">{car.locked ? <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden /> : <LockOpen className="h-3.5 w-3.5 shrink-0" aria-hidden />}<span className="whitespace-nowrap">{car.locked ? "Locked" : "Unlocked"}</span></p>
+            )}
           </>
         ) : (
           <p className="mt-1.5 text-[13px] leading-snug text-white/70">{onClimate ? "Parked and asleep. Tap a button and it wakes up." : "Car info isn't available right now."}</p>

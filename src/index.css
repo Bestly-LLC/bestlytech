@@ -1141,3 +1141,17 @@ body.admin-bento { background-color: var(--bento-page); }
 @keyframes trip-key-in { 0% { opacity: 0; transform: translateY(10px) scale(.6); } 100% { opacity: 1; transform: none; } }
 .trip-key-float { animation: trip-key-in 420ms cubic-bezier(.2,.9,.3,1.2) both, trip-key-float 2.6s ease-in-out 420ms infinite; }
 @media (prefers-reduced-motion: reduce) { .trip-key-float { animation: none; } }
+
+/* Leo (trip pages, 2026-10-11): while Leo's widget is open, the bottom dock steps aside so the widget's own
+   controls never sit on top of the Pickup / Return tags. Comes back the moment Leo closes. */
+nav[aria-label="Trip steps"] { transition: transform 260ms cubic-bezier(.2,.8,.2,1), opacity 200ms ease-out; }
+body.leo-open nav[aria-label="Trip steps"] { transform: translateY(105%); opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  nav[aria-label="Trip steps"] { transition: opacity 150ms linear; }
+  body.leo-open nav[aria-label="Trip steps"] { transform: none; }
+}
+
+/* Leo's orb while he talks: a slow breathe and spin. Still for Reduce Motion. */
+@keyframes leo-orb-breathe { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.08) rotate(180deg); } }
+.leo-orb-live { animation: leo-orb-breathe 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .leo-orb-live { animation: none; } }

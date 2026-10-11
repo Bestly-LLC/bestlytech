@@ -88,8 +88,10 @@ function Row({ l, act, onGo }: { l: Light; act: { label: string; run: () => void
   );
 }
 
-export function AgentLights({ agent, spend, coach, onOpenSettings, onOpenCoach }:
-  { agent: AgentInfo; spend: AgentSpend | null; coach: CoachData | null; onOpenSettings: () => void; onOpenCoach: () => void }) {
+export function AgentLights({ agent, spend, coach, onOpenSettings, onOpenCoach, cell = false, className }:
+  { agent: AgentInfo; spend: AgentSpend | null; coach: CoachData | null; onOpenSettings: () => void; onOpenCoach: () => void;
+    /** Render as a full-width cell of the AgentDesk glance card (label over value) instead of a standalone pill. */
+    cell?: boolean; className?: string }) {
   const mobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const lights = useMemo(() => agentLights(agent, spend, coach), [agent, spend, coach]);
@@ -101,13 +103,26 @@ export function AgentLights({ agent, spend, coach, onOpenSettings, onOpenCoach }
     if (l.key === "spend" || l.key === "calls" || (l.key === "line" && l.state !== "ok")) return { label: "Settings", run: onOpenSettings };
     return null;
   };
-  const pillCls = cn("inline-flex min-h-[44px] items-center gap-2.5 rounded-2xl px-3.5 ring-1 transition-colors motion-reduce:transition-none", ring,
-    sum.tone === "down" ? "bg-red-500/10 ring-red-500/35 hover:bg-red-500/15" : sum.tone === "warn" ? "bg-amber-500/10 ring-amber-500/30 hover:bg-amber-500/15" : "bg-white/[0.04] ring-white/10 hover:bg-white/[0.07]");
+  const toneBg = sum.tone === "down" ? "bg-red-500/10 hover:bg-red-500/15" : sum.tone === "warn" ? "bg-amber-500/10 hover:bg-amber-500/15" : "hover:bg-white/[0.04]";
+  const pillCls = cell
+    ? cn("flex min-h-[68px] w-full items-center gap-3 px-4 py-3 text-left transition-colors motion-reduce:transition-none", ring, toneBg, className)
+    : cn("inline-flex min-h-[44px] items-center gap-2.5 rounded-2xl px-3.5 ring-1 transition-colors motion-reduce:transition-none", ring,
+      sum.tone === "down" ? "bg-red-500/10 ring-red-500/35 hover:bg-red-500/15" : sum.tone === "warn" ? "bg-amber-500/10 ring-amber-500/30 hover:bg-amber-500/15" : "bg-white/[0.04] ring-white/10 hover:bg-white/[0.07]", className);
+  const wordCls = cn("whitespace-nowrap font-semibold", cell ? "text-[17px]" : "text-[15px]", sum.tone === "down" ? "text-red-200" : sum.tone === "warn" ? "text-amber-100" : sum.tone === "off" ? "text-white/70" : "text-white");
   const label = `${who} status: ${sum.word.replace(NB, " ")}. ${lights.length} checks, ${sum.ok} good${sum.warn ? `, ${sum.warn} needing a look` : ""}${sum.down ? `, ${sum.down} down` : ""}${sum.off ? `, ${sum.off} off` : ""}. Tap for details.`;
   const trigger = (
     <button type="button" aria-label={label} aria-haspopup="dialog" aria-expanded={open} className={pillCls} onClick={mobile ? () => setOpen(true) : undefined}>
-      <span className="flex items-center gap-1" aria-hidden>{lights.map((l) => <Dot key={l.key} state={l.state} />)}</span>
-      <span className={cn("whitespace-nowrap text-[15px] font-semibold", sum.tone === "down" ? "text-red-200" : sum.tone === "warn" ? "text-amber-100" : sum.tone === "off" ? "text-white/70" : "text-white")}>{sum.word}</span>
+      {cell ? (<>
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className="block text-[13px] text-white/50">Status</span>
+          <span className={cn("mt-0.5 block", wordCls)}>{sum.word}</span>
+        </span>
+        <span className="flex items-center gap-1" aria-hidden>{lights.map((l) => <Dot key={l.key} state={l.state} />)}</span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-white/30" aria-hidden />
+      </>) : (<>
+        <span className="flex items-center gap-1" aria-hidden>{lights.map((l) => <Dot key={l.key} state={l.state} />)}</span>
+        <span className={wordCls}>{sum.word}</span>
+      </>)}
     </button>
   );
   const list = <ul className="divide-y divide-white/10">{lights.map((l) => <Row key={l.key} l={l} act={actionFor(l)} onGo={go} />)}</ul>;

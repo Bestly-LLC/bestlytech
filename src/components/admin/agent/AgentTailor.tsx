@@ -1,5 +1,5 @@
 /**
- * "Tailor this agent": the last card on every AgentDesk. For anything the template can't do (a custom page, a new tool, a workflow),
+ * "Tailor this agent": the last row in Setup on every AgentDesk, collapsed by default (2026-10-11 cleanup). For anything the template can't do (a custom page, a new tool, a workflow),
  * type what you want and either copy a complete build prompt for Claude Code, or ask Scout to build it (paid AI, only when you tap).
  * Prompt-only changes (tone, script, knowledge) don't need code: the Prompt and Knowledge sections above do that for free.
  */
@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Binoculars, Check, Copy, Sparkles, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { askScout } from "@/components/admin/scoutBus";
-import { openSection } from "@/components/admin/roofguard/CollapsibleSection";
+import { CollapsibleSection, openSection } from "@/components/admin/roofguard/CollapsibleSection";
 import { PROMPT_NOTE, btnPrimary, btnQuiet, copyText, fieldCls, pendingPromptNote, type AgentInfo } from "./agentApi";
 
 export function buildPrompt(a: AgentInfo, request: string): string {
@@ -51,14 +51,15 @@ export function AgentTailor({ agent }: { agent: AgentInfo }) {
   };
   const id = `${agent.slug}-tailor`;
   return (
-    <section aria-labelledby={`${id}-h`} className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10">
-      <h3 id={`${id}-h`} className="flex items-center gap-2 text-[15px] font-semibold text-white"><Wand2 className="h-4 w-4 text-white/70" aria-hidden />Tailor this agent</h3>
-      <p className="mt-1 text-[13px] leading-snug text-white/60">
+    <CollapsibleSection id={id} anchorId={id} bodyClassName="p-4"
+      title="Tailor this agent" summary="Ask Claude for something the template can't do"
+      icon={<span className="grid h-8 w-8 place-items-center rounded-xl bg-white/10 text-white/80"><Wand2 className="h-4 w-4" aria-hidden /></span>}>
+      <p className="text-[13px] leading-snug text-white/60">
         The template covers calls, the Coach, voice, knowledge and the script. For anything it can't do, say what you want and hand it to Claude.
         Changing tone, script or what {agent.name} knows needs no code: "Try with free AI" drafts the change in Prompt for you to review, and Knowledge holds the facts.
       </p>
-      <label htmlFor={id} className="mt-4 block text-[13px] font-medium text-white">What should {agent.name} do that the template can't?</label>
-      <textarea id={id} value={text} onChange={(e) => setText(e.target.value)} rows={4} maxLength={2000}
+      <label htmlFor={`${id}-text`} className="mt-4 block text-[13px] font-medium text-white">What should {agent.name} do that the template can't?</label>
+      <textarea id={`${id}-text`} value={text} onChange={(e) => setText(e.target.value)} rows={4} maxLength={2000}
         placeholder="Example: look up a customer's order status from our database and read it out."
         className={cn(fieldCls, "mt-1 min-h-[112px] resize-y py-3 leading-snug")} />
       <div className="mt-3 flex flex-wrap gap-2">
@@ -69,6 +70,6 @@ export function AgentTailor({ agent }: { agent: AgentInfo }) {
         <button type="button" disabled={text.trim().length < 5} onClick={() => askScout(prompt, { about: `agent:${agent.slug}` })} className={btnQuiet}>
           <Binoculars className="h-4 w-4" aria-hidden />Ask Scout to build it (paid AI)</button>
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }

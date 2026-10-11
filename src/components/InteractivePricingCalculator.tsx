@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { ChevronDown } from "lucide-react";
 import { GradientText } from "@/components/ui/GradientText";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
 import { DeviceSavingsMini } from "@/components/cloud/DeviceSavingsMini";
+import { registerCalc, CALC_CHANGED, type CalcChange, type CalcResult } from "@/components/cloud/calcBridge";
 
 /**
  * InteractivePricingCalculator
@@ -90,6 +91,132 @@ const ON_DEMAND_CALL    = 149;  // self-hosted plan: pay-per-call support, charg
 // Month-to-month billing on typical SaaS runs ~20% over the annual-prepaid rate.
 const MONTHLY_BILLING_UPLIFT = 1.2;
 
+
+// ── Pure math (shared by the page and by Maya, so she quotes exactly what the page shows) ──
+type Billing = "annual" | "monthly";
+type Plan = "managed" | "selfhosted";
+
+function computeCalc(selected: Set<string>, users: number, billing: Billing, plan: Plan) {
+  const chosen = SERVICES.filter(s => selected.has(s.id));
+  const seatPerMonth = chosen.reduce((sum, s) => sum + (s.pricePerSeatMonth ?? 0), 0);
+  const flatPerMonth = chosen.reduce((sum, s) => sum + (s.flatMonth ?? 0), 0);
+
+  const uplift = billing === "monthly" ? MONTHLY_BILLING_UPLIFT : 1;
+  const stackMonthly   = (seatPerMonth * users + flatPerMonth) * uplift;
+  const stackPerSeatMonth = seatPerMonth * uplift;
+  const stackAnnual    = stackMonthly * 12;
+  const stackThreeYear = stackAnnual * 3;
+
+  const bestlyOneTime  = BESTLY_HARDWARE;
+  // Managed (lead plan): startup + flat monthly subscription, never per-seat.
+  // Self-hosted (fallback): startup only, $0/mo; pay-per-call help shown
+  // separately, never in the monthly math.
+  const bestlyMonthly  = plan === "managed" ? MANAGED_MONTHLY : 0;
+  const ownThreeYear    = bestlyOneTime + bestlyMonthly * AMORTIZE_MONTHS;
+  const ownMonthlyEquiv = ownThreeYear / AMORTIZE_MONTHS; // startup spread over 3 yrs + subscription
+  const bestlyMonthlyEquiv = ownMonthlyEquiv;
+
+  const savings = stackThreeYear - ownThreeYear;
+  const savingsPct = stackThreeYear > 0 ? Math.round((savings / stackThreeYear) * 100) : 0;
+  const monthlySaved = stackMonthly - ownMonthlyEquiv;
+
+  // ROI: the startup cost pays for itself out of what you stop renting
+  // (net of the Bestly subscription on the managed plan).
+  const netMonthly = stackMonthly - bestlyMonthly;
+  const paybackMonths = netMonthly > 0 ? Math.ceil(bestlyOneTime / netMonthly) : null;
+
+  // Team size at which owning beats renting (used for the small-team message).
+  const monthlyToolsPerUser = seatPerMonth * uplift;
+  const breakevenUsers = monthlyToolsPerUser > 0
+    ? Math.max(1, Math.ceil((ownMonthlyEquiv - flatPerMonth * uplift) / monthlyToolsPerUser))
+    : null;
+
+  return {
+    stackPerSeatMonth, stackMonthly, stackAnnual, stackThreeYear,
+    bestlyOneTime, bestlyMonthly, ownThreeYear, bestlyMonthlyEquiv,
+    savings, savingsPct, monthlySaved, paybackMonths, breakevenUsers,
+  };
+}
+
+/** What visitors call each tool. Matching is by these words first, then by the product name. */
+const APP_WORDS: Record<string, string[]> = {
+  gws: ["google workspace", "g suite", "gsuite", "gmail", "google docs", "google drive", "google"],
+  m365: ["microsoft 365", "office 365", "o365", "outlook", "microsoft office", "office", "word", "excel"],
+  zoho: ["zoho"],
+  zoom: ["zoom"],
+  slack: ["slack"],
+  teams: ["microsoft teams", "teams"],
+  drop: ["dropbox"],
+  box: ["box"],
+  "1pw": ["1password", "one password"],
+  lastpass: ["lastpass", "last pass"],
+  docusign: ["docusign", "docu sign"],
+  adobesign: ["adobe sign", "acrobat sign", "adobe acrobat"],
+  calendly: ["calendly"],
+  acuity: ["acuity"],
+  gpt: ["chatgpt", "chat gpt", "openai", "gpt"],
+  claude: ["claude", "anthropic"],
+  asana: ["asana"],
+  monday: ["monday"],
+  notion: ["notion"],
+  confluence: ["confluence"],
+  backblaze: ["backblaze"],
+  acronis: ["acronis"],
+  nordlayer: ["nordlayer", "nord vpn", "nordvpn", "vpn"],
+  tailscale: ["tailscale"],
+  dnsfilter: ["dnsfilter", "dns filter"],
+  cfzt: ["cloudflare"],
+  site: ["squarespace", "wix", "website", "web site", "web hosting", "hosting"],
+  webflow: ["webflow"],
+  domain: ["domain", "dns", "godaddy", "namecheap"],
+};
+
+function matchApps(names: string[] | undefined): { ids: string[]; unknown: string[] } {
+  const ids: string[] = [];
+  const unknown: string[] = [];
+  for (const raw of names ?? []) {
+    const n = raw.toLowerCase().replace(/\s+/g, " ").trim();
+    if (!n) continue;
+    // Longest phrase wins, so "microsoft teams" beats "microsoft 365" and "google docs" beats "google".
+    let best: { id: string; len: number } | null = null;
+    for (const [id, words] of Object.entries(APP_WORDS)) {
+      for (const w of words) {
+        const hit = n === w || n.includes(w) || (w.length > 4 && w.includes(n));
+        if (hit && (!best || w.length > best.len)) best = { id, len: w.length };
+      }
+    }
+    if (!best) {
+      const byName = SERVICES.find(s => s.name.toLowerCase().includes(n) || n.includes(s.name.toLowerCase()));
+      if (byName) best = { id: byName.id, len: 1 };
+    }
+    if (best) { if (!ids.includes(best.id)) ids.push(best.id); } else unknown.push(raw.trim());
+  }
+  return { ids, unknown };
+}
+
+const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+/** The calculator's state in one paragraph, every number exactly as the page shows it. */
+function describeCalc(selected: Set<string>, users: number, billing: Billing, plan: Plan, notCovered: string[] = []): CalcResult {
+  const c = computeCalc(selected, users, billing, plan);
+  const apps = SERVICES.filter(s => selected.has(s.id))
+    .map(s => `${s.name} (${s.flatMonth != null ? `$${s.flatMonth} a month` : `$${s.pricePerSeatMonth} a seat`})`);
+  const parts = [
+    `On screen: ${users} ${users === 1 ? "person" : "people"}, billed ${billing === "annual" ? "annually" : "monthly"}, ${plan === "managed" ? `Managed plan ($${MANAGED_MONTHLY} a month)` : "Self-hosted plan ($0 a month)"}.`,
+    apps.length ? `Apps checked: ${apps.join(", ")}.` : "No apps are checked yet.",
+    `Today they pay about ${money(c.stackMonthly)} a month, ${money(c.stackThreeYear)} over 3 years.`,
+    `Bestly Cloud: ${money(BESTLY_HARDWARE)} startup${c.bestlyMonthly ? ` plus ${money(c.bestlyMonthly)} a month` : ""}, ${money(c.ownThreeYear)} over 3 years.`,
+  ];
+  if (c.savings >= 0) {
+    parts.push(`3-year savings: ${money(c.savings)} (${c.savingsPct}% less), about ${money(Math.max(0, c.monthlySaved))} a month back.`);
+    if (c.paybackMonths != null && c.paybackMonths <= 36) parts.push(`The startup cost pays for itself in about ${c.paybackMonths} months, then they own it.`);
+  } else {
+    parts.push(`At this size their subscriptions cost less than Bestly Cloud over 3 years, so there are no savings yet.${c.breakevenUsers != null && c.breakevenUsers <= 50 ? ` Teams like this usually come out ahead around ${c.breakevenUsers}+ people.` : ""}`);
+  }
+  if (notCovered.length) parts.push(`Not in the calculator (Bestly Cloud does not replace these, so they are not counted): ${notCovered.join(", ")}.`);
+  return { say: parts.join(" "), notCovered };
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 export function InteractivePricingCalculator() {
   const [users, setUsers] = useState(12);
@@ -106,46 +233,74 @@ export function InteractivePricingCalculator() {
       return next;
     });
 
-  const calc = useMemo(() => {
-    const chosen = SERVICES.filter(s => selected.has(s.id));
-    const seatPerMonth = chosen.reduce((sum, s) => sum + (s.pricePerSeatMonth ?? 0), 0);
-    const flatPerMonth = chosen.reduce((sum, s) => sum + (s.flatMonth ?? 0), 0);
+  const calc = useMemo(() => computeCalc(selected, users, billing, plan), [selected, users, billing, plan]);
 
-    const uplift = billing === "monthly" ? MONTHLY_BILLING_UPLIFT : 1;
-    const stackMonthly   = (seatPerMonth * users + flatPerMonth) * uplift;
-    const stackPerSeatMonth = seatPerMonth * uplift;
-    const stackAnnual    = stackMonthly * 12;
-    const stackThreeYear = stackAnnual * 3;
+  // ── Maya can drive this calculator (calcBridge.ts) ─────────────────────────
+  const sectionRef = useRef<HTMLElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const live = useRef({ selected, users, billing, plan });
+  live.current = { selected, users, billing, plan };
+  const byMaya = useRef(false);
+  const slideRaf = useRef(0);
 
-    const bestlyOneTime  = BESTLY_HARDWARE;
-    // Managed (lead plan): startup + flat monthly subscription, never per-seat.
-    // Self-hosted (fallback): startup only, $0/mo; pay-per-call help shown
-    // separately, never in the monthly math.
-    const bestlyMonthly  = plan === "managed" ? MANAGED_MONTHLY : 0;
-    const ownThreeYear    = bestlyOneTime + bestlyMonthly * AMORTIZE_MONTHS;
-    const ownMonthlyEquiv = ownThreeYear / AMORTIZE_MONTHS; // startup spread over 3 yrs + subscription
-    const bestlyMonthlyEquiv = ownMonthlyEquiv;
+  useEffect(() => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // Move the slider the way a hand would, so the visitor sees it travel (not a jump).
+    const slideTo = (target: number) => new Promise<void>((resolve) => {
+      cancelAnimationFrame(slideRaf.current);
+      const from = live.current.users;
+      if (reduce || from === target) { setUsers(target); resolve(); return; }
+      const t0 = performance.now();
+      const dur = Math.min(1100, 250 + Math.abs(target - from) * 25);
+      const step = (now: number) => {
+        const k = Math.min(1, (now - t0) / dur);
+        const e = 1 - Math.pow(1 - k, 3);
+        setUsers(Math.round(from + (target - from) * e));
+        if (k < 1) slideRaf.current = requestAnimationFrame(step); else resolve();
+      };
+      slideRaf.current = requestAnimationFrame(step);
+    });
 
-    const savings = stackThreeYear - ownThreeYear;
-    const savingsPct = stackThreeYear > 0 ? Math.round((savings / stackThreeYear) * 100) : 0;
-    const monthlySaved = stackMonthly - ownMonthlyEquiv;
+    return registerCalc({
+      // The headline savings card (top of the results column): centering it keeps the slider in view too.
+      element: () => (resultRef.current?.firstElementChild as HTMLElement | null) ?? resultRef.current ?? sectionRef.current,
+      read: () => describeCalc(live.current.selected, live.current.users, live.current.billing, live.current.plan),
+      apply: async (change: CalcChange) => {
+        byMaya.current = true;
+        const notCovered: string[] = [];
+        let next = new Set(live.current.selected);
+        if (change.only) {
+          const m = matchApps(change.only);
+          notCovered.push(...m.unknown);
+          if (m.ids.length) next = new Set(m.ids);
+        }
+        if (change.add) { const m = matchApps(change.add); notCovered.push(...m.unknown); m.ids.forEach(id => next.add(id)); }
+        if (change.remove) { const m = matchApps(change.remove); m.ids.forEach(id => next.delete(id)); }
+        const nextUsers = change.teamSize ? Math.max(1, Math.min(50, Math.round(change.teamSize))) : live.current.users;
+        const nextBilling = change.billing ?? live.current.billing;
+        const nextPlan = change.plan ?? live.current.plan;
+        if (nextPlan === "selfhosted") setShowMorePlans(true);
+        setSelected(next);
+        setBilling(nextBilling);
+        setPlan(nextPlan);
+        await slideTo(nextUsers);
+        setTimeout(() => { byMaya.current = false; }, 400);
+        const r = describeCalc(next, nextUsers, nextBilling, nextPlan, notCovered);
+        if (change.teamSize && change.teamSize > 50) {
+          r.say += " The calculator stops at 50 people; one Bestly Cloud server covers up to 50, so bigger teams get a custom quote on a call.";
+        }
+        return r;
+      },
+    });
+  }, []);
 
-    // ROI: the startup cost pays for itself out of what you stop renting
-    // (net of the Bestly subscription on the managed plan).
-    const netMonthly = stackMonthly - bestlyMonthly;
-    const paybackMonths = netMonthly > 0 ? Math.ceil(bestlyOneTime / netMonthly) : null;
-
-    // Team size at which owning beats renting (used for the small-team message).
-    const monthlyToolsPerUser = seatPerMonth * uplift;
-    const breakevenUsers = monthlyToolsPerUser > 0
-      ? Math.max(1, Math.ceil((ownMonthlyEquiv - flatPerMonth * uplift) / monthlyToolsPerUser))
-      : null;
-
-    return {
-      stackPerSeatMonth, stackMonthly, stackAnnual, stackThreeYear,
-      bestlyOneTime, bestlyMonthly, ownThreeYear, bestlyMonthlyEquiv,
-      savings, savingsPct, monthlySaved, paybackMonths, breakevenUsers,
-    };
+  // The visitor changed it by hand: tell Maya (debounced), so she keeps up.
+  useEffect(() => {
+    if (byMaya.current) return;
+    const t = setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(CALC_CHANGED, { detail: describeCalc(selected, users, billing, plan).say }));
+    }, 1200);
+    return () => clearTimeout(t);
   }, [selected, users, billing, plan]);
 
   const fmt = (n: number) =>
@@ -160,7 +315,7 @@ export function InteractivePricingCalculator() {
     s.flatMonth != null ? `$${s.flatMonth}/mo` : `$${s.pricePerSeatMonth}/seat`;
 
   return (
-    <section id="savings" className="scroll-mt-20 border-t border-border">
+    <section id="savings" ref={sectionRef} className="scroll-mt-20 border-t border-border">
       <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
         <AnimatedSection animation="fade-in" className="text-center mb-12">
           <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">
@@ -350,7 +505,7 @@ export function InteractivePricingCalculator() {
           </GlowCard>
 
           {/* Right: live output */}
-          <div className="space-y-4">
+          <div ref={resultRef} className="space-y-4">
             <GlowCard className="!p-6 lg:!p-8 text-center">
               {/* The device's glow brightens with your savings */}
               <div className="mx-auto -mt-2 mb-1 h-32 w-44" aria-hidden="true">

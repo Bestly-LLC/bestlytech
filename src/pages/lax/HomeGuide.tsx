@@ -20,9 +20,14 @@ const thumb = (id: string) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 /** Opens the in-page player (VideoPlayer listens). */
 export function playVideo(v: Video) { track(undefined, "video", { title: v.title }); window.dispatchEvent(new CustomEvent("trip-video", { detail: v })); }
 
+/** How many VideoPlayers are mounted right now (Leo's play_video checks this so it never claims a video that has nowhere to play). */
+let playersMounted = 0;
+export const videoPlayerMounted = () => playersMounted > 0;
+
 /** In-page YouTube player (privacy-enhanced embed), opened by playVideo(). */
 export function VideoPlayer() {
   const [v, setV] = useState<Video | null>(null);
+  useEffect(() => { playersMounted++; return () => { playersMounted--; }; }, []);
   useEffect(() => {
     const on = (e: Event) => setV((e as CustomEvent<Video>).detail);
     window.addEventListener("trip-video", on);
@@ -85,13 +90,27 @@ export const VIDEOS: Video[] = [
   v("Autopilot", "Cruise control and lane keeping", "-FeMwPUAOLM"),
 ];
 const FSD = VIDEOS[5];
+/** Leo's page_action play_video values -> VIDEOS entries. */
+export const VIDEO_SLUGS: Record<string, Video> = {
+  playlist: VIDEOS[0], essentials: VIDEOS[1], controls: VIDEOS[2], touchscreen: VIDEOS[3], charging: VIDEOS[4], fsd: VIDEOS[5], autopilot: VIDEOS[6],
+};
 
 const INCIDENT_CARD = "https://support-resources.turo.com/incidents/US%20Incident%20Information%20Card.pdf";
 
-export function Fold({ icon: Icon, title, sub, children, tone, open: start = false }: { icon: typeof Cpu; title: string; sub: string; children: ReactNode; tone?: "alert"; open?: boolean }) {
+export function Fold({ icon: Icon, title, sub, children, tone, open: start = false, id }: { icon: typeof Cpu; title: string; sub: string; children: ReactNode; tone?: "alert"; open?: boolean; id?: string }) {
   const [open, setOpen] = useState(start);
+  // With an id, "open-section" (and a #hash) opens this fold, same as the Collapse cards. Leo's open_guide_section uses it.
+  useEffect(() => {
+    if (!id) return;
+    const onHash = () => { if (location.hash === `#${id}`) setOpen(true); };
+    const onOpen = (e: Event) => { if ((e as CustomEvent).detail === id) setOpen(true); };
+    onHash();
+    window.addEventListener("hashchange", onHash);
+    window.addEventListener("open-section", onOpen);
+    return () => { window.removeEventListener("hashchange", onHash); window.removeEventListener("open-section", onOpen); };
+  }, [id]);
   return (
-    <div className={`border-b border-white/10 last:border-0 ${tone === "alert" ? "bg-[#E4527A]/[0.07] -mx-4 px-4" : ""}`}>
+    <div id={id} className={`scroll-mt-4 border-b border-white/10 last:border-0 ${tone === "alert" ? "bg-[#E4527A]/[0.07] -mx-4 px-4" : ""}`}>
       <button type="button" onClick={() => setOpen((x) => !x)} aria-expanded={open}
         className="flex min-h-[60px] w-full items-center gap-3 py-3 text-left">
         <Icon className="h-6 w-6 shrink-0" style={{ color: tone === "alert" ? "#FF8FA8" : ACCENT }} strokeWidth={1.75} />
@@ -129,13 +148,13 @@ export function ChargeBadge({ pct }: { pct: number | null | undefined }) {
 export function HomeGuide({ pickupBattery, kind = "home", children, valet }: { pickupBattery?: number | null; kind?: TripKind; children?: ReactNode; valet?: ReactNode }) {
   const ch = CHARGERS[kind];
   return (
-    <section className="mt-6 rounded-3xl bg-white/[0.06] px-4 pt-3 ring-1 ring-white/10" aria-label="Car guide">
+    <section id="help" className="mt-6 scroll-mt-4 rounded-3xl bg-white/[0.06] px-4 pt-3 ring-1 ring-white/10" aria-label="Car guide">
       <p className="pt-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Help & guides</p>
       <h2 className="mt-1 text-[20px] font-bold leading-snug text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>Everything else, when you need it</h2>
 
       <BeforeYouDrive />
 
-      <Fold icon={BatteryCharging} title="Charging" sub="Return with the same charge · nearest Supercharger">
+      <Fold id="guide-charging" icon={BatteryCharging} title="Charging" sub="Return with the same charge · nearest Supercharger">
         {pickupBattery != null
           ? <ChargeBadge pct={pickupBattery} />
           : <p><b className="text-white">Return it at the same charge level as pickup</b> to avoid Turo's recharge fee. Note the % in your pickup photos.</p>}
@@ -164,7 +183,7 @@ export function HomeGuide({ pickupBattery, kind = "home", children, valet }: { p
       </Fold>
 
 
-      <Fold icon={Cpu} title="Full Self-Driving (Supervised)" sub="How to turn it on, start, and take over">
+      <Fold id="guide-fsd" icon={Cpu} title="Full Self-Driving (Supervised)" sub="How to turn it on, start, and take over">
         <p><b className="text-white">Hands on. Eyes up.</b> It steers, brakes, changes lanes, handles intersections and parks, but it isn't autonomous. You're the driver and responsible at all times. Rain, glare, faded lines and heavy traffic make it worse.</p>
         <H>Turn it on (in Park)</H>
         <Numbered items={["Tap the Car icon on the screen.", "Open Self-Driving.", "Under Self-Driving Features, choose Full Self-Driving.", "Accept the on-screen acknowledgment."]} />
@@ -177,7 +196,7 @@ export function HomeGuide({ pickupBattery, kind = "home", children, valet }: { p
         <button type="button" onClick={() => playVideo(FSD)} className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white px-4 text-[15px] font-semibold text-[#140826]"><PlayCircle className="h-4 w-4" /> Watch the 3-minute video</button>
       </Fold>
 
-      <Fold icon={KeySquare} title="Valet parking" sub="You keep your phone. No key card to hand over">
+      <Fold id="guide-valet" icon={KeySquare} title="Valet parking" sub="You keep your phone. No key card to hand over">
         <p>Start a 2-minute driving window in the Tesla app so the attendant can move the car.</p>
         <H>Drop-off</H>
         <Numbered items={["Open the Tesla app.", "Tap Controls.", "Tap Start. The attendant has 2 minutes to drive and park it."]} />
@@ -186,7 +205,7 @@ export function HomeGuide({ pickupBattery, kind = "home", children, valet }: { p
         {valet && <><H>Or do it from this page</H>{valet}</>}
       </Fold>
 
-      <Fold icon={AlertTriangle} title="Accidents & roadside" sub="Flat tire, bump or accident: what to do" tone="alert">
+      <Fold id="guide-accident" icon={AlertTriangle} title="Accidents & roadside" sub="Flat tire, bump or accident: what to do" tone="alert">
         <Numbered items={[
           <><b className="text-white">Anyone hurt?</b> Call 911 right away. A police report will be needed.</>,
           <><b className="text-white">No injuries?</b> California police usually don't file a report. Exchange information with everyone involved.</>,
