@@ -5,6 +5,7 @@ import { useState } from "react";
 import { AlertTriangle, Check, Clock, Mail, MessageSquarePlus, Phone, RotateCcw, ShieldAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtPhone } from "@/components/admin/roofguard/AvaShared";
+import { PrivacyCasePanel } from "./PrivacyCasePanel";
 import { KIND_LABEL, PRIVACY_ACTION, dueOf, whenWords, type Ticket } from "./mayaFormat";
 
 export type TicketMode = "followup" | "lead" | "done";
@@ -60,6 +61,7 @@ export function TicketCard({ t, mode, onAct }: { t: Ticket; mode: TicketMode; on
       {t.kind === "privacy" && t.privacy_action && (
         <p className="mt-2 text-[14px] font-medium text-violet-200">Request: {PRIVACY_ACTION[t.privacy_action]}</p>
       )}
+      {t.kind === "privacy" && mode !== "done" && <PrivacyCasePanel code={t.code} />}
       {t.issue && <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-snug text-white/90">{t.issue}</p>}
       {t.note && <p className="mt-2 whitespace-pre-wrap break-words rounded-xl bg-white/[0.05] px-3 py-2 text-[13px] text-white/70">{t.note}</p>}
 

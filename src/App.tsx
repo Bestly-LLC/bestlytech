@@ -62,6 +62,7 @@ const TuroEntry = lazyPage(() => import("./pages/TuroEntry"));
 const DriverKey = lazyPage(() => import("./pages/DriverKey"));
 const ApproveDriver = lazyPage(() => import("./pages/ApproveDriver"));
 const EmailUnsubscribe = lazyPage(() => import("./pages/EmailUnsubscribe"));
+const PrivacyConfirm = lazyPage(() => import("./pages/PrivacyConfirm"));
 const Status = lazyPage(() => import("./pages/Status"));
 const VoiceToClaude = lazyPage(() => import("./pages/VoiceToClaude"));
 const CookieYetiDashboard = lazyPage(() => import("./pages/CookieYetiDashboard"));
@@ -208,6 +209,7 @@ const App = () => {
                 <Route path="/xa/:token" element={<ApproveDriver />} />
                 <Route path="/lax/:slug" element={<LaxGuest />} />
                 <Route path="/unsubscribe" element={<EmailUnsubscribe />} />
+                <Route path="/p/:token" element={<PrivacyConfirm />} />
                 <Route path="/status" element={<Status />} />
                 <Route path="/voice-to-claude" element={<VoiceToClaude />} />
                 <Route path="/cookie-yeti/transparency" element={<CookieYetiDashboard />} />
