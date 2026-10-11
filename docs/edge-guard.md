@@ -68,6 +68,11 @@ The Mac mini, launchd `tech.bestly.edge-guard` (every 60 seconds). Plain Python,
 
 ## If wrangler is logged out
 
+Check first that it is a real logout. Since wrangler 4.149 `npx wrangler whoami` prints a "missing some expected OAuth scopes ...
+run `wrangler login`" warning while you are still logged in. Edge Guard now treats "You are logged in" as healthy and ignores that
+warning (2026-10-11; before that fix it raised a false "I lost my Cloudflare login" every minute). A real logout prints
+"not authenticated" / "not logged in" and no "You are logged in" line.
+
 Edge Guard alerts "I lost my Cloudflare login". On the Mac mini, run:
 
     npx wrangler login
