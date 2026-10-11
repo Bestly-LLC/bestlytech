@@ -112,6 +112,7 @@ const Vesta = lazyPage(() => import("./pages/admin/Vesta"));
 const RoofGuard = lazyPage(() => import("./pages/admin/RoofGuard"));
 const AvaAssistant = lazyPage(() => import("./pages/admin/AvaAssistant"));
 const MayaDesk = lazyPage(() => import("./pages/admin/MayaDesk"));
+const AgentDesk = lazyPage(() => import("./pages/admin/AgentDesk"));
 const ClaimsCloser = lazyPage(() => import("./pages/admin/ClaimsCloser"));
 const Settlements = lazyPage(() => import("./pages/admin/Settlements"));
 const Wall = lazyPage(() => import("./pages/admin/Wall"));
@@ -262,6 +263,7 @@ const App = () => {
                   <Route path="roofguard" element={<RoofGuard />} />
                   <Route path="ava" element={<AvaAssistant />} />
                   <Route path="maya" element={<MayaDesk />} />
+                  <Route path="agents/:slug" element={<AgentDesk />} />
                   <Route path="wall" element={<Wall />} />
                   <Route path="sky" element={<Sky />} />
                   <Route path="security" element={<Security />} />

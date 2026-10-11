@@ -164,6 +164,20 @@ function pathOf(url: string | null | undefined) {
   return url.split(/[?#]/)[0].replace(/\/$/, "") || "/admin";
 }
 
+type AgentNav = { slug: string; name: string; purpose: string; kind: "legacy" | "template"; page_url: string | null; status: string; orb_hue: number; unread: number };
+type NavItem = { title: string; url: string; icon: any; countKey?: CountKeys; sso?: boolean; orbHue?: number; badge?: number };
+
+/** Sidebar items for the Agents group: "<name> (<purpose>)". Legacy agents keep their own icons; template agents get an orb tinted with their hue. */
+function agentNavItems(rows: AgentNav[] | null): NavItem[] {
+  if (!rows || rows.length === 0) return agentItems;
+  return rows.map((a) => {
+    const title = `${a.name} (${a.purpose})`;
+    const url = a.page_url || `/admin/agents/${a.slug}`;
+    if (a.kind === "legacy") return { title, url, icon: a.slug === "ava" ? AvaOrbIcon : PhoneCall };
+    return { title, url, icon: AvaOrbIcon, orbHue: a.orb_hue, countKey: a.slug === "maya" ? ("maya" as CountKeys) : undefined, badge: a.slug === "maya" ? undefined : a.unread };
+  });
+}
+
 export function AdminSidebar() {
   const { state, isMobile, setOpenMobile } = useSidebar();
   const { bento } = useAdminTheme();
@@ -174,6 +188,8 @@ export function AdminSidebar() {
   // A key is missing until its count loads. A failed count keeps its last value instead of reading 0.
   const [counts, setCounts] = useState<Partial<Record<CountKeys, number>>>({});
   const [attention, setAttention] = useState<Record<string, { level: Level; n: number; why: string }>>({});
+  // The Agents group comes from the agent registry (voice_agents); until it loads, or if it fails, the three static items show.
+  const [agents, setAgents] = useState<AgentNav[] | null>(null);
   const [order, setOrder] = useState<string[]>(() => (typeof window === "undefined" ? [] : readOrder()));
   const sections = orderedSections(order);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -220,6 +236,9 @@ export function AdminSidebar() {
       const { data: mayaC } = await supabase.rpc("admin_maya_counts" as never);
       const mc = mayaC as unknown as { open?: number; leads?: number } | null;
       const mayaN = mc && typeof mc.open === "number" ? mc.open + (mc.leads ?? 0) : null;
+      // Agents group: every phone agent in the registry, legacy and template (Ava, Maya, Reese, and any added from the + button).
+      const { data: agentRows } = await supabase.rpc("admin_agents" as never);
+      if (Array.isArray(agentRows)) setAgents(agentRows as unknown as AgentNav[]);
       // Team: any bot gone quiet puts a red dot on the Team page.
       const { data: teamRed } = await supabase.rpc("admin_team_red_count" as never);
       if (typeof teamRed === "number" && teamRed > 0) {
@@ -397,7 +416,7 @@ export function AdminSidebar() {
     window.addEventListener("pointercancel", onUp);
   };
 
-  const renderItem = (item: { title: string; url: string; icon: any; countKey?: CountKeys; sso?: boolean }) => {
+  const renderItem = (item: NavItem) => {
     if (item.sso) {
       return (
         <SidebarMenuItem key={item.title}>
@@ -423,7 +442,7 @@ export function AdminSidebar() {
       );
     }
     const active = isActive(item.url);
-    const count = item.countKey ? counts[item.countKey] ?? 0 : 0;
+    const count = item.countKey ? counts[item.countKey] ?? 0 : item.badge ?? 0;
     // A page gets a dot when something waiting points at it (the home page only for its own items).
     const hits = Object.entries(attention).filter(([p]) => (item.url === "/admin" ? p === "/admin" : p === item.url || p.startsWith(item.url + "/")));
     const dot = hits.length
@@ -447,7 +466,7 @@ export function AdminSidebar() {
             )}
           >
             <span className="relative shrink-0">
-              <item.icon className="h-[1.125rem] w-[1.125rem]" />
+              {item.orbHue != null ? <AvaOrbIcon hue={item.orbHue} className="h-[1.125rem] w-[1.125rem]" /> : <item.icon className="h-[1.125rem] w-[1.125rem]" />}
               {dot && collapsed && <span className={cn("absolute -right-1 -top-1 h-2 w-2 rounded-full ring-2 ring-[#0a0a0a] bento:ring-[#fff]", dotClass)} aria-hidden />}
             </span>
             {!collapsed && (
@@ -520,7 +539,7 @@ export function AdminSidebar() {
                 )}
               </SidebarGroupLabel>
               <SidebarGroupContent>
-                <SidebarMenu>{section.items.map(renderItem)}</SidebarMenu>
+                <SidebarMenu>{(section.label === "Agents" ? agentNavItems(agents) : (section.items as NavItem[])).map(renderItem)}</SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
           </div>
