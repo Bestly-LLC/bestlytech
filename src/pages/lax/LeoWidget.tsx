@@ -21,7 +21,7 @@
  */
 import { useEffect, useState, type ElementType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Maximize2, MessageCircle, Phone } from "lucide-react";
+import { AlertCircle, Loader2, Maximize2, MessageCircle, Phone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { loadEmbed } from "@/components/maya/MayaWidget";
 import type { TripContext } from "./AskSheet";
@@ -42,7 +42,7 @@ export function leoGreeting(ctx: TripContext | undefined, home: boolean): string
 }
 
 const TEXT = JSON.stringify({
-  main_label: "Leo, 24/7 trip helper - real help",
+  main_label: "Leo, 24/7 trip helper",
   start_call: "Call Leo",
   start_chat: "Message Leo",
   end_call: "End",
@@ -92,27 +92,56 @@ let nextMode: LeoMode = "open";
 export function LeoBar({ home, hidden, onOpen }: { home: boolean; hidden?: boolean; onOpen: () => void }) {
   const t = THEME[home ? "home" : "lax"];
   const [o1, o2] = t.orb;
-  const go = (m: LeoMode) => { nextMode = m; onOpen(); };
-  const icon = "grid h-12 w-12 shrink-0 place-items-center rounded-full text-white ring-1 ring-white/25 transition-transform active:scale-95 motion-reduce:transition-none";
+  // idle -> opening (spinner on the pressed button) -> open (bar steps aside for the widget) | error (inline, retry)
+  const [phase, setPhase] = useState<{ k: "idle" } | { k: "opening"; m: LeoMode } | { k: "open" } | { k: "error"; msg: string }>({ k: "idle" });
+  useEffect(() => {
+    const ready = () => setPhase({ k: "open" });
+    const fail = (e: Event) => setPhase({ k: "error", msg: (e as CustomEvent<string>).detail });
+    const closed = () => setPhase((p) => (p.k === "error" ? p : { k: "idle" }));
+    window.addEventListener("leo:ready", ready);
+    window.addEventListener("leo:error", fail);
+    window.addEventListener("leo:closed", closed);
+    return () => { window.removeEventListener("leo:ready", ready); window.removeEventListener("leo:error", fail); window.removeEventListener("leo:closed", closed); };
+  }, []);
+  // The page closed the helper (or never opened it): back to the bar.
+  useEffect(() => { if (!hidden) setPhase((p) => (p.k === "open" || p.k === "opening" ? { k: "idle" } : p)); }, [hidden]);
+
+  const busy = phase.k === "opening";
+  const go = (m: LeoMode) => { if (busy) return; nextMode = m; setPhase({ k: "opening", m }); onOpen(); };
+  const spin = <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden />;
+  const ring = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+  const icon = `grid h-12 w-12 shrink-0 place-items-center rounded-full text-white ring-1 ring-white/25 transition-transform duration-100 active:scale-95 disabled:opacity-60 motion-reduce:transition-none ${ring}`;
   return (
-    <div className={`rounded-[22px] p-3 ring-1 ring-white/15 ${hidden ? "invisible" : ""}`} aria-hidden={hidden || undefined}
+    <div className={`rounded-[22px] p-3 ring-1 ring-white/15 transition-opacity duration-200 motion-reduce:transition-none ${phase.k === "open" ? "invisible opacity-0" : "opacity-100"}`}
+      aria-hidden={phase.k === "open" || undefined} aria-busy={busy || undefined}
       style={{ background: t.vars["--el-base"], boxShadow: "0 12px 32px -14px rgba(0,0,0,.75)" }}>
       <div className="flex items-center gap-3">
         <span aria-hidden className="h-10 w-10 shrink-0 rounded-full"
           style={{ background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,.85), rgba(255,255,255,0) 45%), conic-gradient(from 210deg, ${o1}, ${o2}, ${o1}, ${o2}, ${o1})`,
             boxShadow: `0 0 18px -2px ${o1}99` }} />
-        <p className="min-w-0 text-[16px] font-semibold leading-snug text-white">
+        <p className="min-w-0 text-[17px] font-semibold leading-snug tracking-[-0.01em] text-white">
           Leo, 24/7 trip helper <span className="whitespace-nowrap font-medium" style={{ color: t.vars["--el-base-subtle"] }}>- real help</span>
         </p>
       </div>
+      {phase.k === "error" && (
+        <p role="alert" className="mt-3 flex items-start gap-2 rounded-xl bg-white/[0.08] px-3 py-2.5 text-[15px] leading-snug text-white">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: t.vars["--el-base-error"] }} aria-hidden />
+          <span>{phase.msg}</span>
+        </p>
+      )}
       <div className="mt-3 flex items-center gap-2">
-        <button type="button" onClick={() => go("call")}
-          className="flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-full text-[17px] font-semibold transition-transform active:scale-[0.98] motion-reduce:transition-none"
+        <button type="button" onClick={() => go("call")} disabled={busy}
+          className={`flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-full text-[17px] font-semibold transition-transform duration-100 active:scale-[0.98] disabled:opacity-90 motion-reduce:transition-none ${ring}`}
           style={{ background: t.vars["--el-accent"], color: t.vars["--el-accent-primary"] }}>
-          <Phone className="h-5 w-5 shrink-0" aria-hidden /> <span className="whitespace-nowrap">Call Leo</span>
+          {busy && phase.m === "call" ? <>{spin}<span className="whitespace-nowrap">Connecting</span></>
+            : <><Phone className="h-5 w-5 shrink-0" aria-hidden /><span className="whitespace-nowrap">{phase.k === "error" ? "Try again" : "Call Leo"}</span></>}
         </button>
-        <button type="button" aria-label="Message Leo" onClick={() => go("chat")} className={icon}><MessageCircle className="h-5 w-5" aria-hidden /></button>
-        <button type="button" aria-label="Open Leo" onClick={() => go("open")} className={icon}><Maximize2 className="h-5 w-5" aria-hidden /></button>
+        <button type="button" aria-label="Message Leo" onClick={() => go("chat")} disabled={busy} className={icon}>
+          {busy && phase.m === "chat" ? spin : <MessageCircle className="h-5 w-5" aria-hidden />}
+        </button>
+        <button type="button" aria-label="Open Leo" onClick={() => go("open")} disabled={busy} className={icon}>
+          {busy && phase.m === "open" ? spin : <Maximize2 className="h-5 w-5" aria-hidden />}
+        </button>
       </div>
     </div>
   );
@@ -190,19 +219,21 @@ export function LeoWidget({ token, context, home, onClose }: { token: string; co
     return () => { live = false; };
   }, [token]);
 
-  // No dim or blur behind Leo (Jared, 2026-10-11): the page stays as it is; the widget's own buttons close it.
-  if (err) return top(
-    <button type="button" onClick={onClose} role="alert"
-      className="fixed inset-x-4 bottom-28 z-50 rounded-2xl bg-white p-4 text-left text-[15px] text-[#B4232A] shadow-xl">
-      {err} <span className="whitespace-nowrap font-semibold text-[#1A1140]">Tap to close</span>
-    </button>);
-  if (!s) return top(
-    <div className="pointer-events-none fixed inset-x-0 bottom-28 z-50 flex justify-center" aria-live="polite">
-      <span className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[15px] font-semibold text-white shadow-xl ring-1 ring-white/15"
-        style={{ background: THEME[home ? "home" : "lax"].vars["--el-base"] }}>
-        <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />Opening Leo
-      </span>
-    </div>);
+  // The docked bar shows progress and errors in place (nothing pops up over it); the dock steps aside while open.
+  useEffect(() => {
+    if (!err) return;
+    window.dispatchEvent(new CustomEvent("leo:error", { detail: err }));
+    onClose();
+  }, [err, onClose]);
+  useEffect(() => {
+    if (!s) return;
+    document.body.classList.add("leo-open");
+    window.dispatchEvent(new Event("leo:ready"));
+    return () => { document.body.classList.remove("leo-open"); window.dispatchEvent(new Event("leo:closed")); };
+  }, [s]);
+
+  // No dim or blur behind Leo (Jared, 2026-10-11). While loading or after an error the bar speaks for Leo.
+  if (err || !s) return null;
   const theme = THEME[home ? "home" : "lax"];
   return top(
     <Convai
