@@ -97,36 +97,31 @@ const vestaItems = [
   { title: "Vesta", url: "/admin/vesta", icon: Flower2 },
 ];
 
-// Ava: Jared's personal AI assistant (her own line, messages, calls). Separate from RoofGuard on purpose.
-const avaItems = [
-  { title: "Ava", url: "/admin/ava", icon: AvaOrbIcon },
-];
-
-// Maya: Bestly Sales & Service phone agent (support for every Bestly product, privacy requests, Bestly Agent demos).
-// The badge is open tickets plus open leads waiting on Jared.
-const mayaItems = [
-  { title: "Maya", url: "/admin/maya", icon: Headset, countKey: "maya" as CountKeys },
-];
-
-// RoofGuard: the AI sales caller (Reese: leads, phone finder). Kept separable so it can be split off.
-const roofguardItems = [
-  { title: "Reese", url: "/admin/roofguard", icon: PhoneCall },
+// Agents (Jared, Oct 10 2026): the three phone agents in one group, each labeled with who she works for.
+//   Ava   (Personal)  — Jared's personal assistant, her own line, messages, calls.
+//   Maya  (Bestly)    — Bestly Sales & Service: support for every product, privacy requests, Bestly Agent demos.
+//                       The badge is open tickets plus open leads waiting on Jared.
+//   Reese (RoofGuard) — the RoofGuard caller: leads, phone finder. Its page stays separable so it can be split off.
+const agentItems = [
+  { title: "Ava (Personal)", url: "/admin/ava", icon: AvaOrbIcon },
+  { title: "Maya (Bestly)", url: "/admin/maya", icon: Headset, countKey: "maya" as CountKeys },
+  { title: "Reese (RoofGuard)", url: "/admin/roofguard", icon: PhoneCall },
 ];
 
 // Signs you straight into the HOKU store admin (see lib/openHokuAdmin).
 const hokuItems = [
   { title: "HOKU admin", url: HOKU_ADMIN_URL, icon: ShoppingBag, sso: true },
 ];
-const ALL_NAV_URLS = [...workItems, ...avaItems, ...mayaItems, ...vestaItems, ...roofguardItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems].map((i) => i.url);
+const ALL_NAV_URLS = [...workItems, ...agentItems, ...vestaItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems].map((i) => i.url);
 
 
+// A saved order that still lists the old "Ava" / "Maya" / "RoofGuard" sections just drops them; "Agents" is new to it,
+// so orderedSections() slots it right after Work.
 export const ADMIN_NAV_SECTIONS = [
   { label: "Work", items: workItems },
-  { label: "Ava", items: avaItems },
-  { label: "Maya", items: mayaItems },
+  { label: "Agents", items: agentItems },
   { label: "HOKU", items: hokuItems },
   { label: "Vesta", items: vestaItems },
-  { label: "RoofGuard", items: roofguardItems },
   { label: "Cookie Yeti", items: cookieYetiItems },
   { label: "Home Hub", items: homeHubItems },
   { label: "Turo", items: turoItems },
@@ -146,7 +141,7 @@ function orderedSections(order: string[]) {
   const byLabel = new Map(ADMIN_NAV_SECTIONS.map((s) => [s.label, s]));
   const out = order.filter((l, i) => byLabel.has(l) && order.indexOf(l) === i);
   // A section the saved order has never seen (a new one) lands right after the section that precedes it in the default
-  // list, so Maya shows up under Ava instead of at the very bottom.
+  // list, so Agents shows up under Work instead of at the very bottom.
   ADMIN_NAV_SECTIONS.forEach((s, i) => {
     if (out.includes(s.label)) return;
     const prev = ADMIN_NAV_SECTIONS.slice(0, i).reverse().find((p) => out.includes(p.label));
