@@ -57,12 +57,16 @@ export function LeoOrb({ theme, size = 40, live = false }: { theme: LeoTheme; si
 export function LeoBar({ home, onOpen }: { home: boolean; hidden?: boolean; onOpen: () => void }) {
   const t = THEME[home ? "home" : "lax"];
   const [phase, setPhase] = useState<{ k: "idle" } | { k: "opening"; m: LeoMode } | { k: "open" }>({ k: "idle" });
+  // Minimized Leo (2026-10-11, Jared): the pill lives here in the dock, where Leo sits before he's opened.
+  const [mini, setMini] = useState<LeoMini | null>(null);
   useEffect(() => {
     const ready = () => setPhase({ k: "open" });
-    const closed = () => setPhase({ k: "idle" });
+    const closed = () => { setPhase({ k: "idle" }); setMini(null); };
+    const onMini = (e: Event) => setMini((e as CustomEvent<LeoMini | null>).detail ?? null);
     window.addEventListener("leo:ready", ready);
     window.addEventListener("leo:closed", closed);
-    return () => { window.removeEventListener("leo:ready", ready); window.removeEventListener("leo:closed", closed); };
+    window.addEventListener("leo:mini", onMini);
+    return () => { window.removeEventListener("leo:ready", ready); window.removeEventListener("leo:closed", closed); window.removeEventListener("leo:mini", onMini); };
   }, []);
 
   const busy = phase.k === "opening";
@@ -70,8 +74,10 @@ export function LeoBar({ home, onOpen }: { home: boolean; hidden?: boolean; onOp
   const spin = <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden />;
   const ring = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
   const icon = `grid h-12 w-12 shrink-0 place-items-center rounded-full text-white ring-1 ring-white/25 transition-transform duration-100 active:scale-95 disabled:opacity-60 motion-reduce:transition-none ${ring}`;
+
+  if (phase.k === "open" && mini) return <LeoMiniPill theme={t} mini={mini} />;
   return (
-    <div className={`rounded-[22px] p-3 ring-1 ring-white/15 transition-opacity duration-200 motion-reduce:transition-none ${phase.k === "open" ? "invisible opacity-0" : "opacity-100"}`}
+    <div data-leo-bar className={`rounded-[22px] p-3 ring-1 ring-white/15 transition-opacity duration-200 motion-reduce:transition-none ${phase.k === "open" ? "invisible opacity-0" : "opacity-100"}`}
       aria-hidden={phase.k === "open" || undefined} aria-busy={busy || undefined}
       style={{ background: t.base, boxShadow: "0 12px 32px -14px rgba(0,0,0,.75)" }}>
       <div className="flex items-center gap-3">
@@ -95,6 +101,31 @@ export function LeoBar({ home, onOpen }: { home: boolean; hidden?: boolean; onOp
         </button>
       </div>
     </div>
+  );
+}
+
+/** What minimized Leo shows: his status line, and whether he's talking (the orb breathes). Sent by LeoScreen as `leo:mini`. */
+export type LeoMini = { label: string; live: boolean };
+
+/**
+ * Minimized Leo: one row in the dock (orb, name, status, open). Tapping it sends `leo:restore` and LeoScreen
+ * comes back full screen. `floating` pins it to the bottom of the screen for pages without the dock bar.
+ */
+export function LeoMiniPill({ theme, mini, floating = false }: { theme: LeoTheme; mini: LeoMini; floating?: boolean }) {
+  return (
+    <button type="button" data-leo-bar={floating ? undefined : ""} onClick={() => window.dispatchEvent(new Event("leo:restore"))} aria-label={`Back to Leo, ${mini.label}`}
+      className={`flex min-h-14 w-full items-center gap-3 rounded-full px-2 py-2 text-left text-white ring-1 ring-white/20 transition-transform duration-100 active:scale-[0.98] motion-reduce:transition-none motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${floating ? "fixed inset-x-4 z-[70] mx-auto w-auto max-w-md" : ""}`}
+      style={{ background: theme.base, boxShadow: `0 12px 32px -14px rgba(0,0,0,.75), 0 0 28px -10px ${theme.orb[0]}`,
+        ...(floating ? { bottom: "max(12px, env(safe-area-inset-bottom))" } : {}) }}>
+      <LeoOrb theme={theme} size={40} live={mini.live} />
+      <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+        <span className="whitespace-nowrap text-[17px] font-semibold tracking-[-0.01em]">Leo</span>
+        <span className="whitespace-nowrap text-[15px] font-medium" style={{ color: theme.subtle }}>{mini.label}</span>
+      </span>
+      <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-full ring-1 ring-white/25">
+        <Maximize2 className="h-[18px] w-[18px]" />
+      </span>
+    </button>
   );
 }
 
