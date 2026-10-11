@@ -821,6 +821,7 @@ CHALLENGE_RX = re.compile(r"just a moment|cf-chl|checking your browser|attention
                           r"captcha|access denied|request blocked|are you a robot", re.I)
 SKIP_HOSTS = ("topclassactions.com",)  # HTML sits behind a Cloudflare challenge: never fetched (the RSS text is already in the listing)
 _last_fetch = [0.0]
+_host_gap, _host_last = {}, {}  # per-site Crawl-delay from robots.txt, and when the site was last asked
 _done = set()  # settlement ids handled by the details phase in this run
 
 
@@ -830,10 +831,11 @@ def polite_get(url):
     host = (urllib.parse.urlsplit(url).hostname or "").lower()
     if any(host.endswith(h) for h in SKIP_HOSTS) or not re.match(r"https?://", url or ""):
         return None, "skipped"
-    wait = SOURCE_GAP_SEC - (time.time() - _last_fetch[0])
+    now = time.time()
+    wait = max(SOURCE_GAP_SEC - (now - _last_fetch[0]), _host_gap.get(host, 0) - (now - _host_last.get(host, 0)))
     if wait > 0:
         time.sleep(wait)
-    _last_fetch[0] = time.time()
+    _last_fetch[0] = _host_last[host] = time.time()
     try:
         raw = _http(url, tries=2, timeout=30)
     except urllib.error.HTTPError as e:
@@ -843,7 +845,13 @@ def polite_get(url):
     except Exception:  # noqa: BLE001
         return None, "error"
     finally:
-        _last_fetch[0] = time.time()
+        _last_fetch[0] = _host_last[host] = time.time()
+        rp = _robots.get(f"{urllib.parse.urlsplit(url).scheme}://{urllib.parse.urlsplit(url).netloc}")
+        try:  # the site's own Crawl-delay (capped at 15 s) applies to its next page
+            cd = rp.crawl_delay(ROBOTS_TOKEN) or rp.crawl_delay("*") if rp else None
+            _host_gap[host] = min(float(cd), 15.0) if cd else 0
+        except Exception:  # noqa: BLE001
+            pass
     h = raw[:600000].decode("utf-8", "replace")
     vis = strip_html(h)
     if CHALLENGE_RX.search(vis[:3000]) and len(vis) < 2500:
