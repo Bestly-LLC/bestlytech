@@ -490,7 +490,7 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
   })();
 
   // Preview of the official ElevenLabs widget (demo links with ?widget=1 only): it replaces this sheet entirely.
-  if (widgetPreview) return open && token ? <LeoWidget token={token} context={context} home={home} /> : null;
+  if (widgetPreview) return open && token ? <LeoWidget token={token} context={context} home={home} onClose={onClose} /> : null;
 
   return (
     <TripSheet open={open} onClose={onClose} kicker="Trip helper" title="Talk to our team 24/7" footer={footer} bodyRef={body}>
