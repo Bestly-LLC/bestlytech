@@ -27,7 +27,7 @@ begin
        and (s.deadline is null or s.deadline >= (now() at time zone 'America/Los_Angeles')::date)
        and (s.details is null
             or coalesce(nullif(s.details->>'fetched_at', '')::timestamptz, 'epoch'::timestamptz) < now() - interval '14 days'
-            or (c.id is not null and c.match <> 'no' and c.reasoning is null))
+            or (c.id is not null and c.match <> 'no' and c.status not in ('skipped', 'expired') and c.reasoning is null))
      order by (c.id is not null and c.match <> 'no' and c.status in ('found', 'ready', 'approved', 'needs_you', 'filing')) desc,
               (c.id is not null and c.match <> 'no') desc,
               (c.id is not null) desc,
