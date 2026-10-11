@@ -117,6 +117,8 @@ export function AdminLayout() {
   const currentLabel = BREADCRUMB_MAP[location.pathname] ??
     (location.pathname.startsWith("/admin/submissions/") ? "Submission Detail"
       : location.pathname.startsWith("/admin/cloud/") ? "Cloud Deal"
+      : location.pathname === "/admin/agents/new" ? "New agent"
+      : location.pathname.startsWith("/admin/agents/") ? "Agent"
       : "Not found");
 
   return (
