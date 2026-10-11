@@ -304,14 +304,14 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
     else if (a === "climate") document.getElementById("climate")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   // Leo controls the page (leo:page); LaxGuest answers the demo_* actions and the car follows leo:car (see lax/leoBridge.ts).
-  useLeoPage((action) => {
+  useLeoPage((action, value) => {
     if (action === "demo_stage" || action === "demo_weather") return undefined;
     return sharedPageAction(action, {
       openSheet,
       next, doNext,
       hasClimate: () => !!document.getElementById("climate"),
       send: live && run ? async () => { await run(CHARGERS.home.action); return "sent the nearest Supercharger to the car's navigation."; } : undefined,
-    }) ?? { say: "I can't do that on this page.", stay: true };
+    }, value) ?? { say: "I can't do that on this page.", stay: true };
   });
   // Nice out and no climate to offer: the weather pane adds nothing, so the car tile goes full width.
   const showWx = !car || !!(car.climate_until && +new Date(car.climate_until) > Date.now()) || climateNeed(car.inside_f, demoPage ? car.outside_f : outsideF ?? car.outside_f) !== "comfy";
@@ -396,7 +396,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           <Fold icon={Users} title="Someone else driving?" sub="Add them in Turo first, then get their key here">
             <ExtraDrivers token={token} embedded />
           </Fold>
-          <Fold icon={PlayCircle} title="How-to videos" sub="2-minute videos from Tesla">
+          <Fold id="guide-videos" icon={PlayCircle} title="How-to videos" sub="2-minute videos from Tesla">
             <VideoList />
           </Fold>
           {pub.trip && new Date(pub.trip.starts_at) > new Date() && (

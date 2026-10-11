@@ -22,7 +22,7 @@
 // Open demo (leo_demo_open(), temporary, expires by itself): on demo-home / demo-lax only, car_lock unlock works on the
 // pretend car and the session cap is 200/hour instead of 40. Real trips never unlock.
 //
-// Tools: trip_status, key_fix, job_status, extra_driver, notify_host, file_ticket, and the car tools car_status,
+// Tools: trip_status, key_fix, job_status, extra_driver, notify_host, file_ticket, reminder_email, and the car tools car_status,
 //        car_climate (page presets), car_lock (lock only), find_superchargers, send_to_car_nav, charging_summary,
 //        send_sms (not live). Real trips go through the page's own gate (lax_guest_car_command); demo trips use the
 //        pretend car (leo_demo_car). Phone calls get their trip_key from leo-phone-init instead of door 1.
@@ -310,6 +310,110 @@ async function carTool(name: string, token: string, b: Any): Promise<Any> {
   return { ok: false, say: "I can't do that one." };
 }
 
+// ---------- reminder_email (2026-10-11): Turo guests never give us an email, so Leo collects it ----------
+// action "set"      save the email the guest spelled out (lax_guest_set_email: same rules as the trip page) and say when the
+//                   reminder goes out (LAX: 4 hours before pickup, home: 1 hour before; lax-guest-tick sends it, every 10 min).
+// action "send_now" send one reminder email right now through the existing senders (wallet-pass remind_due for LAX trips,
+//                   trip-remind for home trips). Max 2 per trip per rolling day (leo_reminder_log, which holds no emails).
+// action "status"   is an email on file (masked), when the reminder is scheduled or was sent.
+// Trip-scoped by the session's token only. A full address is never said or returned back; demo trips send nothing.
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/;
+const maskEmail = (e: string) => `${e.split("@")[0].slice(0, 1)}***@${e.split("@")[1] ?? ""}`;
+const sayEmail = (e: string) => `${e.split("@")[0].slice(0, 1)} at ${e.split("@")[1] ?? ""}`;
+const laDate = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: LA_TZ });
+/** "today at 3:05 PM", "tomorrow at 8:00 AM", "Tue, Oct 14 at 8:00 AM" (Pacific, 12-hour). */
+function whenPhrase(iso: string): string {
+  const d = new Date(iso);
+  const day = laDate(d) === laDate(new Date()) ? "today" : laDate(d) === laDate(new Date(Date.now() + 86400_000)) ? "tomorrow"
+    : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: LA_TZ });
+  return `${day} at ${t12(iso)}`;
+}
+const cleanSpokenEmail = (v: unknown) => clip(v, 200).toLowerCase().replace(/\s+at\s+/g, "@").replace(/\s+dot\s+/g, ".").replace(/\s+/g, "");
+const SENDER_FN = { lax: { fn: "wallet-pass", body: { op: "remind_due" } }, home: { fn: "trip-remind", body: {} } } as const;
+
+async function reminderEmail(token: string, conv: string | null, b: Any): Promise<Any> {
+  const action = clip(b.action, 12).toLowerCase();
+  if (!["set", "send_now", "status"].includes(action)) return { ok: false, say: "I can save an email, send the reminder now, or check what's saved." };
+  const demo = token.startsWith("demo:");
+  const log = (a: string) => sb.from("leo_reminder_log").insert({ token, action: a, conversation_id: conv }).then(() => {}, () => {});
+
+  // ---- demo pages: pretend, nothing real is saved or sent ----
+  if (demo) {
+    const home = token === "demo:demo-home";
+    const lead = home ? "1 hour" : "4 hours";
+    if (action === "set") {
+      const e = cleanSpokenEmail(b.email);
+      if (!EMAIL_RE.test(e)) return { ok: false, demo: true, say: "That email doesn't look right. Can you spell it again?" };
+      await log("demo_set");
+      return { ok: true, demo: true, email_masked: maskEmail(e), say: `Saved on the demo page. On a real trip the reminder goes out ${lead} before pickup. Nothing is emailed from the demo.` };
+    }
+    const { count } = await sb.from("leo_reminder_log").select("id", { count: "exact", head: true }).eq("token", token).eq("action", "demo_set").gte("at", new Date(Date.now() - 2 * 3600_000).toISOString());
+    const has = (count ?? 0) > 0;
+    if (action === "status") return { ok: true, demo: true, on_file: has, email_masked: has ? "d***@example.com" : null,
+      say: has ? `Demo: an email is saved. The reminder would go out ${lead} before pickup.` : "Demo: no email saved yet." };
+    if (!has) return { ok: false, demo: true, say: "I don't have an email yet. What's the best one to send it to?" };
+    return { ok: true, demo: true, say: "Demo: that's what the reminder would do. Nothing is emailed from the demo page." };
+  }
+
+  // ---- real trip ----
+  const { data: link } = await sb.from("lax_guest_links").select("reservation_id, email, reminder_at, reminder_sent_at, reminder_error, email_changes").eq("token", token).maybeSingle();
+  if (!link) return { ok: false, say: "I can't find this trip. Open your trip page and try again." };
+  const { data: trip } = await sb.from("turo_trips").select("starts_at, ends_at, airport_code").eq("reservation_id", link.reservation_id).maybeSingle();
+  if (!trip) return { ok: false, say: "I can't find this trip. Open your trip page and try again." };
+  const kind: "lax" | "home" = trip.airport_code === "LAX" ? "lax" : "home";
+  const lead = kind === "home" ? "1 hour" : "4 hours";
+  const ended = Date.parse(trip.ends_at) < Date.now();
+  const started = Date.parse(trip.starts_at) < Date.now();
+
+  if (action === "status") {
+    const e = link.email as string | null;
+    if (!e) return { ok: true, on_file: false, say: "There's no email on file for this trip yet." };
+    const base = { ok: true, on_file: true, email_masked: maskEmail(e), reminder_at: link.reminder_at, sent_at: link.reminder_sent_at };
+    if (link.reminder_sent_at) return { ...base, say: `A reminder went to the email starting with ${sayEmail(e)} ${whenPhrase(link.reminder_sent_at)}.` };
+    if (String(link.reminder_error ?? "").startsWith("gave up")) return { ...base, failed: true, say: `I have the email starting with ${sayEmail(e)}, but the reminder didn't go through. I can try sending it now.` };
+    if (link.reminder_at && !ended) return { ...base, say: Date.parse(link.reminder_at) <= Date.now() + 11 * 60_000
+      ? `I have the email starting with ${sayEmail(e)}. The reminder goes out within about 10 minutes.`
+      : `I have the email starting with ${sayEmail(e)}. The reminder goes out ${whenPhrase(link.reminder_at)}.` };
+    return { ...base, say: `I have the email starting with ${sayEmail(e)}, but no reminder is scheduled${ended ? " because the trip is over" : started ? " because pickup has already started" : ""}.` };
+  }
+
+  if (action === "set") {
+    const e = cleanSpokenEmail(b.email);
+    if (!EMAIL_RE.test(e) || e.length > 200) return { ok: false, say: "That email doesn't look right. Can you spell it again?" };
+    if (ended) return { ok: false, say: "This trip is over, so I can't set up a reminder." };
+    const { data, error } = await sb.rpc("lax_guest_set_email", { p_token: token, p_email: e });
+    if (error) return { ok: false, say: /changes|doesn't look|ended/i.test(error.message) ? error.message.slice(0, 160) : "I couldn't save that email. Try the Reminder email card on your trip page." };
+    await log("set");
+    const at = (data as { reminder_at?: string | null } | null)?.reminder_at ?? null;
+    const m = maskEmail(e);
+    if (!at) return { ok: true, email_masked: m, scheduled: false, say: "Saved. Pickup has already started, so no reminder is scheduled. Want me to email it to you now?" };
+    if (Date.parse(at) <= Date.now() + 60_000) return { ok: true, email_masked: m, scheduled: true, reminder_at: at, say: "Saved. Your reminder email goes out within about 10 minutes." };
+    return { ok: true, email_masked: m, scheduled: true, reminder_at: at, say: `Saved. Your reminder email goes out ${whenPhrase(at)}, ${lead} before pickup.` };
+  }
+
+  // send_now
+  const e = link.email as string | null;
+  if (!e) return { ok: false, say: "I don't have an email yet. What's the best one to send it to?" };
+  if (ended) return { ok: false, say: "This trip is over, so there's nothing to send." };
+  if (kind === "home" && Date.parse(trip.starts_at) < Date.now() - 30 * 60_000) {
+    return { ok: false, say: "The pickup email only goes out around pickup time, and your trip has started. Everything is on your trip page." };
+  }
+  const { count } = await sb.from("leo_reminder_log").select("id", { count: "exact", head: true }).eq("token", token).eq("action", "send_now").gte("at", new Date(Date.now() - 86400_000).toISOString());
+  if ((count ?? 0) >= 2) return { ok: false, limit: true, say: "I've already sent two reminders for this trip today, which is the limit. Check your inbox and spam folder, or message your host in the Turo app." };
+  await log("send_now");
+  const t0 = Date.now() - 1000;
+  await sb.from("lax_guest_links").update({ reminder_at: new Date().toISOString(), reminder_sent_at: null, reminder_error: null, reminder_attempts: 0 }).eq("reservation_id", link.reservation_id);
+  const snd = SENDER_FN[kind];
+  try {
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${snd.fn}`, { method: "POST", signal: AbortSignal.timeout(25_000),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${SB_SECRET}`, apikey: SB_SECRET }, body: JSON.stringify(snd.body) });
+    await r.text().catch(() => "");
+  } catch { /* the check below decides what to say */ }
+  const { data: after } = await sb.from("lax_guest_links").select("reminder_sent_at, reminder_error").eq("reservation_id", link.reservation_id).maybeSingle();
+  if (after?.reminder_sent_at && Date.parse(after.reminder_sent_at) >= t0) return { ok: true, sent: true, say: `Sent to the email starting with ${sayEmail(e)}. It should land in a minute. Check spam if it doesn't.` };
+  return { ok: false, sent: false, say: "I couldn't send it just now. It will try again by itself within about 10 minutes, and you can also find everything on your trip page." };
+}
+
 /** Leo's screen: buttons on his inline cards run the same tools with the trip token (same power as the page's buttons). */
 const SCREEN_TOOLS = new Set(["car_status", "car_climate", "car_lock", "find_superchargers", "send_to_car_nav", "charging_summary"]);
 async function screenAct(b: Any): Promise<Response> {
@@ -335,6 +439,13 @@ async function selftest(): Promise<Any> {
     if (cool.ok !== true) bad.push("cool");
     const off = await carTool("car_climate", demoTok, { action: "off" });
     if (off.ok !== true) bad.push("off");
+    // reminder_email on the demo page: bad email refused, set accepted, status sees it.
+    const rBad = await reminderEmail(demoTok, null, { action: "set", email: "not-an-email" });
+    if (rBad.ok !== false) bad.push("reminder_email validation");
+    const rSet = await reminderEmail(demoTok, null, { action: "set", email: "leo-selftest@example.com" });
+    if (rSet.ok !== true) bad.push("reminder_email set");
+    const rSt = await reminderEmail(demoTok, null, { action: "status" });
+    if (rSt.ok !== true || rSt.on_file !== true) bad.push("reminder_email status");
     return bad;
   };
   let bad: string[] = [];
@@ -352,15 +463,28 @@ async function selftest(): Promise<Any> {
     const u = await carTool("car_lock", "selftest-not-a-real-trip-token", { action: "unlock" });
     if (u.ok !== false) bad.push("REAL TRIP UNLOCK NOT REFUSED");
   } catch (e) { bad.push("unlock check error"); }
+  // A real-shaped trip must not save or send anything for an unknown token (it refuses before touching anything).
+  try {
+    const r = await reminderEmail("selftest-not-a-real-trip-token", null, { action: "set", email: "leo-selftest@example.com" });
+    if (r.ok !== false) bad.push("REAL TRIP REMINDER NOT REFUSED");
+  } catch (_e) { bad.push("reminder refusal check error"); }
+  // send_now reaches the reminder sender with the service key: prove that door still opens (wallet-pass selftest only builds a pass).
+  try {
+    const w = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/wallet-pass`, { method: "POST", signal: AbortSignal.timeout(15_000),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${SB_SECRET}`, apikey: SB_SECRET }, body: JSON.stringify({ op: "selftest" }) });
+    const wj = await w.json().catch(() => ({}));
+    if (!w.ok || wj?.ok !== true) bad.push("reminder sender auth");
+  } catch (_e) { bad.push("reminder sender unreachable"); }
+  await sb.from("leo_reminder_log").delete().lt("at", new Date(Date.now() - 7 * 86400_000).toISOString()).then(() => {}, () => {});
   const unsafe = bad.some((x) => x.startsWith("REAL TRIP"));
   if (bad.length) {
     await sb.rpc("bestly_raise", { p_key: "leo.demo-parity", p_kind: "problem", p_severity: unsafe ? "error" : "warning",
-      p_title: unsafe ? "Leo: unlock is not refused on a real trip" : "Leo: my demo car stopped answering",
-      p_body: `My hourly demo check failed on: ${bad.join(", ")}. ${unsafe ? "A real-shaped trip was allowed to unlock. I need this fixed now." : "Guests on real trips are not affected, but the demo page and my phone test line are."}`,
+      p_title: unsafe ? "Leo: a real trip was not refused" : "Leo: my demo car stopped answering",
+      p_body: `My hourly demo check failed on: ${bad.join(", ")}. ${unsafe ? "A real-shaped trip was allowed through something it must refuse (unlock or the reminder email). I need this fixed now." : "Guests on real trips are not affected, but the demo page and my phone test line are."}`,
       p_area: "agents" }).then(() => {}, () => {});
   } else {
     await sb.rpc("bestly_raise", { p_key: "leo.demo-parity", p_kind: "resolved", p_title: "Leo: my demo car is answering again",
-      p_body: healed ? "I reset the demo car and it answers." : "Status, cool and off all work on the demo car.", p_area: "agents" }).then(() => {}, () => {});
+      p_body: healed ? "I reset the demo car and it answers." : "Status, cool, off and the reminder email all work on the demo.", p_area: "agents" }).then(() => {}, () => {});
   }
   const out = { ok: bad.length === 0, healed, failed: bad };
   lastSelf = { at: Date.now(), out };
@@ -387,6 +511,7 @@ async function tool(name: string, b: Any): Promise<Response> {
         return json({ ok: true, result: await run(t, `driver_${action}`, { name: b.name, summary: b.summary }) });
       }
       case "notify_host": return json({ ok: true, result: await run(t, "notify_host", { summary: `Leo (voice): ${clip(b.summary, 280)}` }) });
+      case "reminder_email": return json(await reminderEmail(t, s.conversation_id, b));
       case "file_ticket": {
         const { count } = await sb.from("support_tickets").select("id", { count: "exact", head: true }).eq("conversation_id", s.conversation_id);
         if ((count ?? 0) >= 3) return json({ ok: false, error: "too many tickets on this call" }, 429);
