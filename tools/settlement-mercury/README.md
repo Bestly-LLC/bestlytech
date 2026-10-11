@@ -25,7 +25,7 @@ Heartbeat: `pi_jobs` row `settlement-mercury` (gap 300 min, Scout alert). Team c
    a claim, those earlier guesses are hidden so money is not counted twice.
 
 ## Auth
-- Mercury: `MERCURY_API_TOKEN` in `/home/pi/scripts/.env` (read-only API token; the same key Penny's `penny_bank` job reads).
+- Mercury: `MERCURY_API_TOKEN` in `/home/pi/scripts/.env`, or the token saved on /admin/cost-cutter (write-only field, Vault `pi:mercury_api_token`, fetched with `mercury_token_t`). Read-only API token; the same key Penny's `penny_bank` job reads.
   Never printed, logged or committed. Missing token = run reports `ok no Mercury token yet` and does nothing.
 - Supabase: the house db-watchdog token in `/home/pi/.bestly/db_watchdog_token` (mode 600) + publishable key.
 

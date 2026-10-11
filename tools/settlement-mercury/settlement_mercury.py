@@ -12,8 +12,9 @@ HARD LIMITS: no write endpoint of Mercury is ever called (no transfers, no payme
 data is written anywhere but the settlement ledger tables. Free: plain code, no AI.
 
 Auth
-  Mercury : MERCURY_API_TOKEN in /home/pi/scripts/.env (the same key Penny's penny_bank job reads; read-only token). Never
-            printed, logged or committed. Missing -> the run reports "ok no Mercury token yet" and does nothing.
+  Mercury : MERCURY_API_TOKEN in /home/pi/scripts/.env, or else the token saved on the admin page /admin/cost-cutter (write-only
+            field -> Vault secret pi:mercury_api_token -> rpc mercury_token_t). Same read-only key Penny's penny_bank job reads.
+            Never printed, logged or committed. Missing -> the run reports "ok no Mercury token yet" and does nothing.
   Supabase: the house db-watchdog token (db_watchdog_ok) from /home/pi/.bestly/db_watchdog_token (mode 600), sent with the
             project's publishable key, same as the settlement finder.
 
@@ -152,6 +153,12 @@ def main(argv):
     if "--days" in argv:
         days = int(argv[argv.index("--days") + 1])
     token = _env_token()
+    if not token:
+        # Saved from the Cost Cutter page (write-only field, Vault secret pi:mercury_api_token); needs the db-watchdog token.
+        try:
+            token = (sb("mercury_token_t") or "").strip()
+        except Exception:  # noqa: BLE001  (no token saved yet, or the DB is briefly unreachable: same quiet result)
+            token = ""
     if not token:
         return "ok no Mercury token yet (MERCURY_API_TOKEN in /home/pi/scripts/.env, shared with Penny); nothing to check"
     credits = fetch_credits(token, days)
