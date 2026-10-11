@@ -11,7 +11,7 @@ import { BadgeDollarSign, Brush, FileWarning,
   Car,
   Mic,
   Handshake,
-  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, ShieldAlert, Siren, CarFront, Flower2, PhoneCall, Headset,
+  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, ShieldAlert, Siren, CarFront, Flower2, PhoneCall, Headset, Crosshair,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -105,6 +105,8 @@ const agentItems = [
   { title: "Ava (Personal)", url: "/admin/ava", icon: AvaOrbIcon },
   { title: "Maya (Bestly)", url: "/admin/maya", icon: Headset, countKey: "maya" as CountKeys },
   { title: "Reese (RoofGuard)", url: "/admin/roofguard", icon: PhoneCall },
+  // Hunter: finds, checks and queues the leads Maya calls (free, no Claude tokens).
+  { title: "Hunter (Leads)", url: "/admin/hunter", icon: Crosshair },
 ];
 
 // Money coming in to Jared personally (Oct 10 2026): Nickel's class action settlements. Its own section near the top
