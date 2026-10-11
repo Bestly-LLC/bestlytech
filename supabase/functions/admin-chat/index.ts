@@ -1,5 +1,5 @@
 import { SECRET_KEY, isServiceRequest } from "../_shared/keys.ts";
-import { llm, llmChat, llmVision, LlmUnavailable, thinkingLeak, stripToolSyntax, hasToolSyntax, rescueToolCalls, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0. v36: llmVision for the free look tool
+import { llm, llmChat, llmVision, LlmUnavailable, thinkingLeak, stripToolSyntax, hasToolSyntax, rescueToolCalls, rawToolJson, narratesStep, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0. v36: llmVision for the free look tool
 // admin-chat — Scout, the assistant inside bestly.tech/admin.
 //
 // Rules, in order of how much trouble breaking them causes:
@@ -644,34 +644,70 @@ function stripMarkdown(s: string): string {
     .replace(/\n{3,}/g, "\n\n").trim();
 }
 
+/** v44: buttons that say nothing. They never come from a generator, and a model-written one is dropped unless the reply is about resuming. */
+const GENERIC_OPTION = /^(keep going|continue|go on|what else( needs me)?\??|anything else\??|tell me more|more|nothing else|ok(ay)?|thanks?|got it|sure)\.?$/i;
+const OPTION_MAX_CHARS = 30;   // an option longer than this is dropped, never cut with "..."
+const cleanOption = (o: unknown) => String(o ?? "").replace(/[|\n]/g, " ").replace(/\s+/g, " ").replace(/[.\u2026]+$/, "").trim();
+
+/** v44: the last stretch of the thread, short, for the quick-reply writer (progress notes and Stop markers left out). */
+async function threadDigest(threadId: string): Promise<string> {
+  const [{ data: hist }, { data: pend }] = await Promise.all([
+    db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(14),
+    db.from("mac_jobs").select("title").eq("thread_id", threadId).eq("status", "proposed").limit(3),
+  ]);
+  const lines = ((hist ?? []) as any[]).reverse()
+    .filter((m) => !/^(Working:|Worked \d+ steps)/.test(String(m.body)) && String(m.body) !== STOP_MARK)
+    .map((m) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body ?? "").replace(/^\s*OPTIONS:.*$/gm, "").replace(/\s+/g, " ").trim().slice(0, m.role === "assistant" ? 320 : 240)}`);
+  const waiting = ((pend ?? []) as any[]).map((j) => `A Run card is waiting on his tap: ${String(j.title).slice(0, 80)}`);
+  return [...lines, ...waiting].join("\n").slice(-3800);
+}
+
+/** v44: the plain status that replaces a reply that was raw tool JSON or the model narrating its next step. */
+const NOT_AN_ANSWER = "My last step came back as working notes, not an answer, so I threw it away instead of showing it to you. Nothing was changed. Ask me again or pick one below and I will redo that step.";
+
 async function adhdShape(reply: string, ask: string, threadId: string): Promise<string> {
   try {
     if (!reply || /^\s*QUESTIONS:/m.test(reply)) return reply;
     const m = reply.match(/^\s*OPTIONS:\s*(.+)$/m);
-    const hadOpts = m ? m[1].split("|").map((o) => o.trim()).filter(Boolean).slice(0, 4) : [];
+    const hadAll = m ? m[1].split("|").map(cleanOption).filter(Boolean) : [];
     let body = stripMarkdown(reply.replace(/^\s*OPTIONS:.*$/m, "").trim());
-    const tooLong = words(body) > ADHD_MAX_WORDS && !WANTS_DETAIL.test(ask) && !KEEP_WHOLE.test(body);
+    // v44 (audit Oct 10): the last gate before Jared sees it. Raw tool JSON or "We need to... Let's read X" is not an answer.
+    let leaked = false;
+    if (rawToolJson(body) || narratesStep(body)) { body = NOT_AN_ANSWER; leaked = true; }
+    // Buttons the model wrote: keep the ones that say something. "Keep going" stays only when the reply is about resuming a saved job.
+    const resumes = /keep going|where it stopped|job is still open|picks? (it|this) up|saved where/i.test(body) || hadAll.some((o) => /paid ai|^drop it$|^leave it$/i.test(o));
+    const hadOpts = leaked ? [] : hadAll.filter((o) => o.length <= OPTION_MAX_CHARS && (resumes || !GENERIC_OPTION.test(o))).slice(0, 4);
+    const tooLong = !leaked && words(body) > ADHD_MAX_WORDS && !WANTS_DETAIL.test(ask) && !KEEP_WHOLE.test(body);
     const needOpts = hadOpts.length < 2 && !KEEP_WHOLE.test(body);
     if (tooLong || needOpts) {
+      const digest = needOpts ? await threadDigest(threadId).catch(() => "") : "";
       const r = await llm({
         task: "summarize", json: true, paid: "never", maxTokens: 700, deadlineMs: 15_000,
         job: "chat-adhd", ref: threadId, fn: "admin-chat", scope: "chat",
         system: `You format replies from Scout (Jared's assistant) for Jared, who has ADHD. Return JSON only: {"body": string, "options": string[]}.
 body: ${tooLong ? `rewrite the reply below in ADHD format: line 1 is the answer (TL;DR, one sentence); then at most 4 short lines, one idea each; the last line is the single next action. Under ${ADHD_MAX_WORDS} words. Keep every fact, number, name, time and link exactly as written; add nothing new; drop filler and repetition. Plain text, no markdown, no bullet marks.` : "return the reply body below unchanged, exactly."}
-options: 2-4 quick replies Jared would most likely tap next, written as HE would say them (e.g. "Do it", "Show me first", "Skip it", "Keep going", "Nothing else"), 1-5 words each, the most likely one first. They must fit this exact reply: if it asks a yes/no, give the yes and the no; if it reports something done, give the natural follow-ups.`,
-        user: `Jared's message:\n${ask.slice(0, 1500)}\n\nScout's reply:\n${body.slice(0, 6000)}`,
+options: ${needOpts ? `2 or 3 quick replies Jared would most likely tap next, written as HE would say them, chosen from the WHOLE conversation below (what he is trying to get done, what is already decided, what is waiting on him), not just the last reply. Be specific: name the real thing ("Commit the Sky fix", "Show the failing query", "Open the Run card"). Each is 2 to 5 words and at most ${OPTION_MAX_CHARS} characters, no ellipsis, no punctuation at the end, the most likely one first. If the reply asks a yes/no, give the yes and the no in his words ("Do it", "Not now"). NEVER use "Keep going", "Continue", "What else", "Tell me more", "Nothing else" or "Thanks". If you cannot think of two specific ones, return an empty array.` : "return an empty array."}`,
+        user: `${digest ? `Conversation so far (oldest first):\n${digest}\n\n` : ""}Jared's latest message:\n${ask.slice(0, 1500)}\n\nScout's reply:\n${body.slice(0, 6000)}`,
         validate: (j: any) => (Array.isArray(j?.options) && typeof j?.body === "string" ? null : "needs body and options"),
       });
       const j = r.json as { body: string; options: string[] };
       const nb = stripMarkdown(String(j.body ?? "").trim());
       // Use the rewrite only if it really is shorter and is not the model talking to itself.
       if (tooLong && nb && words(nb) < words(body) && words(nb) >= 5 && !thinkingLeak(nb)) body = nb;
-      const opts = (j.options ?? []).map((o) => String(o).replace(/[|\n]/g, " ").trim().slice(0, 40)).filter(Boolean).slice(0, 4);
-      if (needOpts && opts.length >= 2) return `${body}\n\nOPTIONS: ${opts.join(" | ")}`;
+      // Generated buttons: specific, short enough to show whole, never a generic one. Dropped, not shortened.
+      const opts = (j.options ?? []).map(cleanOption).filter((o) => o && o.length <= OPTION_MAX_CHARS && !GENERIC_OPTION.test(o)).slice(0, 3);
+      const merged = [...hadOpts, ...opts.filter((o) => !hadOpts.some((h) => h.toLowerCase() === o.toLowerCase()))].slice(0, 3);
+      if (needOpts && merged.length >= 2) return `${body}\n\nOPTIONS: ${merged.join(" | ")}`;
     }
+    // No buttons beats generic buttons: fewer than two good ones means no OPTIONS line at all (v44).
     return hadOpts.length >= 2 ? `${body}\n\nOPTIONS: ${hadOpts.join(" | ")}` : body;
   } catch {
-    return reply;   // never block a reply on formatting
+    // never block a reply on formatting - but never let a leak through either
+    if (rawToolJson(reply) || narratesStep(reply)) return NOT_AN_ANSWER;
+    const mm = reply.match(/^\s*OPTIONS:\s*(.+)$/m);
+    const keep = mm ? mm[1].split("|").map(cleanOption).filter((o) => o && o.length <= OPTION_MAX_CHARS && !GENERIC_OPTION.test(o)) : [];
+    const bare = reply.replace(/^\s*OPTIONS:.*$/m, "").trim();
+    return keep.length >= 2 ? `${bare}\n\nOPTIONS: ${keep.join(" | ")}` : bare;
   }
 }
 
@@ -747,11 +783,10 @@ the one you recommend first. Use it for a yes/no, for a pick between approaches,
 for "want me to keep going" - any time the alternative is him typing a word back.
 
 End EVERY reply with this line. There is no reply that does not have a sensible next
-tap: after a plain answer or a status, offer where to go next ("Keep going", "Check
-the other one", "Nothing else"). The one you must never omit it on is the one you are
-most likely to - "want me to keep going" - because that is precisely the moment he
-would otherwise have to type. If you leave it off, his window generates buttons for
-you, and generic buttons are worse than the ones you would have written.
+tap: after a plain answer or a status, offer where to go next, named for the real thing
+("Check the Sky build", "Open the failing job"), never a bare "Keep going" or "What else". If you
+leave it off, his window shows no buttons (v44: no generic ones), so the next tap is yours to write.
+"Keep going" is not a yes: if you need his yes, ask for it with Do it | Not now.
 
 Never explain the line, never use the word OPTIONS in your prose, and never put it
 anywhere but the very end.
@@ -1236,7 +1271,7 @@ const ASKED_HIM = /^\s*OPTIONS:[^\n]*\b(yes|no|do it|not now|go ahead|apply|appr
  * "plan with opus and execute with sonnet"). Oct 7-10: 20 such asks, paid ran once, because free-first ignored them.
  * A question about it ("are you using paid AI?") is not an ask.
  */
-const WANTS_PAID = /\b(use|using|switch(?: it)? to|with|try|on|go)\s+(?:the\s+)?(?:paid|pair)(?:\s*ai)?\b|\b(use|with|plan with|execute with|switch to)\s+(?:claude\s+)?(opus|sonnet|claude)\b|\bop(?:us)?\.?\s?5(?:\.5)?\b/i;
+const WANTS_PAID = /\b(?:use|using|switch(?: it| over)? to|go to|turn on|enable|try)\s+(?:the\s+)?(?:paid|pair)(?:\s*(?:ai|mode|model|claude))?\b(?!\s+(?:trips?|invoices?|subscriptions?|plans?|accounts?|users?|customers?|rentals?|guests?|bookings?|tiers?|features?|listings?|only))|\b(?:with|on|run (?:it )?on)\s+(?:the\s+)?(?:paid|pair)\s*ai\b|\b(?:use|with|plan with|execute with|switch to|go with|run (?:it )?(?:on|with))\s+(?:claude\s+)?(?:opus|sonnet|claude(?!\s+code))\b|\bop(?:us)?\.?\s?5(?:\.5)?\b/i;
 const ASKS_ABOUT_PAID = /^\s*(are|is|was|were|did|do|does|am)\b[^?]*\bpaid\b[^?]*\?\s*$/i;
 /** v43: a reply that is the model's plan or next step, not an answer ("We need to find…", "Let's read X", "Next: search…"). */
 const NARRATES_STEP = /^\s*(?:we (?:need|should|must) to|we're in the|let'?s|need to|next,? (?:we|i|let)|i(?:'ll| will) (?:now )?(?:read|check|search|look|list|open|find)|first,? (?:we|i|let)|maybe (?:it|the|there))\b|\blet'?s (?:read|list|search|check|look|open|find|try|grep|see)\b|\b(?:use|call) (?:read_file|list_files|search_code|run_sql)\b/i;
@@ -1492,10 +1527,14 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
     return tries >= TRY_MAX;
   };
 
-  const [{ data: hist }, { data: today }] = await Promise.all([
+  const [{ data: hist }, { data: today }, { data: lessonRows }] = await Promise.all([
     db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(10),
     db.rpc("admin_today"),
+    // v44 (audit Oct 10): paid Scout got the top 30 lessons in its prompt; free Scout saw one only after a tool failed. Same 30, one line each.
+    db.from("scout_lessons").select("scope, title, do_text, wins, losses").eq("active", true)
+      .order("wins", { ascending: false }).order("updated_at", { ascending: false }).limit(30),
   ]);
+  const freeLessons = ((lessonRows ?? []) as any[]).map((l) => `- [${l.scope}] ${l.title}: ${l.do_text}`.replace(/\s+/g, " ").slice(0, 150)).join("\n").slice(0, 4200);
   const saidYes = !autopilot && PLAIN_YES.test(text);
   const queue = ((today ?? []) as any[]).slice(0, 12).map((q) => `- [${q.key}] rank ${q.rank} ${q.title}${q.detail ? `: ${String(q.detail).slice(0, 140)}` : ""}`).join("\n");
 
@@ -1533,7 +1572,7 @@ STUCK: <what blocks it>`
     : `Reply: plain text, under 90 words, lead with the answer, no markdown headers. When he needs to choose or approve, end with one line: OPTIONS: <2-4 short choices separated by |>. A plain answer needs no options. If, after using your tools, you truly cannot make progress, reply with one line STUCK: <what blocks it> (it counts as one try).`}
 
 ${FREE_FACTS}
-
+${freeLessons ? `\nWhat you have learned (lessons from past mistakes, best first; follow them before you guess):\n${freeLessons}\n` : ""}
 Main tables (public schema):
 - turo_trips: reservation_id, guest_first, guest_last, starts_at, ends_at, status, earnings, airport_code, pickup_city.
 - turo_vehicle_state: battery_pct, range_real, inside_temp, locked, charging_state, observed_at (the Tesla).
@@ -1583,7 +1622,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   // v41 (chief of staff): classify once, in code. A question answers within 8 tool calls; a task gets 25 a round.
   const isQ = classifyAsk(goal) === "question" && !(prior?.pending);   // autopilot texts ("Autopilot fix attempt...") classify as tasks, so only real questions get the 8-call budget
   const callBudget = isQ ? QUESTION_CALLS : TASK_CALLS;
-  let forceAnswer = false, inTokens = 0, endHop = false;
+  let forceAnswer = false, inTokens = 0, endHop = false, answerRerun = false;
   const repeats = new Map<string, number>();   // same tool + same arguments, this request
   const codeJob = !autopilot && tools.some((t) => t.function.name === "commit_files");   // v38: code steps use the coding ladder
   let pendingTry: { what: string; why: string } | null = null;
@@ -1670,7 +1709,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       const reply = r.content.trim();
       if (!reply) { fails++; if (forceAnswer || fails > 2) break; continue; }
       const nudge = (why: string) => { msgs.push({ role: "assistant", content: reply }); msgs.push({ role: "user", content: why }); nudges++; };
-      if (!forceAnswer && NARRATES_STEP.test(reply) && nudges < 3) {
+      if (!forceAnswer && (NARRATES_STEP.test(reply) || narratesStep(reply) || rawToolJson(reply)) && nudges < 3) {
         nudge("You wrote your plan or your next step as text. Jared can't see your tools and shouldn't have to say keep going: call the tool now. When the job is done (or you truly need him), reply with the result, not the plan.");
         continue;
       }
@@ -1698,6 +1737,21 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
         msgs.push({ role: "assistant", content: reply });
         msgs.push({ role: "user", content: `Try ${tries + 1} of ${TRY_MAX}: you said you were stuck (${stuckWhy.slice(0, 160)}). Take a different approach with your tools, then answer.` });
         continue;
+      }
+      // v44 final-answer guard: the nudges above are spent and it is STILL the plan or raw tool JSON. Re-run the answer step once with
+      // tools off; if that is not an answer either, hand back a plain status built from what the tools actually returned. Never the raw text.
+      {
+        const ownText = reply.replace(/^\s*OPTIONS:.*$/gm, "").trim();
+        if (rawToolJson(ownText) || narratesStep(ownText)) {
+          if (!answerRerun) {
+            answerRerun = true; forceAnswer = true;
+            msgs.push({ role: "assistant", content: reply });
+            msgs.push({ role: "user", content: ANSWER_NOW });
+            continue;
+          }
+          const found = notes.length ? ` What I found: ${oneLine(notes[notes.length - 1])}` : "";
+          return { answer: `I ran ${newCalls + (prior?.steps ?? 0)} step${newCalls + (prior?.steps ?? 0) === 1 ? "" : "s"} on this but did not get to a clean answer.${found}${vm ? "\nSTUCK: the free AI did not reach a clean answer." : ""}`, why: "", tools: used, more: false };
+        }
       }
       // Normalize the options line; fewer than two choices means no line.
       const m = reply.match(/^\s*OPTIONS:\s*(.+)$/m);
@@ -1831,7 +1885,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       msgs.push({ role: "user", content: "Stop using tools now. In under 90 words, tell Jared what you found so far and what is left, using only the tool results above. Start with one short sentence (under 20 words) that says where you are. No options line." });
       const s = await llmChat({ messages: msgs, tools, trim: rungTrimmer(msgs), toolChoice: "none", maxTokens: 700, deadlineMs: Math.min(20_000, Math.max(6_000, reqStartedAt + REQ_HARD_MS - Date.now() - 6_000)), job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
       const sum = s.content.replace(/^\s*OPTIONS:.*$/m, "").trim();
-      if (sum && !s.toolCalls.length) {
+      if (sum && !s.toolCalls.length && !rawToolJson(sum) && !narratesStep(sum)) {
         return autopilot
           ? { answer: `${sum.replace(/^(FIXED|NEEDS_YES|STUCK):.*$/gm, "").trim()}\nSTUCK: the free AI ran out of time before finishing.`, why: "", tools: used }
           // v33: out of steps with work in hand is not a stop on free AI: the handler picks it back up by itself.
