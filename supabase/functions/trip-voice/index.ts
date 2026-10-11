@@ -5,7 +5,7 @@
 //   POST {op:"session", token}            from the trip page. The guest's trip token (or a demo page) buys a short-lived
 //                                         signed voice session. The page gets {signed_url, key}; only the opaque key goes
 //                                         to the voice platform as the dynamic variable trip_key, never the trip token.
-//                                         Max 8 sessions per trip per hour.
+//                                         Max 20 sessions per trip per hour (40 on demo pages).
 //
 //   POST ?tool=<name>  {trip_key, conversation_id, ...}   from the voice platform (Leo's server tools).
 //                                         The first call checks with ElevenLabs that conversation_id is a live call of
@@ -26,7 +26,7 @@ const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { sta
 
 const XI = "https://api.elevenlabs.io/v1";
 const AGENT_SLUG = "leo";
-const NO_TRIP = { ok: false, error: "No trip is linked to this chat. Ask the guest to open their trip page and tap Talk to Leo there." };
+const NO_TRIP = { ok: false, error: "No trip is linked to this chat. Ask the guest to open their trip page and tap Talk to our team 24/7 there." };
 
 type Session = { key: string; token: string; conversation_id: string | null; expires_at: string };
 type Any = Record<string, unknown>;
@@ -54,21 +54,23 @@ async function openSession(b: Any): Promise<Response> {
   }
   const since = new Date(Date.now() - 3600_000).toISOString();
   const { count } = await sb.from("trip_voice_sessions").select("key", { count: "exact", head: true }).eq("token", token).gte("created_at", since);
-  if ((count ?? 0) >= 8) return json({ ok: false, error: "Leo is taking a short break on this trip. Try the text helper, or message your host in the Turo app." }, 429);
+  // Opening the card starts a call, so a guest who opens and closes it a few times uses several sessions.
+  // Demo pages get more room: the host tests and shows them off.
+  if ((count ?? 0) >= (demo ? 40 : 20)) return json({ ok: false, error: "Leo is busy on this trip right now. Try again in a few minutes, or message your host in the Turo app." }, 429);
 
   const aid = await agentId();
   const key = await xiKey();
-  if (!aid || !key) return json({ ok: false, error: "Leo isn't available right now. Try the text helper below." }, 503);
+  if (!aid || !key) return json({ ok: false, error: "Leo isn't available right now. Try again in a minute, or message your host in the Turo app." }, 503);
   const r = await fetch(`${XI}/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(aid)}`, { headers: { "xi-api-key": key } });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.signed_url) {
     await sb.rpc("bestly_raise", { p_key: `agent.line.${AGENT_SLUG}`, p_kind: "problem", p_severity: "warning",
       p_title: "Leo: guests can't start a voice chat", p_body: `The voice platform refused a session (${r.status}).`, p_area: "agents" }).then(() => {}, () => {});
-    return json({ ok: false, error: "Leo isn't available right now. Try the text helper below." }, 502);
+    return json({ ok: false, error: "Leo isn't available right now. Try again in a minute, or message your host in the Turo app." }, 502);
   }
   const sessionKey = `tv_${hex(24)}`;
   const ins = await sb.from("trip_voice_sessions").insert({ key: sessionKey, agent_slug: AGENT_SLUG, token });
-  if (ins.error) return json({ ok: false, error: "Leo isn't available right now. Try the text helper below." }, 500);
+  if (ins.error) return json({ ok: false, error: "Leo isn't available right now. Try again in a minute, or message your host in the Turo app." }, 500);
   return json({ ok: true, signed_url: j.signed_url, key: sessionKey });
 }
 
@@ -79,7 +81,7 @@ async function session(b: Any): Promise<Session | Response> {
   if (!/^tv_[0-9a-f]{48}$/.test(k)) return json(NO_TRIP);
   if (!/^conv_[A-Za-z0-9]+$/.test(conv)) return json({ ok: false, error: "no conversation" }, 401);
   const { data: s } = await sb.from("trip_voice_sessions").select("key, token, conversation_id, expires_at").eq("key", k).maybeSingle();
-  if (!s || Date.parse(s.expires_at) < Date.now()) return json({ ok: false, error: "This chat timed out. Ask the guest to tap Talk to Leo again." });
+  if (!s || Date.parse(s.expires_at) < Date.now()) return json({ ok: false, error: "This chat timed out. Ask the guest to tap Talk to our team 24/7 again." });
   if (s.conversation_id) return s.conversation_id === conv ? s as Session : json({ ok: false, error: "wrong conversation" }, 401);
 
   // First tool call of this conversation: confirm with the voice platform, then bind.

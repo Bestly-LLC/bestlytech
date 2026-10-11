@@ -106,8 +106,12 @@ export function LeoWidget({ token, context, home, onClose }: { token: string; co
   useEffect(() => {
     let live = true;
     track(token, "ask", { via: "leo-widget" });
-    Promise.all([loadEmbed(), supabase.functions.invoke("trip-voice", { body: { op: "session", token } })]).then(([, res]) => {
-      const r = res.data as { ok?: boolean; signed_url?: string; key?: string; error?: string } | null;
+    Promise.all([loadEmbed(), supabase.functions.invoke("trip-voice", { body: { op: "session", token } })]).then(async ([, res]) => {
+      let r = res.data as { ok?: boolean; signed_url?: string; key?: string; error?: string } | null;
+      // On a refusal (429 busy, 404 inactive link) supabase-js puts the body on the error; read it so the guest sees why.
+      if (res.error && !r) {
+        try { r = await (res.error as { context?: Response }).context?.json(); } catch { /* keep the generic line */ }
+      }
       if (!live) return;
       if (res.error || !r?.ok || !r.signed_url || !r.key) { setErr(r?.error ?? "Leo didn't load. Try again in a minute, or message your host in the Turo app."); return; }
       setS({ url: r.signed_url, key: r.key });
