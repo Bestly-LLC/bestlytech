@@ -26,6 +26,10 @@ Tickets: `leo_file_ticket` writes `support_tickets` with `source = 'agent:leo'`,
 
 CSP: trip pages (`/(t|lax|d)/:path*`, `/lax`) got their own CSP that allows `wss://api.elevenlabs.io`. The SDK's audio worklets and resampler are self-hosted in `public/vendor/elevenlabs/` (from `@elevenlabs/client` 1.27.0 and `libsamplerate-js` 2.1.2) because the CSP blocks `blob:` worklets and jsDelivr. Update those files when the SDK is upgraded.
 
+iPhone audio: iOS only plays sound from an AudioContext unlocked inside a tap, and `@elevenlabs/client` arms that unlock as a side effect of being imported. Importing it after the tap (the first version did) left the speaker silent: ElevenLabs generated Leo's voice but the phone never played it. `LeoVoice` now imports the SDK when the sheet opens (never on page load) and lets the SDK ask for the mic itself. Closing the sheet hangs up.
+
+UI (2026-10-11): ElevenLabs-widget style white card (gradient orb, black "Call Leo" pill, mute + End while live, last 6 lines of the call), two suggestions from the trip's stage and key state (`leoSuggestions` in `AskSheet.tsx`) that start a call and ask that question. The page button and sheet title read "Talk to our team 24/7". Mood tags the voice model writes ("[sad]") are stripped from the on-screen transcript and discouraged in the prompt.
+
 Watchdog: Switchboard (`agent-watch`) re-attaches Leo's `tool_ids` and webhook every 10 minutes; `trip-voice` raises `agent.line.leo` (signed "Leo:") when ElevenLabs refuses a session or a ticket can't be saved.
 
 ## Next

@@ -4,7 +4,7 @@
  * Opens in the same luggage bottom sheet as Pickup / Return.
  */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Loader2, MapPin, MessageCircleQuestion, MessageSquare, Navigation, Phone, RotateCcw, UserPlus, Wrench } from "lucide-react";
+import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Headset, Loader2, MapPin, MessageSquare, Navigation, Phone, RotateCcw, UserPlus, Wrench } from "lucide-react";
 import { ackText } from "./ExtraDrivers";
 import { useHasApp } from "./Guide";
 import { supabase } from "@/integrations/supabase/client";
@@ -118,7 +118,7 @@ export function AskButton({ onOpen }: { onOpen: () => void }) {
   return (
     <button type="button" onClick={onOpen}
       className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white/[0.08] text-[15px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98] motion-reduce:transition-none">
-      <MessageCircleQuestion className="h-[18px] w-[18px]" style={{ color: PEACH }} aria-hidden /> Ask any question here
+      <Headset className="h-[18px] w-[18px]" style={{ color: PEACH }} aria-hidden /> Talk to our team 24/7
     </button>
   );
 }
@@ -374,7 +374,19 @@ function Dots() {
 }
 
 const DRIVER_CHIPS = ["My key link doesn't work", "I accepted, but the car isn't in my Tesla app", "How do I unlock the car?", "Where is the car?"];
-export function AskSheet({ open, onClose, token, slug, home = false, driver = false }: { open: boolean; onClose: () => void; token?: string; slug?: string; home?: boolean; driver?: boolean }) {
+/** What Leo should offer to help with right now: two questions from the trip's stage and key state. */
+export type TripContext = { stage: "pickup" | "return" | null; keyState?: string | null };
+function leoSuggestions(ctx: TripContext | undefined, home: boolean): string[] {
+  const k = ctx?.keyState ?? null;
+  if (k === "soon" || k === "making") return ["Why isn't my key here yet?", "What do I need to do before pickup?"];
+  if (k === "problem") return ["My key isn't working. Can you fix it?", "Can you check on my key?"];
+  if (k === "ready") return ["Help me add the car to my Tesla app", "My key link isn't working"];
+  if (ctx?.stage === "pickup") return ["How do I unlock and start the car?", home ? "Where is the car parked?" : "How do I get into the garage?"];
+  if (ctx?.stage === "return") return ["Where can I Supercharge, and what will it cost?", "How much charge do I need when I return?"];
+  return ["My phone key isn't working", "How does charging work on this trip?"];
+}
+
+export function AskSheet({ open, onClose, token, slug, home = false, driver = false, context }: { open: boolean; onClose: () => void; token?: string; slug?: string; home?: boolean; driver?: boolean; context?: TripContext }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -475,7 +487,7 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
   })();
 
   return (
-    <TripSheet open={open} onClose={onClose} kicker="Trip helper" title="Ask any question here" footer={footer} bodyRef={body}>
+    <TripSheet open={open} onClose={onClose} kicker="Trip helper" title="Talk to our team 24/7" footer={footer} bodyRef={body}>
       {urgent && (
         <div className="mb-3 rounded-xl bg-[#E4527A]/20 p-3 text-[14px] font-semibold leading-snug text-white ring-1 ring-[#E4527A]/50">
           If anyone is hurt, call 911 first. Then use Roadside Assistance in the Turo app and message your host there.
@@ -489,7 +501,7 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
         </div>
       )}
       {/* Leo, the voice helper: personal trip links and the host's demo pages only (his tools are scoped to one trip). */}
-      {token && !driver && <LeoVoice token={token} />}
+      {token && !driver && <LeoVoice token={token} open={open} suggestions={leoSuggestions(context, home)} />}
       {msgs.length === 0 ? (
         <div>
           <p className="text-[15px] leading-relaxed text-white/75">{driver ? "Ask anything about your phone key or getting into the car. I can check your key and send a fresh one if it's not working." : home ? "Ask anything about your phone key, finding the car, driving it, or returning it." : "Ask anything about getting to the garage, the lobby door, the car, or returning it."} Answers come from your trip guide.</p>
