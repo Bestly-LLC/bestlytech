@@ -1,6 +1,6 @@
 {
- "generated_at": "2026-10-11T18:39:11.941Z",
- "source": "http://127.0.0.1:4173",
+ "generated_at": "2026-10-11T21:39:13.527Z",
+ "source": "https://www.bestly.tech",
  "pages": [
   {
    "path": "/",
@@ -205,6 +205,11 @@
      "text": "Share what's really on your mind. Anonymous, private, and judgment-free.Fully anonymous postingEnd-to-end encryptionNo account requiredCommunity moderationLive"
     },
     {
+     "heading": "Bestly Agent",
+     "label": "Live",
+     "text": "An AI that answers your business phone and does the work while it talks.Answers every call, day or nightBooks, refunds and dispatches while it talksTexts confirmations for youHands you the calls that need a personLearn MoreLive"
+    },
+    {
      "heading": "Bestly Studio",
      "label": "Live",
      "text": "We make your social posts. You approve them from your phone. We post them.Posts and short videos made for youA person at Bestly checks every postApprove from your phoneWe post to your InstagramLearn MoreLive"
@@ -342,7 +347,7 @@
     {
      "heading": "Service Status",
      "label": "Live system health",
-     "text": "Real-time system health and community statisticsAll Systems OperationalLast checked 11:38:37 AM620Total Patterns372Domains Covered17.4%Success Rate35Active Today207High Confidence Patterns4.7/10Avg. Confidence Score+108New Domains (7 days)Updates every 60 seconds • Community-driven data"
+     "text": "Real-time system health and community statisticsAll Systems OperationalLast checked 2:38:07 PM620Total Patterns372Domains Covered17%Success Rate35Active Today207High Confidence Patterns4.7/10Avg. Confidence Score+108New Domains (7 days)Updates every 60 seconds • Community-driven data"
     },
     {
      "heading": "Need Help?",
@@ -720,6 +725,72 @@
    ]
   },
   {
+   "path": "/agent",
+   "name": "Bestly Agent",
+   "sections": [
+    {
+     "heading": "An AI that answers your business phone.",
+     "label": "Bestly Agent",
+     "text": "It picks up every call, day or night, talks like a real person, and does the work while it talks: books the appointment, updates your software, and texts the confirmation.Watch a call Talk to Maya liveOr call Maya: (213) 641-0074MayaLedgerly · AI agentOn a callThanks for calling Ledgerly support, this is Maya. Who do I have the pleasure of helping today?Hey, it's Dan Ortiz from Ortiz Landscaping. I think you guys charged me twice this month.Found the account and the duplicate chargeA sample call"
+    },
+    {
+     "heading": "Like a great receptionist who also knows your software.",
+     "label": "What it does",
+     "text": ""
+    },
+    {
+     "heading": "Answers every call",
+     "text": "Day or night. No hold music, no voicemail. Every caller talks to someone right away."
+    },
+    {
+     "heading": "Does the work",
+     "text": "Books the appointment, issues the refund, sends the technician. She does it in the software you already use."
+    },
+    {
+     "heading": "Texts and emails for you",
+     "text": "Confirmations, forms and links go out while she is still on the phone with them."
+    },
+    {
+     "heading": "Hands you the hot ones",
+     "text": "When a call needs a person, she alerts you or transfers it. Nothing important gets lost.Any industry"
+    },
+    {
+     "heading": "Works for any business that gets phone calls.",
+     "label": "Any industry",
+     "text": "Pick one to watch that call play out above.Software supportFixes a double charge and adds a teammate to the account.Watch this call Dental officeBooks an after-hours emergency visit and texts the new-patient forms.Watch this call Home servicesCalms a burst-pipe call and sends the on-call plumber.Watch this call Real estateQualifies a buyer and books a Saturday showing.Watch this call RestaurantFinds a table, flags an allergy for the kitchen, and texts a confirmation.Watch this call YoursTell May"
+    },
+    {
+     "heading": "How it works",
+     "label": "Three steps",
+     "text": "1"
+    },
+    {
+     "heading": "We learn your business",
+     "label": "1",
+     "text": "Your hours, prices, policies and the questions people always ask. She answers from that, in your voice.2"
+    },
+    {
+     "heading": "Connect your phone and tools",
+     "label": "2",
+     "text": "You keep your phone number. We connect your calendar, customer list or help desk so she can do the work.3"
+    },
+    {
+     "heading": "Read every call",
+     "label": "3",
+     "text": "Each call comes with a short summary of what happened, and you can listen back to the recording.Live"
+    },
+    {
+     "heading": "Try her right now.",
+     "label": "Live",
+     "text": "Maya is a Bestly Agent. Talk to her the way your customers would. Talk to MayaCall (213) 641-0074"
+    },
+    {
+     "heading": "Get your own agent.",
+     "text": "Tell us about your business and your phone line. We will show you what she would do on your calls.Get your own agent"
+    }
+   ]
+  },
+  {
    "path": "/neckpilot",
    "name": "NeckPilot",
    "sections": [
@@ -989,7 +1060,7 @@
    "sections": [
     {
      "heading": "Marketplace Account Setup",
-     "text": "Complete this form to get your seller accounts set up professionally.ID: 25d96a2eStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review"
+     "text": "Complete this form to get your seller accounts set up professionally.ID: fd177c6fStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review"
     },
     {
      "heading": "Before You Begin",

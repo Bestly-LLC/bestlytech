@@ -139,6 +139,9 @@ Simplify HOA management. Violations, dues, and community comms — finally under
 ### Confesh (In Development)
 Share what's really on your mind. Anonymous, private, and judgment-free.Fully anonymous postingEnd-to-end encryptionNo account requiredCommunity moderationLive
 
+### Bestly Agent (Live)
+An AI that answers your business phone and does the work while it talks.Answers every call, day or nightBooks, refunds and dispatches while it talksTexts confirmations for youHands you the calls that need a personLearn MoreLive
+
 ### Bestly Studio (Live)
 We make your social posts. You approve them from your phone. We post them.Posts and short videos made for youA person at Bestly checks every postApprove from your phoneWe post to your InstagramLearn MoreLive
 
@@ -226,7 +229,7 @@ $7.99/yrSave 33%Unlimited sitesTracking cookie cleaningSaved preferencesPriority
 Cookie Yeti shows you exactly how much time you're saving12Today87This Week1,234All TimeAnonymous, non-personal stats — never tied to you or the pages you visitLive system health
 
 ### Service Status (Live system health)
-Real-time system health and community statisticsAll Systems OperationalLast checked 11:38:37 AM620Total Patterns372Domains Covered17.4%Success Rate35Active Today207High Confidence Patterns4.7/10Avg. Confidence Score+108New Domains (7 days)Updates every 60 seconds • Community-driven data
+Real-time system health and community statisticsAll Systems OperationalLast checked 2:38:07 PM620Total Patterns372Domains Covered17%Success Rate35Active Today207High Confidence Patterns4.7/10Avg. Confidence Score+108New Domains (7 days)Updates every 60 seconds • Community-driven data
 
 ### Need Help?
 (heading only)
@@ -478,6 +481,47 @@ Is it all done by a computer?No. We use software, including AI tools, to draft, 
 ### Talk to us first. It is free.
 Tell us about your business. We will tell you what we would post and how it would work.Book a free call Or email studio@bestly.tech
 
+## Bestly Agent (/agent)
+
+### An AI that answers your business phone. (Bestly Agent)
+It picks up every call, day or night, talks like a real person, and does the work while it talks: books the appointment, updates your software, and texts the confirmation.Watch a call Talk to Maya liveOr call Maya: (213) 641-0074MayaLedgerly · AI agentOn a callThanks for calling Ledgerly support, this is Maya. Who do I have the pleasure of helping today?Hey, it's Dan Ortiz from Ortiz Landscaping. I think you guys charged me twice this month.Found the account and the duplicate chargeA sample call with a made-up business.Sample callsWatch Maya take a callPick a kind of business and press play. On one side, the call. On the other, the software Maya updates while she talks.Software supportDental
+
+### Like a great receptionist who also knows your software. (What it does)
+(heading only)
+
+### Answers every call
+Day or night. No hold music, no voicemail. Every caller talks to someone right away.
+
+### Does the work
+Books the appointment, issues the refund, sends the technician. She does it in the software you already use.
+
+### Texts and emails for you
+Confirmations, forms and links go out while she is still on the phone with them.
+
+### Hands you the hot ones
+When a call needs a person, she alerts you or transfers it. Nothing important gets lost.Any industry
+
+### Works for any business that gets phone calls. (Any industry)
+Pick one to watch that call play out above.Software supportFixes a double charge and adds a teammate to the account.Watch this call Dental officeBooks an after-hours emergency visit and texts the new-patient forms.Watch this call Home servicesCalms a burst-pipe call and sends the on-call plumber.Watch this call Real estateQualifies a buyer and books a Saturday showing.Watch this call RestaurantFinds a table, flags an allergy for the kitchen, and texts a confirmation.Watch this call YoursTell Maya what you do and she’ll show you how it would work.Talk to Maya Three steps
+
+### How it works (Three steps)
+1
+
+### We learn your business (1)
+Your hours, prices, policies and the questions people always ask. She answers from that, in your voice.2
+
+### Connect your phone and tools (2)
+You keep your phone number. We connect your calendar, customer list or help desk so she can do the work.3
+
+### Read every call (3)
+Each call comes with a short summary of what happened, and you can listen back to the recording.Live
+
+### Try her right now. (Live)
+Maya is a Bestly Agent. Talk to her the way your customers would. Talk to MayaCall (213) 641-0074
+
+### Get your own agent.
+Tell us about your business and your phone line. We will show you what she would do on your calls.Get your own agent
+
 ## NeckPilot (/neckpilot)
 
 ### Fly Aware. Adjust Early. (Coming Soon)
@@ -661,7 +705,7 @@ Let's discuss how Apple-native infrastructure can transform your business operat
 ## Marketplace setup service (/marketplace-setup)
 
 ### Marketplace Account Setup
-Complete this form to get your seller accounts set up professionally.ID: 25d96a2eStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review
+Complete this form to get your seller accounts set up professionally.ID: fd177c6fStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review
 
 ### Before You Begin
 Select the platforms you'd like to set up, then review what you'll need. This form takes about 15-20 minutes.Which platforms are you setting up? *AmazonSell on Amazon Seller CentralShopifyLaunch your own Shopify storeTikTok ShopSell directly on TikTokDon't have all of these yet? No problem — you can save your progress and come back anytime.
