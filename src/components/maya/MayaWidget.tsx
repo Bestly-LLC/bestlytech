@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState, type ElementType } from "reac
 import { useLocation, useNavigate } from "react-router-dom";
 import { Mic } from "lucide-react";
 import "./maya-widget.css";
-import { mayaProductForPath, resolveSiteModal, resolveSitePage } from "./siteTools";
+import { mayaProductForPath } from "./siteTools";
+import { presenterTools } from "./presenter";
+import { getMayaSession, mayaDiag, SESSION_FRESH_MS } from "./mayaSession";
 
 /**
  * "Talk to Maya" - Bestly's voice + chat agent (ElevenLabs), on public marketing pages only.
@@ -18,12 +20,13 @@ import { mayaProductForPath, resolveSiteModal, resolveSitePage } from "./siteToo
  *   sets call_mode: Maya defaults to inbound.
  * - Allowed routes are an explicit allowlist (siteTools.ts). Never add /admin, /partner, token pages (/brief,
  *   /intake, /shield/request) or anything authenticated.
- * - Maya's client tools (navigate_site_page, open_site_modal) are registered on the embed's
- *   `elevenlabs-convai:call` event. They move the visitor with in-app navigation so the call keeps going, and only
- *   to pages on that same allowlist. See siteTools.ts.
+ * - Maya's client tools (navigate_site_page, open_site_modal, show_section, describe_screen) come from presenter.ts
+ *   and are registered on the embed's `elevenlabs-convai:call` event. In-app navigation, so the call keeps going.
+ * - Private agent (2026-10-11): the widget never gets Maya's agent id. On tap it asks maya-session for a signed URL
+ *   (origin + per-visitor limits checked there) and hands that to the embed. Signed URLs must start a call within
+ *   about 15 minutes, so an idle open widget refreshes it every 12 minutes, but never during a call.
  */
 
-const MAYA_AGENT_ID = "agent_3701m4jbjnyef6ga4ys73xtbz37s";
 const MAYA_PHONE_DISPLAY = "(213) 641-0074";
 const MAYA_PHONE_TEL = "tel:+12136410074";
 
@@ -102,56 +105,17 @@ export function MayaWidget() {
   const navigate = useNavigate();
   const product = mayaProductForPath(pathname);
   const [phase, setPhase] = useState<Phase>("idle");
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const mounted = useRef(true);
   const widgetEl = useRef<HTMLElement | null>(null);
+  const callStartedAt = useRef(0);
+  const urlAt = useRef(0);
   // Tools run long after render; read the latest route and navigate through refs, never a stale closure.
   const pathRef = useRef(pathname);
   pathRef.current = pathname;
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
-
-  // Register Maya's client tools on the embed. The event fires each time a conversation starts.
-  useEffect(() => {
-    const el = widgetEl.current;
-    if (phase !== "ready" || !el) return;
-
-    const go = (path: string, hash = "") => {
-      if (path !== pathRef.current) navigateRef.current(path);
-      if (hash) {
-        // Wait a frame for the new page to render, then bring the section into view.
-        requestAnimationFrame(() =>
-          setTimeout(() => document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" }), 120),
-        );
-      } else if (path !== pathRef.current) {
-        window.scrollTo({ top: 0 });
-      }
-    };
-
-    const clientTools = {
-      navigate_site_page: async (params: { page_path?: unknown } = {}) => {
-        const r = resolveSitePage(params?.page_path, window.location.hostname);
-        if ("say" in r) return r.say;
-        const already = r.path === pathRef.current;
-        go(r.path, r.hash);
-        return already && !r.hash ? `They are already on the ${r.name} page.` : `Opened the ${r.name} page.`;
-      },
-      open_site_modal: async (params: { modal_type?: unknown } = {}) => {
-        const r = resolveSiteModal(params?.modal_type, pathRef.current);
-        if (!r.ok) return r.say;
-        go(r.path);
-        return r.say;
-      },
-    };
-
-    const onCall = (event: Event) => {
-      const detail = (event as CustomEvent<{ config?: Record<string, unknown> }>).detail;
-      if (!detail?.config) return;
-      const existing = (detail.config.clientTools as Record<string, unknown> | undefined) ?? {};
-      detail.config.clientTools = { ...existing, ...clientTools };
-    };
-    el.addEventListener("elevenlabs-convai:call", onCall);
-    return () => el.removeEventListener("elevenlabs-convai:call", onCall);
-  }, [phase]);
 
   useEffect(() => {
     mounted.current = true;
@@ -160,19 +124,64 @@ export function MayaWidget() {
     };
   }, []);
 
+  // Register Maya's client tools on the embed. The event fires each time a conversation starts.
+  useEffect(() => {
+    const el = widgetEl.current;
+    if (phase !== "ready" || !el) return;
+    const tools = presenterTools({ navigate: () => navigateRef.current, path: () => pathRef.current });
+    const onCall = (event: Event) => {
+      callStartedAt.current = Date.now();
+      const detail = (event as CustomEvent<{ config?: Record<string, unknown> }>).detail;
+      if (!detail?.config) return;
+      const existing = (detail.config.clientTools as Record<string, unknown> | undefined) ?? {};
+      detail.config.clientTools = { ...existing, ...tools };
+    };
+    el.addEventListener("elevenlabs-convai:call", onCall);
+    return () => el.removeEventListener("elevenlabs-convai:call", onCall);
+  }, [phase]);
+
+  // Keep the signed URL fresh while the widget sits open, but never swap it during a call (calls run 10 minutes max).
+  useEffect(() => {
+    if (phase !== "ready") return;
+    const t = setInterval(async () => {
+      if (document.hidden) return;
+      if (Date.now() - urlAt.current < SESSION_FRESH_MS) return;
+      if (Date.now() - callStartedAt.current < 11 * 60_000) return;
+      const s = await getMayaSession(pathRef.current);
+      if ("signedUrl" in s && mounted.current) {
+        urlAt.current = s.at;
+        setSignedUrl(s.signedUrl);
+      }
+    }, 60_000);
+    return () => clearInterval(t);
+  }, [phase]);
+
   const prefetch = useCallback(() => {
     loadEmbed().catch(() => {});
   }, []);
 
-  const open = useCallback(() => {
+  const open = useCallback(async () => {
     setPhase("loading");
-    loadEmbed().then(
-      () => mounted.current && setPhase("ready"),
-      () => {
-        if (reloadUnderMarketingCsp()) return;
-        if (mounted.current) setPhase("error");
-      },
-    );
+    setNote(null);
+    const [session] = await Promise.all([
+      getMayaSession(window.location.pathname),
+      loadEmbed().catch((e: unknown) => e),
+    ]);
+    if (!mounted.current) return;
+    if (!customElements.get("elevenlabs-convai")) {
+      if (reloadUnderMarketingCsp()) return;
+      mayaDiag("embed_load_failed");
+      setPhase("error");
+      return;
+    }
+    if ("error" in session) {
+      setNote(session.error);
+      setPhase("error");
+      return;
+    }
+    urlAt.current = session.at;
+    setSignedUrl(session.signedUrl);
+    setPhase("ready");
   }, []);
 
   // After the one-time CSP reload above, pick up where the visitor left off.
@@ -180,7 +189,7 @@ export function MayaWidget() {
     try {
       if (sessionStorage.getItem(REOPEN_KEY)) {
         sessionStorage.removeItem(REOPEN_KEY);
-        if (mayaProductForPath(window.location.pathname)) open();
+        if (mayaProductForPath(window.location.pathname)) void open();
       }
     } catch {
       /* storage off: they can tap again */
@@ -193,10 +202,10 @@ export function MayaWidget() {
 
   return (
     <div className="maya">
-      {phase === "ready" ? (
+      {phase === "ready" && signedUrl ? (
         <ConvaiElement
           ref={widgetEl}
-          agent-id={MAYA_AGENT_ID}
+          signed-url={signedUrl}
           dynamic-variables={dynamicVariables}
           text-contents={TEXT_CONTENTS}
           variant="full"
@@ -212,13 +221,13 @@ export function MayaWidget() {
         <div className="maya-launcher-wrap">
           {phase === "error" && (
             <p role="alert" className="maya-note">
-              Maya didn&rsquo;t load. Try again, or call us.
+              {note ?? "Maya didn\u2019t load. Try again, or call us."}
             </p>
           )}
           <button
             type="button"
             className="maya-launcher"
-            onClick={open}
+            onClick={() => void open()}
             onPointerEnter={prefetch}
             onFocus={prefetch}
             onTouchStart={prefetch}

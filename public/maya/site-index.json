@@ -1,0 +1,1042 @@
+{
+ "generated_at": "2026-10-11T18:39:11.941Z",
+ "source": "http://127.0.0.1:4173",
+ "pages": [
+  {
+   "path": "/",
+   "name": "Bestly home page",
+   "sections": [
+    {
+     "heading": "Stoprentingyourbusinessfrombig tech.",
+     "label": "Bestly · Privacy-first tech, built in Los Angeles",
+     "text": "Google, Microsoft, Adobe, Zoom, Slack — they charge per seat, harvest your data, and raise prices every year. Bestly builds the alternatives: a private cloud for your office, browser extensions that block surveillance, and apps that don’t sell your data. One company, one promise: collect less, ask first, never sell.See the productsTalk to JaredPrivate cloud for your office·Apps that don't sell your data·Extensions that block surveillance·Built in Los AngelesPrivate cloud◆AI◆Extensions◆Hardware◆A"
+    },
+    {
+     "heading": "Sixproductlines.Noneofthemsellyourdata.",
+     "label": "What we build",
+     "text": ""
+    },
+    {
+     "heading": "In-House Cloud",
+     "text": "One server in your office replaces Google Workspace, Slack, Zoom, Dropbox, DocuSign, 1Password, and your AI tool. Wears your logo. Stays in your building."
+    },
+    {
+     "heading": "Browser extensions",
+     "text": "Cookie Yeti dismisses cookie banners instantly and blocks 200,000+ malicious banner domains. More extensions on the way."
+    },
+    {
+     "heading": "Consumer apps",
+     "text": "InventoryProof builds an insurance-ready home inventory in minutes. NeckPilot fixes your posture using AirPods. Apps that solve real problems without harvesting your data."
+    },
+    {
+     "heading": "AI tools",
+     "text": "AI that runs on your hardware. No prompts shipped to OpenAI. No training on your data. Same models, your machine."
+    },
+    {
+     "heading": "Physical products",
+     "text": "HOKU skincare. Real things you can hold and own. No subscriptions, no telemetry phoning home."
+    },
+    {
+     "heading": "Connected hardware",
+     "text": "Software and hardware designed to work together — at your office, in your home, on your wrist.In the wild"
+    },
+    {
+     "heading": "Threeliverightnow.Pickone.",
+     "label": "In the wild",
+     "text": ""
+    },
+    {
+     "heading": "Cookie Yeti",
+     "text": "Browser extension that dismisses cookie banners instantly and blocks 200,000+ malicious banner domains. Browse cleaner, faster, more private.Read more"
+    },
+    {
+     "heading": "InventoryProof",
+     "text": "Walk through your home with your phone. Get an insurance-ready PDF inventory in minutes. The thing you should do before something burns down.Read more"
+    },
+    {
+     "heading": "HOKU",
+     "text": "Pharmaceutical-grade skincare, simplified. One daily facial mist. No subscriptions, no upsells.Read moreAll productsHow we operate"
+    },
+    {
+     "heading": "Notpolicies.Promises.",
+     "label": "How we operate",
+     "text": ""
+    },
+    {
+     "heading": "Collect less",
+     "text": "We only ask for what's strictly needed to make the product work. Then we stop."
+    },
+    {
+     "heading": "Ask first",
+     "text": "No silent data collection. No background telemetry. If we want it, we ask, and 'no' is a real answer."
+    },
+    {
+     "heading": "Never sell",
+     "text": "Your data is not a product. We don't sell it, broker it, or hand it to ad networks. Ever."
+    },
+    {
+     "heading": "Open about it",
+     "text": "GDPR and CCPA compliant. Source code available on request for the open parts. Plain-English policies, no dark patterns.Services"
+    },
+    {
+     "heading": "Needsoftwarebuilt?Wedothat,too.",
+     "label": "Services",
+     "text": "Custom app development, AI integration, compliance engineering, old Mac apps modernized for Apple Silicon, App Store and marketplace launches, and our flagship In-House Cloud installed in your office. Thirteen services, fixed-fee pricing, no per-hour billing games.See all servicesFrom the founderI started Bestly because I wanted to make tools that don’t treat the people using them as a product to be optimized. Every Bestly thing — software, hardware, the boring infrastructure underneath — ships "
+    }
+   ]
+  },
+  {
+   "path": "/about",
+   "name": "About Bestly",
+   "sections": [
+    {
+     "heading": "Hey, I'm Jared.",
+     "label": "Founder & Builder",
+     "text": "I run Bestly out of Los Angeles. We build private cloud servers for businesses (In-House Cloud), privacy-first apps and browser extensions, and a few physical products. Everything ships with the same default: collect less, ask first, never sell.Los Angeles, California"
+    },
+    {
+     "heading": "Why I Started This",
+     "text": "I got tired of building things that worked against the people using them — products designed to extract data, exploit attention, and maximize engagement at all costs.So I started building the opposite. Technology that makes life better without making privacy worse. That's not a tagline — it's how I decide what to build and what to skip."
+    },
+    {
+     "heading": "Lean by Design",
+     "text": "Bestly is founder-led and intentionally lean. No outside investors pushing us to monetize your data. No board meetings debating whether to sell your information.This structure lets us move fast and stay principled — from software to physical products, the same standards apply to everything we ship."
+    },
+    {
+     "heading": "What We Build",
+     "text": "Six product lines, one promise: collect less, ask first, never sell."
+    },
+    {
+     "heading": "How We Operate",
+     "text": "Privacy isn't a feature we bolt on — it's the foundation everything else is built on."
+    },
+    {
+     "heading": "Transparency",
+     "text": "We tell you what we collect, why, and how it's used."
+    },
+    {
+     "heading": "Data Minimization",
+     "text": "We only collect what's strictly necessary. Nothing more."
+    },
+    {
+     "heading": "User Control",
+     "text": "Access, modify, or delete your data — anytime, no hoops."
+    },
+    {
+     "heading": "No Dark Patterns",
+     "text": "Honest interfaces, honest business. No tricks, no data sales."
+    },
+    {
+     "heading": "On-Device First",
+     "text": "Your data stays on your device whenever possible."
+    },
+    {
+     "heading": "AI Disclosure",
+     "text": "When we use AI, we explain how — clearly and upfront."
+    },
+    {
+     "heading": "Security",
+     "text": "Industry-standard protections, regularly audited."
+    },
+    {
+     "heading": "No Cross-App Tracking",
+     "text": "We don't follow you around the internet. Period."
+    },
+    {
+     "heading": "Right to Deletion",
+     "text": "Your data, your call. One request and it's gone."
+    },
+    {
+     "heading": "Built for Every Platform",
+     "text": "We build for people, not platforms. iOS, Android, web — our products deliver consistent experiences with the same privacy protections, regardless of where you use them."
+    },
+    {
+     "heading": "Wellness Product Safety",
+     "text": "Some of our products fall into the wellness-adjacent category. We make no medical claims, comply with FDA cosmetics guidelines, and clearly disclose all ingredients and usage instructions.Users are encouraged to consult healthcare professionals for medical concerns."
+    },
+    {
+     "heading": "Want something built?",
+     "text": "Custom app, In-House Cloud for your office, AI integration, an old Mac app that needs modernizing — if it’s software-ish and privacy matters, talk to me.Work With MeView Products"
+    }
+   ]
+  },
+  {
+   "path": "/products",
+   "name": "Bestly products",
+   "sections": [
+    {
+     "heading": "The products.",
+     "label": "Everything we ship",
+     "text": "Apps, extensions, a skincare bottle, and a server you can put in a closet. None of them sell your data. Click anything to see what it does.AllPrivacyProductivityEducationFamilyHomeSocialHealthClient WorkLive"
+    },
+    {
+     "heading": "Cookie Yeti",
+     "label": "Live",
+     "text": "Dismiss cookie banners instantly. Browse cleaner, faster, and more privately.Auto-dismiss cookie popupsPrivacy-first preferencesWorks on Chrome, iPhone & iPadCommunity-powered patternsApp StoreLearn MoreLive"
+    },
+    {
+     "heading": "InventoryProof",
+     "label": "Live",
+     "text": "Walk through your home. Get an insurance-ready inventory report in minutes, powered by AI.AI-powered item detectionInsurance-ready PDF reportsRoom-by-room walkthroughCloud backup & sharingDashboardLearn MoreComing Soon"
+    },
+    {
+     "heading": "HOKU",
+     "label": "Coming Soon",
+     "text": "Pharmaceutical-grade skincare, simplified. A daily facial mist backed by science.Pharmaceutical-grade formulaSingle-step daily routineDermatologist reviewedClean ingredients onlyDashboardLearn MoreComing Soon"
+    },
+    {
+     "heading": "NeckPilot",
+     "label": "Coming Soon",
+     "text": "Posture awareness powered by AirPods. Real-time feedback and gentle alerts.AirPods motion trackingReal-time posture alertsDaily posture scoreGentle haptic remindersLearn MoreIn Development"
+    },
+    {
+     "heading": "SchoolPilot",
+     "label": "In Development",
+     "text": "One app for parents and students that pulls everything from your school's existing system into a single place. Grades, attendance, lunch balance, assignments.Unified school viewReads your existing SISFERPA-alignedParent + student modesIn Development"
+    },
+    {
+     "heading": "HOAscope",
+     "label": "In Development",
+     "text": "Simplify HOA management. Violations, dues, and community comms — finally under control.Violation trackingAutomated dues collectionCommunity announcementsBoard meeting toolsIn Development"
+    },
+    {
+     "heading": "Confesh",
+     "label": "In Development",
+     "text": "Share what's really on your mind. Anonymous, private, and judgment-free.Fully anonymous postingEnd-to-end encryptionNo account requiredCommunity moderationLive"
+    },
+    {
+     "heading": "Bestly Studio",
+     "label": "Live",
+     "text": "We make your social posts. You approve them from your phone. We post them.Posts and short videos made for youA person at Bestly checks every postApprove from your phoneWe post to your InstagramLearn MoreLive"
+    },
+    {
+     "heading": "El D'Ora",
+     "label": "Live",
+     "text": "Lab-grown diamond jewelry. Brand direction, product imagery, and a 190-piece storefront.190+ piece catalogArt-directed product imageryFull brand identityStorefront buildLearn MoreLive"
+    },
+    {
+     "heading": "ParentIQ",
+     "label": "Live",
+     "text": "Co-parenting app built for peace of mind between households.Shared household calendarNeutral, logged communicationExpense trackingBuilt for two homesLearn MoreLive"
+    },
+    {
+     "heading": "Captain's Log",
+     "label": "Live",
+     "text": "A sailing app with real marine weather, plus a command center that plots live ship traffic on a map.Live marine weatherReal-time vessel trackingiOS app + web command centerShipped through Apple reviewLearn MoreLive"
+    },
+    {
+     "heading": "Purely Hunza",
+     "label": "Live",
+     "text": "Food brand built and launched from a blank page.Brand identity from scratchStorefront and checkoutProduct photographyLaunch campaignLearn MoreLive"
+    },
+    {
+     "heading": "Golden Hour Garden Design",
+     "label": "Live",
+     "text": "High-end landscape studio in Florida. Portfolio gallery, a booking form that takes photo uploads, and email on their own domain.Portfolio galleryBooking form with photo uploadsEmail on their own domainDesign, build, and hostingLearn MoreLive"
+    },
+    {
+     "heading": "The Shift Shop",
+     "label": "Live",
+     "text": "Moved an entire business onto a new store, then added an Amazon shop and TikTok Shop so the same catalog sells in three places.Full platform migrationAmazon marketplace listingTikTok Shop integrationOne catalog, three channelsLearn MoreMore Coming SoonSomething new is always in the works."
+    },
+    {
+     "heading": "Product Legal Information",
+     "text": "Each product has its own specific privacy policy and terms of service that supplement our Master Privacy Policy and Master Terms of Service."
+    }
+   ]
+  },
+  {
+   "path": "/cookie-yeti",
+   "name": "Cookie Yeti",
+   "sections": [
+    {
+     "heading": "Cookie pop-ups? Gone.",
+     "text": "Now on Chrome, iPhone & iPadEvery website hits you with an annoying “We use cookies” box. Cookie Yeti closes them for you — automatically — and always picks the private choice. You just browse.Add to ChromeGet it on iPhone & iPadMac· Coming soonFree on Chrome, iPhone & iPad · Mac coming soonNo adsNever sold or sharedPrivacy Policyexample.comWe value your privacyWe use cookies to personalize content and analyze traffic.Accept allRejectRejected1,284banners zappedChromeLiveiPhone & iPadLiveMacSoonT"
+    },
+    {
+     "heading": "How It Works",
+     "label": "Three steps, zero clicks",
+     "text": "You don't have to click “Accept” anymore. Cookie Yeti makes the pop-up disappear the second it shows up — and tells the website “no thanks” to tracking you.1"
+    },
+    {
+     "heading": "Add Cookie Yeti",
+     "label": "1",
+     "text": "Get it on Chrome, or on your iPhone and iPad. Takes about ten seconds.2"
+    },
+    {
+     "heading": "Browse like you always do",
+     "label": "2",
+     "text": "Keep doing your thing. Cookie Yeti runs quietly in the background.3"
+    },
+    {
+     "heading": "Pop-ups quietly disappear",
+     "label": "3",
+     "text": "Rejected, not accepted. That's it. No setup, no accounts to figure out, nothing to babysit.Simple on the surface, smart underneath"
+    },
+    {
+     "heading": "Why Cookie Yeti?",
+     "label": "Simple on the surface, smart underneath",
+     "text": "The big one"
+    },
+    {
+     "heading": "It actually says no",
+     "label": "The big one",
+     "text": "Most cookie blockers just hide the pop-up — some even click 'Accept all' to make it vanish, which is the opposite of privacy. Cookie Yeti clicks 'Reject' for real, so websites can't follow you around."
+    },
+    {
+     "heading": "It never goes stale",
+     "text": "Other cookie blockers slowly stop working — the maker moves on and the tool quietly rots. Cookie Yeti keeps learning. When a pop-up is tricky, our AI figures out how to close it, and that fix instantly reaches everyone using Cookie Yeti. It keeps getting smarter on its own, with nothing for you to update."
+    },
+    {
+     "heading": "It won't break your sites",
+     "text": "Broken pages are the number-one gripe about every cookie blocker — dead scrollbars, endless login loops. Cookie Yeti has a built-in safety brake: if a site starts acting up, it backs off before anything breaks. Your favorite sites keep working like normal."
+    },
+    {
+     "heading": "Pop-ups vanish automatically",
+     "text": "Cookie Yeti spots the 'We use cookies' box the moment a page loads and closes it for you. You don't click a thing."
+    },
+    {
+     "heading": "It runs in the background",
+     "text": "No pop-ups from us, either. Cookie Yeti works quietly while you browse and won't slow you down."
+    },
+    {
+     "heading": "See what it's done",
+     "text": "Watch how many cookie pop-ups Cookie Yeti has handled for you.Same pop-ups, different playbook"
+    },
+    {
+     "heading": "Why Cookie Yeti vs. other cookie blockers",
+     "label": "Same pop-ups, different playbook",
+     "text": "Same annoying pop-ups. A very different way of dealing with them.Other cookie blockersCookie YetiOther blockers just hide the banner — some even click “Accept all.”Cookie Yeti actually rejects the tracking.Other blockers go stale and quietly stop working.Cookie Yeti keeps learning, so it never goes stale.Other blockers are famous for breaking sites.Cookie Yeti backs off before it breaks anything.Most work in just one browser.Cookie Yeti works on Chrome, iPhone & iPad — Mac soon.Some got bought b"
+    },
+    {
+     "heading": "See it working, and stay in control",
+     "label": "Right in the popup",
+     "text": "Open Cookie Yeti and you get two simple tabs. Insights shows the banners it's handled and the sites it's worked on. Control lets you decide how strict it is.Strict, Balanced, or Permissive — your policy, applied everywhereReport a missed banner and our AI learns to close itOptional privacy alerts when a site tries to watch you"
+    },
+    {
+     "heading": "Your business stays your business",
+     "text": "We never sell your data, show you ads, or build a profile about you. We never share your browsing history or the pages you visit. The only thing we ever share is the name of a website when its cookie pop-up is tricky — like example.com — so our AI can learn to handle it for everyone. Never you. Never what you were looking at.No profile-buildingAnonymous stats onlyNo selling or sharingNo adsFree tier availableSettings stay on your deviceView Full Privacy PolicyFair, honest pricing"
+    },
+    {
+     "heading": "Simple, Fair Pricing",
+     "label": "Fair, honest pricing",
+     "text": "Choose the plan that works for you"
+    },
+    {
+     "heading": "Free",
+     "text": "Free5 banner handles per day5 banner handles per dayBasic preferencesWorks on popular sitesGet Started Free"
+    },
+    {
+     "heading": "Monthly",
+     "text": "$0.99/moBilled monthlyUnlimited sitesTracking cookie cleaningSaved preferencesCancel anytimeSubscribe MonthlyRecommended"
+    },
+    {
+     "heading": "Yearly",
+     "label": "Recommended",
+     "text": "$7.99/yrSave 33%Unlimited sitesTracking cookie cleaningSaved preferencesPriority supportSubscribe Yearly* Prices may vary by platform and region."
+    },
+    {
+     "heading": "Your Browsing, Your Control",
+     "text": "Cookie Yeti shows you exactly how much time you're saving12Today87This Week1,234All TimeAnonymous, non-personal stats — never tied to you or the pages you visitLive system health"
+    },
+    {
+     "heading": "Service Status",
+     "label": "Live system health",
+     "text": "Real-time system health and community statisticsAll Systems OperationalLast checked 11:38:37 AM620Total Patterns372Domains Covered17.4%Success Rate35Active Today207High Confidence Patterns4.7/10Avg. Confidence Score+108New Domains (7 days)Updates every 60 seconds • Community-driven data"
+    },
+    {
+     "heading": "Need Help?",
+     "text": ""
+    },
+    {
+     "heading": "Report a Site",
+     "text": "Found a website where Cookie Yeti doesn't work correctly?Report Issue"
+    },
+    {
+     "heading": "Contact Support",
+     "text": "Questions, feedback, or need assistance?Email Support"
+    },
+    {
+     "heading": "Frequently Asked Questions",
+     "text": "Short answers, no jargon."
+    },
+    {
+     "heading": "Cookie Yeti Is Here",
+     "text": "Now on Chrome, iPhone & iPad. Add it free — Mac coming soon.Add to ChromeGet it on iPhone & iPadMac· Coming soon"
+    }
+   ]
+  },
+  {
+   "path": "/inventory-proof",
+   "name": "InventoryProof",
+   "sections": [
+    {
+     "heading": "InventoryProof",
+     "text": "Your possessions, verified and protected.A mobile-first platform that helps homeowners and renters create insurance-ready documentation of their belongings in minutes — not hours.Visit inventoryproof.comHow It Works40%of insurance claim value is lost by the average homeownerDue to incomplete documentation. InventoryProof ensures you can prove exactly what you owned — before you need to."
+    },
+    {
+     "heading": "How It Works",
+     "text": "Document your entire home inventory in three simple steps.1"
+    },
+    {
+     "heading": "Record a Walkthrough",
+     "text": "Simply walk through your home recording a video of each room and your belongings.2"
+    },
+    {
+     "heading": "AI Analysis",
+     "text": "Our AI automatically identifies, classifies, and estimates the value of every item it sees.3"
+    },
+    {
+     "heading": "Get Your Report",
+     "text": "Receive a comprehensive, insurance-ready inventory report within minutes."
+    },
+    {
+     "heading": "Key Features",
+     "text": "Everything you need to protect your assets and plan for the future."
+    },
+    {
+     "heading": "AI-Powered Detection",
+     "text": "Automatically recognizes objects, brands, and models from video walkthrough footage."
+    },
+    {
+     "heading": "Instant Valuations",
+     "text": "Get retail and resale value estimates for everything you own in real-time."
+    },
+    {
+     "heading": "Human Verification",
+     "text": "Optional expert review ensures accuracy for high-value items like jewelry and art."
+    },
+    {
+     "heading": "Insurance-Ready Reports",
+     "text": "Generate timestamped PDF and CSV reports accepted by all major insurers."
+    },
+    {
+     "heading": "Data Vault",
+     "text": "Securely store receipts, warranties, and appraisals linked to each item."
+    },
+    {
+     "heading": "Estate Planning",
+     "text": "Create wills and living trusts with direct item assignment to beneficiaries.12,000+Homeowners trust usAES-256Encrypted storageAll MajorInsurers accepted"
+    },
+    {
+     "heading": "Available Now",
+     "text": "InventoryProof is live on the App Store. Download it today and protect what matters.View All ProductsInventoryProof is a product of Bestly LLC. All features are subject to our Terms of Service and Privacy Policy."
+    }
+   ]
+  },
+  {
+   "path": "/hoku",
+   "name": "HOKU",
+   "sections": [
+    {
+     "heading": "HYPOCHLOROUSACID",
+     "label": "Coming Soon",
+     "text": "Optimized to Keep You CleanA skin-refreshing spray that helps cleanse away environmental debris. Known for being gentle and well-tolerated on sensitive skin.Shop the CollectionLearn the Science3Simple Ingredients100%Vacuum-Sealed0Harsh Chemicals"
+    },
+    {
+     "heading": "Made with 3 Ingredients",
+     "text": "Pure, simple, effective"
+    },
+    {
+     "heading": "Electricity",
+     "text": "Electrolysis processWater + Salt + Electricity = Hypochlorous Acid (HOCl)"
+    },
+    {
+     "heading": "What Makes HOKU Different",
+     "text": ""
+    },
+    {
+     "heading": "Naturally Gentle",
+     "text": "HOCl is the same molecule naturally produced by your white blood cells to protect and heal."
+    },
+    {
+     "heading": "Pharmaceutical-Grade",
+     "text": "Advanced electrolysis manufacturing ensures consistent purity and potency in every bottle."
+    },
+    {
+     "heading": "Vacuum-Sealed",
+     "text": "Proprietary packaging preserves freshness and extends shelf life without preservatives."
+    },
+    {
+     "heading": "For All Skin Types",
+     "text": "Gentle enough for sensitive skin, effective enough for daily use without irritation.What competitors won't tell you:Most HOCl sprays lose potency with every pump. HOKU's vacuum-sealed technology ensures every spray delivers uncompromised HOCl — pure, charged, and protected."
+    },
+    {
+     "heading": "The Science of HOCl",
+     "text": "Hypochlorous acid is naturally produced by white blood cells. It's a gentle cleansing ingredient often used in dermatology for its mild, soothing properties.Learn More About the Science"
+    },
+    {
+     "heading": "What Our Customers Say",
+     "text": "\"HOKU has transformed my skincare routine. Clean, effective, and gentle!\"— Sarah M.\"Finally, a science-backed solution that actually works. No more harsh chemicals.\"— David L.\"The vacuum-sealed spray is genius. Every spray feels fresh and potent.\"— Emma R.\"I've tried many products but HOKU is different. My skin has never felt better.\"— Michael K."
+    },
+    {
+     "heading": "Simple Daily Ritual",
+     "text": "Incorporate HOKU into your morning and evening skincare routine. After cleansing, mist your face and let it air dry before applying moisturizer. Gentle enough for multiple daily applications."
+    },
+    {
+     "heading": "Ready to Experience Optimized Clean Skincare?",
+     "text": "Join thousands who have discovered the benefits of hypochlorous acid for clear, healthy-looking skin.Shop the CollectionGet Notified for New ProductsView All ProductsHOKU is a product of Bestly LLC. This product is not intended to diagnose, treat, cure, or prevent any disease. All products are subject to our Terms of Service and Privacy Policy."
+    }
+   ]
+  },
+  {
+   "path": "/cloud",
+   "name": "Bestly Cloud",
+   "sections": [
+    {
+     "heading": "Big tech owns your data.We think you should.",
+     "label": "Bestly In-House Cloud",
+     "text": "One small device in your office replaces thirteen subscriptions — and your data never leaves the building.Get StartedSee how much you'll save$0 per-seat feesNever sold, never retainedOn premises & on brandLook inside. Thirteen services, one small device.What's insideFilesVideo & ChatEmailDocumentsCalendarAI AssistantSecurityRemote AccessBackupTasksFormsPasswordsE-Signatures"
+    },
+    {
+     "heading": "Thirteen services. Out of one small box.",
+     "text": "Scroll"
+    },
+    {
+     "heading": "Files",
+     "text": "Replaces Google Drive · DropboxAll your files in one place, synced to every computer and easy to share with a link."
+    },
+    {
+     "heading": "Video & Chat",
+     "text": "Replaces Zoom · Slack · TeamsPrivate video calls, screen sharing, and team messaging — built right in."
+    },
+    {
+     "heading": "Email",
+     "text": "Replaces Gmail · OutlookProfessional email at your own name, like you@yourpractice.com."
+    },
+    {
+     "heading": "Documents",
+     "text": "Replaces Google Docs · Office 365Write and edit documents and spreadsheets together, at the same time."
+    },
+    {
+     "heading": "Calendar",
+     "text": "Replaces Google Cal · OutlookShared calendars that stay in sync on everyone's phone and computer."
+    },
+    {
+     "heading": "AI Assistant",
+     "text": "Replaces ChatGPT · CopilotHelp with writing and answering questions — and your information never leaves the office."
+    },
+    {
+     "heading": "Security",
+     "text": "Replaces DNS filteringBlocks scam and virus websites before they ever reach a device."
+    },
+    {
+     "heading": "Remote Access",
+     "text": "Replaces Corporate VPNSafely reach your office files from home or anywhere you travel."
+    },
+    {
+     "heading": "Backup",
+     "text": "Replaces Backblaze · VeeamAutomatic daily backups, so you never lose an important file."
+    },
+    {
+     "heading": "Tasks",
+     "text": "Replaces Asana · Trello · MondaySimple boards to track who's doing what, and by when."
+    },
+    {
+     "heading": "Forms",
+     "text": "Replaces Google Forms · TypeformCreate patient or customer forms and surveys on your own website."
+    },
+    {
+     "heading": "Passwords",
+     "text": "Replaces 1Password · LastPassOne secure place for your team's logins and passwords."
+    },
+    {
+     "heading": "E-Signatures",
+     "text": "Replaces DocuSign · Adobe SignSend documents for legal signature online — with no per-document fees."
+    },
+    {
+     "heading": "Close the lid. That's your whole cloud.",
+     "text": "We never sell, share, or retain your data. It lives on hardware in your office — Bestly can't see it, and there's nothing for us to monetize.Sealed. Nothing leaves the building.Why this works"
+    },
+    {
+     "heading": "Four things make this different.",
+     "label": "Why this works",
+     "text": ""
+    },
+    {
+     "heading": "On premises, on brand",
+     "text": "Employees log in at cloud.yourcompany.com with your logo and colors. File-share links carry your domain. Mobile apps sync your branding automatically. No mention of Bestly anywhere."
+    },
+    {
+     "heading": "Your data stops leaving the building",
+     "text": "Files, email, chat, video, and AI prompts process on hardware inside your office. No third-party data center, no cross-border transfers, no foreign-jurisdiction subpoena risk. GDPR, HIPAA, SOC 2, CCPA — built in."
+    },
+    {
+     "heading": "Runs itself 85%+ of the time",
+     "text": "A self-healing IT manager checks every critical service every 5 minutes, auto-repairs common failures in under 30 seconds, and hands prepared diagnostics to your IT lead when humans are needed."
+    },
+    {
+     "heading": "Federation across organizations",
+     "text": "Share files and rooms with users on other servers. White-label cloud.<client>.com per partner. SSO and branded login flows for any enterprise customer.Problem"
+    },
+    {
+     "heading": "You pay thousands a month for software you don't own.",
+     "label": "Problem",
+     "text": "Files, email, client conversations, and strategy docs all live on servers somewhere else — on terms someone else sets.Agitate"
+    },
+    {
+     "heading": "And every renewal, the price goes up.",
+     "label": "Agitate",
+     "text": "Google Workspace raised prices 20% in 2024. Microsoft 365 is up 15 to 25% since 2022. A 15-person business can spend $20,000 a year on subscriptions; a 30-person business, well over $40,000. You never stop paying, and you never own a thing.Solve"
+    },
+    {
+     "heading": "One server in your office, branded to your company.",
+     "label": "Solve",
+     "text": "File storage, email, video, chat, docs, calendar, e-sign, passwords, projects, and local AI on a device that draws as little as 10 watts and fits on a shelf. Buy it once, run it for years.0%lower 3-year cost vs. cloud stack0K+malicious domains blocked at DNS0%average server uptime0per-seat licensing fees, everThe math, on your business"
+    },
+    {
+     "heading": "Add up what you rent today. See what you'd save.",
+     "label": "The math, on your business",
+     "text": "Check the subscriptions your business actually pays for. Slide your team size. The savings update live, no sales call required.One bill instead of a dozen renewalsNo IT department neededEmail, files, chat, video, AI in one placeHow many people on your team?12 people1153050How are you billed today?annualmonthlyEmail & productivityGoogle Workspace Business Standard$14/seatMicrosoft 365 Business Standard$12.5/seatZoho Workplace Professional$7/seatChat & videoZoom Pro$15/seatSlack Pro$8.75/seatMicro"
+    },
+    {
+     "heading": "Deployment #001: us.",
+     "label": "Real deployment",
+     "text": "Bestly runs on Bestly. The files, documents, calendars, and team calls behind this company live on the exact device on this page — sitting on a shelf in our office, not in anyone else's data center. We don't sell anything we don't run our own business on.Files & backupsDocumentsCalendarsTeam calls & chatLocal AIYour business could be deployment #002. Start the conversationHow we get there"
+    },
+    {
+     "heading": "Four steps. No long contracts.",
+     "label": "How we get there",
+     "text": "01"
+    },
+    {
+     "heading": "Discovery Call",
+     "label": "01",
+     "text": "30 minutes. We map your stack, user count, storage, compliance, and pain points. You leave with a side-by-side cost comparison.02"
+    },
+    {
+     "heading": "Architecture",
+     "label": "02",
+     "text": "If it's a fit, we design the hardware tier, software config, branding, AI model selection, and integration points.03"
+    },
+    {
+     "heading": "Build & Deploy",
+     "label": "03",
+     "text": "We configure and harden the server, apply your branding, install on-site, and verify every service end-to-end.04"
+    },
+    {
+     "heading": "Onboard",
+     "label": "04",
+     "text": "Hands-on team training and admin handoff. Ongoing support from $500/mo, or self-manage with full docs.Reasonable concerns"
+    },
+    {
+     "heading": "The four questions everybody asks.",
+     "label": "Reasonable concerns",
+     "text": ""
+    },
+    {
+     "heading": "What if the server breaks?",
+     "text": "Automated daily backups, documented DR, and redundant access paths. A full Enterprise replacement is $6,500–$10,000 — less than one month of cloud subs at scale."
+    },
+    {
+     "heading": "What about remote work?",
+     "text": "Encrypted remote access is included. Reach the office server from home, an airport, a client site — same branded interface, same domain."
+    },
+    {
+     "heading": "Isn't local AI worse than ChatGPT?",
+     "text": "For summaries, drafting, translation, transcription, and smart search, local 1B–8B models handle the work. You trade a sliver of nuance for $0 per query and zero data exposure."
+    },
+    {
+     "heading": "Who maintains it?",
+     "text": "Your choice. Full docs and DR guide included — self-manage from day one, or Bestly handles monitoring, updates, and model upgrades from $500/mo. No long-term contracts.Open-source & licensingYour In-House Cloud is a white-labeled, self-hosted platform built on open-source software, including components licensed under the GNU AGPL v3. It runs on your hardware under your brand. Bestly LLC operates a modified deployment and is an independent provider — not affiliated with, sponsored by, or endorsed"
+    },
+    {
+     "heading": "Stop renting. Start owning.",
+     "text": "Thirty minutes on a call, a side-by-side cost comparison, and zero pressure. Bring your stack home — on hardware you own, with data we never sell or retain.Get StartedEmail jared@bestly.tech"
+    }
+   ]
+  },
+  {
+   "path": "/get-started",
+   "name": "Bestly Cloud",
+   "sections": [
+    {
+     "heading": "Your data. Your brand.Your cloud.",
+     "label": "In-House Cloud — Discovery",
+     "text": "Tell us about your team. We'll come back with a line-by-line map of your current IT spend vs. what a Bestly Cloud deployment would cost — whether you move forward or not.30 min, no obligationFor 5–200+ usersConfidentialLeave this emptyYour name *Email *Company *Company websitePhone (optional)Team size *How many people?5-15 people16-30 people31-75 people76-150 people150+ peopleWhat's pulling you toward this?Pick the closest fitPer-seat costs are getting absurdOur data shouldn't live on someone el"
+    }
+   ]
+  },
+  {
+   "path": "/studio",
+   "name": "Bestly Studio",
+   "sections": [
+    {
+     "heading": "We make your social posts. You approve them from your phone. We post them.",
+     "label": "Bestly Studio",
+     "text": "Bestly Studio is a done-for-you service for small businesses. We make the pictures, swipe posts and short videos for your social media. A person at Bestly checks every post. You say yes, or tell us what to change.Book a free call Or email studio@bestly.techScreenshots of the real Bestly Studio on a demo account, with a sample post.How it works"
+    },
+    {
+     "heading": "Three steps. The hard part is ours.",
+     "label": "How it works",
+     "text": "1"
+    },
+    {
+     "heading": "Send us the raw material",
+     "label": "1",
+     "text": "Email photos and notes to studio@bestly.tech. Or book a call and we plan the posts with you.2"
+    },
+    {
+     "heading": "We make the posts",
+     "label": "2",
+     "text": "We turn it into image posts, swipe posts and short videos. A person at Bestly checks every one before it reaches you.3"
+    },
+    {
+     "heading": "You approve from your phone. We post.",
+     "label": "3",
+     "text": "Open your own board, look at each post the way it will appear, and tap Approve. Once you approve, we post it to your Instagram.What you get"
+    },
+    {
+     "heading": "Posts you can read and approve on your phone.",
+     "label": "What you get",
+     "text": "Image posts, swipe posts and short vertical videos, made for your business.A person at Bestly checks every post before you see it.A board of your own on your phone. See each post the way it will look in Instagram or TikTok.Tap Approve, or tap Changes and say what to fix in your own words.Earlier versions of a post are kept, so you can go back.A calendar of what is coming up.Send us an idea, or a clip you filmed, any time.The same board on a computer. Real screenshot of a demo account with a samp"
+    },
+    {
+     "heading": "People who run something and have no time to post about it.",
+     "label": "Who it is for",
+     "text": ""
+    },
+    {
+     "heading": "Small businesses",
+     "text": "Shops, restaurants, studios and trades that need to show up online and do not have the evenings to do it."
+    },
+    {
+     "heading": "Solo professionals",
+     "text": "Coaches, consultants and trainers who are the whole business and would rather work than write captions."
+    },
+    {
+     "heading": "Real estate agents",
+     "text": "Agents who want to stay visible between closings without making posts themselves.Plain answers"
+    },
+    {
+     "heading": "Questions people ask first.",
+     "label": "Plain answers",
+     "text": "Is it all done by a computer?No. We use software, including AI tools, to draft, design and edit. A person at Bestly checks every post before it reaches you, and nothing goes out until you approve it.Where do you post?We post to your Instagram account, which you connect once. We also make videos in the vertical shape that TikTok and Reels use.What does it cost?We go through that on the free call, once we know what you need.What if I do not like a post?Tap Changes and tell us what to fix, the way "
+    },
+    {
+     "heading": "Talk to us first. It is free.",
+     "text": "Tell us about your business. We will tell you what we would post and how it would work.Book a free call Or email studio@bestly.tech"
+    }
+   ]
+  },
+  {
+   "path": "/neckpilot",
+   "name": "NeckPilot",
+   "sections": [
+    {
+     "heading": "Fly Aware. Adjust Early.",
+     "label": "Coming Soon",
+     "text": "Posture awareness powered by AirPods. Real-time feedback, Live Activities, and gentle alerts when you've been flying too long.iOS AppJoin the Waitlist"
+    },
+    {
+     "heading": "How It Works",
+     "text": "Three steps to your first flight.01"
+    },
+    {
+     "heading": "Pair AirPods",
+     "text": "Connect your AirPods for high-fidelity tracking, or use iPhone sensors as a fallback.02"
+    },
+    {
+     "heading": "Start a Flight",
+     "text": "Begin a posture session. NeckPilot runs quietly, surfacing awareness through Live Activities.03"
+    },
+    {
+     "heading": "Monitor & Correct",
+     "text": "Receive gentle alerts when you've been cruising in strain too long. Reset earlier, feel better."
+    },
+    {
+     "heading": "Key Features",
+     "text": "Sensor-driven awareness, designed for your daily cruising altitude."
+    },
+    {
+     "heading": "AirPods-Based Tracking",
+     "text": "Uses AirPods motion data for higher-fidelity head and neck angle detection — tracking posture where it actually matters."
+    },
+    {
+     "heading": "Phone-Based Fallback",
+     "text": "Works without AirPods using iPhone motion sensors. Lower precision, but always available for every session."
+    },
+    {
+     "heading": "Live Activities",
+     "text": "View your current posture state at a glance. Persistent, real-time feedback without opening the app."
+    },
+    {
+     "heading": "\"Flying Too Long\" Alerts",
+     "text": "Time-aware alerts when you've held a strained posture for too long. Gentle nudges, not constant interruptions."
+    },
+    {
+     "heading": "Session Monitoring",
+     "text": "Start and stop posture \"flights\" during work, study, or focus time. Track your awareness over time."
+    },
+    {
+     "heading": "Privacy-First Design",
+     "text": "No cameras. No recordings. No biometric identity storage. Your posture data stays on your device."
+    },
+    {
+     "heading": "Who It's For",
+     "text": "Desk workers & remote professionalsStudents & creatorsAirPods users seeking passive awarenessAnyone with screen-related neck fatigue"
+    },
+    {
+     "heading": "Your Posture, Your Data",
+     "text": "NeckPilot uses only motion sensor data from AirPods or your iPhone. No cameras. No recordings. No biometric identity storage. Everything stays on your device.No CamerasNo RecordingsNo Biometric Storage"
+    },
+    {
+     "heading": "Start your first flight.",
+     "text": "Be the first to know when NeckPilot is ready for takeoff.Join the WaitlistView All ProductsNeckPilot is a product of Bestly LLC. This product is not a medical device and is not intended to diagnose, treat, cure, or prevent any condition. All products are subject to our Terms of Service and Privacy Policy."
+    }
+   ]
+  },
+  {
+   "path": "/services",
+   "name": "Bestly services",
+   "sections": [
+    {
+     "heading": "How I Can Help",
+     "text": "From local shops to tech startups — I partner with you to build something that works.Work With MeLearn More About Me"
+    },
+    {
+     "heading": "Services",
+     "text": "5+ years of experience across development, strategy, and growth."
+    },
+    {
+     "heading": "Web & App Development",
+     "text": "Custom websites, web apps, and mobile apps. From landing pages to full platforms."
+    },
+    {
+     "heading": "Business Consulting",
+     "text": "Strategic guidance on operations, growth, and scaling."
+    },
+    {
+     "heading": "AI & Automation",
+     "text": "Intelligent tools and workflow automation to save time and cut manual work."
+    },
+    {
+     "heading": "Marketing & Branding",
+     "text": "Digital marketing strategy, brand identity, and design that resonates."
+    },
+    {
+     "heading": "Productization",
+     "text": "Turn services or ideas into scalable products that grow."
+    },
+    {
+     "heading": "Compliance Engineering",
+     "text": "Privacy-first architecture, GDPR/CCPA compliance. Launch with confidence."
+    },
+    {
+     "heading": "Apple Business Modernization",
+     "text": "Apple-native infrastructure — discovery, payments, identity, and automation for local businesses.Learn more"
+    },
+    {
+     "heading": "Marketplace Onboarding",
+     "text": "Full-service setup for Amazon, Shopify, and TikTok Shop — from registration to launch-ready.Learn more Flagship Program"
+    },
+    {
+     "heading": "Apple-Native Business Modernization",
+     "label": "Flagship Program",
+     "text": "Discovery, payments, identity, automation — a complete Apple ecosystem stack for local businesses.Done-For-You Setup"
+    },
+    {
+     "heading": "Marketplace Onboarding",
+     "label": "Done-For-You Setup",
+     "text": "Amazon Seller Central, Shopify, and TikTok Shop — we handle registration, branding, and compliance so you can start selling."
+    },
+    {
+     "heading": "Selected Work",
+     "text": "Real businesses, shipped and live.Client · Web Design & Development"
+    },
+    {
+     "heading": "Golden Hour Garden Design",
+     "label": "Client · Web Design & Development",
+     "text": "Designed and built the website for a high-end landscape design studio — a polished portfolio gallery, a multi-step booking form with photo uploads, and email on their own domain. Shipped and live.goldenhourgardendesign.com"
+    },
+    {
+     "heading": "The Process",
+     "text": "Simple, transparent, no surprises.01"
+    },
+    {
+     "heading": "Review",
+     "label": "01",
+     "text": "I review your project details and goals.02"
+    },
+    {
+     "heading": "Conversation",
+     "label": "02",
+     "text": "A quick call to align on scope and fit.03"
+    },
+    {
+     "heading": "Proposal",
+     "label": "03",
+     "text": "A clear plan with timeline and investment.04"
+    },
+    {
+     "heading": "Build",
+     "label": "04",
+     "text": "Execution with regular check-ins and transparency."
+    },
+    {
+     "heading": "More Than a Service Provider",
+     "text": "My best work happens when I partner with clients on a deeper level — ongoing advisory or revenue share where we both have skin in the game."
+    },
+    {
+     "heading": "Consulting & Advisory",
+     "text": "Strategic guidance on an ongoing basis. I become an extension of your team."
+    },
+    {
+     "heading": "Revenue Share Partnerships",
+     "text": "For the right projects, I co-create products where we share in the success."
+    },
+    {
+     "heading": "Who I Work With",
+     "text": ""
+    },
+    {
+     "heading": "Ready to Work Together?",
+     "text": "No commitment — just a conversation to see if we're a good fit.Start the Conversation"
+    }
+   ]
+  },
+  {
+   "path": "/apple-modernization",
+   "name": "Apple modernization service",
+   "sections": [
+    {
+     "heading": "Apple-Native Infrastructure for Local Businesses",
+     "label": "Flagship Program",
+     "text": "A turnkey modernization stack that enables discovery, payments, identity verification, customer engagement, and analytics — all built on Apple's ecosystem.Get Started"
+    },
+    {
+     "heading": "Program Overview",
+     "text": "This program creates a comprehensive Apple-native operational stack that integrates discovery, payments, identity verification, engagement, and analytics into a single modernization offering. We position your business as a technology infrastructure partner — not a marketing vendor."
+    },
+    {
+     "heading": "Core Components",
+     "text": "Nine integrated service modules covering the full Apple ecosystem."
+    },
+    {
+     "heading": "Apple Discovery Infrastructure",
+     "text": "Business Connect listing optimizationMaps Place Card configurationShowcase campaign setupMulti-location consistencyIncreased high-intent local traffic via Apple Maps and Siri."
+    },
+    {
+     "heading": "Instant Customer Experience (App Clips)",
+     "text": "Lightweight App Clip designQR / NFC / location invocationMenu, booking, or ordering flowsCustomer interaction analyticsImmediate engagement without full app downloads."
+    },
+    {
+     "heading": "Payments Modernization",
+     "text": "Tap to Pay on iPhone deploymentApple Pay readiness consultingCheckout workflow trainingConversion tracking integrationReduced checkout friction and increased mobile payments."
+    },
+    {
+     "heading": "Digital ID Verification",
+     "text": "Digital ID acceptance assessmentMobile ID verification workflowStaff verification trainingCompliance SOP documentationFaster entry processing and reduced fraud exposure."
+    },
+    {
+     "heading": "Brand Trust & Identity",
+     "text": "Branded email identity (BIMI)Domain authentication (SPF/DKIM/DMARC)Wallet pass deploymentApple ecosystem brand consistencyIncreased trust signals across Apple interfaces."
+    },
+    {
+     "heading": "Customer Experience Automation",
+     "text": "NFC-triggered return experiencesLoyalty and promo automationReservation / booking integrationMembership enablementHigher repeat-customer conversion and retention."
+    },
+    {
+     "heading": "Commerce & Ordering",
+     "text": "Apple Pay web checkout optimizationApp Clip ordering flowsMobile-first commerce deploymentSubscription payment integrationDirect revenue capture without third-party intermediaries."
+    },
+    {
+     "heading": "Operational Analytics",
+     "text": "Apple Maps engagement dashboardsConversion funnel reportingCampaign performance trackingQuarterly optimization auditsData-driven decisions and measurable ROI tracking.Optional"
+    },
+    {
+     "heading": "Apple-Ready Certification",
+     "label": "Optional",
+     "text": "Maps listing optimizedApp Clip operationalTap-to-Pay enabledWallet pass deployedMarketable differentiation badge for certified businesses."
+    },
+    {
+     "heading": "Service Tiers",
+     "text": "Each tier builds on the previous, scaling with your business needs.Tier 1"
+    },
+    {
+     "heading": "Presence Setup",
+     "label": "Tier 1",
+     "text": "Apple Business Connect listing optimizationMaps Place Card configurationInitial Showcase campaignBasic analytics setupTier 2"
+    },
+    {
+     "heading": "Conversion Stack",
+     "label": "Tier 2",
+     "text": "Everything in Tier 1App Clip deploymentNFC / QR invocation infrastructureCustomer interaction flowsApple Pay readiness consultingTier 3"
+    },
+    {
+     "heading": "Commerce & Identity Stack",
+     "label": "Tier 3",
+     "text": "Everything in Tier 2Tap-to-Pay enablementDigital ID verification readinessWallet pass deploymentCustomer lifecycle automationTier 4"
+    },
+    {
+     "heading": "Enterprise Modernization",
+     "label": "Tier 4",
+     "text": "Everything in Tier 3Analytics dashboardsMulti-location rolloutQuarterly optimization reportingCertification program eligibility"
+    },
+    {
+     "heading": "Ideal For",
+     "text": "Highest-ROI verticals that benefit most from Apple-native infrastructure.Bars & NightlifeRestaurants & CafésRetail BoutiquesSalons & SpasFitness StudiosEvent VenuesHospitality"
+    },
+    {
+     "heading": "Ready to Modernize?",
+     "text": "Let's discuss how Apple-native infrastructure can transform your business operations.Start the Conversation"
+    }
+   ]
+  },
+  {
+   "path": "/marketplace-setup",
+   "name": "Marketplace setup service",
+   "sections": [
+    {
+     "heading": "Marketplace Account Setup",
+     "text": "Complete this form to get your seller accounts set up professionally.ID: 25d96a2eStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review"
+    },
+    {
+     "heading": "Before You Begin",
+     "text": "Select the platforms you'd like to set up, then review what you'll need. This form takes about 15-20 minutes.Which platforms are you setting up? *AmazonSell on Amazon Seller CentralShopifyLaunch your own Shopify storeTikTok ShopSell directly on TikTokDon't have all of these yet? No problem — you can save your progress and come back anytime."
+    },
+    {
+     "heading": "Contact Information",
+     "text": "Your Name *Who should we contact about this setup?Your Email *Your Phone *Preferred Contact MethodEmailYour TimezoneSelect timezoneGet Started →"
+    }
+   ]
+  },
+  {
+   "path": "/contact",
+   "name": "Contact page",
+   "sections": [
+    {
+     "heading": "Contact Us",
+     "text": "Drop us a line. We'll get back to you within 2-3 business days.Name *Email *Category *Select a categoryApp SupportPlatform PartnersRetail / DistributionHardware / Device SupportPrivacy InquiryGeneral InquirySubject *Message *Send Message"
+    },
+    {
+     "heading": "Email Contacts",
+     "text": "General Supportsupport@bestly.techPrivacy Inquiriesprivacy@bestly.tech"
+    },
+    {
+     "heading": "Response Time",
+     "text": "We typically respond to inquiries within 2-3 business days. For urgent privacy-related matters, please email privacy@bestly.tech directly."
+    }
+   ]
+  },
+  {
+   "path": "/support",
+   "name": "Cookie Yeti support",
+   "sections": [
+    {
+     "heading": "Support",
+     "label": "Cookie Yeti",
+     "text": "Need help? Browse common questions below or reach out to our team directly."
+    },
+    {
+     "heading": "Email Support",
+     "text": "Our team typically responds within 24 hours.Contact Support"
+    },
+    {
+     "heading": "Frequently Asked Questions",
+     "text": ""
+    }
+   ]
+  }
+ ]
+}

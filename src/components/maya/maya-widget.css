@@ -115,3 +115,22 @@ elevenlabs-convai {
 
 /* Don't print the widget or the launcher. */
 @media print { .maya { display: none; } }
+
+/* Presenter spotlight: when Maya shows a section, its block gets a soft glow that feathers outward (no hard ring),
+   breathes once, and fades. Pointer events and layout are untouched; it is only a shadow. */
+.maya-spotlight {
+  position: absolute;
+  z-index: 40;
+  pointer-events: none;
+  border-radius: 22px;
+  animation: maya-spot 4.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@keyframes maya-spot {
+  0%   { box-shadow: 0 0 0 0 hsl(var(--primary) / 0), 0 0 0 0 hsl(var(--primary) / 0); }
+  14%  { box-shadow: 0 0 36px 10px hsl(var(--primary) / 0.22), 0 0 90px 30px hsl(var(--primary) / 0.10); }
+  60%  { box-shadow: 0 0 28px 8px hsl(var(--primary) / 0.16), 0 0 80px 26px hsl(var(--primary) / 0.07); }
+  100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0), 0 0 0 0 hsl(var(--primary) / 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .maya-spotlight { animation: none; box-shadow: 0 0 32px 10px hsl(var(--primary) / 0.16), 0 0 80px 26px hsl(var(--primary) / 0.07); }
+}
