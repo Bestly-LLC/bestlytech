@@ -114,6 +114,7 @@ const AvaAssistant = lazyPage(() => import("./pages/admin/AvaAssistant"));
 const MayaDesk = lazyPage(() => import("./pages/admin/MayaDesk"));
 const AgentDesk = lazyPage(() => import("./pages/admin/AgentDesk"));
 const Hunter = lazyPage(() => import("./pages/admin/Hunter"));
+const HunterScores = lazyPage(() => import("./pages/admin/HunterScores"));
 const AgentNew = lazyPage(() => import("./pages/admin/AgentNew"));
 const ClaimsCloser = lazyPage(() => import("./pages/admin/ClaimsCloser"));
 const Settlements = lazyPage(() => import("./pages/admin/Settlements"));
@@ -267,7 +268,11 @@ const App = () => {
                   <Route path="maya" element={<MayaDesk />} />
                   <Route path="agents/new" element={<AgentNew />} />
                   <Route path="agents/:slug" element={<AgentDesk />} />
-                  <Route path="hunter" element={<Hunter />} />
+                  {/* Hunter lives under Leads. The old /admin/hunter address keeps working. */}
+                  <Route path="leads/hunter" element={<Hunter />} />
+                  <Route path="leads/hunter/scores" element={<HunterScores />} />
+                  <Route path="hunter" element={<Navigate to="/admin/leads/hunter" replace />} />
+                  <Route path="hunter/scores" element={<Navigate to="/admin/leads/hunter/scores" replace />} />
                   <Route path="wall" element={<Wall />} />
                   <Route path="sky" element={<Sky />} />
                   <Route path="security" element={<Security />} />
