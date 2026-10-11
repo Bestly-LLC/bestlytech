@@ -5,6 +5,32 @@ import "./maya-widget.css";
 import { mayaProductForPath } from "./siteTools";
 import { presenterTools } from "./presenter";
 import { getMayaSession, mayaDiag, SESSION_FRESH_MS } from "./mayaSession";
+import { MayaScreen, MayaScreenLauncher } from "./MayaScreen";
+
+/** Review flag for the Leo-style Maya screen: ?maya=screen turns it on for this tab, ?maya=widget turns it off. */
+const SCREEN_KEY = "maya:screen";
+function useScreenFlag(): boolean {
+  const { search } = useLocation();
+  const [on, setOn] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("maya") === "screen" || sessionStorage.getItem(SCREEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    const q = new URLSearchParams(search).get("maya");
+    try {
+      if (q === "screen") sessionStorage.setItem(SCREEN_KEY, "1");
+      if (q === "widget") sessionStorage.removeItem(SCREEN_KEY);
+    } catch {
+      /* storage off: the URL flag still works for this page */
+    }
+    if (q === "screen") setOn(true);
+    if (q === "widget") setOn(false);
+  }, [search]);
+  return on;
+}
 
 /**
  * "Talk to Maya" - Bestly's voice + chat agent (ElevenLabs), on public marketing pages only.
@@ -107,6 +133,8 @@ export function MayaWidget() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const screen = useScreenFlag();
+  const [screenOpen, setScreenOpen] = useState(false);
   const mounted = useRef(true);
   const widgetEl = useRef<HTMLElement | null>(null);
   const callStartedAt = useRef(0);
@@ -197,6 +225,10 @@ export function MayaWidget() {
   }, [open]);
 
   if (!product) return null;
+
+  if (screen) {
+    return screenOpen ? <MayaScreen onClose={() => setScreenOpen(false)} /> : <MayaScreenLauncher onOpen={() => setScreenOpen(true)} />;
+  }
 
   const dynamicVariables = JSON.stringify({ page_product: product, page_path: pathname });
 
