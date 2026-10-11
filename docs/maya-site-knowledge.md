@@ -229,7 +229,7 @@ $7.99/yrSave 33%Unlimited sitesTracking cookie cleaningSaved preferencesPriority
 Cookie Yeti shows you exactly how much time you're saving12Today87This Week1,234All TimeAnonymous, non-personal stats — never tied to you or the pages you visitLive system health
 
 ### Service Status (Live system health)
-Real-time system health and community statisticsAll Systems OperationalLast checked 2:38:07 PM620Total Patterns372Domains Covered17%Success Rate35Active Today207High Confidence Patterns4.7/10Avg. Confidence Score+108New Domains (7 days)Updates every 60 seconds • Community-driven data
+Real-time system health and community statisticsAll Systems OperationalLast checked 2:50:09 PM620Total Patterns372Domains Covered17%Success Rate35Active Today207High Confidence Patterns4.7/10Avg. Confidence Score+108New Domains (7 days)Updates every 60 seconds • Community-driven data
 
 ### Need Help?
 (heading only)
@@ -484,7 +484,10 @@ Tell us about your business. We will tell you what we would post and how it woul
 ## Bestly Agent (/agent)
 
 ### An AI that answers your business phone. (Bestly Agent)
-It picks up every call, day or night, talks like a real person, and does the work while it talks: books the appointment, updates your software, and texts the confirmation.Watch a call Talk to Maya liveOr call Maya: (213) 641-0074MayaLedgerly · AI agentOn a callThanks for calling Ledgerly support, this is Maya. Who do I have the pleasure of helping today?Hey, it's Dan Ortiz from Ortiz Landscaping. I think you guys charged me twice this month.Found the account and the duplicate chargeA sample call with a made-up business.Sample callsWatch Maya take a callPick a kind of business and press play. On one side, the call. On the other, the software Maya updates while she talks.Software supportDental
+It picks up every call, day or night, talks like a real person, and does the work while it talks: books the appointment, updates your software, and texts the confirmation.Watch a call Talk to Maya liveOr call Maya: (213) 641-0074MayaLedgerly · AI agentOn a callThanks for calling Ledgerly support, this is Maya. Who do I have the pleasure of helping today?Hey, it's Dan Ortiz from Ortiz Landscaping. I think you guys charged me twice this month.Found the account and the duplicate chargeA sample call with a made-up business.Sample calls
+
+### Watch Maya take a call (Sample calls)
+Pick a kind of business and press play. On one side, the call. On the other, the software Maya updates while she talks.Software supportDental officeHome servicesReal estateRestaurant2:14 PM. A customer thinks he was charged twice.Maya AI agentLedgerlyReady(555) 014-2290CallerPress play. The call shows up here as it happens, and the software on the right changes while Maya talks.A sample Ledgerly Support window, with made-up data. It updates as the call goes on. The transcript lists everything Maya does.Ledgerly Support — InboxLedgerly SupportFileEditViewWindowBestly Agent connected2:14 PMLedgerlyInbox12CustomersBillingReportsSettingsInbox12 openMaria Alvarez1:52 PMCan't export invoices to CS
 
 ### Like a great receptionist who also knows your software. (What it does)
 (heading only)
@@ -705,7 +708,7 @@ Let's discuss how Apple-native infrastructure can transform your business operat
 ## Marketplace setup service (/marketplace-setup)
 
 ### Marketplace Account Setup
-Complete this form to get your seller accounts set up professionally.ID: fd177c6fStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review
+Complete this form to get your seller accounts set up professionally.ID: 1a18ffebStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review
 
 ### Before You Begin
 Select the platforms you'd like to set up, then review what you'll need. This form takes about 15-20 minutes.Which platforms are you setting up? *AmazonSell on Amazon Seller CentralShopifyLaunch your own Shopify storeTikTok ShopSell directly on TikTokDon't have all of these yet? No problem — you can save your progress and come back anytime.

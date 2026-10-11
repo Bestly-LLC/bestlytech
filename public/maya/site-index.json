@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-11T21:39:13.527Z",
+ "generated_at": "2026-10-11T21:51:14.848Z",
  "source": "https://www.bestly.tech",
  "pages": [
   {
@@ -347,7 +347,7 @@
     {
      "heading": "Service Status",
      "label": "Live system health",
-     "text": "Real-time system health and community statisticsAll Systems OperationalLast checked 2:38:07 PM620Total Patterns372Domains Covered17%Success Rate35Active Today207High Confidence Patterns4.7/10Avg. Confidence Score+108New Domains (7 days)Updates every 60 seconds • Community-driven data"
+     "text": "Real-time system health and community statisticsAll Systems OperationalLast checked 2:50:09 PM620Total Patterns372Domains Covered17%Success Rate35Active Today207High Confidence Patterns4.7/10Avg. Confidence Score+108New Domains (7 days)Updates every 60 seconds • Community-driven data"
     },
     {
      "heading": "Need Help?",
@@ -734,6 +734,11 @@
      "text": "It picks up every call, day or night, talks like a real person, and does the work while it talks: books the appointment, updates your software, and texts the confirmation.Watch a call Talk to Maya liveOr call Maya: (213) 641-0074MayaLedgerly · AI agentOn a callThanks for calling Ledgerly support, this is Maya. Who do I have the pleasure of helping today?Hey, it's Dan Ortiz from Ortiz Landscaping. I think you guys charged me twice this month.Found the account and the duplicate chargeA sample call"
     },
     {
+     "heading": "Watch Maya take a call",
+     "label": "Sample calls",
+     "text": "Pick a kind of business and press play. On one side, the call. On the other, the software Maya updates while she talks.Software supportDental officeHome servicesReal estateRestaurant2:14 PM. A customer thinks he was charged twice.Maya AI agentLedgerlyReady(555) 014-2290CallerPress play. The call shows up here as it happens, and the software on the right changes while Maya talks.A sample Ledgerly Support window, with made-up data. It updates as the call goes on. The transcript lists everything Ma"
+    },
+    {
      "heading": "Like a great receptionist who also knows your software.",
      "label": "What it does",
      "text": ""
@@ -1060,7 +1065,7 @@
    "sections": [
     {
      "heading": "Marketplace Account Setup",
-     "text": "Complete this form to get your seller accounts set up professionally.ID: fd177c6fStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review"
+     "text": "Complete this form to get your seller accounts set up professionally.ID: 1a18ffebStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review"
     },
     {
      "heading": "Before You Begin",
