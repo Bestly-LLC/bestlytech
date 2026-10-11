@@ -665,6 +665,24 @@ class Run:
         return "\n".join(lines)
 
 
+HOME_PLACE_RX = re.compile(r"californ|\bca\b|los angeles|west hollywood|nationwide|national|united states|\bu\.?s\.?a?\b|all (?:50 )?states|every state|anywhere", re.I)
+
+
+def other_place_only(s):
+    """The official site names the places the class covers and none is his (California / Los Angeles / the whole US): returns
+    those places, else None. Only trusted when the details were read from the settlement's own site AND the settlement's own text
+    ties the class to that place ("residents of X", "bought in X", "(X)" in the name), so a company's home state is never enough."""
+    details = s.get("details")
+    if not isinstance(details, dict) or details.get("basis") != "site":
+        return None
+    locs = [str(x) for x in (details.get("locations") or []) if str(x).strip()]
+    if not locs or any(HOME_PLACE_RX.search(x) for x in locs):
+        return None
+    text = " ".join([s.get("name") or "", s.get("class_definition") or ""] + [str(x) for x in details.get("who_qualifies") or []])
+    tied = [l for l in locs if re.search(r"\(\s*" + re.escape(l) + r"\s*\)|(?:residents?|resid\w*|liv\w+|purchas\w+|bought|located)\W+(?:\w+\W+){0,4}?" + re.escape(l), text, re.I)]
+    return locs[:3] if len(tied) == len(locs) else None
+
+
 def judge_one(s, deadline, run):
     """Returns (match, evidence, question, note, fact_key, fact_question). Raises RuntimeError if the AI is unavailable
     (the settlement stays unjudged). Evidence rows always come from real rows (email, device, vehicle), never from AI text."""
@@ -679,6 +697,9 @@ def judge_one(s, deadline, run):
     reason = squash(tri.get("no_reason") or "", 200)
     if plaus == "none":
         return "no", [], None, reason or "class cannot include him", None, None
+    away = other_place_only(s)
+    if away:
+        return "no", [], None, "Only covers " + ", ".join(away) + " (read from the official site)", None, None
     kind = str(tri.get("kind") or "other").lower()
     fkey = fact_slug(tri.get("fact_key")) if plaus in ("medium", "high") else None
     fq = squash(tri.get("fact_question") or "", 160) or None
