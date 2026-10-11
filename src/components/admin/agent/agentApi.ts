@@ -79,3 +79,19 @@ export const btnQuiet = `inline-flex min-h-[44px] items-center justify-center ga
 export const btnPrimary = `inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-white px-4 text-[15px] font-semibold text-black hover:bg-white/90 disabled:opacity-40 ${ring} ${press}`;
 export const fieldCls = "w-full rounded-xl bg-white/[0.05] px-3 text-[15px] text-white outline-none ring-1 ring-white/10 placeholder:text-white/50 focus:ring-white/25";
 export const boxCls = "rounded-2xl bg-white/[0.04] p-5 text-[15px] text-white/75 ring-1 ring-white/10";
+
+/** Copy text to the clipboard (with the old execCommand fallback the RoofGuard CopyButton uses). Returns true when it worked. */
+export async function copyText(text: string): Promise<boolean> {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    try { const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); const ok = document.execCommand("copy"); t.remove(); return ok; }
+    catch { return false; }
+  }
+}
+
+/**
+ * A note waiting for the Prompt section ("Try with free AI" on the Tailor card). The Prompt body only exists while its section is open,
+ * so the note is parked here and read when the body mounts; if it is already mounted it also hears PROMPT_NOTE.
+ */
+export const pendingPromptNote = new Map<string, string>();
+export const PROMPT_NOTE = "agent:prompt-note";

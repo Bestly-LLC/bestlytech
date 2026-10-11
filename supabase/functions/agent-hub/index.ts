@@ -12,6 +12,9 @@
 //   {action:"kb_list"} / {action:"kb_get"} / {action:"kb_save"}        the agent's knowledge docs.
 //   {action:"prompt_get"} / {action:"prompt_set"}   template agents only, only when Jared presses Save.
 //   {action:"playbook_push"}  rewrite only the block between <!-- playbook --> and <!-- /playbook --> with the approved lines.
+//   {action:"numbers_free"}   admin: ElevenLabs phone numbers that have no agent assigned (for the + New agent wizard). Never buys a number.
+//   {action:"create"}         admin: {spec} -> make a new template agent end to end (voice agent, voice, knowledge, optional spare number, webhook,
+//                        registry row, Team card). Idempotent per slug: run it again and finished steps just report done. Spends nothing.
 //
 // Non-hook doors check the caller is an admin (or the service key, for cron). Secrets come from Vault, never from the browser.
 
@@ -485,6 +488,192 @@ async function playbookPush(b: Record<string, unknown>): Promise<Response> {
   return jok({ changed: true, lines: lines.length });
 }
 
+
+// ---------- create: a new template agent, end to end (idempotent per slug) ----------
+const RESERVED = new Set(["new", "admin", "ava", "reese", "roofguard", "maya", "scout"]);
+const MODULES_OK = new Set(["tickets", "privacy", "calls", "coach", "voice", "knowledge", "spend"]);
+const FILE_TICKET_TOOL = "tool_7901m4m0e2dvf0x9y469gf3cb4zn";   // Maya's file_ticket, attached only when "Use Maya's ticket desk" is ticked
+const DEPT_BY_PURPOSE: Record<string, string> = { Personal: "desk", Bestly: "sales", RoofGuard: "sales", "A client business": "sales" };
+type Step = { key: string; label: string; ok: boolean; detail?: string };
+
+const cleanLine = (v: unknown, n: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+
+async function numbersFree(): Promise<Response> {
+  const key = await xiKey();
+  if (!key) return jerr("The ElevenLabs key is missing from Vault.", 412);
+  const r = await fetch(`${XI}/convai/phone-numbers`, { headers: H(key, false) });
+  if (!r.ok) { await r.text().catch(() => ""); return jerr(`Couldn't read the phone numbers (${r.status}).`, 502); }
+  const list = (await r.json().catch(() => [])) as Any[];
+  const { data: used } = await db.from("voice_agents").select("phone_number_id").not("phone_number_id", "is", null);
+  const taken = new Set((used ?? []).map((x: { phone_number_id: string }) => x.phone_number_id));
+  const numbers = (Array.isArray(list) ? list : []).filter((n) => !n.assigned_agent && !taken.has(n.phone_number_id))
+    .map((n) => ({ phone_number_id: String(n.phone_number_id), phone_number: String(n.phone_number ?? ""), label: cleanLine(n.label, 60), provider: String(n.provider ?? ""),
+      supports_inbound: n.supports_inbound !== false, supports_outbound: n.supports_outbound === true }));
+  return jok({ numbers });
+}
+
+/** Admin-only RPCs (team_onboard) need an admin session. Service calls pass as is; a browser call re-runs the RPC as that admin. */
+async function adminRpc(req: Request, fn: string, args: Record<string, unknown>): Promise<{ error: string | null }> {
+  const first = await db.rpc(fn, args);
+  if (!first.error) return { error: null };
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  if (!token || !anon) return { error: first.error.message };
+  const asUser = createClient(Deno.env.get("SUPABASE_URL")!, anon, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${token}` } } });
+  const second = await asUser.rpc(fn, args);
+  return { error: second.error ? second.error.message : null };
+}
+
+async function create(b: Record<string, unknown>, req: Request): Promise<Response> {
+  const spec = (b.spec ?? {}) as Record<string, Any>;
+  const slug = String(spec.slug ?? "");
+  if (!SLUG.test(slug)) return jerr("The short name must be 2 to 32 lowercase letters, numbers or dashes, starting with a letter.");
+  if (RESERVED.has(slug)) return jerr(`"${slug}" is taken. Pick another short name.`);
+  const name = cleanLine(spec.name, 40), purpose = cleanLine(spec.purpose, 40);
+  if (!name) return jerr("Give the agent a name.");
+  if (!purpose) return jerr("Say who it is for.");
+  const prompt = String(spec.prompt ?? "").trim();
+  if (prompt.length < 40) return jerr("The script is too short. Write what the agent should do, or use the autofill.");
+  if (prompt.length > 50_000) return jerr("The script is too long.");
+  const greeting = cleanLine(spec.greeting, 500) || `Hey, this is ${name} with ${purpose}. What can I help you with?`;
+  const orbHue = Number.isFinite(Number(spec.orb_hue)) ? Math.max(0, Math.min(359, Math.round(Number(spec.orb_hue)))) : 200;
+  const starter = String(spec.knowledge_starter ?? "").trim().slice(0, 100_000);
+  const useDesk = spec.use_ticket_desk === true;
+  const wanted: string[] = Array.isArray(spec.modules) ? spec.modules.map(String).filter((m) => MODULES_OK.has(m)) : [];
+  const modules = [...new Set(["calls", "coach", "voice", "knowledge", "spend", ...wanted])];
+  const fields = (Array.isArray(spec.data_fields) ? spec.data_fields : []).slice(0, 12).map((f: Any) => ({
+    name: String(f?.name ?? "").toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").replace(/^[0-9]+/, "").slice(0, 40), description: cleanLine(f?.description, 200) }))
+    .filter((f: { name: string; description: string }) => f.name && f.description);
+  const numberId = spec.phone_number_id ? String(spec.phone_number_id) : "";
+  if (numberId && !/^phnum_[A-Za-z0-9]{10,60}$/.test(numberId)) return jerr("That phone number id doesn't look right.");
+  const tc = (spec.team_card ?? {}) as Record<string, Any>;
+  const role = cleanLine(tc.role, 60) || `${purpose} phone agent`;
+  const what = cleanLine(tc.what_it_does, 500) || `Answers calls for ${purpose}. Every call is logged, scored by the Coach, and checked by Switchboard.`;
+
+  const key = await xiKey();
+  if (!key) return jerr("The ElevenLabs key is missing from Vault.", 412);
+  const steps: Step[] = [];
+  const done = (st: Step) => { steps.push(st); return st.ok; };
+  const finish = (ok: boolean, extra: Record<string, unknown> = {}) => Response.json({ ok, slug, page_url: `/admin/agents/${slug}`, steps, error: ok ? undefined : (steps.find((x) => !x.ok)?.detail ?? "Some steps didn't finish. Tap retry.") , ...extra }, { headers: CORS });
+
+  // Maya's current LLM and voice are the defaults; the registry row is the source, not a hard-coded name.
+  const { data: maya } = await db.from("voice_agents").select("llm, voice_id").eq("slug", "maya").maybeSingle();
+  const llm = String(maya?.llm ?? "gemini-2.5-flash");
+  const voiceId = VOICE_ID.test(String(spec.voice_id ?? "")) ? String(spec.voice_id) : String(maya?.voice_id ?? "");
+  if (!VOICE_ID.test(voiceId)) return jerr("Pick a voice first.");
+
+  let { data: row } = await db.from("voice_agents").select("*").eq("slug", slug).maybeSingle();
+  if (row && row.kind !== "template") return jerr(`"${slug}" is taken. Pick another short name.`, 409);
+  if (!row) {
+    const ins = await db.from("voice_agents").insert({ slug, name, purpose, kind: "template", status: "draft", orb_hue: orbHue, modules, llm, voice_id: voiceId,
+      tool_ids: useDesk ? [FILE_TICKET_TOOL] : [], page_url: `/admin/agents/${slug}`, settings: { cost_per_min: 0.12, daily_cap: 10, coach_on: true, watch: null } }).select("*").single();
+    if (ins.error) return jerr(`Couldn't save the agent (${ins.error.message}).`, 500);
+    row = ins.data;
+  }
+  const upd = async (patch: Record<string, unknown>) => { await db.from("voice_agents").update({ ...patch, updated_at: new Date().toISOString() }).eq("slug", slug); };
+
+  // 1. the voice agent
+  let agentId: string | null = row.elevenlabs_agent_id ?? null;
+  if (!agentId) {
+    const xname = `${name} (${purpose}) [${slug}]`;
+    // a previous try may have made it and died before saving the id: look before making a second one
+    const sr = await fetch(`${XI}/convai/agents?search=${encodeURIComponent(`[${slug}]`)}&page_size=30`, { headers: H(key, false) });
+    const found = sr.ok ? (((await sr.json().catch(() => ({}))).agents ?? []) as { agent_id: string; name: string }[]).find((x) => x.name === xname) : null;
+    if (found) agentId = found.agent_id;
+    else {
+      const prompts = {
+        prompt: `${prompt}\n\n${playbookBlock([])}`, llm, tool_ids: useDesk ? [FILE_TICKET_TOOL] : [],
+        built_in_tools: { end_call: { type: "system", name: "end_call", description: "", params: { system_tool_type: "end_call" } } },
+      };
+      const dc: Record<string, unknown> = {};
+      for (const f of fields) dc[f.name] = { type: "string", description: f.description };
+      const body = (withLimits: boolean) => ({
+        name: xname,
+        conversation_config: { agent: { first_message: greeting, language: "en", prompt: prompts }, tts: { voice_id: voiceId }, conversation: { max_duration_seconds: 600 } },
+        platform_settings: { data_collection: dc, ...(withLimits ? { call_limits: { agent_concurrency_limit: 3, daily_limit: 100, bursting_enabled: false } } : {}) },
+      });
+      let cr = await fetch(`${XI}/convai/agents/create`, { method: "POST", headers: H(key), body: JSON.stringify(body(true)) });
+      if (!cr.ok && cr.status === 422) { await cr.text().catch(() => ""); cr = await fetch(`${XI}/convai/agents/create`, { method: "POST", headers: H(key), body: JSON.stringify(body(false)) }); }
+      const cj = await cr.json().catch(() => ({}));
+      if (!cr.ok || !cj.agent_id) {
+        done({ key: "agent", label: "Agent made", ok: false, detail: `The voice platform wouldn't make the agent (${cr.status}): ${JSON.stringify(cj).slice(0, 220)}` });
+        return finish(false);
+      }
+      agentId = cj.agent_id as string;
+    }
+    await upd({ elevenlabs_agent_id: agentId });
+  }
+  done({ key: "agent", label: "Agent made", ok: true });
+  const a: AgentRow = { slug, name, purpose, kind: "template", elevenlabs_agent_id: agentId, webhook_id: row.webhook_id ?? null, settings: row.settings, status: row.status, voice_id: voiceId, tool_ids: row.tool_ids ?? [] };
+
+  // 2. voice (read back, fix if it differs)
+  const cur = await readAgent(a, key);
+  if (!cur) { done({ key: "voice", label: "Voice set", ok: false, detail: "Couldn't read the agent back." }); return finish(false); }
+  if (String(cur.conversation_config?.tts?.voice_id ?? "") !== voiceId) {
+    const pr = await fetch(`${XI}/convai/agents/${agentId}`, { method: "PATCH", headers: H(key), body: JSON.stringify({ conversation_config: { tts: { voice_id: voiceId } } }) });
+    if (!pr.ok) await pr.text().catch(() => "");
+    done({ key: "voice", label: "Voice set", ok: pr.ok, detail: pr.ok ? undefined : `The voice platform wouldn't set the voice (${pr.status}).` });
+  } else done({ key: "voice", label: "Voice set", ok: true });
+  await upd({ voice_id: voiceId });
+
+  // 3. knowledge starter (skipped when the agent already has documents)
+  const refs = (cur.conversation_config?.agent?.prompt?.knowledge_base ?? []) as KbRef[];
+  if (!starter) done({ key: "knowledge", label: "Knowledge added", ok: true, detail: "Nothing to add." });
+  else if (refs.length) done({ key: "knowledge", label: "Knowledge added", ok: true });
+  else {
+    const kr = await fetch(`${XI}/convai/knowledge-base/text`, { method: "POST", headers: H(key), body: JSON.stringify({ text: starter, name: `${name} KB - starter` }) });
+    const kj = await kr.json().catch(() => ({}));
+    if (!kr.ok || !kj.id) done({ key: "knowledge", label: "Knowledge added", ok: false, detail: `The voice platform couldn't save the document (${kr.status}).` });
+    else {
+      const pr = await fetch(`${XI}/convai/agents/${agentId}`, { method: "PATCH", headers: H(key),
+        body: JSON.stringify({ conversation_config: { agent: { prompt: { knowledge_base: [{ type: "text", name: `${name} KB - starter`, id: kj.id, usage_mode: "auto" }] } } } }) });
+      if (!pr.ok) await pr.text().catch(() => "");
+      done({ key: "knowledge", label: "Knowledge added", ok: pr.ok, detail: pr.ok ? undefined : `Saved the document but couldn't attach it (${pr.status}).` });
+    }
+  }
+
+  // 4. a spare number, only if one was picked and it is really free. Nothing is ever bought here.
+  if (!numberId) done({ key: "number", label: "Number assigned", ok: true, detail: "Web only." });
+  else if (row.phone_number_id === numberId) done({ key: "number", label: "Number assigned", ok: true });
+  else {
+    const nr = await fetch(`${XI}/convai/phone-numbers/${numberId}`, { headers: H(key, false) });
+    const nj = nr.ok ? await nr.json().catch(() => null) : null;
+    if (!nj) { if (!nr.ok) await nr.text().catch(() => ""); done({ key: "number", label: "Number assigned", ok: false, detail: "That number isn't in your voice account." }); }
+    else if (nj.assigned_agent && nj.assigned_agent.agent_id !== agentId) done({ key: "number", label: "Number assigned", ok: false, detail: `That number already belongs to ${nj.assigned_agent.agent_name ?? "another agent"}. Pick a free one.` });
+    else {
+      const { data: owner } = await db.from("voice_agents").select("slug").eq("phone_number_id", numberId).neq("slug", slug).maybeSingle();
+      if (owner) done({ key: "number", label: "Number assigned", ok: false, detail: `That number is already ${owner.slug}'s line.` });
+      else {
+        const pr = nj.assigned_agent?.agent_id === agentId ? { ok: true, status: 200 } : await fetch(`${XI}/convai/phone-numbers/${numberId}`, { method: "PATCH", headers: H(key), body: JSON.stringify({ agent_id: agentId }) });
+        if (!pr.ok) await (pr as Response).text().catch(() => "");
+        if (pr.ok) await upd({ phone_number_id: numberId, line_e164: String(nj.phone_number ?? "") || null });
+        done({ key: "number", label: "Number assigned", ok: pr.ok, detail: pr.ok ? undefined : `The voice platform wouldn't assign the number (${pr.status}).` });
+      }
+    }
+  }
+
+  // 5. calls hooked up (post-call webhook)
+  const sr = await setup(slug);
+  const sj = await sr.json().catch(() => ({}));
+  done({ key: "hook", label: "Calls hooked up", ok: sj.ok === true, detail: sj.ok === true ? undefined : String(sj.error ?? "The webhook didn't attach.") });
+
+  // 6. Team card (never overwrites a card that belongs to something else)
+  const { data: clash } = await db.from("bestly_agents").select("slug, admin_url").eq("slug", slug).maybeSingle();
+  const tslug = clash && clash.admin_url !== `/admin/agents/${slug}` ? `agent-${slug}` : slug;
+  const dept = DEPT_BY_PURPOSE[purpose] ?? (["desk", "sales", "ops"].includes(String(spec.dept)) ? String(spec.dept) : "desk");
+  const card = [{ slug: tslug, name, role, what_it_does: what, reports_to: "jared", dept, runs_on: "cloud", icon: "phone-call", sort: 62, admin_url: `/admin/agents/${slug}`,
+    schedule: "answers calls; Switchboard checks it every 10 min", welcome: false,
+    pulse: { src: "at", table: "agent_health", col: "checked_at", where: `agent_slug = '${slug}'`, ok: "ok", sum: "case when ok then 'Line OK' else 'Line problem' end", gap: 30, also: ["agent-watch"], alert: true, on_demand: true },
+    owns: [`agent.line.${slug}`, `agent.spend.${slug}`] }];
+  await db.from("agent_health").upsert({ agent_slug: slug, ok: true, problems: [], checked_at: new Date().toISOString(), last_ok_at: new Date().toISOString() }, { onConflict: "agent_slug", ignoreDuplicates: true });
+  const tr = await adminRpc(req, "team_onboard", { p: card });
+  done({ key: "team", label: "On the Team page", ok: !tr.error, detail: tr.error ? `The Team card wasn't added (${tr.error.slice(0, 160)}).` : undefined });
+
+  // live as soon as the agent itself exists; Switchboard heals whatever a retry still has to fix
+  if (row.status === "draft") await upd({ status: "live" });
+  return finish(steps.every((x) => x.ok), { agent_id: agentId, team_slug: tslug });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const url = new URL(req.url);
@@ -506,6 +695,8 @@ Deno.serve(async (req) => {
       case "prompt_get": return await promptGet(body);
       case "prompt_set": return await promptSet(body);
       case "playbook_push": return await playbookPush(body);
+      case "numbers_free": return await numbersFree();
+      case "create": return await create(body, req);
       default: return jerr("unknown action", 400);
     }
   } catch (e) {

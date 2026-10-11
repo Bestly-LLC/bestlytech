@@ -12,7 +12,7 @@
  */
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { AlertTriangle, Check, Copy, MessagesSquare, Phone } from "lucide-react";
+import { AlertTriangle, Check, Copy, MessagesSquare, Phone, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AvaOrb } from "@/components/admin/roofguard/AvaOrb";
 import { CollapsibleSection, openSection } from "@/components/admin/roofguard/CollapsibleSection";
@@ -138,6 +138,7 @@ export default function AgentDesk({ slug: slugProp }: { slug?: string }) {
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <SpendChip spend={spend} onClick={() => setSettingsOpen(true)} />
           <SettingsButton onClick={() => setSettingsOpen(true)} />
+          <Link to="/admin/agents/new" className={btnQuiet} aria-label="New agent"><Plus className="h-4 w-4" aria-hidden />New agent</Link>
         </div>
       </div>
 
