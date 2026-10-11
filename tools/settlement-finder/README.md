@@ -12,13 +12,21 @@ It reads public listing pages and his email *search RPC* (sender/subject only) a
    category (their HTML page sits behind a Cloudflare challenge, which is not bypassed). Obeys robots.txt, one request per
    source, 4 s apart, normal User-Agent, retries with backoff. Keeps only rows with a claim deadline today or later.
    `settlement_upsert_t` with stable keys `ca:<slug>` / `tca:<slug>`. Rows whose deadline has passed are marked `closed`.
-2. **Match** - `settlement_unjudged_t` (up to 60 per run, soonest deadline first). Per settlement: AI triage (search terms,
-   plausibility, one yes/no question) -> `settlement_mail_search_t` -> AI judge -> `settlement_judge_t`.
-   - `proven`: a receipt/order/account/statement email, inside the class period (evidence = the real email subject + date)
-   - `likely`: transactional emails that strongly suggest it
-   - `ask`: broad class, nothing in email proves it -> one short yes/no question
-   - `no`: clearly not him (other state, business-only, narrow product with no email trace)
-   Evidence is built from the real email rows, never from AI text. Unsure between proven and ask -> ask.
+2. **Match** - `settlement_unjudged_t` (up to 60 per run, soonest deadline first). Per settlement:
+   - AI triage: search terms, plausibility, kind (breach / device / vehicle / service / ...), class period dates, one yes/no
+     question, and a `fact_key` (+ a generic `fact_question`) for the underlying fact. Known facts (`settlement_facts_t`) are
+     passed in so keys are reused; a fact Jared already answered settles the claim at once (yes -> ready, no -> skipped) via
+     `settlement_judge2_t`, no search needed.
+   - Evidence: his email by class-period dates **including body text** (`settlement_mail_search2_t`, 40 hits, falls back to
+     all time), devices seen on his home network (`settlement_devices_t`), Turo vehicles (`settlement_vehicles_t`).
+   - AI judge picks candidate labels; **code re-checks** the cited real rows (header names the company, date inside the class
+     period, breach wording, device/vehicle name overlaps the class text) before accepting `proven`.
+   - `proven`: a breach notice email from that company, a receipt/order/account email inside the class period, or an owned
+     device/vehicle clearly inside the class. `likely`: transactional / breach-notice / device evidence not fully confirmed.
+     `ask`: broad class, nothing proves it -> one yes/no (the fact is stored once and reused). `no`: clearly not him.
+   - Evidence is built from the real rows (email subject + date, device name, vehicle), never from AI text.
+   - `--rejudge-asks`: one-off pass over claims still at `ask` (`settlement_rejudge_list_t`) to give them fact keys and re-check
+     proof. Note his mailbox in `bestly_mail` only goes back to 2026-04-09, so old purchases cannot be proven from email.
 3. **Heartbeat** - `runjob.py` calls `pi_job_report` with the one-line summary, ok=false on any failure.
 
 ## Self-heal
@@ -35,5 +43,6 @@ settlements stay unjudged for tomorrow and the run reports failed when nothing c
 /opt/bestly/cron/run.sh settlement-finder            # real run, logs to /home/pi/scripts/cron-logs/settlement-finder.log
 python3 /opt/bestly/cron/jobs/settlement_finder.py --dry        # fetch + judge, write nothing
 python3 /opt/bestly/cron/jobs/settlement_finder.py --find-only | --match-only | --limit 5
+python3 /opt/bestly/cron/jobs/settlement_finder.py --rejudge-asks [--dry]   # re-judge claims waiting at ask
 ```
 Install/update: copy this folder to the Pi and `sh install.sh`.
