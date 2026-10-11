@@ -46,7 +46,7 @@ export function useWidgetPreview(token?: string): boolean {
   try { return new URLSearchParams(window.location.search).get("widget") === "1"; } catch { return false; }
 }
 
-export function LeoWidget({ token, context, home }: { token: string; context?: TripContext; home: boolean }) {
+export function LeoWidget({ token, context, home, onClose }: { token: string; context?: TripContext; home: boolean; onClose: () => void }) {
   const [s, setS] = useState<{ url: string; key: string } | null>(null);
   const [err, setErr] = useState("");
 
@@ -62,15 +62,19 @@ export function LeoWidget({ token, context, home }: { token: string; context?: T
     return () => { live = false; };
   }, [token]);
 
-  if (err) return <p role="alert" className="fixed inset-x-4 bottom-28 z-50 rounded-2xl bg-white p-4 text-[15px] text-[#B4232A] shadow-xl">{err}</p>;
-  if (!s) return (
+  // Pull-out card: dim the trip page behind the widget so its glass panel stays readable; tap outside to close.
+  const scrim = <button type="button" aria-label="Close Leo" onClick={onClose}
+    className="fixed inset-0 z-40 cursor-default bg-black/60 backdrop-blur-[2px] motion-safe:animate-in motion-safe:fade-in" />;
+
+  if (err) return <>{scrim}<p role="alert" className="fixed inset-x-4 bottom-28 z-50 rounded-2xl bg-white p-4 text-[15px] text-[#B4232A] shadow-xl">{err}</p></>;
+  if (!s) return (<>{scrim}
     <div className="fixed inset-x-0 bottom-28 z-50 flex justify-center" aria-live="polite">
       <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[15px] font-semibold text-[#0B0B0F] shadow-xl">
         <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />Opening Leo
       </span>
-    </div>
+    </div></>
   );
-  return (
+  return (<>{scrim}
     <Convai
       signed-url={s.url}
       dynamic-variables={JSON.stringify({ trip_key: s.key })}
@@ -87,6 +91,6 @@ export function LeoWidget({ token, context, home }: { token: string; context?: T
       worklet-path-raw-audio-processor="/maya/raw-audio-processor.js"
       worklet-path-audio-concat-processor="/maya/audio-concat-processor.js"
       worklet-path-libsamplerate="/maya/libsamplerate.worklet.js"
-    />
+    /></>
   );
 }
