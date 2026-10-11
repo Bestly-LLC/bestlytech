@@ -173,13 +173,13 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
     >
       <div className="ad-band">
         <div className="ad-inner">
-          <header className="ad-intro">
+          <div className="ad-intro">
             <p className="ad-eyebrow">Sample calls</p>
             <h2 id="demo-title" className="font-modern">Watch Maya take a call</h2>
             <p>
               Pick a kind of business and press play. On one side, the call. On the other, the software Maya updates while she talks.
             </p>
-          </header>
+          </div>
 
           <div id="demo-chips" ref={chipsRef} className="ad-chips" role="radiogroup" aria-label="Pick a kind of business">
             {SCENARIOS.map((s, i) => (
