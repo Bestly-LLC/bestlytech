@@ -721,6 +721,8 @@ def main(argv):
                 if dry:
                     queue(True, None, "first", lead["email"], subject, body)
                     counts["firsts"] += 1
+                    log("lead: %s | %s, %s | track %s | %s | %s | contact %s | hook: %s" % (lead["company"], lead["city"], lead["state"], lead["track"], lead["email"],
+                        lead["phone"], lead["contact_name"] or "none", lead["hook"]))
                     continue
                 lid = lib.rpc("rg_outreach_ledger_upsert", p={k: lead.get(k) for k in (
                     "company", "domain", "website", "email", "phone", "contact_name", "contact_title", "city", "state", "tz", "track", "services",
