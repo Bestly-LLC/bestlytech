@@ -1155,3 +1155,6 @@ body.leo-open nav[aria-label="Trip steps"] { transform: translateY(105%); opacit
 @keyframes leo-orb-breathe { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.08) rotate(180deg); } }
 .leo-orb-live { animation: leo-orb-breathe 2.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .leo-orb-live { animation: none; } }
+
+/* Asset revision: bump to give the main stylesheet a new file name when browsers hold a bad cached copy (2026-10-11). */
+:root { --bestly-asset-rev: 2; }
