@@ -9,9 +9,10 @@ import { cn } from "@/lib/utils";
 import bestlyLogo from "@/assets/bestly-logo.png";
 import { products, isExternalHref } from "@/config/products";
 
-const navigation: { name: string; href: string; external?: boolean }[] = [
+const navigation: { name: string; href: string; external?: boolean; isNew?: boolean }[] = [
   { name: "Home", href: "/" },
   { name: "In-House Cloud", href: "/cloud" },
+  { name: "Agents", href: "/agent", isNew: true },
   // /work is a static page in public/, outside the React router. It must be a
   // plain <a> so the browser does a real page load; <Link> would hit the SPA
   // catch-all rewrite in vercel.json and render the 404 route instead.
@@ -20,6 +21,15 @@ const navigation: { name: string; href: string; external?: boolean }[] = [
   { name: "About", href: "/about" },
   { name: "Contact", href: "/contact" },
 ];
+
+/** Small "New" pill beside a nav label. Kept in the label's line so the two never wrap apart. */
+function NewPill() {
+  return (
+    <span className="ml-1.5 inline-flex items-center rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-semibold uppercase leading-4 tracking-wide text-primary ring-1 ring-inset ring-primary/25">
+      New
+    </span>
+  );
+}
 
 export function Header({ compact = false }: { compact?: boolean } = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -127,7 +137,7 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
                 href={item.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="relative px-4 py-2 text-sm font-medium transition-colors rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                className="relative whitespace-nowrap px-2.5 xl:px-4 py-2 text-sm font-medium transition-colors rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50"
               >
                 {item.name}
               </a>
@@ -136,13 +146,16 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
               key={item.name}
               to={item.href}
               className={cn(
-                "relative px-4 py-2 text-sm font-medium transition-colors rounded-lg",
+                "relative whitespace-nowrap px-2.5 xl:px-4 py-2 text-sm font-medium transition-colors rounded-lg",
               (item.href === "/services" ? isServicesActive : location.pathname === item.href)
                    ? "text-foreground"
                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
               )}
             >
-              {item.name}
+              <span className="inline-flex items-center whitespace-nowrap">
+                {item.name}
+                {item.isNew && <NewPill />}
+              </span>
               {(item.href === "/services" ? isServicesActive : location.pathname === item.href) && (
                 <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
               )}
@@ -152,16 +165,16 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
           <ProductsDropdown isActive={isProductsActive} />
         </div>
 
-        <div className="hidden lg:flex lg:flex-1 lg:justify-end lg:items-center lg:gap-2">
+        <div className="hidden lg:flex lg:flex-1 lg:justify-end lg:items-center lg:gap-1 xl:gap-2">
           <Link
             to="/get-started"
-            className="inline-flex items-center justify-center rounded-lg gradient-bg px-4 py-2 text-sm font-medium text-white shadow-sm shadow-primary/20 btn-lift"
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-lg gradient-bg px-4 py-2 text-sm font-medium text-white shadow-sm shadow-primary/20 btn-lift"
           >
             Get Started
           </Link>
           <Link
             to="/privacy-policy"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-4 py-2 rounded-lg hover:bg-accent/50"
+            className="hidden xl:inline-flex text-sm font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap px-4 py-2 rounded-lg hover:bg-accent/50"
           >
             Legal
           </Link>
@@ -241,7 +254,10 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
                           )}
                           style={{ animationDelay: `${index * 50}ms` }}
                         >
-                          {item.name}
+                          <span className="inline-flex items-center whitespace-nowrap">
+                            {item.name}
+                            {item.isNew && <NewPill />}
+                          </span>
                         </Link>
                       )
                     )}

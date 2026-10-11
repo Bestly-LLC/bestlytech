@@ -1,8 +1,9 @@
 import { useRef } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowRight, Check, ClipboardCheck, MessageSquareText, Mic, Phone, PhoneIncoming,
-  Plus, UserRoundCheck,
+  ArrowRight, CalendarDays, Check, ClipboardCheck, CreditCard, Headset, Languages, Mail, MessageCircle,
+  MessageSquareText, MessagesSquare, Mic, Phone, PhoneIncoming, Plug, Plus, ShieldCheck, UserRoundCheck,
+  Users, Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SEOHead } from "@/components/SEOHead";
@@ -26,10 +27,28 @@ const PHONE_TEL = "tel:+12136410074";
 const openMaya = () => window.dispatchEvent(new Event("maya:open"));
 
 const does: { icon: LucideIcon; title: string; body: string }[] = [
-  { icon: PhoneIncoming, title: "Answers every call", body: "Day or night. No hold music, no voicemail. Every caller talks to someone right away." },
-  { icon: ClipboardCheck, title: "Does the work", body: "Books the appointment, issues the refund, sends the technician. She does it in the software you already use." },
-  { icon: MessageSquareText, title: "Texts and emails for you", body: "Confirmations, forms and links go out while she is still on the phone with them." },
-  { icon: UserRoundCheck, title: "Hands you the hot ones", body: "When a call needs a person, she alerts you or transfers it. Nothing important gets lost." },
+  { icon: PhoneIncoming, title: "Answers every call", body: "Day or night, weekends and holidays. Nobody waits on hold. Nobody gets voicemail." },
+  { icon: ClipboardCheck, title: "Does the work, not just the talking", body: "She books, reschedules, looks up orders and sends a technician, right inside your own software." },
+  { icon: MessageSquareText, title: "Texts and emails for you", body: "Confirmations, forms and payment links go out while she is still on the call." },
+  { icon: UserRoundCheck, title: "Gets you when it matters", body: "If a caller needs a person, she transfers the call or sends you an alert with the details." },
+];
+
+/** The point of the page: she is connected to the customer's own tools. Names are examples, set up per customer. */
+const apps: { icon: LucideIcon; title: string; names: string[]; body: string }[] = [
+  { icon: CalendarDays, title: "Your calendar", names: ["Google Calendar", "Outlook", "Calendly"], body: "Books, moves and cancels appointments in open times only." },
+  { icon: Users, title: "Your customer list", names: ["HubSpot", "Salesforce", "a spreadsheet"], body: "Adds new callers, finds returning ones, and writes a note about every call." },
+  { icon: Headset, title: "Your help desk", names: ["Zendesk", "Intercom", "Freshdesk"], body: "Looks up the order or account and fixes the problem, or opens a ticket for your team." },
+  { icon: CreditCard, title: "Payments", names: ["Stripe", "Square"], body: "Texts a secure payment link. Can give a refund, up to a limit you set." },
+  { icon: Wrench, title: "Your crew schedule", names: ["Jobber", "Housecall Pro"], body: "Creates the job and sends the right person to the right address." },
+  { icon: Plug, title: "Something else?", names: [], body: "If your software can connect to other apps, we can usually connect her to it too. Just ask." },
+];
+
+const channels: { icon: LucideIcon; label: string }[] = [
+  { icon: Phone, label: "Phone calls" },
+  { icon: MessageSquareText, label: "Text messages" },
+  { icon: MessagesSquare, label: "Website chat" },
+  { icon: Mail, label: "Email" },
+  { icon: MessageCircle, label: "WhatsApp" },
 ];
 
 const industries: { id: string; line: string }[] = [
@@ -41,9 +60,20 @@ const industries: { id: string; line: string }[] = [
 ];
 
 const steps = [
-  { n: "1", title: "We learn your business", body: "Your hours, prices, policies and the questions people always ask. She answers from that, in your voice." },
-  { n: "2", title: "Connect your phone and tools", body: "You keep your phone number. We connect your calendar, customer list or help desk so she can do the work." },
-  { n: "3", title: "Read every call", body: "Each call comes with a short summary of what happened, and you can listen back to the recording." },
+  { n: "1", title: "Tell us how your business works", body: "Your hours, prices, rules and the questions people always ask. You decide what she can and can't do." },
+  { n: "2", title: "We connect your phone and apps", body: "You keep your phone number. We hook up your calendar, customer list and anything else she needs." },
+  { n: "3", title: "We test her before she goes live", body: "We run practice calls, tricky ones included, until she handles them the way you would." },
+  { n: "4", title: "You see every call", body: "Each call comes with a short summary and the recording. See how many calls she took and what she booked." },
+];
+
+/** The questions people actually ask before they buy, answered in one or two plain sentences. */
+const faqs = [
+  { q: "Is she just a chatbot?", a: "No. A chatbot only talks. Maya talks and does the work: she books, looks things up, updates records and sends messages in your own apps." },
+  { q: "I already have a receptionist.", a: "Keep them. Maya covers nights, weekends, lunch breaks and busy times, so no call ever goes to voicemail." },
+  { q: "We're small. Is this for us?", a: "Yes. Small businesses miss the most calls, because nobody is free to pick up. A missed call is often a customer who calls someone else." },
+  { q: "Do I have to change my phone number?", a: "No. You keep your number. Send her every call, or only the ones you can't pick up. You choose." },
+  { q: "Will callers know she's AI?", a: "She sounds like a real person, and she's honest about what she is. If someone asks, she tells them. Anyone who wants a person can reach one." },
+  { q: "What if she gets something wrong?", a: "She follows the rules you set and only uses the apps her job needs. Every call is summarized, so you can check her work in seconds." },
 ];
 
 export default function BestlyAgent() {
@@ -71,8 +101,8 @@ export default function BestlyAgent() {
   return (
     <>
       <SEOHead
-        title="Bestly Agent: an AI that answers your business phone"
-        description="Bestly Agent picks up every call, day or night, talks like a real person, and does the work while it talks: books the appointment, updates your software, and texts the confirmation."
+        title="Bestly Agent: an AI receptionist that answers your phone and does the work"
+        description="Bestly Agent answers every call, day or night, and does the work inside the apps you already use: books the appointment in your calendar, updates your customer list, and texts the confirmation."
         path="/agent"
         image="/og-agent.png"
       />
@@ -87,12 +117,13 @@ export default function BestlyAgent() {
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-24">
           <AnimatedSection animation="fade-in" immediate>
             <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-primary">Bestly Agent</p>
-            <h1 className="font-modern text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              An AI that answers your business phone.
+            <h1 className="font-modern [text-wrap:balance] text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+              An AI receptionist that answers your phone and does the work.
             </h1>
             <p className="mt-6 max-w-xl text-lg text-muted-foreground">
-              It picks up every call, day or night, talks like a real person, and does the work while it talks: books the
-              appointment, updates your software, and texts the confirmation.
+              She picks up every call, day or night, and sounds like a real person. Then she does the job. She books the
+              appointment in your calendar, adds the caller to your customer list, and texts them a confirmation before they
+              hang up.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button size="lg" className="min-h-[44px]" onClick={() => watch("saas-support", true)}>
@@ -165,8 +196,8 @@ export default function BestlyAgent() {
       <section className="border-b border-border bg-background">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
           <AnimatedSection animation="fade-in" className="mb-12 max-w-2xl">
-            <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">What it does</p>
-            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">What she does</p>
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
               Like a great receptionist who also knows your software.
             </h2>
           </AnimatedSection>
@@ -186,12 +217,93 @@ export default function BestlyAgent() {
         </div>
       </section>
 
-      {/* 4. Works for any business */}
+      {/* 4. Works inside your apps: the thing that makes her more than a voice bot */}
+      <section id="apps" className="border-b border-border bg-secondary/20">
+        <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
+          <AnimatedSection animation="fade-in" className="mb-12 max-w-3xl">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Not just a chatbot</p>
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              She works inside the apps you already use.
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground">
+              Most answering services take a message and leave the rest to you. We connect Maya to your tools, so she finishes
+              the job while the caller is still on the phone.
+            </p>
+          </AnimatedSection>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {apps.map((a, i) => (
+              <AnimatedSection key={a.title} animation="fade-in-up" delay={i * 60}>
+                <div className={`h-full rounded-2xl border p-6 ${a.names.length ? "border-border bg-card" : "border-dashed border-primary/40 bg-primary/[0.04]"}`}>
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <a.icon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <h3 className="font-modern text-lg font-semibold text-foreground">{a.title}</h3>
+                  </div>
+                  <p className="mt-4 text-muted-foreground">{a.body}</p>
+                  {a.names.length > 0 && (
+                    <ul className="mt-4 flex flex-wrap gap-2" aria-label={`${a.title} examples`}>
+                      {a.names.map((n) => (
+                        <li key={n} className="whitespace-nowrap rounded-full border border-border bg-background px-3 py-1 text-sm text-foreground">
+                          {n}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </AnimatedSection>
+            ))}
+          </div>
+          <AnimatedSection animation="fade-in" className="mt-8 flex max-w-2xl items-start gap-3 text-muted-foreground">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+            <p>We set up every connection for you. She only gets access to what her job needs, and nothing else.</p>
+          </AnimatedSection>
+        </div>
+      </section>
+
+      {/* 5. Every channel, every language */}
+      <section id="channels" className="border-b border-border bg-background">
+        <div className="mx-auto grid max-w-7xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8 lg:py-24">
+          <AnimatedSection animation="fade-in">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Everywhere your customers are</p>
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              One agent for calls, texts, chat and email.
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground">
+              Customers reach you in different ways. The same agent, with the same know-how, answers all of them.
+            </p>
+            <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {channels.map((c) => (
+                <li key={c.label} className="flex min-h-[44px] items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 text-foreground">
+                  <c.icon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span className="whitespace-nowrap font-medium">{c.label}</span>
+                </li>
+              ))}
+            </ul>
+          </AnimatedSection>
+          <AnimatedSection animation="fade-in" delay={80} className="self-center">
+            <div className="rounded-2xl border border-border bg-card p-8">
+              <span className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Languages className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <h3 className="font-modern text-2xl font-semibold text-foreground">
+                Speaks <span className="whitespace-nowrap">90+ languages.</span>
+              </h3>
+              <p className="mt-3 text-lg text-muted-foreground">
+                A caller can start in Spanish, Korean, Chinese or Tagalog. She answers in their language, and you still get the
+                summary in English.
+              </p>
+            </div>
+          </AnimatedSection>
+        </div>
+      </section>
+
+      {/* 6. Works for any business */}
       <section id="industries" className="border-b border-border bg-secondary/20">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
           <AnimatedSection animation="fade-in" className="mb-12 max-w-2xl">
             <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Any industry</p>
-            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
               Works for any business that gets phone calls.
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">Pick one to watch that call play out above.</p>
@@ -236,14 +348,14 @@ export default function BestlyAgent() {
         </div>
       </section>
 
-      {/* 5. How it works */}
+      {/* 7. How it works */}
       <section id="how-it-works" className="border-b border-border bg-background">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
           <AnimatedSection animation="fade-in" className="mb-12 max-w-2xl">
-            <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Three steps</p>
-            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">How it works</h2>
+            <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">How it works</p>
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">We set it all up for you.</h2>
           </AnimatedSection>
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {steps.map((s, i) => (
               <AnimatedSection key={s.n} animation="fade-in-up" delay={i * 80}>
                 <div className="h-full rounded-2xl border border-border bg-card p-7">
@@ -259,8 +371,28 @@ export default function BestlyAgent() {
         </div>
       </section>
 
-      {/* 6. Try her right now */}
-      <section id="try-maya" className="border-b border-border bg-secondary/20">
+      {/* 8. Questions people ask before they buy */}
+      <section id="questions" className="border-b border-border bg-secondary/20">
+        <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
+          <AnimatedSection animation="fade-in" className="mb-12 max-w-2xl">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Questions</p>
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">What people ask us first.</h2>
+          </AnimatedSection>
+          <dl className="grid gap-5 md:grid-cols-2">
+            {faqs.map((f, i) => (
+              <AnimatedSection key={f.q} animation="fade-in-up" delay={i * 50}>
+                <div className="h-full rounded-2xl border border-border bg-card p-6">
+                  <dt className="font-modern text-lg font-semibold text-foreground">{f.q}</dt>
+                  <dd className="mt-2 text-muted-foreground">{f.a}</dd>
+                </div>
+              </AnimatedSection>
+            ))}
+          </dl>
+        </div>
+      </section>
+
+      {/* 9. Try her right now */}
+      <section id="try-maya" className="border-b border-border bg-background">
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-20 sm:px-6 lg:grid-cols-[auto_1fr] lg:gap-14 lg:px-8 lg:py-24">
           <AnimatedSection animation="fade-in" className="flex justify-center">
             <span
@@ -274,9 +406,9 @@ export default function BestlyAgent() {
           </AnimatedSection>
           <AnimatedSection animation="fade-in" delay={80}>
             <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Live</p>
-            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Try her right now.</h2>
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Try her right now.</h2>
             <p className="mt-4 max-w-xl text-lg text-muted-foreground">
-              Maya is a Bestly Agent. Talk to her the way your customers would.
+              Maya is a Bestly Agent. Ask her anything, or pretend you are one of your own customers.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <Button size="lg" className="min-h-[44px]" onClick={openMaya}>
@@ -293,13 +425,14 @@ export default function BestlyAgent() {
         </div>
       </section>
 
-      {/* 7. CTA */}
-      <section className="bg-background">
+      {/* 10. CTA */}
+      <section className="bg-secondary/20">
         <div className="mx-auto max-w-3xl px-4 py-20 text-center sm:px-6 lg:py-24">
           <AnimatedSection animation="fade-in">
-            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Get your own agent.</h2>
+            <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Get your own agent.</h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Tell us about your business and your phone line. We will show you what she would do on your calls.
+              Tell us about your business. We set up your agent, connect your apps and test her, and you keep your phone
+              number. If it is not a fit, we will tell you.
             </p>
             <div className="mt-8 flex justify-center">
               <Button size="lg" className="min-h-[44px]" asChild>
