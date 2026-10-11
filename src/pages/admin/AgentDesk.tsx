@@ -13,7 +13,7 @@
  */
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { AlertTriangle, Check, Copy, MessagesSquare, Phone, Plus } from "lucide-react";
+import { AlertTriangle, Check, Copy, Globe, MessagesSquare, Phone, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AvaOrb } from "@/components/admin/roofguard/AvaOrb";
 import { CollapsibleSection, openSection } from "@/components/admin/roofguard/CollapsibleSection";
@@ -51,7 +51,7 @@ function LineNumber({ name, e164 }: { name: string; e164: string | null }) {
   const [copied, setCopied] = useState(false);
   if (!e164) return (
     <span className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white/[0.04] px-3.5 text-[15px] text-white/60 ring-1 ring-white/10">
-      <Phone className="h-4 w-4" aria-hidden />Web only, no phone number</span>
+      <Globe className="h-4 w-4" aria-hidden />Web only, no phone number</span>
   );
   const copy = async () => {
     try { await navigator.clipboard.writeText(fmtPhone(e164).replace(/ /g, " ")); }
