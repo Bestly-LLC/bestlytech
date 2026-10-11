@@ -7,6 +7,10 @@
 // agent private (enable_auth) with bestly.tech + www.bestly.tech allowed, the maya-session door minting, the prompt
 // carrying the current "Website presenter" block, and her "bestly.tech site map" knowledge matching the live
 // /maya/site-index.json (rebuilt whenever its generated_at changes). Heals all of these. Alert key maya.site.
+// Agent demo (about hourly, only when the run lands in minutes 0-9): bestly.tech/agent answers 200, every
+// /agent-demo/<id>.json is 200 with duration > 20 s and every .mp3 answers 200, and no visitor browser has reported
+// agent-demo-audio failures (maya_web_sessions kind='diag') in the last hour. Alert only (a static file can't be
+// healed from here); the message says what to re-run. Same alert key maya.site.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const AGENT_ID = "agent_3701m4jbjnyef6ga4ys73xtbz37s";
@@ -55,6 +59,7 @@ Bestly Cloud is one small server in their office that replaces the apps they ren
 - On phone calls none of these tools work; never call them there.
 ${PRESENTER_END}`;
 const SITE_HOSTS = ["bestly.tech", "www.bestly.tech"];
+const AGENT_DEMO_IDS = ["saas-support", "dental", "plumbing", "real-estate", "restaurant"];
 const TELNYX_CONN = "3067494961063659261";
 const NUMBER = "+12136410074";
 const EL_FQDN = "sip.rtc.elevenlabs.io";
@@ -221,6 +226,33 @@ Deno.serve(async () => {
     const mj = await ms.json().catch(() => ({}));
     if (!ms.ok || mj?.ok !== true) site.push(`My website door (maya-session) can't start chats (${ms.status}${mj?.mint_status ? `, ElevenLabs ${mj.mint_status}` : ""}).`);
     else if ((mj.refused_last_hour ?? 0) > 40) site.push(`My website door refused ${mj.refused_last_hour} chat starts in the last hour; someone may be hammering it (the limits held).`);
+
+    // 5d. Bestly Agent demo page (/agent): page up, every recorded call present, no visitor-side audio failures.
+    // Hourly-ish: this function runs every 10 minutes, so only the run in minutes 0-9 does it.
+    if (new Date().getUTCMinutes() < 10) {
+      try {
+        const base = "https://www.bestly.tech";
+        const pg = await fetch(`${base}/agent`, { redirect: "follow" });
+        if (pg.status !== 200) site.push(`The Bestly Agent page at bestly.tech/agent answered ${pg.status}.`);
+        const gone: string[] = [];
+        for (const id of AGENT_DEMO_IDS) {
+          const jr = await fetch(`${base}/agent-demo/${id}.json`, { headers: { "Cache-Control": "no-cache" } });
+          if (jr.status !== 200) { gone.push(`${id}.json answered ${jr.status}`); }
+          else {
+            const jj = await jr.json().catch(() => null) as { duration?: number } | null;
+            if (!(Number(jj?.duration) > 20)) gone.push(`${id}.json has no usable timeline`);
+          }
+          const mr = await fetch(`${base}/agent-demo/${id}.mp3`, { method: "HEAD" });
+          if (mr.status !== 200) gone.push(`${id}.mp3 answered ${mr.status}`);
+        }
+        if (gone.length) site.push(`The Bestly Agent demo calls on bestly.tech/agent are missing their sound (${gone.join("; ")}). Re-run node tools/agent-demo-audio/build.mjs.`);
+        const { count: audioDiag } = await sb.from("maya_web_sessions").select("id", { count: "exact", head: true })
+          .eq("kind", "diag").ilike("detail->>what", "%agent-demo-audio%").gte("created_at", new Date(Date.now() - 3600_000).toISOString());
+        if ((audioDiag ?? 0) > 0) site.push(`${audioDiag} visitor${audioDiag === 1 ? "" : "s"} could not play the Bestly Agent demo audio in the last hour, so the calls fell back to captions only. Check bestly.tech/agent-demo/ and re-run node tools/agent-demo-audio/build.mjs if a file is bad.`);
+      } catch (e) {
+        site.push(`Agent demo check crashed: ${String(e).slice(0, 120)}`);
+      }
+    }
   } catch (e) {
     problems.push(`Check crashed: ${String(e).slice(0, 200)}`);
   }

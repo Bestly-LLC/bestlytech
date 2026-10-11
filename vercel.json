@@ -196,7 +196,7 @@
       ]
     },
     {
-      "source": "/(about|products|apps|cookie-yeti|inventory-proof|hoku|cloud|in-house-cloud|get-started|studio|neckpilot|services|apple-modernization|marketplace-setup|contact|support)",
+      "source": "/(about|products|apps|cookie-yeti|inventory-proof|hoku|cloud|in-house-cloud|get-started|studio|neckpilot|agent|bestly-agent|demo|services|apple-modernization|marketplace-setup|contact|support)",
       "headers": [
         {
           "key": "X-Frame-Options",

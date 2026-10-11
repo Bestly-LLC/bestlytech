@@ -161,6 +161,7 @@ export function MayaWidget() {
     const tools = presenterTools({ navigate: () => navigateRef.current, path: () => pathRef.current });
     const onCall = (event: Event) => {
       callStartedAt.current = Date.now();
+      window.dispatchEvent(new Event("maya:call-start")); // pages that play their own audio (the /agent demo) pause
       const detail = (event as CustomEvent<{ config?: Record<string, unknown> }>).detail;
       if (!detail?.config) return;
       const existing = (detail.config.clientTools as Record<string, unknown> | undefined) ?? {};
@@ -225,6 +226,23 @@ export function MayaWidget() {
       /* storage off: they can tap again */
     }
   }, [open]);
+
+  // Other parts of the site (the /agent page buttons) open Maya with: window.dispatchEvent(new Event("maya:open")).
+  // It does exactly what tapping her launcher does: the intro in screen mode, the widget otherwise.
+  const openFromSite = useRef<() => void>(() => {});
+  openFromSite.current = () => {
+    if (!product) return;
+    if (screen) {
+      setScreenStage((s) => (s === "closed" ? "intro" : s));
+    } else if (phase === "idle" || phase === "error") {
+      void open();
+    }
+  };
+  useEffect(() => {
+    const on = () => openFromSite.current();
+    window.addEventListener("maya:open", on);
+    return () => window.removeEventListener("maya:open", on);
+  }, []);
 
   if (!product) return null;
 

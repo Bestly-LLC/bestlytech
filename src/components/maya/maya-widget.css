@@ -230,3 +230,18 @@ elevenlabs-convai {
 @media (prefers-reduced-transparency: reduce) {
   .maya-intro { background: #121326; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
+
+/* A page can ask the floating launcher and call pill to step aside while it shows something big in the same corner
+   (the /agent demo stage): it sets html.maya-yield. They fade out, stop taking taps, and come back when it is removed. */
+.maya-launcher-wrap, .maya-call, .maya-pill { transition: opacity 0.25s ease, visibility 0s linear 0s; }
+html.maya-yield .maya-launcher-wrap,
+html.maya-yield .maya-call,
+html.maya-yield .maya-pill {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.25s ease, visibility 0s linear 0.25s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .maya-launcher-wrap, .maya-call, .maya-pill, html.maya-yield .maya-launcher-wrap, html.maya-yield .maya-call, html.maya-yield .maya-pill { transition: none; }
+}
