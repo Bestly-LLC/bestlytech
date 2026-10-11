@@ -4,6 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0a0a0a" />
+    <script>
+      // Deploy-swap self-heal (2026-10-11): a page opened while Vercel swaps deploys can ask for the old
+      // hashed CSS/JS, which 404s, and renders unstyled. Reload once (max every 30 s) to pick up the new files.
+      window.addEventListener("error", function (e) {
+        var t = e.target;
+        if (!t || (t.tagName !== "LINK" && t.tagName !== "SCRIPT")) return;
+        var u = t.href || t.src || "";
+        if (u.indexOf("/assets/") < 0) return;
+        try {
+          var k = "bestly:asset-reloaded-at", last = +sessionStorage.getItem(k) || 0;
+          if (Date.now() - last < 30000) return;
+          sessionStorage.setItem(k, String(Date.now()));
+        } catch (_) { return; }
+        location.reload();
+      }, true);
+    </script>
     <title>Bestly — Stop renting your business from big tech</title>
     <meta name="description" content="Bestly builds private cloud servers for businesses, plus privacy-first apps, browser extensions, and consumer hardware. One server in your office replaces Google Workspace, Slack, Zoom, Dropbox, DocuSign, 1Password, and your AI tool. Built in Los Angeles." />
     <meta name="author" content="Bestly LLC" />
