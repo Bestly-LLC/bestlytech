@@ -100,7 +100,7 @@ export function NextStep({ next, glow, onAction, onHasApp, run, kind, extra }: {
   if (!next) return null;
   const Icon = next.icon;
   return (
-    <section aria-label="Next step" className={`mt-4 rounded-3xl p-4 ring-1 ring-white/10 ${glow ? "trip-glow trip-glow-card" : "bg-white/[0.06]"}`}>
+    <section id="next-step" aria-label="Next step" className={`mt-4 scroll-mt-4 rounded-3xl p-4 ring-1 ring-white/10 ${glow ? "trip-glow trip-glow-card" : "bg-white/[0.06]"}`}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Next step</p>
       <div className="mt-1.5 flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full" style={{ background: ACCENT }}><Icon className="h-5 w-5 text-[#1A1140]" aria-hidden /></span>

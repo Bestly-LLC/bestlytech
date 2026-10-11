@@ -8,6 +8,11 @@
  *   command path, so Leo, the cards and the page buttons can never disagree.
  * - show_card (Leo's client tool) brings up the key, controls or charging inline, or steps aside to the page's own
  *   pickup / return sheets while the call keeps going (Leo shrinks to a pill at the top).
+ * - page_action (Leo's client tool) controls the whole page: open the pickup / return sheets, show the QR, the car
+ *   controls, Supercharging or Help, run the Next Step, and on the demo pages switch the stage or weather. It goes to
+ *   the page over leoBridge.ts; the page answers with one line Leo can say.
+ * - The page follows the car: every car tool result is re-sent as `leo:car` (demo pages apply it to their pretend car,
+ *   real trips refetch), and a car button tapped on the page comes back as `leo:page-did` so Leo stays in step.
  * - Sessions come from trip-voice {op:"session"} (signed URL + opaque trip_key); the trip token never reaches the
  *   voice platform. Any failure on a real device is reported to trip-voice {op:"diag"} -> leo_client_diag.
  * - Design: Apple HIG pass then UI UX Pro Max (house rules: 12-hour times, US units, number+unit never split, no
@@ -23,6 +28,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TripContext } from "./AskSheet";
 import { LeoOrb, THEME, leoGreeting, loadLeoSdk, takeLeoMode, type LeoTheme } from "./LeoWidget";
 import { track } from "./track";
+import { MINIMIZE, askPage, emitLeoCar, useLeoDid } from "./leoBridge";
+import { useDemoOpen } from "./demoState";
 
 type Any = Record<string, unknown>;
 type Card = Any & { type: string };
@@ -64,6 +71,9 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
   const [toast, setToast] = useState<string | null>(null);
   const [mini, setMini] = useState(false);
   const [text, setText] = useState("");
+  // Demo pages with "open demo" on: Leo may unlock the pretend car, so the controls card gets an Unlock button.
+  const demoOpen = useDemoOpen().open;
+  const unlockable = token.startsWith("demo-") && demoOpen;
   const conv = useRef<Conv | null>(null);
   const starting = useRef<Promise<Conv | null> | null>(null);
   const lastSent = useRef("");
@@ -103,6 +113,8 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
     if (!r) { flash("Couldn't reach the car. Try again."); return null; }
     if (r.ok === false && !r.card) flash(String(r.say ?? "That didn't work."));
     showResult(r, replaceId);
+    if (tool.startsWith("car_")) emitLeoCar(r); // the trip page shows the same car state
+
     // Let Leo know what happened on screen, so the conversation stays in step.
     try { conv.current?.sendContextualUpdate(`The guest tapped a button on Leo's screen (${tool} ${JSON.stringify(args)}). Result: ${String(r.say ?? "")}`); } catch { /* not connected */ }
     return r;
@@ -119,6 +131,22 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
     }
     return "That card isn't available.";
   }, [act, push, context?.keyState, context?.keyLink]);
+
+  // page_action: Leo drives the trip page. The page does it (leoBridge) and says what happened; Leo steps aside to his pill
+  // for anything that is on the page itself, and comes back for close_sheets.
+  const pageAction = useCallback(async (p: Any) => {
+    const action = String(p?.action ?? "").trim();
+    const value = p?.value == null ? undefined : String(p.value).trim();
+    if (!action) return "Which action? I need one, like open_pickup or show_qr.";
+    const r = await askPage(action, value, action === "next_step" ? 20000 : 3000);
+    if (!r.stay) { if (MINIMIZE.has(action)) setMini(true); else if (action === "close_sheets") setMini(false); }
+    return r.say;
+  }, []);
+
+  // The guest tapped a car button on the trip page: tell Leo so he doesn't repeat or contradict it.
+  useLeoDid(({ action, result }) => {
+    try { conv.current?.sendContextualUpdate(`The guest tapped ${action} on the trip page. Result: ${result}`); } catch { /* not connected */ }
+  });
 
   // ---- session ----
   const start = useCallback(async (withVoice: boolean): Promise<Conv | null> => {
@@ -138,7 +166,7 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
           overrides: { agent: { firstMessage: items.length > 1 ? "I'm here. Go ahead." : greeting }, conversation: { textOnly: !withVoice } },
           dynamicVariables: { trip_key: String(s.key), call_mode: "page", caller_type: token.startsWith("demo-") ? "test_guest" : "guest",
             pickup_place: home ? "home" : "lax", trip_stage: context?.stage ?? "unknown" },
-          clientTools: { show_card: async (p: Any) => showCard(String(p?.card ?? "")) },
+          clientTools: { show_card: async (p: Any) => showCard(String(p?.card ?? "")), page_action: async (p: Any) => pageAction(p) },
           onConnect: () => { setPhase("live"); if (history && items.length > 1) try { c.sendContextualUpdate(`Earlier on this screen:\n${history}`); } catch { /* ignore */ } },
           onDisconnect: () => { conv.current = null; setPhase("ended"); setVoice(false); setSpeaking(false); setWorking(null); },
           onModeChange: ({ mode: m }: { mode: string }) => setSpeaking(m === "speaking"),
@@ -153,7 +181,14 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
             setWorking(null);
             const raw = (p as { full_tool_result?: string }).full_tool_result;
             if (!raw) return;
-            try { const j = JSON.parse(raw); showResult((j && typeof j === "object" && "card" in j) ? j : (j?.result ?? j)); } catch { /* not JSON */ }
+            try {
+              const j = JSON.parse(raw);
+              const res = ((j && typeof j === "object" && "card" in j) ? j : (j?.result ?? j)) as Any | null;
+              showResult(res);
+              // A car tool: the page behind Leo should show the same car (demo: pretend car, real: refetch).
+              const ct = String(((res?.card ?? null) as Card | null)?.type ?? "");
+              if (res && typeof res === "object" && (["climate", "lock", "unlock", "car"].includes(ct) || String((p as { tool_name?: string }).tool_name ?? "").startsWith("car_"))) emitLeoCar(res);
+            } catch { /* not JSON */ }
           },
           onError: (msg: string) => { diag(token, "sdk", { msg: String(msg).slice(0, 300) }); },
         } as never) as Conv;
@@ -172,7 +207,7 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
     })();
     return starting.current;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, home, greeting, context?.stage, items, push, showCard, showResult]);
+  }, [token, home, greeting, context?.stage, items, push, showCard, showResult, pageAction]);
 
   const endCall = useCallback(async () => {
     const c = conv.current; conv.current = null;
@@ -281,7 +316,7 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
           WebkitMaskImage: "linear-gradient(to bottom, transparent 0, #000 20px, #000 calc(100% - 16px), transparent 100%)" }}>
         <div className="mx-auto flex max-w-md flex-col gap-3 px-4 pb-5 pt-5" aria-live="polite">
           {items.map((it) => it.kind === "card"
-            ? <CardView key={it.id} card={it.card} theme={theme} onAct={(tool, args) => act(tool, args, it.id)} onPage={toPage} />
+            ? <CardView key={it.id} card={it.card} theme={theme} onAct={(tool, args) => act(tool, args, it.id)} onPage={toPage} unlockable={unlockable} />
             : it.kind === "note"
               ? <p key={it.id} role={it.tone === "error" ? "alert" : undefined} className="flex items-start gap-2 rounded-2xl bg-white/[0.06] px-4 py-3 text-[15px] leading-snug ring-1 ring-white/10">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: theme.error }} aria-hidden />{it.text}</p>
@@ -352,6 +387,7 @@ function labelFor(tool: string): string {
     case "charging_summary": return "Adding up your charging";
     case "trip_status": return "Checking your trip";
     case "key_fix": case "job_status": return "Working on your key";
+    case "page_action": return "Updating the page";
     default: return "Working on it";
   }
 }
@@ -414,7 +450,7 @@ function ClimateButtons({ theme, current, onAct }: { theme: LeoTheme; current?: 
   );
 }
 
-function CardView({ card, theme, onAct, onPage }: { card: Card; theme: LeoTheme; onAct: (tool: string, args?: Any) => Promise<unknown>; onPage: (h: "#pickup" | "#return") => void }) {
+function CardView({ card, theme, onAct, onPage, unlockable = false }: { card: Card; theme: LeoTheme; onAct: (tool: string, args?: Any) => Promise<unknown>; onPage: (h: "#pickup" | "#return") => void; unlockable?: boolean }) {
   const demo = !!card.demo;
   switch (card.type) {
     case "climate": {
@@ -435,7 +471,10 @@ function CardView({ card, theme, onAct, onPage }: { card: Card; theme: LeoTheme;
       return (
         <Shell icon={<Thermometer className="h-4 w-4" aria-hidden />} title="Car controls" theme={theme}>
           <ClimateButtons theme={theme} onAct={onAct} />
-          <div className="mt-2 grid"><Btn theme={theme} onClick={() => onAct("car_lock", { action: "lock" })}><Lock className="h-4 w-4" aria-hidden />Lock the car</Btn></div>
+          <div className={`mt-2 grid gap-2 ${unlockable ? "grid-cols-2" : ""}`}>
+            <Btn theme={theme} onClick={() => onAct("car_lock", { action: "lock" })}><Lock className="h-4 w-4" aria-hidden />{nw("Lock the car")}</Btn>
+            {unlockable && <Btn theme={theme} onClick={() => onAct("car_lock", { action: "unlock" })}><LockOpen className="h-4 w-4" aria-hidden />{nw("Unlock")}</Btn>}
+          </div>
         </Shell>
       );
     case "car": {
@@ -448,16 +487,21 @@ function CardView({ card, theme, onAct, onPage }: { card: Card; theme: LeoTheme;
             <Stat theme={theme} big={locked == null ? "--" : locked ? "Locked" : "Open"} small={card.outside_f != null ? `${card.outside_f}°F out` : ""} />
           </div>
           {locked === false && <div className="mt-3 grid"><Btn theme={theme} primary onClick={() => onAct("car_lock", { action: "lock" })}><Lock className="h-4 w-4" aria-hidden />Lock the car</Btn></div>}
+          {locked === true && unlockable && <div className="mt-3 grid"><Btn theme={theme} onClick={() => onAct("car_lock", { action: "unlock" })}><LockOpen className="h-4 w-4" aria-hidden />Unlock the car</Btn></div>}
           {card.as_of && <p className="mt-3 text-[13px]" style={{ color: theme.subtle }}>As of {nw(String(card.as_of))}</p>}
         </Shell>
       );
     }
     case "lock":
+    case "unlock": {
+      const locked = card.type === "lock" && !!card.locked; // an "unlock" card is always unlocked
       return (
-        <Shell icon={card.locked ? <Lock className="h-4 w-4" aria-hidden /> : <LockOpen className="h-4 w-4" aria-hidden />} title="Locks" demo={demo} theme={theme}>
-          <p className="text-[20px] font-semibold">{card.pending ? "Locking now" : card.locked ? "The car is locked" : "The car is unlocked"}</p>
+        <Shell icon={locked ? <Lock className="h-4 w-4" aria-hidden /> : <LockOpen className="h-4 w-4" aria-hidden />} title="Locks" demo={demo} theme={theme}>
+          <p className="text-[20px] font-semibold">{card.pending ? (card.type === "unlock" ? "Unlocking now" : "Locking now") : locked ? "The car is locked" : "The car is unlocked"}</p>
+          {unlockable && <div className="mt-3 grid"><Btn theme={theme} onClick={() => onAct("car_lock", { action: locked ? "unlock" : "lock" })}>{locked ? <LockOpen className="h-4 w-4" aria-hidden /> : <Lock className="h-4 w-4" aria-hidden />}{locked ? "Unlock the car" : "Lock the car"}</Btn></div>}
         </Shell>
       );
+    }
     case "superchargers": {
       const sites = (card.sites ?? []) as Any[];
       return (
