@@ -74,10 +74,13 @@ const TYPES: Record<string, { label: string; naics: string[]; base: number }> = 
   clinic: { label: "small clinic", naics: ["621111", "621210", "621310", "621320"], base: 50 },
 };
 
+// 2026-10-11: home services ran 1 to 2 of 7 a day because OSM only tagged four trades were searched. Same free source, wider list of trades.
+const HOME_CRAFTS = ["plumber", "hvac", "electrician", "roofer", "carpenter", "painter", "plasterer", "tiler", "glaziery", "gardener", "locksmith", "handyman", "floorer", "insulation", "window_construction", "garage_door"];
+
 function osmType(t: Record<string, string>): string | null {
   if (t.shop === "car_repair") return "auto_repair";
   if (t.shop === "hairdresser" || t.shop === "beauty") return "salon";
-  if (["plumber", "hvac", "electrician", "roofer"].includes(t.craft)) return "home_services";
+  if (HOME_CRAFTS.includes(t.craft)) return "home_services";
   if (["clinic", "dentist", "doctors"].includes(t.amenity)) return "clinic";
   if (["doctor", "dentist", "clinic", "chiropractor", "physiotherapist", "optometrist", "alternative"].includes(t.healthcare)) return "clinic";
   return null;
@@ -272,7 +275,7 @@ async function osmQuery(tile: number): Promise<string> {
   const [s, w] = TILES[tile % TILES.length];
   const bb = `${s.toFixed(2)},${w.toFixed(2)},${(s + STEP).toFixed(2)},${(w + STEP).toFixed(2)}`;
   // four regex-value clauses on an indexed key are far cheaper for Overpass than sixteen exact ones (those timed out with 504)
-  const sel = ['"shop"~"^(car_repair|hairdresser|beauty)$"', '"craft"~"^(plumber|hvac|electrician|roofer)$"', '"amenity"~"^(clinic|dentist|doctors)$"',
+  const sel = ['"shop"~"^(car_repair|hairdresser|beauty)$"', `"craft"~"^(${HOME_CRAFTS.join("|")})$"`, '"amenity"~"^(clinic|dentist|doctors)$"',
     '"healthcare"~"^(doctor|dentist|clinic|chiropractor|physiotherapist|optometrist)$"'];
   return `[out:json][timeout:50];(${sel.map((x) => `nwr[${x}]["name"](${bb});`).join("")});out tags center 600;`;
 }
