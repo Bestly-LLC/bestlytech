@@ -487,7 +487,7 @@ def evaluate_site(domain, home_raw, extra_pages, deadline=None):
         name = title = ""  # an unverified name is dropped: the greeting becomes "Hello,"
     hook, hq = str(ai.get("hook") or "").strip(), re.sub(r"\s+", " ", str(ai.get("hook_quote") or "")).strip()
     if not hook_ok(hook, hq, flat):
-        hook = ('On your site you say: "%s"' % hq[:160]) if (hq and hq in flat and len(hq) >= 12) else ""
+        hook = ('On your site you say: "%s"' % hq[:160]) if (hq and hq in flat and len(hq) >= 30) else ""
         if hook and violations("", hook + "\n" + FOOTER):
             hook = ""
     if not hook:
