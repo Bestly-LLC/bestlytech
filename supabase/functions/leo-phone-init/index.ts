@@ -5,6 +5,7 @@
 // Auth: x-leo-init header must match Vault leo_phone_init_token (checked in SQL, never logged).
 // verify_jwt = false (ElevenLabs and pg_cron call it with the header token, not a Supabase JWT).
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { leoOpening } from "../_shared/leo-offer.ts";
 
 const SB = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
@@ -22,13 +23,34 @@ const DEFAULTS = {
   pickup_time_local: "",
   return_time_local: "",
   car_name: "Blue Steel",
+  minutes_to_pickup: 9999,
+  controls_state: "unknown",
+  greeting_offer: "none",
 };
 
 function json(obj: unknown, status = 200) {
   return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
 }
-function reply(vars: Record<string, unknown>) {
-  return json({ type: "conversation_initiation_client_data", dynamic_variables: { ...DEFAULTS, ...vars } });
+function reply(vars: Record<string, unknown>, firstMessage?: string) {
+  return json({
+    type: "conversation_initiation_client_data",
+    dynamic_variables: { ...DEFAULTS, ...vars },
+    ...(firstMessage ? { conversation_config_override: { agent: { first_message: firstMessage } } } : {}),
+  });
+}
+
+/** Stage-aware opening line for a caller we recognise (same words as the trip page's greeting). Unknown callers keep the agent's default. */
+function greetFor(raw: Record<string, unknown>): { vars: Record<string, unknown>; text?: string } {
+  const { starts_at, ends_at, ...vars } = raw;
+  if (String(vars.caller_type ?? "unknown") === "unknown") return { vars };
+  const mtp = Number(vars.minutes_to_pickup);
+  const startsAt = typeof starts_at === "string" ? starts_at
+    : Number.isFinite(mtp) && mtp !== 9999 ? new Date(Date.now() + mtp * 60000).toISOString() : null;
+  const o = leoOpening({
+    first: String(vars.guest_first_name ?? ""), startsAt, endsAt: typeof ends_at === "string" ? ends_at : null,
+    ended: vars.trip_stage === "ended", controlsState: String(vars.controls_state ?? "unknown"), canAct: String(vars.trip_key ?? "none") !== "none",
+  });
+  return { vars: { ...vars, greeting_offer: o.offer }, text: o.text };
 }
 
 async function raise(key: string, kind: "problem" | "resolved", title: string, body: string, healed = false) {
@@ -107,7 +129,8 @@ Deno.serve(async (req) => {
   try {
     const { data, error } = await SB.rpc("leo_phone_caller", { p_caller: caller });
     if (error) throw new Error(error.message);
-    return reply((data ?? {}) as Record<string, unknown>);
+    const g = greetFor((data ?? {}) as Record<string, unknown>);
+    return reply(g.vars, g.text);
   } catch (e) {
     await raise("leo.phone-init", "problem", "Leo: caller lookup failed",
       "A call to (310) 622-7052 got safe defaults because the caller lookup errored: " + String((e as Error)?.message ?? e));

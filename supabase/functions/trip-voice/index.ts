@@ -24,7 +24,7 @@
 //
 // Tools: trip_status, key_fix, job_status, extra_driver, notify_host, file_ticket, reminder_email, and the car tools car_status,
 //        car_climate (page presets), car_lock (lock only), find_superchargers, send_to_car_nav, charging_summary,
-//        send_sms (not live). Real trips go through the page's own gate (lax_guest_car_command); demo trips use the
+//        send_sms (fixed-link texts to the trip page; off until leo_settings.sms_mode is switched on and the 10DLC watchdog says ready). Real trips go through the page's own gate (lax_guest_car_command); demo trips use the
 //        pretend car (leo_demo_car). Phone calls get their trip_key from leo-phone-init instead of door 1.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsWith } from "../_shared/cors.ts";
@@ -147,7 +147,7 @@ const DRIVER = new Set(["status", "check", "resend", "notify_host"]);
 // 1 hour before pickup or once the phone key connects, daily limit, one command at a time). Demo trips use the
 // pretend car (leo_demo_car). Unlock is never a voice action. Every result carries `say` (one plain line), `card`
 // (what Leo's screen shows inline) and `toast` (the confirmation), so the page and the phone line tell the same story.
-const CAR_TOOLS = new Set(["car_status", "car_lock", "car_climate", "find_superchargers", "send_to_car_nav", "charging_summary", "send_sms"]);
+const CAR_TOOLS = new Set(["car_status", "car_lock", "car_climate", "find_superchargers", "send_to_car_nav", "charging_summary"]);
 const PRESET: Record<string, { label: string; f: number | null }> = {
   cool: { label: "A/C on, cooling to 68°F", f: 68 }, warm: { label: "Heat on, warming to 74°F", f: 74 },
   seat: { label: "Driver seat heater on", f: null }, off: { label: "Climate off", f: null },
@@ -204,7 +204,6 @@ async function pageCommand(token: string, action: string, okLine: string, card: 
 async function carTool(name: string, token: string, b: Any): Promise<Any> {
   const demo = token.startsWith("demo:");
   const action = clip(b.action, 20).toLowerCase();
-  if (name === "send_sms") return { ok: false, not_live: true, say: "I can't send texts yet. Everything is on your trip page." };
   if (name === "car_lock" && action === "unlock" && !(demo && await demoOpen())) {
     return { ok: false, say: "I can't unlock the car. Your Tesla app key does that. Want me to check your key?", card: { type: "notice", text: "Unlocking works through your Tesla app key." } };
   }
@@ -414,6 +413,199 @@ async function reminderEmail(token: string, conv: string | null, b: Any): Promis
   return { ok: false, sent: false, say: "I couldn't send it just now. It will try again by itself within about 10 minutes, and you can also find everything on your trip page." };
 }
 
+// ---------- send_sms (2026-10-12): one short link to the guest's trip page, never free text. Ships OFF (leo_settings.sms_mode). ----------
+// Leo never writes the text: the body is built here from a fixed purpose. Gates, in order: sms_mode/sms_ready (kill switch + 10DLC watchdog),
+// opt-out/DNC list, 3 sends per trip per day, 2 number changes per trip per day, US numbers only, never Leo's own or Turo's line.
+// Demo pages send nothing, except to the owner's own number when sms_mode allows it.
+const LEO_FROM = "+13106227052", OWNER = "+18165007236", TURO_LINE = "+14159654525";
+const PURPOSE: Record<string, [string, string]> = { trip_page: ["your trip page", ""], key: ["your Tesla key is on your trip page", ""],
+  pickup_guide: ["your pickup guide", "#pickup"], return_checklist: ["your return checklist", "#return"] };
+const e164 = (v: unknown) => { const d = String(v ?? "").replace(/\D/g, ""); const t = d.length === 11 && d[0] === "1" ? d.slice(1) : d;
+  return /^[2-9]\d{2}[2-9]\d{6}$/.test(t) ? `+1${t}` : null; };
+const smsText = (p: string, slug: string) => `Leo from Bestly: ${PURPOSE[p][0]}: bestly.tech/t/${slug}${PURPOSE[p][1]} Reply STOP to opt out.`;
+const NOT_LIVE = { ok: false, not_live: true, say: "I can't send texts yet. It's all on your trip page, and I can email it to you instead." };
+const sha256 = async (s: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+const smsSettings = async () => (await sb.from("leo_settings").select("sms_mode, sms_ready, sms_profile_id, sms_campaign_id").eq("id", 1).maybeSingle()).data as Any | null;
+const txKey = async () => { const { data } = await sb.rpc("ava_secret", { p_name: "telnyx_api_key" }); return typeof data === "string" ? data : null; };
+const tx = async (path: string, init: RequestInit = {}) => { const k = await txKey(); if (!k) throw new Error("no telnyx key");
+  const r = await fetch(`https://api.telnyx.com/v2${path}`, { ...init, signal: AbortSignal.timeout(10_000), headers: { authorization: `Bearer ${k}`, "content-type": "application/json" } });
+  return { status: r.status, j: await r.json().catch(() => ({})) as Any }; };
+async function telnyxSend(to: string, text: string, profile?: string | null) {
+  const r = await tx("/messages", { method: "POST", body: JSON.stringify({ from: LEO_FROM, to, text, ...(profile ? { messaging_profile_id: profile } : {}) }) });
+  const id = (r.j.data as Any)?.id as string | undefined;
+  if (r.status >= 300 || !id) return { ok: false, code: String(((r.j.errors as Any[]) ?? [])[0]?.code ?? r.status) } as { ok: boolean; id?: string; status?: string; code?: string };
+  let st = "queued";
+  for (let i = 0; i < 3; i++) { await new Promise((z) => setTimeout(z, 1500));
+    st = String((((await tx(`/messages/${id}`)).j.data as Any)?.to as Any[])?.[0]?.status ?? st);
+    if (st !== "queued" && st !== "sending") break; }
+  return { ok: !/failed/.test(st), id, status: st, code: /failed/.test(st) ? st : undefined } as { ok: boolean; id?: string; status?: string; code?: string };
+}
+/** Two failed sends in an hour: switch texting off by itself (sms_ready=false) and tell Jared. The hourly check turns it back on when Telnyx looks healthy. */
+async function smsBreaker() {
+  const { count } = await sb.from("leo_sms_log").select("id", { count: "exact", head: true }).eq("action", "failed").gte("at", new Date(Date.now() - 3600_000).toISOString());
+  if ((count ?? 0) < 2) return;
+  const { data: cur } = await sb.from("leo_settings").select("sms_detail").eq("id", 1).maybeSingle();
+  await sb.from("leo_settings").update({ sms_ready: false, sms_detail: { ...((cur?.sms_detail as Any) ?? {}), breaker: true, breaker_at: new Date().toISOString() } }).eq("id", 1);
+  await sb.rpc("bestly_raise", { p_key: "leo.sms", p_kind: "problem", p_severity: "warning", p_title: "Leo: I stopped sending texts",
+    p_body: "Two texts failed within an hour, so I paused texting by myself. I will check the carrier again within the hour.", p_area: "agents", p_needs_jared: false, p_healed: false }).then(() => {}, () => {});
+}
+async function sendSms(token: string, conv: string | null, b: Any): Promise<Any> {
+  const action = clip(b.action, 10), purpose = clip(b.purpose, 20), demo = token.startsWith("demo:");
+  const slug = demo ? token.slice(5) : token;
+  const log = (row: Any) => sb.from("leo_sms_log").insert({ token, conversation_id: conv, ...row }).then(() => {}, () => {});
+  const given = b.phone ? e164(b.phone) : null;
+  if (b.phone && !given) return { ok: false, say: "That number doesn't look right. I can only text US numbers. Can you say it again?" };
+  if (given && (given === LEO_FROM || given === TURO_LINE)) return { ok: false, say: "I can't text that number. What's your mobile number?" };
+  if (demo) {
+    if (action === "status") return { ok: true, demo: true, on_file: false, say: "No number on file on the demo. What number should I text?" };
+    if (!PURPOSE[purpose]) return { ok: false, say: "I can text your trip page, key, pickup guide or return checklist." };
+    if (!given) return { ok: false, need_phone: true, say: "What number should I text? I'll read it back." };
+    if (given !== OWNER) { await log({ action: "demo_send", purpose, to_last4: given.slice(-4) });
+      return { ok: true, demo: true, sent: false, say: `Demo: I'd text the number ending in ${given.slice(-4)}. Nothing is sent from the demo.` }; }
+  }
+  let rid: number | null = null, target = given, ended = false, started = false, onFile: string | null = null;
+  if (!demo) {
+    const { data: link } = await sb.from("lax_guest_links").select("reservation_id, sms_phone").eq("token", token).maybeSingle();
+    if (!link) return { ok: false, say: "I can't find this trip. Open your trip page and try again." };
+    const { data: trip } = await sb.from("turo_trips").select("starts_at, ends_at, guest_phone").eq("reservation_id", link.reservation_id).maybeSingle();
+    if (!trip) return { ok: false, say: "I can't find this trip. Open your trip page and try again." };
+    rid = link.reservation_id; ended = Date.parse(trip.ends_at) < Date.now(); started = Date.parse(trip.starts_at) < Date.now();
+    onFile = e164(link.sms_phone) ?? e164(trip.guest_phone);
+    if (action === "status") return onFile ? { ok: true, on_file: true, phone_last4: onFile.slice(-4), say: `I can text the number ending in ${onFile.slice(-4)}. Is that your mobile?` }
+      : { ok: true, on_file: false, say: "I don't have a number for texts. What's your mobile number?" };
+    if (!PURPOSE[purpose]) return { ok: false, say: "I can text your trip page, key, pickup guide or return checklist." };
+    if (ended) return { ok: false, say: "This trip is over, so there's nothing to text." };
+    if (purpose === "return_checklist" && !started) return { ok: false, say: "The return checklist opens once your trip starts. Want the pickup guide instead?" };
+    target = given ?? onFile;
+    if (!target) return { ok: false, need_phone: true, say: "What's the best number to text? I'll read it back." };
+  }
+  const s = await smsSettings();
+  if (!s || s.sms_mode === "off" || !s.sms_ready || (s.sms_mode === "owner_only" && target !== OWNER)) { await log({ action: "refused", purpose, reservation_id: rid, status: "not_live" }); return NOT_LIVE; }
+  if ((await sb.rpc("leo_sms_blocked", { p_phone: target })).data === true) return { ok: false, say: "That number opted out of texts. Everything is on your trip page, and I can email it instead." };
+  const since = new Date(Date.now() - 86400_000).toISOString();
+  const { count } = await sb.from("leo_sms_log").select("id", { count: "exact", head: true }).eq("token", token).in("action", ["send", "owner_test"]).gte("at", since);
+  if ((count ?? 0) >= 3) return { ok: false, limit: true, say: "I've sent three texts for this trip today, which is the limit. Everything is on your trip page." };
+  if (given && !demo) {
+    const { count: ch } = await sb.from("leo_sms_log").select("id", { count: "exact", head: true }).eq("token", token).eq("action", "set_phone").gte("at", since);
+    if ((ch ?? 0) >= 2) return { ok: false, say: "That number was already changed twice today. Message your host in the Turo app to change it." };
+    await sb.from("lax_guest_links").update({ sms_phone: given, sms_phone_at: new Date().toISOString() }).eq("token", token);
+    await log({ action: "set_phone", reservation_id: rid, to_last4: given.slice(-4) });
+  }
+  const r = await telnyxSend(target!, smsText(purpose, slug), s.sms_profile_id as string | null);
+  if (!r.ok) {
+    await log({ action: "failed", purpose, reservation_id: rid, to_last4: target!.slice(-4), telnyx_id: r.id ?? null, error_code: r.code });
+    if (r.code === "40300") { await sb.from("leo_sms_optouts").upsert({ phone_hash: await sha256(target!), source: "telnyx_40300" }); return { ok: false, say: "That number opted out of texts. I can email it instead." }; }
+    await smsBreaker();
+    return { ok: false, sent: false, say: "The text didn't go through. Everything is on your trip page, and I can email it instead." };
+  }
+  await log({ action: "send", purpose, reservation_id: rid, to_last4: target!.slice(-4), telnyx_id: r.id, status: r.status });
+  return { ok: true, sent: true, say: `Sent to the number ending in ${target!.slice(-4)}. It has ${PURPOSE[purpose][0]}.` };
+}
+
+/** Watchdog (sends nothing): is Leo's number able to text? Reads the messaging profile and the 10DLC campaign; heals what it can.
+ *  Writes leo_settings.sms_ready / sms_detail. Raises leo.sms (signed Leo) only when texting is switched on and not ready. */
+async function smsCheck(): Promise<Any> {
+  const healed: string[] = [];
+  const detail: Any = { checked: new Date().toISOString() };
+  let why = "";
+  try {
+    const { data: cur } = await sb.from("leo_settings").select("sms_mode, sms_profile_id, sms_campaign_id, sms_detail").eq("id", 1).maybeSingle();
+    const mode = String(cur?.sms_mode ?? "off");
+    const enc = encodeURIComponent(LEO_FROM);
+    const num = await tx(`/phone_numbers?filter[phone_number]=${enc}`);
+    const rec = ((num.j.data as Any[]) ?? [])[0] as Any | undefined;
+    detail.number_found = !!rec; detail.number_status = rec?.status ?? null; detail.shapes = { phone_numbers_keys: rec ? Object.keys(rec).slice(0, 30) : [] };
+    if (!rec) why = "Leo's number was not found at the carrier";
+    let profile: string | null = null;
+    if (rec) {
+      const ms = await tx(`/phone_numbers/${rec.id}/messaging`);
+      const md = (ms.j.data ?? {}) as Any;
+      detail.shapes = { ...(detail.shapes as Any), messaging_keys: Object.keys(md).slice(0, 30) };
+      profile = (md.messaging_profile_id as string | null) ?? null;
+      detail.features = md.features ?? null;
+      if (!profile && cur?.sms_profile_id) {
+        const p = await tx(`/phone_numbers/${rec.id}/messaging`, { method: "PATCH", body: JSON.stringify({ messaging_profile_id: cur.sms_profile_id }) });
+        if (p.status < 300) { profile = String(cur.sms_profile_id); healed.push("re-attached messaging profile"); }
+      }
+      detail.profile = profile;
+      if (!profile) why ||= "Leo's number has no messaging profile";
+    }
+    if (profile) {
+      const pr = await tx(`/messaging_profiles/${profile}`);
+      const pd = (pr.j.data ?? {}) as Any;
+      detail.profile_enabled = pd.enabled ?? null;
+      if (pd.enabled === false) why ||= "the messaging profile is switched off";
+    }
+    // 10DLC: number must be assigned to an active campaign
+    const as = await tx(`/10dlc/phone_number_campaigns/${enc}`);
+    let ad = (as.j ?? {}) as Any; if (ad.data) ad = ad.data as Any;
+    let campaign = (ad.campaignId as string | undefined) ?? null;
+    detail.shapes = { ...(detail.shapes as Any), campaign_assignment_status: as.status, campaign_assignment_keys: Object.keys(ad).slice(0, 30) };
+    if (!campaign && as.status === 404 && cur?.sms_campaign_id) {
+      const a = await tx("/10dlc/phone_number_campaigns", { method: "POST", body: JSON.stringify({ phoneNumber: LEO_FROM, campaignId: cur.sms_campaign_id }) });
+      if (a.status < 300) { campaign = String(cur.sms_campaign_id); healed.push("re-assigned campaign"); }
+    }
+    detail.campaign = campaign; detail.assignment_status = ad.assignmentStatus ?? ad.telnyxCampaignAssignmentStatus ?? null;
+    let cstatus: string | null = null;
+    if (campaign) {
+      const c = await tx(`/10dlc/campaign/${campaign}`);
+      const cd = (c.j.data ?? c.j ?? {}) as Any;
+      cstatus = String(cd.status ?? cd.campaignStatus ?? "") || null;
+      detail.shapes = { ...(detail.shapes as Any), campaign_keys: Object.keys(cd).slice(0, 40) };
+    }
+    detail.campaign_status = cstatus;
+    if (!campaign) why ||= "Leo's number is not assigned to a 10DLC campaign yet (it needs an approved customer-care campaign)";
+    else if (!cstatus) why ||= "the 10DLC campaign status is unknown";
+    else if (!/active|accepted|approved|registered/i.test(cstatus)) why ||= `the 10DLC campaign status is ${cstatus}`;
+    const breaker = (await sb.from("leo_sms_log").select("id", { count: "exact", head: true }).eq("action", "failed").gte("at", new Date(Date.now() - 3600_000).toISOString())).count ?? 0;
+    if (breaker >= 2) { detail.breaker = true; why ||= "two texts failed within the last hour"; }
+    const ready = !why && !!profile && !!campaign;
+    detail.ready = ready; detail.why = why || null; detail.healed = healed;
+    await sb.from("leo_settings").update({ sms_ready: ready, sms_detail: detail, sms_checked_at: new Date().toISOString(),
+      ...(profile && !cur?.sms_profile_id ? { sms_profile_id: profile } : {}), ...(campaign && !cur?.sms_campaign_id ? { sms_campaign_id: campaign } : {}) }).eq("id", 1);
+    if (mode !== "off") {
+      if (!ready) await sb.rpc("bestly_raise", { p_key: "leo.sms", p_kind: "problem", p_severity: "warning", p_title: "Leo: I can't send texts",
+        p_body: clip(`Texting is on but not ready: ${why}.`, 280), p_area: "agents", p_needs_jared: !healed.length, p_healed: healed.length > 0 }).then(() => {}, () => {});
+      else await sb.rpc("bestly_raise", { p_key: "leo.sms", p_kind: "resolved", p_title: "Leo: texting works again",
+        p_body: healed.length ? healed.join("; ") : "Messaging profile and campaign look good.", p_area: "agents", p_healed: healed.length > 0 }).then(() => {}, () => {});
+    }
+    return { ok: true, ready, mode, ...detail };
+  } catch (e) {
+    const msg = clip((e as Error)?.message, 160);
+    await sb.from("leo_settings").update({ sms_ready: false, sms_detail: { checked: new Date().toISOString(), error: msg }, sms_checked_at: new Date().toISOString() }).eq("id", 1).then(() => {}, () => {});
+    return { ok: false, ready: false, error: msg };
+  }
+}
+const isService = (req: Request) => { const a = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  return !!a && (a === SB_SECRET || a === (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "\0")); };
+/** Owner-only test text (service key only; built for Jared to fire on purpose, same gates as any send). */
+async function smsOwnerTest(): Promise<Any> {
+  const s = await smsSettings();
+  if (!s || s.sms_mode === "off" || !s.sms_ready) return { ok: false, refused: "sms is off or not ready" };
+  const since = new Date(Date.now() - 86400_000).toISOString();
+  const { count } = await sb.from("leo_sms_log").select("id", { count: "exact", head: true }).eq("token", "owner_test").eq("action", "owner_test").gte("at", since);
+  if ((count ?? 0) >= 3) return { ok: false, refused: "3 per day" };
+  if ((await sb.rpc("leo_sms_blocked", { p_phone: OWNER })).data === true) return { ok: false, refused: "owner number opted out" };
+  const r = await telnyxSend(OWNER, smsText("trip_page", "demo-lax"), s.sms_profile_id as string | null);
+  await sb.from("leo_sms_log").insert({ token: "owner_test", action: "owner_test", purpose: "trip_page", to_last4: OWNER.slice(-4), telnyx_id: r.id ?? null, status: r.status ?? null, error_code: r.code ?? null });
+  return { ok: r.ok, status: r.status, code: r.code };
+}
+/** One-time setup: a messaging-only profile attached to Leo's number (voice settings untouched). Does not touch 10DLC. */
+async function smsSetup(): Promise<Any> {
+  const { data: cur } = await sb.from("leo_settings").select("sms_profile_id").eq("id", 1).maybeSingle();
+  if (cur?.sms_profile_id) return { ok: true, already: true, profile: cur.sms_profile_id };
+  const enc = encodeURIComponent(LEO_FROM);
+  const num = await tx(`/phone_numbers?filter[phone_number]=${enc}`);
+  const rec = ((num.j.data as Any[]) ?? [])[0] as Any | undefined;
+  if (!rec) return { ok: false, error: "number not found" };
+  const p = await tx("/messaging_profiles", { method: "POST", body: JSON.stringify({ name: "Leo texts", whitelisted_destinations: ["US"] }) });
+  const pid = (p.j.data as Any)?.id as string | undefined;
+  if (!pid) return { ok: false, error: `profile create failed (${p.status})`, errors: p.j.errors };
+  await sb.from("leo_settings").update({ sms_profile_id: pid }).eq("id", 1);
+  const a = await tx(`/phone_numbers/${rec.id}/messaging`, { method: "PATCH", body: JSON.stringify({ messaging_profile_id: pid }) });
+  return { ok: a.status < 300, profile: pid, attach_status: a.status };
+}
+
 /** Leo's screen: buttons on his inline cards run the same tools with the trip token (same power as the page's buttons). */
 const SCREEN_TOOLS = new Set(["car_status", "car_climate", "car_lock", "find_superchargers", "send_to_car_nav", "charging_summary"]);
 async function screenAct(b: Any): Promise<Response> {
@@ -468,6 +660,22 @@ async function selftest(): Promise<Any> {
     const r = await reminderEmail("selftest-not-a-real-trip-token", null, { action: "set", email: "leo-selftest@example.com" });
     if (r.ok !== false) bad.push("REAL TRIP REMINDER NOT REFUSED");
   } catch (_e) { bad.push("reminder refusal check error"); }
+  // send_sms: a demo number must never send; an unknown trip must never send (both refuse before touching Telnyx).
+  try {
+    const d = await sendSms("demo:demo-lax", null, { action: "send", purpose: "trip_page", phone: "2135550100" });
+    if (d.demo !== true || d.sent !== false) bad.push("SMS DEMO NOT SAFE");
+  } catch (_e) { bad.push("sms demo check error"); }
+  try {
+    const r = await sendSms("selftest-not-a-real-trip-token", null, { action: "send", purpose: "trip_page", phone: "2135550100" });
+    if (r.ok !== false) bad.push("REAL TRIP SMS NOT REFUSED");
+  } catch (_e) { bad.push("sms refusal check error"); }
+  // Texting watchdog (hourly; sends nothing).
+  let smsOut: Any | null = null;
+  try {
+    const { data: ls } = await sb.from("leo_settings").select("sms_checked_at, sms_detail, sms_ready").eq("id", 1).maybeSingle();
+    if (!ls?.sms_checked_at || Date.now() - Date.parse(ls.sms_checked_at) > 50 * 60_000) smsOut = await smsCheck();
+    else smsOut = { cached: true, ready: ls.sms_ready, detail: ls.sms_detail };
+  } catch (_e) { smsOut = { error: "sms check failed" }; }
   // send_now reaches the reminder sender with the service key: prove that door still opens (wallet-pass selftest only builds a pass).
   try {
     const w = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/wallet-pass`, { method: "POST", signal: AbortSignal.timeout(15_000),
@@ -476,17 +684,17 @@ async function selftest(): Promise<Any> {
     if (!w.ok || wj?.ok !== true) bad.push("reminder sender auth");
   } catch (_e) { bad.push("reminder sender unreachable"); }
   await sb.from("leo_reminder_log").delete().lt("at", new Date(Date.now() - 7 * 86400_000).toISOString()).then(() => {}, () => {});
-  const unsafe = bad.some((x) => x.startsWith("REAL TRIP"));
+  const unsafe = bad.some((x) => x.startsWith("REAL TRIP") || x.startsWith("SMS DEMO"));
   if (bad.length) {
     await sb.rpc("bestly_raise", { p_key: "leo.demo-parity", p_kind: "problem", p_severity: unsafe ? "error" : "warning",
       p_title: unsafe ? "Leo: a real trip was not refused" : "Leo: my demo car stopped answering",
-      p_body: `My hourly demo check failed on: ${bad.join(", ")}. ${unsafe ? "A real-shaped trip was allowed through something it must refuse (unlock or the reminder email). I need this fixed now." : "Guests on real trips are not affected, but the demo page and my phone test line are."}`,
+      p_body: `My hourly demo check failed on: ${bad.join(", ")}. ${unsafe ? "A real-shaped trip was allowed through something it must refuse (unlock, the reminder email or a text). I need this fixed now." : "Guests on real trips are not affected, but the demo page and my phone test line are."}`,
       p_area: "agents" }).then(() => {}, () => {});
   } else {
     await sb.rpc("bestly_raise", { p_key: "leo.demo-parity", p_kind: "resolved", p_title: "Leo: my demo car is answering again",
       p_body: healed ? "I reset the demo car and it answers." : "Status, cool, off and the reminder email all work on the demo.", p_area: "agents" }).then(() => {}, () => {});
   }
-  const out = { ok: bad.length === 0, healed, failed: bad };
+  const out: Any = { ok: bad.length === 0, healed, failed: bad, sms: smsOut };
   lastSelf = { at: Date.now(), out };
   return out;
 }
@@ -497,6 +705,7 @@ async function tool(name: string, b: Any): Promise<Response> {
   const t = s.token;
   try {
     if (CAR_TOOLS.has(name)) return json(await carTool(name, t, b));
+    if (name === "send_sms") return json(await sendSms(t, s.conversation_id, b));
     switch (name) {
       case "trip_status": return json({ ok: true, status: await run(t, "diagnose", {}) });
       case "key_fix": {
@@ -543,6 +752,10 @@ Deno.serve(async (req) => {
   if (b.op === "session") return openSession(b);
   if (b.op === "act") return screenAct(b);
   if (b.op === "selftest") return json(await selftest());
+  if (b.op === "sms_check" || b.op === "sms_setup" || b.op === "sms_test") {
+    if (!isService(req)) return json({ ok: false, error: "service key only" }, 401);
+    return json(b.op === "sms_check" ? await smsCheck() : b.op === "sms_setup" ? await smsSetup() : await smsOwnerTest());
+  }
   if (b.op === "diag") {
     // What Leo's widget hit on a real device (CSP block, widget error text). Small, capped, no personal data.
     const kind = clip(b.kind, 30) || "error";
