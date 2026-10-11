@@ -238,7 +238,8 @@ export default function LaxPass() {
                       {busy === "read" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" aria-hidden />}
                       {busy === "read" ? "Reading the code…" : missing ? `Add ${monthLabel(st.month_now).split(" ")[0]}'s code` : "Replace code"}
                     </button>
-                    <a href={`/lax/${st.slug}`} target="_blank" rel="noreferrer" className={btnPlain}>
+                    {/* The LAX demo (with Leo), not the old shared /lax/<slug> page, which only has the text helper. */}
+                    <a href="/t/demo-lax?stage=day-of" target="_blank" rel="noreferrer" className={btnPlain}>
                       See guest page <ChevronRight className="h-4 w-4" aria-hidden />
                     </a>
                   </div>
