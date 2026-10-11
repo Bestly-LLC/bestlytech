@@ -2,18 +2,19 @@
  * AgentDesk: the page every template phone agent shares (route /admin/agents/:slug; /admin/maya renders it with slug "maya").
  * Plan: docs/agent-template-opusplan.md. Registry: public.voice_agents. Data: admin_agent* RPCs and the agent-hub edge function.
  *
- *   Top bar     orb tinted by orb_hue, name, purpose chip, line number (tap to copy), status lights, live pills, spend chip, settings
+ *   Header      orb tinted by orb_hue, name, "Purpose · status" subtitle, live pills, one Settings button (2026-10-11 cleanup)
+ *   Glance      one inset card, three cells: the line (tap to copy, phone icon to call), Status lights, today's spend
  *   Live        a banner with the transcript so far, while a call is happening
  *   Body        modules, in collapsible columns:
  *                 tickets + privacy  Maya's Sales and Service columns, TicketCard and PrivacyCasePanel unchanged;
  *                                    other agents get only their own Service tickets (no Sales column)
  *                 calls              Messages (Maya) or Calls: numbered rows, call sheet with recording, share, Coach review
- *                 coach, voice, knowledge, and the Prompt (template agents), then "Tailor this agent"
+ *   Setup       coach, voice, knowledge, the Prompt and "Tailor this agent", grouped under one heading, all collapsed by default
  * Ava and Reese keep their own pages. Nothing here touches them.
  */
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { AlertTriangle, Check, Copy, Globe, MessagesSquare, Phone, Plus } from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, Copy, Globe, MessagesSquare, Phone, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AvaOrb } from "@/components/admin/roofguard/AvaOrb";
 import { CollapsibleSection, openSection } from "@/components/admin/roofguard/CollapsibleSection";
@@ -21,7 +22,7 @@ import { fmtPhone } from "@/components/admin/roofguard/AvaShared";
 import { MayaTicketsModule, Pill, columnBodyCls } from "@/components/admin/maya/MayaTicketColumns";
 import { AgentLights } from "@/components/admin/agent/AgentLights";
 import { AgentLiveBanners, AgentLivePill, useAgentLive } from "@/components/admin/agent/AgentLive";
-import { AgentSettingsSheet, SettingsButton } from "@/components/admin/agent/AgentSettingsSheet";
+import { AgentSettingsSheet } from "@/components/admin/agent/AgentSettingsSheet";
 import { AgentCallsList, callsSummary, useAgentCalls } from "@/components/admin/agent/AgentCalls";
 import { AgentCoachSection, useAgentCoach } from "@/components/admin/agent/AgentCoach";
 import { AgentVoice } from "@/components/admin/agent/AgentVoice";
@@ -30,42 +31,59 @@ import { AgentPrompt } from "@/components/admin/agent/AgentPrompt";
 import { AgentTailor } from "@/components/admin/agent/AgentTailor";
 import { boxCls, btnQuiet, money, ring, useAgent, useAgentSpend, type AgentSpend } from "@/components/admin/agent/agentApi";
 
-function SpendChip({ spend, onClick }: { spend: AgentSpend | null; onClick: () => void }) {
+const cellCls = "flex min-h-[68px] w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.04] motion-reduce:transition-none";
+const cellLabel = "block text-[13px] text-white/50";
+const cellValue = "mt-0.5 block whitespace-nowrap text-[17px] font-semibold tabular-nums text-white";
+
+/** Today's spend, as a glance-card cell. Tap opens Settings (where the cap lives). */
+function SpendCell({ spend, onClick }: { spend: AgentSpend | null; onClick: () => void }) {
   const over = !!spend?.over;
   const near = !!spend && !over && spend.cap > 0 && spend.today / spend.cap >= 0.8;
-  const tone = over ? "bg-amber-500/10 ring-amber-500/35" : near ? "bg-amber-500/[0.06] ring-amber-500/25" : "bg-white/[0.04] ring-white/10";
   return (
     <button type="button" onClick={onClick} aria-haspopup="dialog" aria-label={spend ? `Today's spend ${money(spend.today)} of ${money(spend.cap)}${over ? ", cap reached" : ""}. Open settings to change the cap.` : "Today's spend, loading"}
-      className={cn("inline-flex min-h-[44px] flex-col items-end justify-center rounded-2xl px-3.5 text-right ring-1 hover:bg-white/[0.07]", tone, ring)}>
-      <span className="flex items-center gap-1 text-[11px] text-white/50">
-        {(over || near) && <AlertTriangle className="h-3 w-3 text-amber-300" aria-hidden />}{over ? "Daily cap reached" : "Today"}
+      className={cn(cellCls, ring, over ? "bg-amber-500/10 hover:bg-amber-500/15" : near && "bg-amber-500/[0.06]")}>
+      <span className="min-w-0 flex-1 leading-tight">
+        <span className={cn(cellLabel, "flex items-center gap-1")}>
+          {(over || near) && <AlertTriangle className="h-3 w-3 text-amber-300" aria-hidden />}{over ? "Daily cap reached" : "Spent today"}
+        </span>
+        <span className={cellValue}>
+          {spend ? <>{money(spend.today)}<span className="font-normal text-white/45">{" of "}{money(spend.cap)}</span></> : "–"}
+        </span>
       </span>
-      <span className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-white">
-        {spend ? <>{money(spend.today)}<span className="font-normal text-white/50">{" of "}{money(spend.cap)}</span></> : "–"}
-      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-white/30" aria-hidden />
     </button>
   );
 }
 
-function LineNumber({ name, e164 }: { name: string; e164: string | null }) {
+/** The agent's phone line, as a glance-card cell: tap the number to copy it, tap the phone to call it (handy for a test call). */
+function LineCell({ name, e164 }: { name: string; e164: string | null }) {
   const [copied, setCopied] = useState(false);
   if (!e164) return (
-    <span className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white/[0.04] px-3.5 text-[15px] text-white/60 ring-1 ring-white/10">
-      <Globe className="h-4 w-4" aria-hidden />Web only, no phone number</span>
+    <div className={cn(cellCls, "hover:bg-transparent")}>
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/[0.07] text-white/60"><Globe className="h-4 w-4" aria-hidden /></span>
+      <span className="min-w-0 flex-1 leading-tight"><span className={cellLabel}>{name}'s line</span>
+        <span className="mt-0.5 block text-[17px] font-semibold text-white/70">Web only</span></span>
+    </div>
   );
+  const pretty = fmtPhone(e164);
+  const plain = pretty.replace(/\u00A0/g, " ");
   const copy = async () => {
-    try { await navigator.clipboard.writeText(fmtPhone(e164).replace(/ /g, " ")); }
-    catch { const t = document.createElement("textarea"); t.value = fmtPhone(e164).replace(/ /g, " "); document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+    try { await navigator.clipboard.writeText(plain); }
+    catch { const t = document.createElement("textarea"); t.value = plain; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
     setCopied(true); setTimeout(() => setCopied(false), 1500);
   };
   return (
-    <button type="button" onClick={() => void copy()} aria-label={`${name}'s number ${fmtPhone(e164)}, copy`}
-      className={cn("group inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white/[0.04] px-3.5 ring-1 ring-white/10 transition hover:bg-white/[0.07]", ring)}>
-      <span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500/15 text-emerald-300"><Phone className="h-3.5 w-3.5" aria-hidden /></span>
-      <span className="text-left leading-tight"><span className="block text-[11px] text-white/50">{name}'s line</span>
-        <span className="block whitespace-nowrap text-[15px] font-semibold tabular-nums text-white">{fmtPhone(e164)}</span></span>
-      {copied ? <Check className="h-4 w-4 text-emerald-300" aria-hidden /> : <Copy className="h-4 w-4 text-white/30 group-hover:text-white/60" aria-hidden />}
-    </button>
+    <div className="flex items-center">
+      <button type="button" onClick={() => void copy()} aria-label={`${name}'s number ${plain}. Copy`} className={cn(cellCls, "group flex-1", ring)}>
+        <span className="min-w-0 flex-1 leading-tight"><span className={cellLabel}>{copied ? "Copied" : `${name}'s line`}</span>
+          <span className={cellValue}>{pretty}</span></span>
+        {copied ? <Check className="h-4 w-4 shrink-0 text-emerald-300" aria-hidden /> : <Copy className="h-4 w-4 shrink-0 text-white/30 group-hover:text-white/60" aria-hidden />}
+      </button>
+      <a href={`tel:${e164}`} aria-label={`Call ${name}`} title={`Call ${name}`}
+        className={cn("mr-3 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-500/15 text-emerald-300 transition-colors hover:bg-emerald-500/25 motion-safe:active:scale-[0.97] motion-reduce:transition-none", ring)}>
+        <Phone className="h-4 w-4" aria-hidden />
+      </a>
+    </div>
   );
 }
 
@@ -122,38 +140,42 @@ export default function AgentDesk({ slug: slugProp }: { slug?: string }) {
   return (
     <div className="space-y-5 pb-24">
       <header className="flex items-center gap-4">
-        <AvaOrb size={72} hue={agent.orb_hue} speaking={live.length > 0} label={live.length > 0 ? `${agent.name}, on a call now` : agent.name} />
+        <AvaOrb size={64} hue={agent.orb_hue} speaking={live.length > 0} label={live.length > 0 ? `${agent.name}, on a call now` : agent.name} />
         <div className="min-w-0 flex-1">
-          <h1 className="text-[2rem] font-bold leading-[1.1] tracking-[-0.015em] text-white sm:text-3xl">{agent.name}</h1>
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-white/65">
-            <span className="inline-flex items-center rounded-full bg-white/10 px-2.5 py-0.5 text-[13px] font-medium text-white/85">{agent.purpose}</span>
-            {agent.status !== "live" && <span className="inline-flex items-center rounded-full bg-amber-400/15 px-2.5 py-0.5 text-[13px] font-medium text-amber-200">{agent.status === "paused" ? "Paused" : "Draft"}</span>}
+          <h1 className="text-[2rem] font-bold leading-[1.1] tracking-[-0.015em] text-white">{agent.name}</h1>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[15px] text-white/55">
+            <span>{agent.purpose}</span>
+            <span aria-hidden>·</span>
+            <span className={agent.status === "live" ? "text-emerald-300" : "text-amber-200"}>{agent.status === "live" ? "Live" : agent.status === "paused" ? "Paused" : "Draft"}</span>
+            <AgentLivePill agent={agent} calls={live} />
           </p>
         </div>
+        <button type="button" onClick={() => setSettingsOpen(true)} aria-haspopup="dialog" aria-label={`${agent.name} settings`} title="Settings"
+          className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/[0.06] text-white/80 ring-1 ring-white/10 transition-colors hover:bg-white/[0.1] hover:text-white motion-safe:active:scale-[0.97] motion-reduce:transition-none", ring)}>
+          <Settings className="h-5 w-5" aria-hidden />
+        </button>
       </header>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <LineNumber name={agent.name} e164={agent.line_e164} />
-        <AgentLights agent={agent} spend={spend} coach={coach.data} onOpenSettings={() => setSettingsOpen(true)} onOpenCoach={() => openSection(`${slug}-coach`)} />
-        <AgentLivePill agent={agent} calls={live} />
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <SpendChip spend={spend} onClick={() => setSettingsOpen(true)} />
-          <SettingsButton onClick={() => setSettingsOpen(true)} />
-          <Link to="/admin/agents/new" className={btnQuiet} aria-label="New agent"><Plus className="h-4 w-4" aria-hidden />New agent</Link>
-        </div>
+      <div aria-label={`${agent.name} at a glance`}
+        className="grid grid-cols-1 divide-y divide-white/[0.08] overflow-hidden rounded-3xl bg-white/[0.03] ring-1 ring-white/10 md:grid-cols-3 md:divide-x md:divide-y-0">
+        <LineCell name={agent.name} e164={agent.line_e164} />
+        <AgentLights cell agent={agent} spend={spend} coach={coach.data} onOpenSettings={() => setSettingsOpen(true)} onOpenCoach={() => openSection(`${slug}-coach`)} />
+        <SpendCell spend={spend} onClick={() => setSettingsOpen(true)} />
       </div>
 
       <AgentLiveBanners agent={agent} calls={live} />
 
       {ticketsOn ? <MayaTicketsModule messages={messagesCol} agent={{ slug: agent.slug, name: agent.name }} /> : has("calls") ? <div className="grid grid-cols-1 items-start gap-4">{messagesCol("")}</div> : null}
 
-      <div className="space-y-4">
+      {/* Setup: everything that changes how the agent works, out of the way of the daily desk. All rows start collapsed. */}
+      <section aria-labelledby={`${slug}-setup-h`} className="space-y-2 pt-3">
+        <h2 id={`${slug}-setup-h`} className="px-1 text-[13px] font-semibold uppercase tracking-[0.06em] text-white/45">Setup</h2>
         {has("coach") && <AgentCoachSection agent={agent} coach={coach.data} err={coach.err} reload={async () => { await coach.reload(); }} />}
         {has("voice") && <AgentVoice agent={agent} />}
         {has("knowledge") && <AgentKnowledge agent={agent} />}
         <AgentPrompt agent={agent} />
         <AgentTailor agent={agent} />
-      </div>
+      </section>
 
       <AgentSettingsSheet agent={agent} open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
