@@ -9,7 +9,8 @@ Short version: a new phone agent is a row in `voice_agents`, an ElevenLabs agent
 - The Coach (`agent-coach`) scores each call over 20 seconds with free AI and proposes playbook lines. Nothing reaches the prompt until Approve.
 - Switchboard (`agent-watch`) checks every 10 minutes: agent exists, webhook attached, tools attached, number assigned, last calls synced, spend under the cap. It fixes what it can and raises alerts signed with the agent's name.
 - Voice picker with preview, Knowledge editor, Prompt editor with "Improve with free AI", and the Tailor card.
-- Optional modules by `voice_agents.modules`: `tickets` and `privacy` (Maya's ticket desk), `calls`, `coach`, `voice`, `knowledge`, `spend`.
+- Optional modules by `voice_agents.modules`: `tickets` and `privacy` (Maya's ticket desk), `calls`, `coach`, `voice`, `knowledge`, `spend`. On any agent but Maya, `tickets` shows only that agent's own tickets (`support_tickets.source = 'agent:<slug>'`, via `admin_agent_tickets`) in a Service column, with no Sales column. Maya's `file_ticket` tool only accepts Maya's calls, so another agent needs its own ticket tool (Leo's: `trip-voice?tool=file_ticket` → `leo_file_ticket`).
+- Agents on the Turo trip pages: see `docs/leo-opusplan.md` (signed sessions, opaque `trip_key`, tools through `trip-voice`).
 
 ## Make one (the + button)
 

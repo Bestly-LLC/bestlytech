@@ -5,6 +5,9 @@
  *   Service    support_tickets that are not leads, soonest due first, plus a "Done" disclosure with Reopen
  * Data: support_tickets via admin_maya_tickets / admin_maya_ticket_set / admin_maya_counts (admin only). Plan: docs/maya-desk-columns-opusplan.md.
  * TicketCard and PrivacyCasePanel are untouched.
+ *
+ * Other template agents (Leo, 2026-10-11) pass `agent`: they get their own tickets (source 'agent:<slug>', via
+ * admin_agent_tickets / admin_agent_ticket_counts), only Service and Messages, and no Sales column — they don't sell.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronRight, LifeBuoy, TrendingUp } from "lucide-react";
@@ -76,7 +79,10 @@ function Disclosure({ label, count, children }: { label: string; count: number |
 /** Class names that place each column: phone Service, Sales, Messages; tablet Service | Messages then Sales; desktop Sales | Service | Messages. */
 export const MESSAGES_ORDER = "order-3 lg:order-2 xl:order-3";
 
-export function MayaTicketsModule({ messages }: { messages: (orderCls: string) => ReactNode }) {
+export function MayaTicketsModule({ messages, agent }: { messages: (orderCls: string) => ReactNode; agent?: { slug: string; name: string } }) {
+  // Maya runs the sales + service desk; every other agent only has service tickets of its own.
+  const solo = !!agent && agent.slug !== "maya";
+  const slug = agent?.slug ?? "maya";
   const [counts, setCounts] = useState<Counts | null>(null);
   const [lists, setLists] = useState<Lists>({ open: null, leads: null, done: null });
   const [errs, setErrs] = useState<Errs>({ open: null, leads: null, done: null });
@@ -84,18 +90,19 @@ export function MayaTicketsModule({ messages }: { messages: (orderCls: string) =
   const pending = useRef(0);     // writes in flight: a poll must not resurrect a card that was just closed
 
   const loadCounts = useCallback(async () => {
-    const { data } = await rpcArgs<Counts>("admin_maya_counts");
+    const { data } = solo ? await rpcArgs<Counts>("admin_agent_ticket_counts", { p_slug: slug }) : await rpcArgs<Counts>("admin_maya_counts");
     if (data) setCounts(data);
-  }, []);
+  }, [solo, slug]);
 
   const loadView = useCallback(async (v: View) => {
     const id = ++reqs.current[v];
-    const { data, error } = await rpcArgs<Ticket[]>("admin_maya_tickets", { p_view: v });
+    if (solo && v === "leads") { setLists((l) => ({ ...l, leads: [] })); return; }
+    const { data, error } = solo ? await rpcArgs<Ticket[]>("admin_agent_tickets", { p_slug: slug, p_view: v }) : await rpcArgs<Ticket[]>("admin_maya_tickets", { p_view: v });
     if (id !== reqs.current[v] || pending.current > 0) return;
     if (error) { setErrs((e) => ({ ...e, [v]: "Couldn't load tickets. Try again in a minute." })); return; }
     setErrs((e) => ({ ...e, [v]: null }));
     setLists((l) => ({ ...l, [v]: data ?? [] }));
-  }, []);
+  }, [solo, slug]);
 
   const refresh = useCallback(() => { VIEWS.forEach((v) => void loadView(v)); void loadCounts(); }, [loadView, loadCounts]);
 
@@ -160,16 +167,16 @@ export function MayaTicketsModule({ messages }: { messages: (orderCls: string) =
 
   return (
     <>
-      <div className="grid grid-cols-4 gap-2 xl:max-w-2xl" aria-label="Tickets at a glance">
+      <div className={cn("grid gap-2", solo ? "grid-cols-2 max-w-sm" : "grid-cols-4 xl:max-w-2xl")} aria-label="Tickets at a glance">
         <Stat label="Open" value={counts?.open} />
         <Stat label="Overdue" value={counts?.overdue} warn />
-        <Stat label="Leads" value={counts?.leads} />
-        <Stat label="Privacy" value={counts?.privacy_open} />
+        {!solo && <Stat label="Leads" value={counts?.leads} />}
+        {!solo && <Stat label="Privacy" value={counts?.privacy_open} />}
       </div>
 
       {/* Jared asked for all three columns to be collapsible (CollapsibleSection's header note about always-open areas does not apply here). */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        <CollapsibleSection id="maya-col-sales" defaultOpen className="order-2 lg:order-3 lg:col-span-2 xl:order-1 xl:col-span-1" bodyClassName={columnBodyCls}
+      <div className={cn("grid grid-cols-1 items-start gap-4 lg:grid-cols-2", !solo && "xl:grid-cols-3")}>
+        {!solo && <CollapsibleSection id="maya-col-sales" defaultOpen className="order-2 lg:order-3 lg:col-span-2 xl:order-1 xl:col-span-1" bodyClassName={columnBodyCls}
           title="Sales" icon={<TrendingUp className="h-5 w-5 text-emerald-300" />} summary={salesSummary}
           badge={<Pill n={leadCount} label={`${leadCount ?? 0} open demo requests`} />}>
           {errs.leads && <ColError msg={errs.leads} retry={() => void loadView("leads")} />}
@@ -177,14 +184,14 @@ export function MayaTicketsModule({ messages }: { messages: (orderCls: string) =
           {leads?.length === 0 && <p className={box}>No demo requests yet. Maya pitches the Bestly Agent when a caller runs a business.</p>}
           {leads && cards(leads, "lead")}
           {doneBlock("Closed leads", doneLeads)}
-        </CollapsibleSection>
+        </CollapsibleSection>}
 
-        <CollapsibleSection id="maya-col-service" defaultOpen className="order-1 lg:order-1 xl:order-2" bodyClassName={columnBodyCls}
+        <CollapsibleSection id={solo ? `${slug}-col-service` : "maya-col-service"} defaultOpen className="order-1 lg:order-1 xl:order-2" bodyClassName={columnBodyCls}
           title="Service" icon={<LifeBuoy className="h-5 w-5 text-sky-300" />} summary={serviceSummary}
           badge={<Pill n={openCount} hot={(counts?.overdue ?? 0) > 0} label={`${openCount ?? 0} open tickets${(counts?.overdue ?? 0) > 0 ? `, ${counts?.overdue} overdue` : ""}`} />}>
           {errs.open && <ColError msg={errs.open} retry={() => void loadView("open")} />}
           {lists.open === null && !errs.open && <Skeleton n={3} />}
-          {lists.open?.length === 0 && <p className={box}>Nothing waiting. Maya has it covered.</p>}
+          {lists.open?.length === 0 && <p className={box}>Nothing waiting. {agent?.name ?? "Maya"} has it covered.</p>}
           {lists.open && cards(lists.open, "followup")}
           {doneBlock("Done", doneOther)}
           {lists.done && lists.done.length >= 100 && <p className="px-1 text-[13px] text-white/55">Done shows the 100 most recent.</p>}
