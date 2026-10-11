@@ -27,7 +27,20 @@ It reads public listing pages and his email *search RPC* (sender/subject only) a
    - Evidence is built from the real rows (email subject + date, device name, vehicle), never from AI text.
    - `--rejudge-asks`: one-off pass over claims still at `ask` (`settlement_rejudge_list_t`) to give them fact keys and re-check
      proof. Note his mailbox in `bestly_mail` only goes back to 2026-04-09, so old purchases cannot be proven from email.
-3. **Heartbeat** - `runjob.py` calls `pi_job_report` with the one-line summary, ok=false on any failure.
+3. **Details + reasons** (`details_phase`, runs before the matcher and again for the claims judged just now; `--details-only` runs
+   only this) - `settlement_needs_details_t` lists open settlements with no details or details older than 14 days (claims that are
+   ask / ready / approved first, then the rest, 40 per run) plus live claims with no `reasoning` yet. For each: read the official
+   site (the claim URL host; its FAQ / "who is included" page when linked; the page's meta description for JS-only sites; the
+   listing text when the site is blocked, empty or has no readable robots.txt), politely (robots.txt incl. Crawl-delay, 4 s between
+   requests, normal UA, a 401/403/challenge is never worked around, topclassactions.com HTML is never fetched), then the free AI
+   ladder returns strict JSON that `clean_details` shapes into `settlements.details` (who_qualifies, class_period, locations,
+   excluded, payout_no_proof, payout_with_proof, proof_examples, how_to_check, official_site, claim_form, fetched_at; plus
+   `basis` = `site` or `listing`). URLs come from the fetched pages' own links, never from AI text. Then one `reasoning` per
+   live claim (1-3 plain sentences; only evidence rows that really exist; a guard replaces a reply that invents records) and a
+   sharper claim question with the specific dates / places (only while the claim is still waiting for his answer; the shared fact
+   question is only reworded when one claim rests on the fact). The matcher then uses the details (class period, places, who is
+   left out) in its triage prompt. A details failure is logged and counted in the summary, it never fails the run.
+4. **Heartbeat** - `runjob.py` calls `pi_job_report` with the one-line summary, ok=false on any failure.
 
 ## Self-heal
 `flock` in `run.sh` plus an in-process lock; HTTP retries with backoff; one source failing never kills the run (3 days in a
@@ -44,5 +57,6 @@ settlements stay unjudged for tomorrow and the run reports failed when nothing c
 python3 /opt/bestly/cron/jobs/settlement_finder.py --dry        # fetch + judge, write nothing
 python3 /opt/bestly/cron/jobs/settlement_finder.py --find-only | --match-only | --limit 5
 python3 /opt/bestly/cron/jobs/settlement_finder.py --rejudge-asks [--dry]   # re-judge claims waiting at ask
+python3 /opt/bestly/cron/jobs/settlement_finder.py --details-only [--limit 40] [--dry] [--examples]   # details + reasons only
 ```
 Install/update: copy this folder to the Pi and `sh install.sh`.
