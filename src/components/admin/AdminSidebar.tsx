@@ -77,7 +77,6 @@ const turoItems = [
   { title: "Turo Watch", url: "/admin/turo", icon: Car },
   { title: "Turo Settings", url: "/admin/turo/settings", icon: CarFront },
   { title: "Claims", url: "/admin/claims", icon: FileWarning },
-  { title: "Settlements", url: "/admin/settlements", icon: BadgeDollarSign },
   { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Brush },
 ];
 
@@ -108,11 +107,17 @@ const agentItems = [
   { title: "Reese (RoofGuard)", url: "/admin/roofguard", icon: PhoneCall },
 ];
 
+// Money coming in to Jared personally (Oct 10 2026): Nickel's class action settlements. Its own section near the top
+// so it isn't buried under Turo.
+const moneyItems = [
+  { title: "Settlements", url: "/admin/settlements", icon: BadgeDollarSign },
+];
+
 // Signs you straight into the HOKU store admin (see lib/openHokuAdmin).
 const hokuItems = [
   { title: "HOKU admin", url: HOKU_ADMIN_URL, icon: ShoppingBag, sso: true },
 ];
-const ALL_NAV_URLS = [...workItems, ...agentItems, ...vestaItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems].map((i) => i.url);
+const ALL_NAV_URLS = [...workItems, ...agentItems, ...moneyItems, ...vestaItems, ...cookieYetiItems, ...homeHubItems, ...turoItems, ...opsItems, ...hokuItems].map((i) => i.url);
 
 
 // A saved order that still lists the old "Ava" / "Maya" / "RoofGuard" sections just drops them; "Agents" is new to it,
@@ -120,6 +125,7 @@ const ALL_NAV_URLS = [...workItems, ...agentItems, ...vestaItems, ...cookieYetiI
 export const ADMIN_NAV_SECTIONS = [
   { label: "Work", items: workItems },
   { label: "Agents", items: agentItems },
+  { label: "Money", items: moneyItems },
   { label: "HOKU", items: hokuItems },
   { label: "Vesta", items: vestaItems },
   { label: "Cookie Yeti", items: cookieYetiItems },
