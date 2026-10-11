@@ -29,7 +29,7 @@ import { FindCarButton } from "./FindCar";
 import { InstallToast } from "./InstallToast";
 import { Fold } from "./HomeGuide";
 import { HostPanel } from "./HostPanel";
-import { homePlace } from "./places";
+import { CHARGERS, homePlace } from "./places";
 import { OpenTuro, TripDone, tripEnded } from "./TripDone";
 import { BatteryReturn, ChargingCard, ChargingFab, type BatteryHealth, type Charging } from "./Charging";
 import { ChargeNow, OpenStalls, RangeCheck, type RangeCheckData } from "./LiveCharge";
@@ -38,6 +38,7 @@ import { BestlyAd } from "./BestlyAd";
 import { PhoneHandoff } from "./PhoneHandoff";
 import { UnlockStart } from "./Valet";
 import { Lines } from "./Lines";
+import { sharedPageAction, useLeoPage } from "./leoBridge";
 
 // Midcentury modern LA: dusk over the hills, Case Study glass house, Googie sign, atomic stars.
 // Mustard + burnt orange + cream on deep teal.
@@ -72,6 +73,7 @@ export type KeyInfo = { state: "soon" | "making" | "ready" | "added" | "ended" |
 export type HomePub = {
   trip?: Trip; car?: CarState | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null;
   pickup_battery?: number | null; email?: string | null; reminder_at?: string | null; reminder_sent_at?: string | null; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; find_hold?: boolean; key?: KeyInfo | null; charging?: Charging | null;
+  demo_open?: boolean; // demo page only: "open demo" is on (no restrictions)
   pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; trip_changed_at?: string | null;
 };
 
@@ -284,7 +286,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
     : demo === "added" ? { state: "added" } : demo === "soon" ? { state: "soon", opens_at: pub.trip ? new Date(+new Date(pub.trip.starts_at) - 2 * 3600e3).toISOString() : undefined } : pub.key ?? null;
   const live = !!pub.controls && !demo;
   // "Set Up" done at the car (the car unlocked/moved by itself after the key was accepted), or 45 min into the trip.
-  const carConnected = !!pub.car_connected_at || (!!pub.trip && Date.now() > +new Date(pub.trip.starts_at) + 45 * 60e3);
+  const carConnected = !pub.demo_open && (!!pub.car_connected_at || (!!pub.trip && Date.now() > +new Date(pub.trip.starts_at) + 45 * 60e3));
   const spot = pub.find_hold ? null : pub.spot ?? (demoCar ? { lat: home.lat, lon: home.lon, observed_at: new Date(Date.now() - 4 * 60e3).toISOString() } : null);
   const street = home.address.split(",")[0];
   const shadow = { textShadow: "0 2px 14px rgba(19,39,38,0.9), 0 1px 2px rgba(19,39,38,0.9)" };
@@ -301,6 +303,16 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
     if (a === "pickup" || a === "return") openSheet(a);
     else if (a === "climate") document.getElementById("climate")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  // Leo controls the page (leo:page); LaxGuest answers the demo_* actions and the car follows leo:car (see lax/leoBridge.ts).
+  useLeoPage((action) => {
+    if (action === "demo_stage" || action === "demo_weather") return undefined;
+    return sharedPageAction(action, {
+      openSheet,
+      next, doNext,
+      hasClimate: () => !!document.getElementById("climate"),
+      send: live && run ? async () => { await run(CHARGERS.home.action); return "sent the nearest Supercharger to the car's navigation."; } : undefined,
+    }) ?? { say: "I can't do that on this page.", stay: true };
+  });
   // Nice out and no climate to offer: the weather pane adds nothing, so the car tile goes full width.
   const showWx = !car || !!(car.climate_until && +new Date(car.climate_until) > Date.now()) || climateNeed(car.inside_f, demoPage ? car.outside_f : outsideF ?? car.outside_f) !== "comfy";
   const lockedUntil = demoCar || demoPage ? null : pub.controls ? null : pub.controls_state === "soon" && pub.controls_opens_at ? pub.controls_opens_at : "pending";
@@ -380,7 +392,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           <RangeCheck rc={pub.range_check} kind="home" className="mt-3" warnOnly />
         </ChargingCard>}
 
-        <HomeGuide pickupBattery={pub.pickup_battery} valet={demoPage ? (key?.state === "added" ? <UnlockStart demo /> : null) : <UnlockStart token={token} />}>
+        <HomeGuide pickupBattery={pub.pickup_battery} valet={demoPage ? (key?.state === "added" || pub.demo_open ? <UnlockStart demo /> : null) : <UnlockStart token={token} />}>
           <Fold icon={Users} title="Someone else driving?" sub="Add them in Turo first, then get their key here">
             <ExtraDrivers token={token} embedded />
           </Fold>
@@ -432,7 +444,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           <p className="mt-5 text-[14px] text-white/60">Your key turns off by itself after the trip. Nothing to hand back.</p>
         </TripSheet>
 
-        <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton leo home active={sheet === "ask"} onOpen={() => openSheet("ask")} />} variant="home" hideTags={ended} only={tripTab(pub.trip, ended, pub.car_connected_at, pub.key?.state)}
+        <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton leo home active={sheet === "ask"} onOpen={() => openSheet("ask")} />} variant="home" hidePickup hideTags={ended} only={tripTab(pub.trip, ended, pub.car_connected_at, pub.key?.state)}
           glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
         {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
         {!ended && <InstallToast token={token} kind="home" />}

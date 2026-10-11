@@ -16,6 +16,11 @@
 //
 //   POST {op:"act", token, tool, args}    buttons on Leo's inline cards (same power as the page's own buttons).
 //   POST {op:"diag", ...}                  what Leo's screen hit on a real device -> leo_client_diag.
+//   POST {op:"selftest"}                  hourly watchdog (cron leo-demo-parity): drives the DEMO car only, checks unlock is still
+//                                         refused for real trips, raises/clears leo.demo-parity signed Leo.
+//
+// Open demo (leo_demo_open(), temporary, expires by itself): on demo-home / demo-lax only, car_lock unlock works on the
+// pretend car and the session cap is 200/hour instead of 40. Real trips never unlock.
 //
 // Tools: trip_status, key_fix, job_status, extra_driver, notify_host, file_ticket, and the car tools car_status,
 //        car_climate (page presets), car_lock (lock only), find_superchargers, send_to_car_nav, charging_summary,
@@ -62,8 +67,9 @@ async function openSession(b: Any): Promise<Response> {
   const since = new Date(Date.now() - 3600_000).toISOString();
   const { count } = await sb.from("trip_voice_sessions").select("key", { count: "exact", head: true }).eq("token", token).gte("created_at", since);
   // Opening the card starts a call, so a guest who opens and closes it a few times uses several sessions.
-  // Demo pages get more room: the host tests and shows them off.
-  if ((count ?? 0) >= (demo ? 40 : 20)) return json({ ok: false, error: "Leo is busy on this trip right now. Try again in a few minutes, or message your host in the Turo app." }, 429);
+  // Demo pages get more room: the host tests and shows them off (200 an hour while the open demo is on).
+  const cap = demo ? ((await demoOpen()) ? 200 : 40) : 20;
+  if ((count ?? 0) >= cap) return json({ ok: false, error: "Leo is busy on this trip right now. Try again in a few minutes, or message your host in the Turo app." }, 429);
 
   const aid = await agentId();
   const key = await xiKey();
@@ -100,7 +106,11 @@ async function session(b: Any): Promise<Session | Response> {
   const started = Number(c?.metadata?.start_time_unix_secs ?? 0) * 1000;
   if (c?.agent_id !== aid || !started || Date.now() - started > 2 * 3600_000) return json({ ok: false, error: "not a live Leo call" }, 401);
   const up = await sb.from("trip_voice_sessions").update({ conversation_id: conv }).eq("key", k).is("conversation_id", null).select("key");
-  if (up.error || !up.data?.length) return json({ ok: false, error: "wrong conversation" }, 401);
+  if (up.error || !up.data?.length) {
+    // Two tools fired at once at the start of a chat: the other call bound it first. Same conversation is fine.
+    const { data: again } = await sb.from("trip_voice_sessions").select("conversation_id").eq("key", k).maybeSingle();
+    if (again?.conversation_id !== conv) return json({ ok: false, error: "wrong conversation" }, 401);
+  }
   return { ...(s as Session), conversation_id: conv };
 }
 
@@ -146,6 +156,11 @@ const LA_TZ = "America/Los_Angeles";
 const t12 = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: LA_TZ }) : null);
 const day12 = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: LA_TZ });
 const niceSite = (n: string) => n.replace(/, CA\b/, "").replace(/^Los Angeles - /, "");
+/** Temporary open demo (leo_demo_open): true while the host has the demo page wide open. Demo tokens only ever ask. */
+const demoOpen = async (): Promise<boolean> => {
+  const { data } = await sb.rpc("leo_demo_open");
+  return !!(data as { open?: boolean } | null)?.open;
+};
 const rpcData = async (fn: string, args: Any) => (await sb.rpc(fn, args)).data as Any | null;
 
 function climateMode(action: string, target: unknown): string | null {
@@ -190,7 +205,7 @@ async function carTool(name: string, token: string, b: Any): Promise<Any> {
   const demo = token.startsWith("demo:");
   const action = clip(b.action, 20).toLowerCase();
   if (name === "send_sms") return { ok: false, not_live: true, say: "I can't send texts yet. Everything is on your trip page." };
-  if (name === "car_lock" && action === "unlock") {
+  if (name === "car_lock" && action === "unlock" && !(demo && await demoOpen())) {
     return { ok: false, say: "I can't unlock the car. Your Tesla app key does that. Want me to check your key?", card: { type: "notice", text: "Unlocking works through your Tesla app key." } };
   }
 
@@ -208,7 +223,9 @@ async function carTool(name: string, token: string, b: Any): Promise<Any> {
           card: { type: "climate", demo: true, on: !!c.climate_on, mode: m, target_f: PRESET[m]?.f ?? null, until: t12(c.climate_until as string) },
           toast: `Leo: ${PRESET[m]?.label ?? "Climate updated"}` };
       }
-      case "car_lock": return { ok: true, demo: true, say: "Done, the demo car is locked.", card: { type: "lock", demo: true, locked: true }, toast: "Leo locked the car" };
+      case "car_lock":
+        if (action === "unlock") return { ok: true, demo: true, say: "Unlocked the demo car. On a real trip, your Tesla app key does this.", card: { type: "lock", demo: true, locked: false }, toast: "Leo unlocked the demo car" };
+        return { ok: true, demo: true, say: "Done, the demo car is locked.", card: { type: "lock", demo: true, locked: true }, toast: "Leo locked the car" };
       case "find_superchargers": {
         const sites = ((r.sites ?? []) as Any[]).map((s) => ({ name: niceSite(String(s.name)), miles: s.miles, open: s.open, total: s.total }));
         return { ok: true, demo: true, say: `The closest is ${sites[0]?.name}, ${sites[0]?.miles} miles away. Want me to send it to the car?`, card: { type: "superchargers", demo: true, sites } };
@@ -304,6 +321,52 @@ async function screenAct(b: Any): Promise<Response> {
   return json(await carTool(tool, demo ? `demo:${raw}` : raw, args));
 }
 
+/** Hourly watchdog: Leo drives his own demo car (status, cool, off) and checks a real-shaped unlock is still refused.
+ *  Touches only the pretend car. Resets the demo car once and retries before raising. Signed Leo via leo.demo-parity. */
+let lastSelf: { at: number; out: Any } | null = null;
+async function selftest(): Promise<Any> {
+  if (lastSelf && Date.now() - lastSelf.at < 60_000) return lastSelf.out;
+  const demoTok = "demo:demo-lax";
+  const run3 = async () => {
+    const bad: string[] = [];
+    const st = await carTool("car_status", demoTok, {});
+    if (st.ok !== true) bad.push("status");
+    const cool = await carTool("car_climate", demoTok, { action: "cool" });
+    if (cool.ok !== true) bad.push("cool");
+    const off = await carTool("car_climate", demoTok, { action: "off" });
+    if (off.ok !== true) bad.push("off");
+    return bad;
+  };
+  let bad: string[] = [];
+  let healed = false;
+  try {
+    bad = await run3();
+    if (bad.length) {
+      await sb.from("leo_demo_car_state").delete().eq("link", "d:demo-lax");
+      bad = await run3();
+      healed = bad.length === 0;
+    }
+  } catch (e) { bad = ["error: " + clip((e as Error)?.message, 120)]; }
+  // Safety parity: a real-shaped trip must still refuse unlock (this refuses before touching anything).
+  try {
+    const u = await carTool("car_lock", "selftest-not-a-real-trip-token", { action: "unlock" });
+    if (u.ok !== false) bad.push("REAL TRIP UNLOCK NOT REFUSED");
+  } catch (e) { bad.push("unlock check error"); }
+  const unsafe = bad.some((x) => x.startsWith("REAL TRIP"));
+  if (bad.length) {
+    await sb.rpc("bestly_raise", { p_key: "leo.demo-parity", p_kind: "problem", p_severity: unsafe ? "error" : "warning",
+      p_title: unsafe ? "Leo: unlock is not refused on a real trip" : "Leo: my demo car stopped answering",
+      p_body: `My hourly demo check failed on: ${bad.join(", ")}. ${unsafe ? "A real-shaped trip was allowed to unlock. I need this fixed now." : "Guests on real trips are not affected, but the demo page and my phone test line are."}`,
+      p_area: "agents" }).then(() => {}, () => {});
+  } else {
+    await sb.rpc("bestly_raise", { p_key: "leo.demo-parity", p_kind: "resolved", p_title: "Leo: my demo car is answering again",
+      p_body: healed ? "I reset the demo car and it answers." : "Status, cool and off all work on the demo car.", p_area: "agents" }).then(() => {}, () => {});
+  }
+  const out = { ok: bad.length === 0, healed, failed: bad };
+  lastSelf = { at: Date.now(), out };
+  return out;
+}
+
 async function tool(name: string, b: Any): Promise<Response> {
   const s = await session(b);
   if (s instanceof Response) return s;
@@ -354,6 +417,7 @@ Deno.serve(async (req) => {
   if (t) return tool(t, b);
   if (b.op === "session") return openSession(b);
   if (b.op === "act") return screenAct(b);
+  if (b.op === "selftest") return json(await selftest());
   if (b.op === "diag") {
     // What Leo's widget hit on a real device (CSP block, widget error text). Small, capped, no personal data.
     const kind = clip(b.kind, 30) || "error";

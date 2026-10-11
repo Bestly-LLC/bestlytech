@@ -129,7 +129,7 @@ export function ChargeBadge({ pct }: { pct: number | null | undefined }) {
 export function HomeGuide({ pickupBattery, kind = "home", children, valet }: { pickupBattery?: number | null; kind?: TripKind; children?: ReactNode; valet?: ReactNode }) {
   const ch = CHARGERS[kind];
   return (
-    <section className="mt-6 rounded-3xl bg-white/[0.06] px-4 pt-3 ring-1 ring-white/10" aria-label="Car guide">
+    <section id="help" className="mt-6 scroll-mt-4 rounded-3xl bg-white/[0.06] px-4 pt-3 ring-1 ring-white/10" aria-label="Car guide">
       <p className="pt-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Help & guides</p>
       <h2 className="mt-1 text-[20px] font-bold leading-snug text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>Everything else, when you need it</h2>
 
