@@ -337,15 +337,72 @@ async function refund(c: Ctx, p: Record<string, unknown>) {
   return json({ ok: true, refunded: money(amount), message: `Done. ${money(amount)} is going back to the card, and most banks show it in 5 to 10 business days. A confirmation email is on its way.` });
 }
 
-// Service-key only: the watchdog calls this. Reports problems, never customer data.
-async function health(req: Request) {
+function isService(req: Request): boolean {
   const auth = req.headers.get("authorization") ?? "";
   const keys = [SB_KEY];
   try { keys.push(...(Object.values(JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}")) as string[])); } catch (_) { /* none */ }
-  if (!keys.some((k) => k && auth === `Bearer ${k}`)) return json({ ok: false, error: "not allowed" }, 401);
+  return keys.some((k) => k && auth === `Bearer ${k}`);
+}
+
+// The portal config Maya's pay links use: the account default, else the one we created and saved.
+async function portalConfigId(): Promise<string | null> {
+  const { data: s } = await sb.from("maya_billing_settings").select("portal_configuration_id").eq("id", true).maybeSingle();
+  const saved = (s as { portal_configuration_id?: string } | null)?.portal_configuration_id ?? null;
+  if (saved) {
+    const r = await stripe("GET", `/billing_portal/configurations/${saved}`);
+    if (r.ok && r.data?.active) return saved;
+  }
+  const d = await stripe("GET", "/billing_portal/configurations", { limit: "1", is_default: "true", active: "true" });
+  return d.ok && d.data?.data?.[0]?.id ? String(d.data.data[0].id) : null;
+}
+
+// Service-key only. Turns on Stripe's customer portal for Maya's card-update links (idempotent) and
+// checks that maya@bestly.tech can send. Returns statuses only, never keys or customer data.
+async function setupPortal(req: Request, p: Record<string, unknown>) {
+  if (!isService(req)) return json({ ok: false, error: "not allowed" }, 401);
+  let id = await portalConfigId();
+  let created = false;
+  if (!id) {
+    const r = await stripe("POST", "/billing_portal/configurations", {
+      "business_profile[headline]": "Bestly: manage your billing",
+      "business_profile[privacy_policy_url]": "https://bestly.tech/privacy-policy",
+      "default_return_url": "https://bestly.tech",
+      "features[invoice_history][enabled]": "true",
+      "features[payment_method_update][enabled]": "true",
+      "features[customer_update][enabled]": "true",
+      "features[customer_update][allowed_updates][0]": "address",
+      "features[customer_update][allowed_updates][1]": "phone",
+      "features[subscription_cancel][enabled]": "true",
+      "features[subscription_cancel][mode]": "at_period_end",
+      "metadata[owner]": "maya",
+    }, "maya-portal-config-v1");
+    if (!r.ok || !r.data?.id) return json({ ok: false, step: "create_portal", status: r.status, error: cleanText(String(r.data?.error?.message ?? ""), 200) }, 502);
+    id = String(r.data.id);
+    created = true;
+  }
+  await sb.from("maya_billing_settings").update({ portal_configuration_id: id }).eq("id", true);
+
+  // Resend: is bestly.tech verified, and does a real send from Maya go through?
+  const apiKey = Deno.env.get("RESEND_API_KEY");
+  let resend: Record<string, unknown> = { key: !!apiKey };
+  if (apiKey) {
+    const d = await fetch("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${apiKey}` } }).then((r) => r.json()).catch(() => null);
+    // deno-lint-ignore no-explicit-any
+    const dom = (d?.data ?? []).find((x: any) => String(x?.name ?? "").toLowerCase() === "bestly.tech");
+    resend = { ...resend, domain_status: dom?.status ?? "not found" };
+    if (isTrue(p.send_test)) {
+      resend.test_sent = await sendMail("jared@bestly.tech", "Maya email check", "This is a one-time check that my billing emails can send from maya@bestly.tech. No action needed.", `maya-email-check-${new Date().toISOString().slice(0, 10)}`);
+    }
+  }
+  return json({ ok: true, portal_configuration: created ? "created" : "already on", resend });
+}
+
+// Service-key only: the watchdog calls this. Reports problems, never customer data.
+async function health(req: Request) {
+  if (!isService(req)) return json({ ok: false, error: "not allowed" }, 401);
   const problems: string[] = [];
   try { const r = await stripe("GET", "/customers", { limit: "1" }); if (!r.ok) problems.push(`Stripe key rejected (${r.status})`); } catch (e) { problems.push("Stripe key missing: " + cleanText((e as Error).message, 60)); }
-  try { const r = await stripe("GET", "/billing_portal/configurations", { limit: "1", is_default: "true" }); if (r.ok && !(r.data?.data ?? []).length) problems.push("Stripe has no default customer portal set up"); } catch (_) { /* already reported */ }
+  try { if (!(await portalConfigId())) problems.push("Stripe customer portal is not set up"); } catch (_) { /* already reported */ }
   for (const t of ["maya_billing_settings", "maya_verifications", "maya_billing_actions", "maya_pay_links"]) {
     const { error } = await sb.from(t).select("*", { head: true, count: "exact" }).limit(1);
     if (error) problems.push(`table ${t} unreadable`);
@@ -365,6 +422,7 @@ Deno.serve(async (req) => {
   const action = String(p.action ?? "");
   try {
     if (action === "health") return await health(req);
+    if (action === "setup_portal") return await setupPortal(req, p);
     // A dry run never moves money or changes a subscription, so it may run after the call ends (used by tests).
     const write = ["cancel", "pause", "cancel_or_pause", "refund"].includes(action) && !isTrue(p.dry_run);
     if (!["start_verify", "check_code", "billing_status", "send_pay_link", "cancel", "pause", "cancel_or_pause", "refund"].includes(action)) return json({ ok: false, error: "unknown action" }, 400);
