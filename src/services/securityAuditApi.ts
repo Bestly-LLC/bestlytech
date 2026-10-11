@@ -42,6 +42,33 @@ export interface SecurityFinding {
   resolved_at: string | null;
   nights_open: number;
   dismissed_reason: string | null;
+  /** Ares's Auto-Fixer state: needs_person = handed to Jared; watching = Ares has it. */
+  autofix: { state?: string; reason?: string; at?: string } | null;
+}
+
+/** Who holds an open finding right now. */
+export type FindingOwner = "you" | "ares";
+export function findingOwner(f: Pick<SecurityFinding, "status" | "severity" | "autofix">): FindingOwner {
+  if (f.severity === "red") return "you";
+  return f.autofix?.state === "needs_person" ? "you" : "ares";
+}
+
+/** Live counts from the findings table itself, not from the last nightly run's snapshot. */
+export interface LiveCounts {
+  red: number;
+  yellow: number;
+  needsYou: number;
+  withAres: number;
+}
+
+export function countOpen(findings: Pick<SecurityFinding, "status" | "severity" | "autofix">[]): LiveCounts {
+  const c: LiveCounts = { red: 0, yellow: 0, needsYou: 0, withAres: 0 };
+  for (const f of findings) {
+    if (f.status !== "open") continue;
+    if (f.severity === "red") c.red++; else c.yellow++;
+    if (findingOwner(f) === "you") c.needsYou++; else c.withAres++;
+  }
+  return c;
 }
 
 export interface SecurityLogRow {
@@ -79,7 +106,7 @@ export async function fetchFindings(): Promise<SecurityFinding[]> {
   return unwrap<SecurityFinding[]>(
     await db
       .from("security_findings")
-      .select("id,key,layer,asset,check_name,severity,status,title,detail,proposed_fix,first_seen,last_seen,resolved_at,nights_open,dismissed_reason")
+      .select("id,key,layer,asset,check_name,severity,status,title,detail,proposed_fix,first_seen,last_seen,resolved_at,nights_open,dismissed_reason,autofix")
       .order("last_seen", { ascending: false })
       .limit(500),
   );
@@ -95,14 +122,46 @@ export async function setFindingStatus(id: string, status: FindingStatus, note?:
   unwrap(await db.rpc("security_finding_set_status", { p_id: id, p_status: status, p_note: note ?? null }));
 }
 
-/** Command Center chip: green / yellow / red, plus "no run last night". */
-export function runHeadline(run: SecurityRun | null): { tone: "ok" | "warn" | "bad"; word: string } {
+export interface SecurityStatus extends LiveCounts {
+  run: SecurityRun | null;
+}
+
+/** Command Center chip data: the last run (is the audit alive?) plus live open counts. */
+export async function fetchSecurityStatus(): Promise<SecurityStatus> {
+  const [run, open] = await Promise.all([
+    fetchLatestRun(),
+    db.from("security_findings").select("status,severity,autofix").eq("status", "open").limit(500)
+      .then((r: { data: SecurityFinding[] | null; error: { message?: string } | null }) => unwrap<SecurityFinding[]>(r)),
+  ]);
+  return { run, ...countOpen(open) };
+}
+
+/**
+ * Headline for the Command Center chip and the Security page. Counts are live (they drop
+ * the moment Ares or Jared closes a finding); the run only says whether the audit is alive.
+ * Only things that need Jared turn it orange: findings Ares holds don't.
+ */
+export function liveHeadline(run: SecurityRun | null, live: LiveCounts): { tone: "ok" | "warn" | "bad"; word: string } {
+  if (live.red > 0) return { tone: "bad", word: `${live.red} red` + (live.needsYou > live.red ? ` · ${live.needsYou - live.red} more need you` : "") };
   if (!run) return { tone: "warn", word: "Never run" };
   const ageH = (Date.now() - new Date(run.started_at).getTime()) / 3_600_000;
   if (ageH > 30) return { tone: "warn", word: "No run last night" };
-  if (run.status === "running") return { tone: "warn", word: "Running now" };
   if (run.status === "failed") return { tone: "warn", word: "Last run failed" };
-  if (run.open_red > 0) return { tone: "bad", word: `${run.open_red} red` + (run.open_yellow ? ` · ${run.open_yellow} yellow` : "") };
-  if (run.open_yellow > 0) return { tone: "warn", word: `${run.open_yellow} to fix this week` };
+  if (live.needsYou > 0) return { tone: "warn", word: `${live.needsYou} ${live.needsYou === 1 ? "needs" : "need"} you` };
+  if (run.status === "running") return { tone: "ok", word: "Running now" };
+  if (live.withAres > 0) return { tone: "ok", word: `Ares has ${live.withAres}` };
   return { tone: "ok", word: "All clear" };
+}
+
+/** Realtime: call onChange (debounced) whenever a finding or run changes. Returns cleanup. */
+export function subscribeSecurity(onChange: () => void, name = "security-live"): () => void {
+  let t: number | null = null;
+  const soon = () => { if (t) window.clearTimeout(t); t = window.setTimeout(onChange, 600); };
+  const channel = supabase.channel(`${name}-${Math.random().toString(36).slice(2, 8)}`);
+  for (const table of ["security_findings", "security_audit_runs"]) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    channel.on("postgres_changes" as any, { event: "*", schema: "public", table }, soon);
+  }
+  channel.subscribe();
+  return () => { if (t) window.clearTimeout(t); supabase.removeChannel(channel); };
 }

@@ -10,14 +10,15 @@ import { askScout } from "@/components/admin/scoutBus";
 import { Binoculars } from "lucide-react";
 import { pollInterval } from "@/lib/polling";
 import {
-  fetchFindings, fetchLog, fetchRuns, runHeadline, setFindingStatus,
+  countOpen, fetchFindings, fetchLog, fetchRuns, findingOwner, liveHeadline, setFindingStatus, subscribeSecurity,
   type SecurityFinding, type SecurityLogRow, type SecurityRun,
 } from "@/services/securityAuditApi";
 
 /**
  * Security — what the nightly 1:00 AM audit found, every run it made, and an append-only trail
- * of everything that changed. The audit only looks; nothing here changes a live system except
- * the status of a finding, and that change is logged as Jared.
+ * of everything that changed. The audit only looks; Ares's Auto-Fixer then fixes what it safely
+ * can within the hour. Counts here are live from the findings table (realtime), not the
+ * snapshot the last run took, so a fix shows up the moment it lands.
  */
 
 const LA_TZ = "America/Los_Angeles";
@@ -126,8 +127,15 @@ function FindingRow({ f, onChange }: { f: SecurityFinding; onChange: () => void 
         <Icon className={cn("mt-0.5 h-5 w-5 shrink-0", sev.text)} aria-hidden />
         <span className="min-w-0 flex-1">
           <span className="block text-[0.9375rem] font-medium text-white">{f.title}</span>
-          <span className="mt-1 block text-sm text-white/55">
-            {f.asset} · {f.layer} · {f.status === "open" ? `open ${f.nights_open} ${f.nights_open === 1 ? "night" : "nights"}` : `${f.status} ${ago(f.resolved_at)}`}
+          <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/55">
+            {f.status === "open" && (
+              findingOwner(f) === "you"
+                ? <span className={cn(pill, "border-amber-500/25 bg-amber-500/10 text-amber-300")}>Needs you</span>
+                : <span className={cn(pill, "border-white/10 bg-white/[0.05] text-white/70")}>Ares has it</span>
+            )}
+            <span>
+              {f.asset} · {f.layer} · <span className="whitespace-nowrap">{f.status === "open" ? `open ${f.nights_open} ${f.nights_open === 1 ? "night" : "nights"}` : `${f.status} ${ago(f.resolved_at)}`}</span>
+            </span>
           </span>
         </span>
         <ChevronDown className={cn("mt-1 h-4 w-4 shrink-0 text-white/40 transition-transform", open && "rotate-180")} aria-hidden />
@@ -150,6 +158,9 @@ function FindingRow({ f, onChange }: { f: SecurityFinding; onChange: () => void 
       )}
       {open && (
         <div className="mt-3 space-y-3 pl-8">
+          {f.status === "open" && f.autofix?.reason && (
+            <p className="text-sm text-white/75"><span className="font-medium text-white">{findingOwner(f) === "you" ? "What Ares needs from you: " : "Ares: "}</span>{f.autofix.reason}</p>
+          )}
           {f.detail && <p className="text-sm text-white/75 whitespace-pre-wrap">{f.detail}</p>}
           {f.proposed_fix && (
             <div>
@@ -191,6 +202,7 @@ export default function Security() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showClosed, setShowClosed] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -201,20 +213,34 @@ export default function Security() {
     }
   }, []);
 
+  // Live: realtime on findings + runs, with a slow poll as the fallback.
   useEffect(() => {
     load();
+    const stop = subscribeSecurity(load, "security-page");
     const iv = setInterval(() => { if (!document.hidden) load(); }, pollInterval(60_000));
-    return () => clearInterval(iv);
+    const onVisible = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { stop(); clearInterval(iv); document.removeEventListener("visibilitychange", onVisible); };
   }, [load]);
 
   const refresh = async () => { setLoading(true); try { await load(); } finally { setLoading(false); } };
 
   const latest = runs?.[0] ?? null;
-  const head = runHeadline(latest);
+  const live = useMemo(() => countOpen(findings ?? []), [findings]);
+  const head = liveHeadline(latest, live);
+  // Needs-you first, then red before yellow, then longest open.
   const open = useMemo(() => (findings ?? []).filter((f) => f.status === "open")
-    .sort((a, b) => (a.severity === b.severity ? b.nights_open - a.nights_open : a.severity === "red" ? -1 : 1)), [findings]);
+    .sort((a, b) => {
+      const oa = findingOwner(a) === "you" ? 0 : 1, ob = findingOwner(b) === "you" ? 0 : 1;
+      if (oa !== ob) return oa - ob;
+      if (a.severity !== b.severity) return a.severity === "red" ? -1 : 1;
+      return b.nights_open - a.nights_open;
+    }), [findings]);
   const closed = useMemo(() => (findings ?? []).filter((f) => f.status !== "open"), [findings]);
-  const reds = open.filter((f) => f.severity === "red").length;
+  const mine = useMemo(() => open.filter((f) => findingOwner(f) === "you"), [open]);
+  // What changed since the run's snapshot, so its summary can't read as current.
+  const closedSinceRun = useMemo(() => latest
+    ? closed.filter((f) => f.resolved_at && new Date(f.resolved_at) > new Date(latest.started_at)).length : 0, [closed, latest]);
 
   const HeadIcon = head.tone === "ok" ? CheckCircle2 : head.tone === "bad" ? XCircle : AlertTriangle;
   const headText = head.tone === "ok" ? "text-emerald-300" : head.tone === "bad" ? "text-red-300" : "text-amber-300";
@@ -223,11 +249,16 @@ export default function Security() {
     <div className="mx-auto max-w-3xl space-y-8 pb-8">
       <PageHeader
         title="Security"
-        description="Nightly audit at 1:00 AM Pacific. Looks only; never changes a live system."
+        description="Nightly audit at 1:00 AM Pacific. Ares fixes what he safely can within the hour; only what needs you stays here."
         actions={
+          <div className="flex items-center gap-2">
+          <span className="mr-1 inline-flex items-center gap-1.5 text-xs text-white/50">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden /> Live
+          </span>
           <button type="button" onClick={refresh} disabled={loading} className={cn("inline-flex h-9 items-center gap-1.5 rounded-full bg-white/[0.08] px-3.5 text-[13px] font-medium text-white hover:bg-white/[0.14] disabled:opacity-60", focusRing)}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} aria-hidden /> Refresh
           </button>
+          </div>
         }
       />
 
@@ -246,35 +277,59 @@ export default function Security() {
             <HeadIcon className={cn("h-6 w-6 shrink-0", headText)} aria-hidden />
             <div className="min-w-0">
               <p className={cn("text-lg font-semibold", headText)}>
-                {head.tone === "ok" ? "All clear" : reds > 0 ? `${reds} red ${reds === 1 ? "finding needs" : "findings need"} you` : head.word}
+                {live.red > 0
+                  ? `${live.red} red ${live.red === 1 ? "finding needs" : "findings need"} you`
+                  : live.needsYou > 0
+                    ? `${live.needsYou} ${live.needsYou === 1 ? "thing needs" : "things need"} you`
+                    : head.tone === "warn" ? head.word
+                    : live.withAres > 0 ? "Nothing needs you" : "All clear"}
               </p>
               <p className="mt-1 text-sm text-white/60">
+                {live.withAres > 0 && <><span className="whitespace-nowrap">Ares has {live.withAres}</span> · </>}
                 {latest ? (
-                  <>Last run {fmt(latest.started_at)} ({ago(latest.started_at)}) · {latest.checks_total} checks · {latest.new_findings} new · {latest.fixed_findings} fixed</>
+                  <>Last run <span className="whitespace-nowrap">{fmt(latest.started_at)}</span> ({ago(latest.started_at)}) · <span className="whitespace-nowrap">{latest.checks_total} checks</span>
+                    {closedSinceRun > 0 && <> · <span className="whitespace-nowrap text-emerald-300">{closedSinceRun} fixed since</span></>}</>
                 ) : "No run yet."}
               </p>
-              {latest?.summary && <p className="mt-2 text-sm text-white/75">{latest.summary}</p>}
 
-              {/* Self-managing is the goal: the whole open list goes to Scout in one tap,
-                  and only what genuinely needs a judgement call comes back to you. */}
-              {open.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    askScout(
-                      `Work through these ${open.length} open security findings. Fix what you can on your own, and only come back to me for the ones that actually need a decision.`,
-                      { about: open.map(findingContext).join("\n\n---\n\n") },
-                    )
-                  }
-                  className={cn("mt-3 inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90", focusRing)}
-                >
-                  <Binoculars className="h-4 w-4" />
-                  Scout works the {open.length === 1 ? "finding" : `${open.length} findings`}
-                </button>
+              {/* The run's summary is a snapshot from 1 AM. Tucked away so it can't pass for current. */}
+              {latest?.summary && (
+                <div className="mt-2">
+                  <button type="button" onClick={() => setShowNotes((v) => !v)} aria-expanded={showNotes}
+                    className={cn("inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 -ml-2 text-sm text-white/60 hover:bg-white/5 hover:text-white", focusRing)}>
+                    <ChevronDown className={cn("h-4 w-4 transition-transform", showNotes && "rotate-180")} aria-hidden />
+                    What the {fmt(latest.started_at, { hour: "numeric", minute: "2-digit" })} run said
+                  </button>
+                  {showNotes && (
+                    <p className="mt-1 text-sm text-white/70">
+                      {latest.summary}
+                      {closedSinceRun > 0 && <span className="mt-2 block text-white/50">{closedSinceRun} of these {closedSinceRun === 1 ? "has" : "have"} been fixed since.</span>}
+                    </p>
+                  )}
+                </div>
               )}
-              {open.length > 0 && (
-                <CopyButton text={fixPrompt(open)} label={`Copy fix prompt for all ${open.length}`}
-                  className={cn("ml-2 mt-3 inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white/80 hover:bg-white/[0.08]", focusRing)} />
+
+              {/* Only what genuinely needs a person goes to Scout; what Ares holds stays with Ares. */}
+              {mine.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      askScout(
+                        mine.length === 1
+                          ? "Help me close this security finding. Do everything you can, and tell me the one step only I can do."
+                          : `Help me close these ${mine.length} security findings. Do everything you can, and tell me the one step only I can do for each.`,
+                        { about: mine.map(findingContext).join("\n\n---\n\n") },
+                      )
+                    }
+                    className={cn("inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90 active:scale-[0.97]", focusRing)}
+                  >
+                    <Binoculars className="h-4 w-4" />
+                    {mine.length === 1 ? "Scout helps with this one" : `Scout helps with these ${mine.length}`}
+                  </button>
+                  <CopyButton text={fixPrompt(mine)} label={mine.length === 1 ? "Copy fix prompt" : `Copy fix prompt for ${mine.length}`}
+                    className={cn("inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white/80 hover:bg-white/[0.08]", focusRing)} />
+                </div>
               )}
             </div>
           </div>
@@ -283,7 +338,7 @@ export default function Security() {
 
       <Tabs defaultValue="findings">
         <TabsList>
-          <TabsTrigger value="findings">Findings{open.length ? ` (${open.length})` : ""}</TabsTrigger>
+          <TabsTrigger value="findings">Open{open.length ? ` (${open.length})` : ""}</TabsTrigger>
           <TabsTrigger value="runs">Runs</TabsTrigger>
           <TabsTrigger value="trail">Audit trail</TabsTrigger>
         </TabsList>

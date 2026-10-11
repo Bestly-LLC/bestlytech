@@ -387,7 +387,7 @@ export function ScoutToday() {
           <SectionHeader id="drafts-title" title="Replies ready" aside={drafts.length} />
           <div className={cn(cardCls, "overflow-hidden")}>
             <ul id="drafts-list" className={divider}>
-              {shownDrafts.map((d) => <DraftCard key={d.id} d={d} onSet={set} onSpam={spamRow} onNotSpam={notSpamRow} busy={busy === d.id} />)}
+              {shownDrafts.map((d) => <DraftCard key={d.id} d={d} onSet={set} onSpam={spamRow} onNotSpam={notSpamRow} onUnsubscribe={unsubscribeRow} busy={busy === d.id} />)}
             </ul>
             {drafts.length > 3 && (
               <Disclosure open={allDrafts} onToggle={() => setAllDrafts((v) => !v)} controls="drafts-list">
@@ -598,8 +598,9 @@ function RunMenu({ running, onRun }: { running: string | null; onRun: (j: "morni
 
 const spamBtn = cn(btn, "justify-center text-[#FF6961] hover:bg-[#FF453A1f] bento:text-[#D70015]");
 
-function DraftCard({ d, onSet, onSpam, onNotSpam, busy }: {
-  d: Row; onSet: (r: Row, s: Status, msg?: string) => void; onSpam: (r: Row) => void; onNotSpam: (r: Row) => void; busy: boolean;
+function DraftCard({ d, onSet, onSpam, onNotSpam, onUnsubscribe, busy }: {
+  d: Row; onSet: (r: Row, s: Status, msg?: string) => void; onSpam: (r: Row) => void; onNotSpam: (r: Row) => void;
+  onUnsubscribe: (r: Row) => void; busy: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [text_, setText] = useState(d.body ?? "");
@@ -625,7 +626,7 @@ function DraftCard({ d, onSet, onSpam, onNotSpam, busy }: {
          <div className="-mx-1 mt-2 flex flex-wrap gap-1 pl-7">
            <button className={spamBtn} disabled={busy} onClick={() => onSpam(d)}><ShieldAlert className="h-4 w-4" aria-hidden /> Spam</button>
            <button className={ghost} disabled={busy} onClick={() => onNotSpam(d)}><Check className="h-4 w-4" aria-hidden /> Not spam</button>
-           <button className={spamBtn} disabled={busy} onClick={() => unsubscribeRow(d)}>Unsubscribe</button>
+           <button className={spamBtn} disabled={busy} onClick={() => onUnsubscribe(d)}>Unsubscribe</button>
          </div>
       </li>
     );
@@ -664,7 +665,7 @@ function DraftCard({ d, onSet, onSpam, onNotSpam, busy }: {
              <button className={ghost} disabled={busy} onClick={() => onSet(d, "done", "Marked sent")}><Check className="h-4 w-4" aria-hidden /> Sent</button>
              <button className={ghost} disabled={busy} onClick={() => onSet(d, "dismissed")}><X className="h-4 w-4" aria-hidden /> Skip</button>
              <button className={spamBtn} disabled={busy} onClick={() => onSpam(d)}><ShieldAlert className="h-4 w-4" aria-hidden /> Spam</button>
-             <button className={spamBtn} disabled={busy} onClick={() => unsubscribeRow(d)}>Unsubscribe</button>
+             <button className={spamBtn} disabled={busy} onClick={() => onUnsubscribe(d)}>Unsubscribe</button>
            </div>
         </div>
       )}
