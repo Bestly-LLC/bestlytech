@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Check, Mic, PhoneCall, RotateCcw } from "lucide-react";
 import "@/components/maya/maya-widget.css";
-import { Avatar, useReducedMotion } from "./appKit";
+import { Avatar, BizLogo, useReducedMotion } from "./appKit";
+import { BRANDS } from "./brand";
 import { Glued, RevealText, segments } from "./RevealText";
 import type { Scenario } from "./scenarios";
 import {
@@ -88,7 +89,10 @@ export function MayaCallPanel({
           <b>
             Maya <span className="ad-badge">AI agent</span>
           </b>
-          <span>{scenario.business}</span>
+          <span className="ad-biz">
+            <BizLogo slug={BRANDS[scenario.id].logo} size={16} />
+            <span>{scenario.business}</span>
+          </span>
         </div>
         <span className={`ad-callpill ${pill.cls}`}>
           <i aria-hidden="true" />

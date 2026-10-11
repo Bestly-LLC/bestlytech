@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { BarChart3, CreditCard, Inbox, Settings, Users, Check, PhoneCall } from "lucide-react";
-import { Avatar, Fx, useFlip, type AppProps } from "./appKit";
+import { Avatar, BizLogo, Fx, useFlip, type AppProps } from "./appKit";
+import { badgeSrc } from "./brand";
 import type { SidebarItem } from "./DesktopWindow";
 import type { FiredEvent } from "./timeline";
 
@@ -71,13 +72,13 @@ export function helpdeskReduce(init: HelpdeskState, events: FiredEvent[]): Helpd
   return st;
 }
 
-export function HelpdeskApp({ events, t, caller }: AppProps) {
+export function HelpdeskApp({ events, t, caller, ended }: AppProps) {
   const st = useMemo(() => helpdeskReduce(helpdeskInitial, events), [events]);
   const { call, customer, flagged, refunded, invite, resolved } = st;
   const flip = useFlip(call ? "call" : "idle");
 
   const phone = caller.phone;
-  const status = resolved ? "Resolved" : call ? "On a call" : "Open";
+  const status = resolved ? "Resolved" : call && !ended ? "On a call" : "Open";
 
   return (
     <div className="hd">
@@ -176,7 +177,10 @@ export function HelpdeskApp({ events, t, caller }: AppProps) {
               <Fx at={customer.at} t={t} className="hd-card hd-cust">
                 <div className="hd-kv">
                   <span>Company</span>
-                  <b>{customer.company}</b>
+                  <b className="hd-co">
+                    {badgeSrc(customer.company) ? <Avatar name={customer.company} size={16} /> : null}
+                    <span>{customer.company}</span>
+                  </b>
                 </div>
                 <div className="hd-kv">
                   <span>Plan</span>

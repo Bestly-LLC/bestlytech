@@ -9,21 +9,28 @@ import { MayaScreen, MayaScreenLauncher } from "./MayaScreen";
 import { MayaIntro } from "./MayaIntro";
 
 /** Review flag for the Leo-style Maya screen: ?maya=screen turns it on for this tab, ?maya=widget turns it off. */
-const SCREEN_KEY = "maya:screen";
+const WIDGET_KEY = "maya:widget";
+/**
+ * Maya's own screen (MayaScreen, with the "Meet Maya" intro) is the default for everyone since 2026-10-11 (Jared).
+ * `?maya=widget` falls back to the old ElevenLabs embed for this tab (a debugging escape hatch); `?maya=screen` undoes it.
+ */
 function useScreenFlag(): boolean {
   const { search } = useLocation();
   const [on, setOn] = useState(() => {
     try {
-      return new URLSearchParams(window.location.search).get("maya") === "screen" || sessionStorage.getItem(SCREEN_KEY) === "1";
+      const q = new URLSearchParams(window.location.search).get("maya");
+      if (q === "widget") return false;
+      if (q === "screen") return true;
+      return sessionStorage.getItem(WIDGET_KEY) !== "1";
     } catch {
-      return false;
+      return true;
     }
   });
   useEffect(() => {
     const q = new URLSearchParams(search).get("maya");
     try {
-      if (q === "screen") sessionStorage.setItem(SCREEN_KEY, "1");
-      if (q === "widget") sessionStorage.removeItem(SCREEN_KEY);
+      if (q === "widget") sessionStorage.setItem(WIDGET_KEY, "1");
+      if (q === "screen") sessionStorage.removeItem(WIDGET_KEY);
     } catch {
       /* storage off: the URL flag still works for this page */
     }

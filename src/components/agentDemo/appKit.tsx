@@ -5,8 +5,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { cn } from "@/lib/utils";
 import type { FiredEvent } from "./timeline";
+import { badgeSrc, logoSrc, personSrc } from "./brand";
 
-export type AppProps = { events: FiredEvent[]; t: number; caller: { name: string; phone: string } };
+export type AppProps = { events: FiredEvent[]; t: number; caller: { name: string; phone: string }; /** The call is over (t has reached the end). */ ended?: boolean };
 
 export type ToastItem = { at: number; text: string };
 
@@ -39,16 +40,41 @@ export const initials = (name: string) =>
     .join("")
     .toUpperCase();
 
+/** A person's photo (or a business's round logo) when we have one; their initials otherwise, and if the image fails. */
 export function Avatar({ name, size = 28, className }: { name: string; size?: number; className?: string }) {
+  const src = personSrc(name) ?? badgeSrc(name);
+  const [failed, setFailed] = useState<string | null>(null);
   const hue = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length;
+  const photo = src && failed !== src;
   return (
     <span
       aria-hidden="true"
-      className={cn("ad-avatar", className)}
-      style={{ width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.38)), background: AVATAR_COLORS[hue] }}
+      className={cn("ad-avatar", photo && "ad-avatar-photo", className)}
+      style={{ width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.38)), background: photo ? undefined : AVATAR_COLORS[hue] }}
     >
-      {initials(name)}
+      {photo ? (
+        <img src={src} alt="" width={size} height={size} decoding="async" loading="lazy" draggable={false} onError={() => setFailed(src)} />
+      ) : (
+        initials(name)
+      )}
     </span>
+  );
+}
+
+/** A demo business's app icon (rounded square). Sized in px; never wider than it is tall. */
+export function BizLogo({ slug, size = 16, className }: { slug: string; size?: number; className?: string }) {
+  return (
+    <img
+      src={logoSrc(slug)}
+      alt=""
+      width={size}
+      height={size}
+      decoding="async"
+      draggable={false}
+      aria-hidden="true"
+      className={cn("ad-logo", className)}
+      style={{ width: size, height: size }}
+    />
   );
 }
 

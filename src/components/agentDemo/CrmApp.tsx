@@ -51,7 +51,7 @@ export function crmReduce(init: CrmState, events: FiredEvent[]): CrmState {
   return st;
 }
 
-export function CrmApp({ events, t, caller }: AppProps) {
+export function CrmApp({ events, t, caller, ended }: AppProps) {
   const st = useMemo(() => crmReduce(crmInitial, events), [events]);
   const { call, listing, lead, qualify, showing } = st;
   const stage: Stage = showing ? "showing" : qualify ? "qualified" : "new";
@@ -99,7 +99,7 @@ export function CrmApp({ events, t, caller }: AppProps) {
             <span className="hd-ring" aria-hidden="true">
               <PhoneCall size={12} />
             </span>
-            <b>{lead ? "Maya on call" : "Incoming call"}</b>
+            <b>{ended ? "Call ended" : lead ? "Maya on call" : "Incoming call"}</b>
             <span className="ad-nw ap-sub">{caller.phone}</span>
           </Fx>
         ) : (
