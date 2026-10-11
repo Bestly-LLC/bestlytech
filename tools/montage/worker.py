@@ -402,9 +402,57 @@ def hold(job, h):
     return f"held {jid} ({h.kind}): {h.reason[:120]}"
 
 
+def _rest_audio(method, query, body=None):
+    """PostgREST call on studio_audio_jobs with the service key; returns the rows (or None). Raises RuntimeError with the HTTP code."""
+    h = {"apikey": lib.KEY, "Content-Type": "application/json", "Prefer": "return=representation"}
+    if lib.KEY.startswith("eyJ"):
+        h["Authorization"] = "Bearer " + lib.KEY
+    req = urllib.request.Request(f"{lib.URL}/rest/v1/studio_audio_jobs{query}", method=method, headers=h,
+                                 data=json.dumps(body).encode() if body is not None else None)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            raw = r.read().decode()
+            return json.loads(raw) if raw else None
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"HTTP {e.code}: {e.read().decode()[:200]}")
+
+
 def audio_log(job, status, vinfo=None, held_reason=None, credits=None, cost=None):
-    """Spend and state of each video's voiceover go into studio_audio_jobs (requested_by 'montage'). Wired in once the table exists."""
-    return None
+    """Each video's voiceover is one studio_audio_jobs row (owner = the brand slug, feature 'voiceover', requested_by 'montage'),
+    status 'held' while it waits and 'done' / 'failed' at the end, with credits and cost_usd added up across tries. Montage is
+    pre-approved daily automation for house brands, so there is no quote/confirm step. Never raises; silent until the table exists."""
+    try:
+        vinfo = vinfo or {}
+        if credits is None:
+            credits = float(vinfo.get("credits") or 0)
+        if cost is None:
+            cost = float(vinfo.get("cost") or 0)
+        if vinfo.get("provider") == "piper":      # manual Piper switch: nothing was bought from ElevenLabs
+            credits = cost = 0.0
+        rows = _rest_audio("GET", f"?select=code,actual_credits,cost_usd&requested_by=eq.montage&inputs-%3E%3Emontage_job_id=eq.{job['id']}&limit=1") or []
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        prov = {"tool": "montage", "ai_generated": True, "provider": vinfo.get("provider") or "elevenlabs", "model": vinfo.get("model"),
+                "voice_name": vinfo.get("voice_name"), "montage_job_id": job["id"]}
+        patch = {"status": status, "held_reason": (held_reason or None), "voice_id": vinfo.get("voice_id")}
+        if status in ("done", "failed"):
+            patch["finished_at"] = now
+        if rows:
+            r = rows[0]
+            patch["actual_credits"] = round(float(r.get("actual_credits") or 0) + credits, 1)
+            patch["cost_usd"] = round(float(r.get("cost_usd") or 0) + cost, 4)
+            _rest_audio("PATCH", f"?code=eq.{r['code']}", {k: v for k, v in patch.items() if v is not None or k == "held_reason"})
+        else:
+            code = "".join(random.choice("abcdefghjkmnpqrstuvwxyz23456789") for _ in range(7))
+            lines = (job.get("script") or {}).get("scenes") or []
+            chars = sum(len(x.get("say", "")) for x in lines) + len(((job.get("script") or {}).get("end") or {}).get("say", ""))
+            _rest_audio("POST", "", {"code": code, "owner_slug": job["client_slug"], "feature": "voiceover", "requested_by": "montage",
+                                     "inputs": {"montage_job_id": job["id"], "pipeline": "montage", "chars": chars or None},
+                                     "est_credits": round(chars * (0.5 if str(vinfo.get("model") or "").startswith(("eleven_flash", "eleven_turbo")) else 1.0), 1) or None,
+                                     "actual_credits": round(credits, 1), "cost_usd": round(cost, 4), "billed_usd": 0,
+                                     "provenance": prov, **{k: v for k, v in patch.items() if v is not None or k == "held_reason"}})
+    except Exception as e:  # noqa: BLE001  (logging must never fail or hold a video)
+        if not any(t in str(e) for t in ("HTTP 404", "PGRST205", "does not exist")):
+            print("audio_log failed:", e, flush=True)
 
 
 def upload(path, name, ctype):
@@ -535,6 +583,7 @@ def process(job):
     else:
         report(jid, stage="writing", note="re-cutting with the change note" if job.get("parent_job_id") else "writing the script with free AI")
         script = brand.write(job, note)
+        job["script"] = script
         report(jid, stage="voicing", script=script, note=f"script ok via {script['provider']} (editor {script['score']:g}/10)")
         total, vinfo = voice(brand, script, jd, jid, job["client_slug"])
         _voice_report(jid, vinfo)

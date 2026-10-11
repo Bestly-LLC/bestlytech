@@ -132,8 +132,13 @@ def main(argv):
         return "skip: off switch (whisper_stt.OFF)"
     if not (os.path.exists(VENV_PY) and os.path.exists(TRANSCRIBE)):
         raise RuntimeError("whisper venv or transcribe.py missing under /mnt/ssd/whisper-stt")
-    requeued = _requeue_stale()
-    rows = _rest("GET", "/rest/v1/studio_audio_jobs?select=*&feature=eq.stt&status=eq.confirmed&order=created_at.asc&limit=20") or []
+    try:
+        requeued = _requeue_stale()
+        rows = _rest("GET", "/rest/v1/studio_audio_jobs?select=*&feature=eq.stt&status=eq.confirmed&order=created_at.asc&limit=20") or []
+    except RuntimeError as e:
+        if any(t in str(e) for t in ("HTTP 404", "PGRST205", "does not exist")):
+            return "skip: studio_audio_jobs is not created yet (audio-core's migration)"
+        raise
     rows = [r for r in rows if _is_whisper(r)]
     if not rows:
         return "nothing to transcribe" + (f" ({requeued} stale requeued)" if requeued else "")
