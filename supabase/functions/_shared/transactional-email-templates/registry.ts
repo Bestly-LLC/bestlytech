@@ -25,6 +25,8 @@ import { template as cloudBriefSubmitted } from './cloud-brief-submitted.tsx'
 import { template as cloudDepositPaid } from './cloud-deposit-paid.tsx'
 import { template as cloudIntakeReceived } from './cloud-intake-received.tsx'
 import { template as roofguardInfo } from './roofguard-info.tsx'
+import { template as privacyVerify } from './privacy-verify.tsx'
+import { template as privacyDone } from './privacy-done.tsx'
 
 export const TEMPLATES: Record<string, TemplateEntry> = {
   'order-confirmation': orderConfirmation,
@@ -37,4 +39,7 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   'cloud-intake-received': cloudIntakeReceived,
   // RoofGuard: what Ava emails during a call when someone asks for information
   'roofguard-info': roofguardInfo,
+  // Vera, the Privacy Clerk: confirm a data request, then say what was done
+  'privacy-verify': privacyVerify,
+  'privacy-done': privacyDone,
 }

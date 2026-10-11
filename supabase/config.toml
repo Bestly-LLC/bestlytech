@@ -125,8 +125,16 @@ project_id = "keowunrxpxlbgebujbao"
 [functions.maya-ticket]
   verify_jwt = false
 
+<<<<<<< Updated upstream
 [functions.maya-billing]
   verify_jwt = false
 
 [functions.maya-pay]
   verify_jwt = false
+=======
+[functions.privacy-verify]
+  verify_jwt = false
+
+[functions.privacy-clerk]
+  verify_jwt = true
+>>>>>>> Stashed changes
