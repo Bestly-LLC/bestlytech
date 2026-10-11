@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { TripContext } from "./AskSheet";
-import { LeoOrb, THEME, leoGreeting, loadLeoSdk, takeLeoMode, type LeoTheme } from "./LeoWidget";
+import { LeoMiniPill, LeoOrb, THEME, leoGreeting, loadLeoSdk, takeLeoMode, type LeoMini, type LeoTheme } from "./LeoWidget";
 import { track } from "./track";
 import { MINIMIZE, askPage, emitLeoCar, useLeoDid } from "./leoBridge";
 import { useDemoOpen } from "./demoState";
@@ -266,15 +266,23 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
   const status = phase === "connecting" ? "Connecting" : phase === "live" ? (voice ? (speaking ? "Leo is talking" : muted ? "Muted" : "Listening") : "Chatting") : "24/7 trip helper";
   const chips = items.length === 1 ? suggestions(context, home) : [];
 
+  // Minimized: Leo goes back to the dock where he lives (LeoBar shows the pill in its own spot) instead of a
+  // pill at the top. LeoBar taps send leo:restore. Jared, 2026-10-11.
+  const miniLabel = phase === "live" && voice ? status : "Tap to return";
+  const miniLive = voice && speaking;
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent<LeoMini | null>("leo:mini", { detail: mini ? { label: miniLabel, live: miniLive } : null }));
+  }, [mini, miniLabel, miniLive]);
+  useEffect(() => {
+    const restore = () => setMini(false);
+    window.addEventListener("leo:restore", restore);
+    return () => window.removeEventListener("leo:restore", restore);
+  }, []);
+
   if (mini) {
-    return createPortal(
-      <button type="button" onClick={() => setMini(false)} aria-label="Back to Leo"
-        className="fixed left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2.5 rounded-full py-2 pl-2 pr-4 text-[15px] font-semibold text-white ring-1 ring-white/20 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2"
-        style={{ top: "max(10px, env(safe-area-inset-top))", background: theme.base, boxShadow: `0 10px 30px -10px rgba(0,0,0,.7), 0 0 24px -8px ${theme.orb[0]}` }}>
-        <LeoOrb theme={theme} size={28} live={voice && speaking} />
-        <span className="whitespace-nowrap">Leo</span>
-        <span className="whitespace-nowrap font-medium" style={{ color: theme.subtle }}>{phase === "live" && voice ? status : "Tap to return"}</span>
-      </button>, document.body);
+    // The dock bar draws the pill; only pages without it get a floating one, still at the bottom.
+    if (document.querySelector("[data-leo-bar]")) return null;
+    return createPortal(<LeoMiniPill theme={theme} mini={{ label: miniLabel, live: miniLive }} floating />, document.body);
   }
 
   return createPortal(
