@@ -1,8 +1,8 @@
 import { useRef } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowRight, Check, ClipboardCheck, Headset, House, MessageSquareText, Mic, Phone, PhoneIncoming,
-  Plus, Stethoscope, UserRoundCheck, UtensilsCrossed, Wrench,
+  ArrowRight, Check, ClipboardCheck, MessageSquareText, Mic, Phone, PhoneIncoming,
+  Plus, UserRoundCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SEOHead } from "@/components/SEOHead";
@@ -10,6 +10,8 @@ import { AnimatedSection } from "@/components/AnimatedSection";
 import { Button } from "@/components/ui/button";
 import { DemoStage, type DemoStageHandle } from "@/components/agentDemo/DemoStage";
 import { SCENARIOS } from "@/components/agentDemo/scenarios";
+import { BizLogo } from "@/components/agentDemo/appKit";
+import { BRANDS } from "@/components/agentDemo/brand";
 import { useReducedMotion } from "@/components/agentDemo/appKit";
 
 /**
@@ -30,12 +32,12 @@ const does: { icon: LucideIcon; title: string; body: string }[] = [
   { icon: UserRoundCheck, title: "Hands you the hot ones", body: "When a call needs a person, she alerts you or transfers it. Nothing important gets lost." },
 ];
 
-const industries: { id: string; icon: LucideIcon; line: string }[] = [
-  { id: "saas-support", icon: Headset, line: "Fixes a double charge and adds a teammate to the account." },
-  { id: "dental", icon: Stethoscope, line: "Books an after-hours emergency visit and texts the new-patient forms." },
-  { id: "plumbing", icon: Wrench, line: "Calms a burst-pipe call and sends the on-call plumber." },
-  { id: "real-estate", icon: House, line: "Qualifies a buyer and books a Saturday showing." },
-  { id: "restaurant", icon: UtensilsCrossed, line: "Finds a table, flags an allergy for the kitchen, and texts a confirmation." },
+const industries: { id: string; line: string }[] = [
+  { id: "saas-support", line: "Fixes a double charge and adds a teammate to the account." },
+  { id: "dental", line: "Books an after-hours emergency visit and texts the new-patient forms." },
+  { id: "plumbing", line: "Calms a burst-pipe call and sends the on-call plumber." },
+  { id: "real-estate", line: "Qualifies a buyer and books a Saturday showing." },
+  { id: "restaurant", line: "Finds a table, flags an allergy for the kitchen, and texts a confirmation." },
 ];
 
 const steps = [
@@ -127,7 +129,10 @@ export default function BestlyAgent() {
                 />
                 <div className="min-w-0 flex-1">
                   <p className="text-[17px] font-semibold leading-tight">Maya</p>
-                  <p className="text-[13px] text-[#C7CBEA]">{first.business} · AI agent</p>
+                  <p className="flex items-center gap-1.5 text-[13px] text-[#C7CBEA]">
+                    <BizLogo slug={BRANDS[first.id].logo} size={16} />
+                    <span>{first.business} · AI agent</span>
+                  </p>
                 </div>
                 <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full bg-white/10 px-3 py-1.5 text-[13px] font-semibold">
                   <i aria-hidden="true" className="h-2 w-2 rounded-full bg-[#4ade80]" style={{ boxShadow: "0 0 10px 2px rgba(74,222,128,.5)" }} />
@@ -200,9 +205,7 @@ export default function BestlyAgent() {
                     onClick={() => watch(x.id, false)}
                     className="group flex h-full min-h-[44px] w-full flex-col rounded-2xl border border-border bg-card p-6 text-left transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                   >
-                    <span className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                      <x.icon className="h-5 w-5" aria-hidden="true" />
-                    </span>
+                    <BizLogo slug={BRANDS[x.id].logo} size={44} className="mb-4 rounded-xl shadow-sm" />
                     <span className="font-modern text-xl font-semibold text-foreground">{sc.chip}</span>
                     <span className="mt-2 block text-muted-foreground">{x.line}</span>
                     <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary">

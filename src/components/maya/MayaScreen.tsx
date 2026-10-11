@@ -11,8 +11,7 @@
  *   pill so the page is visible, and the pill brings her back.
  * - Sessions come from maya-session (signed URL; her agent is private). Worklets are self-hosted under /maya, so the
  *   page CSP needs no blob:. Failures on real devices go to maya-session {op:"diag"}.
- * - Behind a flag while Jared reviews it: bestly.tech/?maya=screen turns it on for that browser tab
- *   (?maya=widget switches back). Everyone else still gets the widget.
+ * - The default on bestly.tech since 2026-10-11 (Jared). ?maya=widget falls back to the old ElevenLabs embed for that tab.
  * - Design: Apple HIG pass then UI UX Pro Max (house rules: 12-hour times, US units, number+unit never split, no
  *   truncation, feathered glows, 44 px targets, Reduce Motion and Reduce Transparency respected).
  */

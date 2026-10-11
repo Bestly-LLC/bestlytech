@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Toasts, type ToastItem } from "./appKit";
+import { BizLogo, Toasts, type ToastItem } from "./appKit";
 
 export type SidebarItem = { id: string; label: string; icon: LucideIcon; badge?: string };
 
@@ -12,6 +12,8 @@ export type SidebarItem = { id: string; label: string; icon: LucideIcon; badge?:
  */
 export function DesktopWindow({
   appName,
+  logo,
+  brand,
   windowTitle,
   clock,
   accent,
@@ -24,6 +26,9 @@ export function DesktopWindow({
   children,
 }: {
   appName: string;
+  /** Logo slug and short name of the business, for the title bar and the sidebar. */
+  logo: string;
+  brand: string;
   windowTitle: string;
   clock: string;
   accent: string;
@@ -52,7 +57,10 @@ export function DesktopWindow({
             <span style={{ background: "#FEBC2E" }} />
             <span style={{ background: "#28C840" }} />
           </div>
-          <div className="adw-title">{windowTitle}</div>
+          <div className="adw-title">
+            <BizLogo slug={logo} size={16} />
+            <span>{windowTitle}</span>
+          </div>
           <div />
         </div>
         <div className="adw-menu">
@@ -73,6 +81,10 @@ export function DesktopWindow({
         </div>
         <div className="adw-body">
           <nav className="adw-side">
+            <div className="adw-brand">
+              <BizLogo slug={logo} size={22} />
+              <span className="adw-brand-n">{brand}</span>
+            </div>
             {sidebar.map((s) => (
               <div key={s.id} className={cn("adw-side-i", s.id === current && "is-on")}>
                 <s.icon size={16} strokeWidth={1.9} />

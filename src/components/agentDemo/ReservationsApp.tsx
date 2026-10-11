@@ -64,7 +64,7 @@ const TABLES = [
   { id: "b4", x: 26, y: 43, w: 18, h: 13, busy: true },
 ];
 
-export function ReservationsApp({ events, t, caller }: AppProps) {
+export function ReservationsApp({ events, t, caller, ended }: AppProps) {
   const st = useMemo(() => reservationsReduce(reservationsInitial, events), [events]);
   const { call, check, hold, name, tags, confirm } = st;
   const offered = (time: string) => !!check && check.offers.includes(time);
@@ -78,7 +78,7 @@ export function ReservationsApp({ events, t, caller }: AppProps) {
             <span className="hd-ring" aria-hidden="true">
               <PhoneCall size={12} />
             </span>
-            <b>{hold ? "Maya on call" : "Incoming call"}</b>
+            <b>{ended ? "Call ended" : hold ? "Maya on call" : "Incoming call"}</b>
             <span className="ad-nw ap-sub">{caller.phone}</span>
           </Fx>
         ) : (

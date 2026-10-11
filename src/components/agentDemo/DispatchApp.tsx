@@ -60,7 +60,7 @@ export function dispatchReduce(init: DispatchState, events: FiredEvent[]): Dispa
   return st;
 }
 
-export function DispatchApp({ events, t, caller }: AppProps) {
+export function DispatchApp({ events, t, caller, ended }: AppProps) {
   const st = useMemo(() => dispatchReduce(dispatchInitial, events), [events]);
   const { call, job, assign, note } = st;
   const col: Col = assign ? "way" : "new";
@@ -119,7 +119,7 @@ export function DispatchApp({ events, t, caller }: AppProps) {
             <span className="hd-ring" aria-hidden="true">
               <PhoneCall size={12} />
             </span>
-            <b>{job ? "Maya on call" : "Incoming call"}</b>
+            <b>{ended ? "Call ended" : job ? "Maya on call" : "Incoming call"}</b>
             <span className="ad-nw ap-sub">{phone}</span>
           </Fx>
         ) : (

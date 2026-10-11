@@ -3,6 +3,8 @@ import "./agent-demo.css";
 import { APPS } from "./apps";
 import { DesktopWindow } from "./DesktopWindow";
 import { MayaCallPanel } from "./MayaCallPanel";
+import { BRANDS, preloadPerson } from "./brand";
+import { BizLogo } from "./appKit";
 import { Glued } from "./RevealText";
 import { Transport } from "./Transport";
 import { SCENARIOS } from "./scenarios";
@@ -41,6 +43,7 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
   const tq = Math.floor(t * 10) / 10; // apps re-draw ten times a second, not every frame
 
   const app = APPS[scenario.app];
+  const brand = BRANDS[scenario.id];
   const App = app.Component;
 
   const choose = useCallback(
@@ -54,6 +57,11 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
     },
     [idx, clock],
   );
+
+  // The caller's photo starts loading the moment a chip is chosen, so it never pops in mid-call.
+  useEffect(() => {
+    preloadPerson(scenario.caller.name);
+  }, [scenario.caller.name]);
 
   // A new call has just loaded (the clock reset itself first): warm its audio, and start it if asked to.
   useEffect(() => {
@@ -185,6 +193,7 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
                 onClick={() => choose(i, false)}
                 onKeyDown={onChipKey}
               >
+                <BizLogo slug={BRANDS[s.id].logo} size={18} />
                 <span className="whitespace-nowrap">{s.chip}</span>
               </button>
             ))}
@@ -208,6 +217,8 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
             />
             <DesktopWindow
               appName={scenario.appName}
+              logo={brand.logo}
+              brand={brand.short}
               windowTitle={scenario.windowTitle}
               clock={scenario.clock}
               accent={app.accent}
@@ -218,7 +229,7 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
               bodyHeight={app.bodyHeight}
               bodyHeightNarrow={app.bodyHeightNarrow}
             >
-              <App key={scenario.id} events={fired} t={tq} caller={scenario.caller} />
+              <App key={scenario.id} events={fired} t={tq} caller={scenario.caller} ended={clock.ended} />
             </DesktopWindow>
           </div>
 
