@@ -20,7 +20,7 @@ import {
 import { TuroMini } from "@/components/admin/turo/TuroMini";
 import { ReadyWidget } from "@/components/admin/turo/ReadyWidget";
 import { StatusBoard } from "@/components/admin/StatusBoard";
-import { fetchLatestRun, runHeadline } from "@/services/securityAuditApi";
+import { fetchSecurityStatus, liveHeadline, subscribeSecurity } from "@/services/securityAuditApi";
 import {
   Disclosure, LoadError, Pill, RowLink, SectionHeader, SkeletonRows,
   cardCls, divider, focusRing, hairline, inset, rowCls, text, tint,
@@ -401,7 +401,10 @@ export default function AdminDashboard() {
   const health = useSource<SystemHealth>(fetchSystemHealth, true);
   const homeHub = useSource(loadHomeHub, true);
   const cy = useSource(loadCyHealth, true);
-  const security = useSource(fetchLatestRun, true);
+  const security = useSource(fetchSecurityStatus, true);
+  // Live: the chip drops the moment Ares or Jared closes a finding, not at the next poll.
+  const reloadSecurity = security.reload;
+  useEffect(() => subscribeSecurity(reloadSecurity, "cc-security"), [reloadSecurity]);
   const newLeads = useSource(loadNewLeads);
   const paidSubs = useSource(loadPaidSubs);
   const waitlist = useSource(loadWaitlist);
@@ -446,13 +449,14 @@ export default function AdminDashboard() {
       href: "/admin/cookie-yeti/analytics?tab=operations",
     });
   }
-  if (security.data && security.data.open_red > 0) {
-    const n = security.data.open_red;
+  // Live count, not the 1 AM snapshot: it clears the moment Ares or Jared closes the finding.
+  if (security.data && security.data.red > 0) {
+    const n = security.data.red;
     needs.push({
       id: "security-red",
       urgent: true,
       title: `${n} red security ${plural(n, "finding", "findings")}`,
-      why: security.data.summary?.slice(0, 140) || "Found by the nightly audit. Open it for the proposed fix.",
+      why: "Found by the nightly audit and Ares couldn't close it. Open it for the fix.",
       href: "/admin/security",
     });
   }
@@ -668,7 +672,7 @@ export default function AdminDashboard() {
           <StatusRow label="Home Hub" source={homeHub} to="/admin/home-hub" render={homeHubChip} />
           <StatusRow label="Street Sweeping" source={sweep} to="/admin/street-sweeping" render={sweepChip} />
           <StatusRow label="Cookie Yeti" source={cy} to="/admin/cookie-yeti" render={cyChip} />
-          <StatusRow label="Security" source={security} to="/admin/security" render={() => runHeadline(security.data ?? null)} />
+          <StatusRow label="Security" source={security} to="/admin/security" render={() => security.data ? liveHeadline(security.data.run, security.data) : null} />
         </StatusBoard>
       </section>
 
