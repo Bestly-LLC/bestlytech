@@ -683,7 +683,7 @@ export default function LaxGuest() {
               glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
             {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} weather={weather} onWeather={(w) => { setWeather(w); setPub(demoPub(dKind, stageRef.current) as Pub); }} />}
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug}
-              context={{ stage: tripTab(pub?.trip, ended, pub?.car_connected_at, key?.state ?? pub?.key?.state), keyState: key?.state ?? pub?.key?.state }} />
+              context={{ stage: tripTab(pub?.trip, ended, pub?.car_connected_at, key?.state ?? pub?.key?.state), keyState: key?.state ?? pub?.key?.state, keyLink: key?.link ?? pub?.key?.link ?? null }} />
             {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
             {token && !ended && <InstallToast token={token} kind="lax" />}
             {token && !ended && <PhoneHandoff token={token} keyReady={!!key && ["ready", "making"].includes(key.state)} />}
