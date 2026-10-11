@@ -150,3 +150,80 @@ export function resolveSiteModal(raw: unknown, currentPath: string): ModalResult
       return { ok: false, say: `That is not something the site can open. Options: ${MODAL_TYPES.join(", ")}.` };
   }
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Presenting: find a section anywhere on the site by what the visitor called it.
+// The index (public/maya/site-index.json) is built by tools/maya-site-index/build.mjs from the rendered pages, so it
+// follows the real headings. It is fetched only when Maya first needs it, never on page load. Maya's Line Check also
+// reads it to keep her "bestly.tech site map" knowledge in step with the site.
+// ---------------------------------------------------------------------------------------------------------------
+
+export type SiteIndex = {
+  generated_at: string;
+  pages: { path: string; name: string; sections: { heading: string; label?: string; text: string }[] }[];
+};
+
+let indexPromise: Promise<SiteIndex> | null = null;
+export function loadSiteIndex(): Promise<SiteIndex> {
+  indexPromise ??= fetch("/maya/site-index.json", { cache: "no-cache" })
+    .then((r) => (r.ok ? (r.json() as Promise<SiteIndex>) : Promise.reject(new Error(`site index ${r.status}`))))
+    .catch((e) => {
+      indexPromise = null; // try again next time
+      throw e;
+    });
+  return indexPromise;
+}
+
+/** Words visitors use that are not on the page. Each points at a page and the start of a real heading there. */
+const SECTION_ALIASES: { words: string[]; path: string; heading: string; need?: string }[] = [
+  { words: ["calculator", "savings", "you'd save", "estimate"], path: "/cloud", heading: "Add up what you rent today" },
+  { words: ["cost", "quote", "how much", "price", "pricing"], need: "cloud", path: "/cloud", heading: "Add up what you rent today" },
+  { words: ["jared", "founder", "owner", "who runs", "who made", "who built", "behind bestly"], path: "/about", heading: "Hey, I'm Jared" },
+  { words: ["book", "call", "discovery", "schedule", "get started"], path: "/cloud", heading: "Four steps" },
+  { words: ["faq", "questions", "concerns", "breaks", "maintains"], path: "/cloud", heading: "The four questions everybody asks" },
+];
+
+const STOP = new Set(["the", "a", "an", "me", "show", "see", "of", "for", "to", "on", "in", "and", "your", "you", "our",
+  "page", "section", "part", "please", "can", "with", "about", "more", "tell", "what", "is", "it", "that", "this", "bestly"]);
+const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").split(/\s+/).filter((w) => w.length > 1 && !STOP.has(w));
+
+export type SectionHit = { path: string; name: string; heading: string; text: string };
+
+/**
+ * Best section for "the cloud calculator", "Jared", "how the box works". Prefers the page the visitor is on when the
+ * match is close, and returns null rather than a weak guess.
+ */
+export function findSection(query: string, index: SiteIndex, currentPath: string): SectionHit | null {
+  const q = String(query ?? "").toLowerCase().trim();
+  if (!q) return null;
+  const qw = words(q);
+  const here = normalizePath(currentPath);
+  let best: { score: number; hit: SectionHit } | null = null;
+
+  const consider = (path: string, name: string, s: { heading: string; label?: string; text: string }, bonus: number) => {
+    const hw = words(s.heading);
+    const lw = words(s.label ?? "");
+    const tw = new Set(words(s.text));
+    let score = bonus;
+    for (const w of qw) {
+      if (hw.includes(w)) score += 3;
+      else if (hw.some((h) => h.startsWith(w) || w.startsWith(h))) score += 1.5;
+      if (lw.includes(w)) score += 2;
+      if (tw.has(w)) score += 0.6;
+      if (words(name).includes(w)) score += 1.2;
+    }
+    if (path === here) score += 0.8;
+    if (!best || score > best.score) best = { score, hit: { path, name, heading: s.heading, text: s.text } };
+  };
+
+  for (const a of SECTION_ALIASES) {
+    if (!a.words.some((w) => q.includes(w)) || (a.need && !q.includes(a.need))) continue;
+    const page = index.pages.find((p) => p.path === a.path);
+    const s = page?.sections.find((x) => x.heading.toLowerCase().startsWith(a.heading.toLowerCase()));
+    if (page && s) consider(page.path, page.name, s, 12); // curated: wins unless the visitor named something else outright
+  }
+  for (const p of index.pages) for (const s of p.sections) consider(p.path, p.name, s, 0);
+
+  const b = best as { score: number; hit: SectionHit } | null;
+  return b && b.score >= 3 ? b.hit : null;
+}
