@@ -9,13 +9,14 @@
  * Pages use useLeoPage(handler) / useLeoCar(handler); LeoScreen uses askPage() / tellLeo-style listeners.
  */
 import { useEffect, useRef } from "react";
+import { VIDEO_SLUGS, playVideo, videoPlayerMounted } from "./HomeGuide";
 
 export type PageAction =
   | "open_pickup" | "open_return" | "show_qr" | "show_car_controls" | "show_charging" | "show_help"
-  | "next_step" | "close_sheets" | "demo_stage" | "demo_weather";
-export const PAGE_ACTIONS: PageAction[] = ["open_pickup", "open_return", "show_qr", "show_car_controls", "show_charging", "show_help", "next_step", "close_sheets", "demo_stage", "demo_weather"];
+  | "next_step" | "close_sheets" | "demo_stage" | "demo_weather" | "play_video" | "open_guide_section";
+export const PAGE_ACTIONS: PageAction[] = ["open_pickup", "open_return", "show_qr", "show_car_controls", "show_charging", "show_help", "next_step", "close_sheets", "demo_stage", "demo_weather", "play_video", "open_guide_section"];
 /** Actions that leave the page in view: Leo steps aside to his pill (unless the page said it didn't happen). */
-export const MINIMIZE: ReadonlySet<string> = new Set(["open_pickup", "open_return", "show_qr", "show_car_controls", "show_charging", "show_help", "next_step"]);
+export const MINIMIZE: ReadonlySet<string> = new Set(["open_pickup", "open_return", "show_qr", "show_car_controls", "show_charging", "show_help", "next_step", "play_video", "open_guide_section"]);
 
 /** What the page says back: one plain sentence for Leo to say, and stay:true when nothing on the page moved. */
 export type PageResult = { say: string; stay?: boolean };
@@ -101,11 +102,60 @@ export type SharedCtx = {
   send?: () => Promise<string>;
 };
 
+const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
+
+/** play_video values and what they are called to the guest. */
+const VIDEO_NAMES = Object.keys(VIDEO_SLUGS).join(", ");
+/** open_guide_section values -> the fold's element id in Help & guides ("rules" is the Before you drive card). */
+const GUIDE_IDS: Record<string, { id: string; name: string }> = {
+  fsd: { id: "guide-fsd", name: "Full Self-Driving" }, valet: { id: "guide-valet", name: "Valet parking" },
+  accident: { id: "guide-accident", name: "Accidents and roadside" }, charging: { id: "guide-charging", name: "Charging" },
+  rules: { id: "before", name: "Before you drive" }, videos: { id: "guide-videos", name: "How-to videos" },
+};
+
+/** Play one of the how-to videos in the page's player. Says so only when the player is really on screen. */
+async function playVideoAction(value: string | undefined, c: SharedCtx): Promise<PageResult> {
+  const slug = (value ?? "").trim().toLowerCase();
+  const vid = VIDEO_SLUGS[slug];
+  if (!vid) return { say: `I don't have a video called "${slug || "(none)"}". The choices are: ${VIDEO_NAMES}.`, stay: true };
+  if (!videoPlayerMounted()) return { say: "The video player isn't on this page right now, so I can't play it here. The how-to videos are in Help and guides.", stay: true };
+  c.openSheet(null);
+  playVideo(vid);
+  for (let i = 0; i < 8; i++) {
+    await sleep(60);
+    const up = [...document.querySelectorAll('[role="dialog"]')].some((d) => d.getAttribute("aria-label") === vid.title);
+    if (up) return { say: `Playing "${vid.title}" on the page. They can close it with the X, then I'm right here.` };
+  }
+  return { say: "I tried to start the video but it didn't open on the page. The how-to videos are in Help and guides.", stay: true };
+}
+
+/** Open one fold in Help & guides and scroll to it. Succeeds only if the fold is really open afterwards. */
+async function openGuideSection(value: string | undefined, c: SharedCtx): Promise<PageResult> {
+  const key = (value ?? "").trim().toLowerCase();
+  const g = GUIDE_IDS[key];
+  if (!g) return { say: `I don't have a guide section called "${key || "(none)"}". The choices are: ${Object.keys(GUIDE_IDS).join(", ")}.`, stay: true };
+  if (!document.getElementById("help")) return { say: "Help and guides isn't on this page right now.", stay: true };
+  c.openSheet(null);
+  // Bring Help & guides forward (its card in the carousel), open the fold, then check it really opened.
+  window.dispatchEvent(new CustomEvent("open-section", { detail: "help" }));
+  await sleep(220);
+  window.dispatchEvent(new CustomEvent("open-section", { detail: g.id }));
+  if (key === "rules") window.dispatchEvent(new CustomEvent("open-before"));
+  await sleep(200);
+  const el = document.getElementById(g.id);
+  const btn = el?.querySelector("button[aria-expanded]");
+  if (!el || btn?.getAttribute("aria-expanded") !== "true") return { say: `I couldn't open the ${g.name} section on this page.`, stay: true };
+  el.scrollIntoView({ behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  return { say: `Opened the ${g.name} section in Help and guides on the page.` };
+}
+
 const clean = (s: string) => s.replace(/\s*\n\s*/g, " ").replace(/\s+/g, " ").trim();
 
 /** The page actions both trip pages do the same way. Returns undefined for actions it doesn't own (demo_*). */
-export function sharedPageAction(action: string, c: SharedCtx): PageResult | Promise<PageResult> | undefined {
+export function sharedPageAction(action: string, c: SharedCtx, value?: string): PageResult | Promise<PageResult> | undefined {
   switch (action) {
+    case "play_video": return playVideoAction(value, c);
+    case "open_guide_section": return openGuideSection(value, c);
     case "open_pickup": c.openSheet("pickup"); return { say: "Opened the pickup steps on the page." };
     case "open_return": c.openSheet("return"); return { say: "Opened the return steps on the page." };
     case "close_sheets": c.openSheet("ask"); return { say: "Closed the sheet. Leo is back full screen." };

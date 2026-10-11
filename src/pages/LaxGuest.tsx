@@ -456,7 +456,7 @@ export default function LaxGuest() {
       next: guide.next, doNext,
       hasClimate: () => !!document.getElementById("climate"),
       send: live ? async () => { await carCommand(CHARGERS.lax.action as CarAction); return "sent the nearest Supercharger to the car's navigation."; } : undefined,
-    }) ?? { say: "I can't do that on this page.", stay: true };
+    }, value) ?? { say: "I can't do that on this page.", stay: true };
   });
   useLeoCar((r) => {
     if (demo) { applyLeoCar(r); return; }
@@ -609,7 +609,7 @@ export default function LaxGuest() {
                   <ExtraDrivers token={token} embedded />
                 </Fold>
               )}
-              <Fold icon={PlayCircle} title="How-to videos" sub="2-minute videos from Tesla">
+              <Fold id="guide-videos" icon={PlayCircle} title="How-to videos" sub="2-minute videos from Tesla">
                 <VideoList />
               </Fold>
               {token && pub.trip && new Date(pub.trip.starts_at) > new Date() && (
