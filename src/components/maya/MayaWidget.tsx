@@ -93,7 +93,8 @@ function reloadUnderMarketingCsp(): boolean {
   return true;
 }
 
-function loadEmbed(): Promise<void> {
+/** Shared with LeoWidget (trip pages): same pinned embed, same SRI. */
+export function loadEmbed(): Promise<void> {
   if (scriptPromise) return scriptPromise;
   scriptPromise = new Promise<void>((resolve, reject) => {
     if (customElements.get("elevenlabs-convai")) return resolve();

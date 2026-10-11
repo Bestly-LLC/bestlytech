@@ -12,6 +12,7 @@ import { TripSheet } from "./TripSheet";
 import { track } from "./track";
 import { Lines } from "./Lines";
 import { LeoVoice } from "./LeoVoice";
+import { LeoWidget, useWidgetPreview } from "./LeoWidget";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 type Msg = { id: number | string; role: "user" | "assistant"; content: string; status?: string };
@@ -388,6 +389,7 @@ function leoSuggestions(ctx: TripContext | undefined, home: boolean): string[] {
 
 export function AskSheet({ open, onClose, token, slug, home = false, driver = false, context }: { open: boolean; onClose: () => void; token?: string; slug?: string; home?: boolean; driver?: boolean; context?: TripContext }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
+  const widgetPreview = useWidgetPreview(token);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState<number | null>(null);
@@ -486,6 +488,9 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
     for (let i = 1; i < msgs.length; i++) if (msgs[i].role === "assistant" && msgs[i - 1].role === "user" && (msgs[i - 1].content === DRIVER_Q || DRIVER_RE.test(msgs[i - 1].content))) return msgs[i].id;
     return null;
   })();
+
+  // Preview of the official ElevenLabs widget (demo links with ?widget=1 only): it replaces this sheet entirely.
+  if (widgetPreview) return open && token ? <LeoWidget token={token} context={context} home={home} /> : null;
 
   return (
     <TripSheet open={open} onClose={onClose} kicker="Trip helper" title="Talk to our team 24/7" footer={footer} bodyRef={body}>
