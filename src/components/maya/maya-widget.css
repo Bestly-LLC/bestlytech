@@ -134,3 +134,69 @@ elevenlabs-convai {
 @media (prefers-reduced-motion: reduce) {
   .maya-spotlight { animation: none; box-shadow: 0 0 32px 10px hsl(var(--primary) / 0.16), 0 0 80px 26px hsl(var(--primary) / 0.07); }
 }
+
+/* ---------- Maya screen (Leo-style, ?maya=screen) ---------- */
+/* Glass panel: a translucent layer over the site, not a modal. Desktop docks right below the site header; phones get a
+   bottom sheet. Reduce Transparency makes it solid. */
+.maya-panel {
+  background: rgba(16, 17, 38, 0.84);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 28px;
+  box-shadow: 0 30px 80px -24px rgba(8, 9, 30, 0.55), 0 0 60px -20px rgba(142, 155, 255, 0.35);
+  right: 16px;
+  top: 84px;
+  bottom: calc(16px + var(--consent-h, 0px));
+  width: 400px;
+}
+@media (max-width: 1023px) {
+  .maya-panel {
+    left: 8px;
+    right: 8px;
+    top: auto;
+    width: auto;
+    bottom: calc(8px + var(--consent-h, 0px) + env(safe-area-inset-bottom, 0px));
+    height: min(72dvh, 640px);
+    border-radius: 26px;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .maya-panel, .maya-pill { background: #121326; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* The page makes room for the docked panel on wide screens, so nothing Maya shows hides under her. */
+@media (min-width: 1024px) {
+  html.maya-docked main { padding-right: 424px; }
+  main { transition: padding-right 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
+}
+@media (prefers-reduced-motion: reduce) { main { transition: none; } }
+
+/* Messages fade out at the edges instead of being cut by a line. */
+.maya-scroll {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px, #000 calc(100% - 14px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 18px, #000 calc(100% - 14px), transparent 100%);
+}
+
+/* Launcher and tucked-away pill. */
+.maya-pill {
+  right: 16px;
+  bottom: calc(20px + var(--consent-h, 0px) + env(safe-area-inset-bottom, 0px));
+  background: rgba(16, 17, 38, 0.86);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 14px 36px -12px rgba(8, 9, 30, 0.6), 0 0 34px -10px rgba(142, 155, 255, 0.45);
+}
+/* Phones: centered without a transform, so the press-scale on the button never fights the centering. */
+@media (max-width: 1023px) {
+  .maya-pill { left: 0; right: 0; width: max-content; max-width: calc(100vw - 32px); margin-inline: auto; }
+}
+
+/* The orb breathes only while Maya is talking (something is happening). */
+.maya-orb-live { animation: maya-breathe 1.6s ease-in-out infinite; }
+@keyframes maya-breathe {
+  0%, 100% { transform: scale(1); filter: saturate(1); }
+  50% { transform: scale(1.06); filter: saturate(1.25); }
+}
+@media (prefers-reduced-motion: reduce) { .maya-orb-live { animation: none; } }
