@@ -3,7 +3,8 @@
 // Desk: file_ticket tool still attached (heals by re-attaching), ticket endpoint alive, overdue tickets.
 // Billing (Phase 3): the six billing tools still attached (heals by re-attaching), maya-billing refuses a fake call,
 // and maya-billing's own health check (Stripe key, portal, tables, email, ElevenLabs key) passes.
-// Website: her five site tools (navigate_site_page, open_site_modal, show_section, describe_screen, cloud_calculator) attached, the
+// Website: her six site tools (navigate_site_page, open_site_modal, show_section, describe_screen, cloud_calculator,
+// fill_contact_form) attached, the
 // agent private (enable_auth) with bestly.tech + www.bestly.tech allowed, the maya-session door minting, the prompt
 // carrying the current "Website presenter" block, and her "bestly.tech site map" knowledge matching the live
 // /maya/site-index.json (rebuilt whenever its generated_at changes). Heals all of these. Alert key maya.site.
@@ -30,6 +31,7 @@ const SITE_TOOLS = [
   "tool_5001m4p4de4qefx8wcd9d9jqn9w7", // show_section (client tool, presenter)
   "tool_3901m4p4dgffew580sm8prn3r2c1", // describe_screen (client tool, presenter)
   "tool_9801m4p7z7nze08t38c4hcea47qg", // cloud_calculator (client tool, drives the savings calculator)
+  "tool_9601m4pfs50qebrs7gskeetezaw2", // fill_contact_form (client tool, types into the visible contact / get-started form)
 ];
 const SITE_INDEX_URL = "https://www.bestly.tech/maya/site-index.json";
 const SITE_KB_PREFIX = "Maya KB - bestly.tech site map";
@@ -54,8 +56,9 @@ Bestly Cloud is one small server in their office that replaces the apps they ren
 - If an app is not in the calculator, say Bestly Cloud doesn't replace that one, so it isn't counted. Never inflate the number.
 - If there are no savings yet (small team or few apps), be honest, say where it starts to pay off, and ask if they expect to grow or pay for anything else.
 - Objections: server breaks, remote work, local AI, who maintains it. Answer in one sentence, then show the matching answer on the page with show_section ("the four questions everybody asks").
-- Close: once they have seen their savings, ask for the next step: "Want me to set up a 30-minute call to map this to your business?" If yes, open the booking form with open_site_modal book_demo, and also take their name, best email and phone, read them back, and file a sales_lead ticket whose issue includes team size, the apps they pay for, billing, and the savings number.
-- Keep momentum: one short answer, show it, one question. Never pressure; if they want to think, offer to email a summary through a ticket.
+- Close: once they have seen their savings, ask for the next step: "Want me to set up a 30-minute call to map this to your business?" If yes, fill in the form with them on screen using fill_contact_form (it opens the right form). Ask for their name, then email, then phone (optional), calling fill_contact_form after each answer so they watch it fill in. Put a short summary in details: team size, the apps they pay for, billing, and the savings number. Read it back, and only after a clear yes call fill_contact_form with submit true. On the website the form is the record: never also file a sales_lead ticket yourself.
+- Same for anyone else who wants to be contacted on the website (Bestly Agent demos, questions for the team): fill the form with them instead of only taking details by voice. Use open_site_modal only when they just want to see the form.
+- Keep momentum: one short answer, show it, one question. Never pressure; if they want to think, offer to send the team a note through the form.
 - On phone calls none of these tools work; never call them there.
 ${PRESENTER_END}`;
 const SITE_HOSTS = ["bestly.tech", "www.bestly.tech"];
@@ -248,6 +251,9 @@ Deno.serve(async () => {
         if (gone.length) site.push(`The Bestly Agent demo calls on bestly.tech/agent are missing their sound (${gone.join("; ")}). Re-run node tools/agent-demo-audio/build.mjs.`);
         const { count: audioDiag } = await sb.from("maya_web_sessions").select("id", { count: "exact", head: true })
           .eq("kind", "diag").ilike("detail->>what", "%agent-demo-audio%").gte("created_at", new Date(Date.now() - 3600_000).toISOString());
+        const { count: formDiag } = await sb.from("maya_web_sessions").select("id", { count: "exact", head: true })
+          .eq("kind", "diag").ilike("detail->>what", "%form-fill%").gte("created_at", new Date(Date.now() - 3600_000).toISOString());
+        if ((formDiag ?? 0) > 3) site.push(`${formDiag} times in the last hour I could not fill or send a visitor's form on bestly.tech (contact or get-started). Check those pages and the submit-contact function.`);
         if ((audioDiag ?? 0) > 0) site.push(`${audioDiag} visitor${audioDiag === 1 ? "" : "s"} could not play the Bestly Agent demo audio in the last hour, so the calls fell back to captions only. Check bestly.tech/agent-demo/ and re-run node tools/agent-demo-audio/build.mjs if a file is bad.`);
       } catch (e) {
         site.push(`Agent demo check crashed: ${String(e).slice(0, 120)}`);

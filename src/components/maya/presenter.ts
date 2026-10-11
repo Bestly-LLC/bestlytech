@@ -8,10 +8,12 @@
  *  - describeScreen(): what the visitor is looking at right now (page + visible headings + their words), so Maya
  *                     can talk over the slide instead of reciting the knowledge base.
  *  - presenterTools(): the client tools (navigate_site_page, open_site_modal, show_section, describe_screen,
- *                     cloud_calculator),
+ *                     cloud_calculator, fill_contact_form),
  *                     each returning one plain sentence for Maya.
  */
 import { getCalc, type CalcChange } from "@/components/cloud/calcBridge";
+import { getForm, type FormValues } from "./formBridge";
+import { mayaDiag } from "./mayaSession";
 import {
   findSection, loadSiteIndex, mayaProductForPath, normalizePath, resolveSiteModal, resolveSitePage,
 } from "./siteTools";
@@ -150,6 +152,10 @@ export function describeScreen(path: string): string {
 
 type P = Record<string, unknown> | undefined;
 
+// The form card last given the spotlight, so a second fill_contact_form call does not glow it again.
+let spottedForm: HTMLElement | null = null;
+const PHONE_LINE = "(213) 641-0074";
+
 /** The client tools both Maya surfaces register. Every one returns one sentence Maya can act on. */
 export function presenterTools(deps: PresenterDeps) {
   return {
@@ -234,6 +240,70 @@ export function presenterTools(deps: PresenterDeps) {
       if (el) spotlightBlock(el);
       deps.onShow?.("Bestly Cloud savings calculator");
       return `${r.say} Lead with the savings number in plain words, then ask the next thing you don't know yet (team size, the apps they pay for, or monthly vs annual billing). Never quote a number that is not in this result.`;
+    },
+
+    // Fill the contact form the visitor is looking at (Contact, or the Bestly Cloud get-started form), typing their
+    // answers in live, and press Send only when asked to (after a clear yes).
+    fill_contact_form: async (params: P) => {
+      try {
+        const str = (k: string) => {
+          const v = params?.[k];
+          return v == null ? undefined : clean(String(v));
+        };
+        const wantsSubmit = params?.submit === true || String(params?.submit ?? "").toLowerCase() === "true";
+        const values: FormValues = {};
+        for (const k of ["name", "email", "phone", "company", "team_size", "topic"] as const) {
+          const v = str(k);
+          if (v) values[k] = v;
+        }
+        // details keeps its line breaks and punctuation; only the ends are trimmed.
+        if (params?.details != null && String(params.details).trim()) values.details = String(params.details).trim();
+
+        // Which form: stay on the one they are already looking at; otherwise Bestly Cloud questions go to the
+        // get-started form and everything else to the contact page.
+        const here = normalizePath(deps.path());
+        const target = here === "/contact" || here === "/get-started" ? here
+          : mayaProductForPath(here) === "Bestly Cloud" || /cloud/i.test(String(values.topic ?? "")) ? "/get-started" : "/contact";
+        const moved = goTo(deps, target);
+        if (moved) await sleep(450);
+        const api = await getForm(5000, target === "/get-started" ? "cloud-lead" : "contact");
+        if (!api) {
+          mayaDiag("form-fill", { msg: "form did not load", target });
+          return `The form didn't load. Offer to try again, or to take it by phone at ${PHONE_LINE}.`;
+        }
+        const el = api.element();
+        if (el && el !== spottedForm) {
+          spottedForm = el;
+          spotlightBlock(el);
+        }
+        deps.onShow?.("Filling in your details");
+
+        let lead = "";
+        let missing: string[] = [];
+        if (Object.keys(values).length) {
+          const r = await api.fill(values);
+          lead = r.say;
+          missing = r.missing;
+        } else {
+          const r = api.read();
+          lead = r.say;
+          missing = r.missing;
+        }
+
+        if (wantsSubmit) {
+          const s = await api.submit();
+          if (!s.ok && !/^Not sent yet/.test(s.say)) mayaDiag("form-fill", { msg: s.say.slice(0, 200), target });
+          return s.ok
+            ? `${s.say} Tell them what happens next, then ask if there is anything else.`
+            : `${s.say} Say it plainly. If a field is missing, ask for it; if the site failed, offer to try again or ${PHONE_LINE}.`;
+        }
+        return missing.length
+          ? `${lead} Ask for the missing ones one at a time. Never say it was sent: only a submit result that says Sent means that.`
+          : `${lead} Read it back in plain words and only call again with submit true after a clear yes. Never say it was sent until a submit result says Sent.`;
+      } catch (e) {
+        mayaDiag("form-fill", { msg: String((e as Error)?.message ?? e).slice(0, 200) });
+        return `The form didn't respond. Offer to try again, or to take it by phone at ${PHONE_LINE}.`;
+      }
     },
   };
 }
