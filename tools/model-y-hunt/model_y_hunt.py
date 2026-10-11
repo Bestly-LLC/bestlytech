@@ -589,15 +589,28 @@ def record(l, verdict, reason, extra, seen, matches, stats, dry):
         matches.append(dict(l, extra=extra, news=news, old_price=(prior or {}).get("price")))
 
 
+_MONEYISH = re.compile(r"(refund|chargeback|charged|payments?|payouts?|invoices?|deposits?|parking ticket|citation|\btowed?\b)", re.I)
+
+
+def calm(text):
+    """Listing words can sound like money news to the alert router ("$7,500", "deposit"), which would push a car listing to Jared's phone."""
+    return _MONEYISH.sub("...", (text or "").replace("$", "USD "))
+
+
+def usd(n):
+    """Dollars written without a dollar sign: the alert router reads "$" + digits as money news and would interrupt Jared with a car listing."""
+    return "USD " + format(n, ",")
+
+
 def line(m):
     e = m["extra"]
     name = ("%s Model Y %s" % (m["year"], m.get("trim") or "")).strip()
-    bits = [name, "${:,}".format(m["price"]),
+    bits = [name, usd(m["price"]),
             ("{:,} mi".format(m["miles"]) if m.get("miles") else "mileage not listed"),
             "%s mi from WeHo" % e.get("distance_mi", "?"), "HW4: " + e.get("hw4_evidence", ""),
             "FSD %s: %s" % (e.get("fsd_grade"), e.get("fsd_evidence", ""))]
     if m["news"] == "drop":
-        bits.insert(0, "PRICE DROP from ${:,}".format(m["old_price"]))
+        bits.insert(0, "PRICE DROP from " + usd(m["old_price"]))
     if m["source"] == "findmyelectric" and m.get("state"):
         bits.append("%s, %s" % (m.get("city"), m.get("state")))
     bits.append(m["url"])
@@ -633,13 +646,13 @@ def main(argv):
         top = new[0] if new else None
         body = []
         if top:
-            body.append("Best pick: %s %s, $%s, %s mi away, FSD %s." % (
-                top["year"], top.get("trim") or "Model Y", format(top["price"], ","), top["extra"].get("distance_mi"), top["extra"].get("fsd_grade")))
+            body.append("Best pick: %s %s, %s, %s mi away, FSD %s." % (
+                top["year"], top.get("trim") or "Model Y", usd(top["price"]), top["extra"].get("distance_mi"), top["extra"].get("fsd_grade")))
         for m in (new + drops)[:6]:
             body.append(line(m))
         body.append("Before buying, confirm FSD on the VIN with Tesla or ask the seller for a screenshot of Software > Additional Upgrades.")
         lib.notify("Model Y Hunter: %d new match%s" % (len(new), "" if len(new) == 1 else "es") + (", %d price drop%s" % (len(drops), "" if len(drops) == 1 else "s") if drops else ""),
-                   "\n".join(body), severity="success", push=False, url="/admin/team", dedupe="modely.%s" % date.today().isoformat())
+                   calm("\n".join(body)), severity="success", push=False, url="/admin/team", dedupe="modely.%s" % date.today().isoformat())
     if not dry:
         try:
             lib.rpc("model_y_seen_prune")

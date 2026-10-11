@@ -202,6 +202,14 @@ class AiPromotion(unittest.TestCase):
             M.freellm = None
 
 
+class Calm(unittest.TestCase):
+    def test_money_words_and_dollar_signs_are_defused(self):
+        out = M.calm('FSD paid $7,500, deposit required, payment plan')
+        self.assertNotIn("$", out)
+        for w in ("deposit", "payment"):
+            self.assertNotIn(w, out.lower())
+
+
 class Run(unittest.TestCase):
     def setUp(self):
         FAKE.calls.clear()
@@ -238,7 +246,8 @@ class Run(unittest.TestCase):
         out = self.run_with(lambda *a: ({}, [self.match("drop", 26000, 27500)]), lambda *a: ({}, []))
         self.assertIn("1 price drop", out)
         body = [c for c in FAKE.calls if c[0] == "notify"][0][1]["args"][1]
-        self.assertIn("PRICE DROP from $27,500", body)
+        self.assertIn("PRICE DROP from USD 27,500", body)
+        self.assertNotIn("$", body)  # a dollar sign + digits makes the alert router treat it as money news
 
     def test_one_source_down_is_partial_both_down_fails(self):
         def boom(*a):

@@ -185,7 +185,7 @@ def parse_detail(page):
     """(text, closed). text is the plain job description."""
     m = re.search(r'<div class="[^"]*show-more-less-html__markup[^"]*">(.*?)</div>', page or "", re.S)
     text = html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", m.group(1)))).strip() if m else ""
-    closed = bool(re.search(r"No longer accepting applications|closed-job|job is no longer available|no longer available", page or "", re.I))
+    closed = bool(re.search(r"No longer accepting applications|closed-job__flavor--closed", page or "", re.I))
     return text, closed
 
 
@@ -430,8 +430,6 @@ def main(argv):
 
     if posted and not dry:
         body = ["%d new on the Job Search board: %s." % (len(posted), ", ".join("%s %d" % (k[0], v) for k, v in sorted(per.items())))]
-        for j in posted[:6]:
-            body.append("%s | %s | %s | score %s | %s" % (j["title"], j["company"], j["location"], j["score"], j["url"]))
         if closed_n:
             body.append("%d Shortlist role%s closed and moved to Closed." % (closed_n, "" if closed_n == 1 else "s"))
         lib.notify("Job Finder: %d new role%s on your board" % (len(posted), "" if len(posted) == 1 else "s"), "\n".join(body),

@@ -57,7 +57,9 @@ class Parse(unittest.TestCase):
     def test_detail(self):
         page = '<div class="show-more-less-html__markup show-more-less-html__markup--clamp-after-5"><p>Run guest <b>services</b>.</p></div>'
         self.assertEqual(J.parse_detail(page), ("Run guest services .", False))
-        self.assertTrue(J.parse_detail("<div>No longer accepting applications</div>")[1])
+        self.assertTrue(J.parse_detail('<figcaption class="closed-job__flavor--closed">No longer accepting applications</figcaption>')[1])
+        # an open posting carries the same "closed-job" CSS words in its page template: that alone must not count
+        self.assertFalse(J.parse_detail('<style>.closed-job{display:none}</style><div class="show-more-less-html__markup">Open role</div>')[1])
 
 
 class NoOvernight(unittest.TestCase):
