@@ -136,3 +136,12 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.privacy-clerk]
   verify_jwt = true
+
+[functions.agent-hub]
+  verify_jwt = false
+
+[functions.agent-watch]
+  verify_jwt = true
+
+[functions.agent-coach]
+  verify_jwt = true
