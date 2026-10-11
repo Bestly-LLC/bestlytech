@@ -15,7 +15,8 @@
  *   trip right now (override-first-message from the trip's stage and key state).
  * - Mounted expanded when "Talk to our team 24/7" is tapped; unmounted when the sheet state closes.
  */
-import { useEffect, useState, type ElementType } from "react";
+import { useEffect, useState, type ElementType, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { loadEmbed } from "@/components/maya/MayaWidget";
@@ -95,6 +96,9 @@ function autoCall(el: HTMLElement | null) {
   }, 125);
 }
 
+/** Render at the top of <body>: trip pages fade their own content while a sheet is open, and that must not reach Leo. */
+const top = (n: ReactNode) => (typeof document === "undefined" ? n : createPortal(n, document.body));
+
 export function LeoWidget({ token, context, home, onClose }: { token: string; context?: TripContext; home: boolean; onClose: () => void }) {
   const [s, setS] = useState<{ url: string; key: string } | null>(null);
   const [err, setErr] = useState("");
@@ -115,17 +119,16 @@ export function LeoWidget({ token, context, home, onClose }: { token: string; co
   const scrim = <button type="button" aria-label="Close Leo" onClick={onClose}
     className="fixed inset-0 z-40 cursor-default bg-black/60 backdrop-blur-[2px] motion-safe:animate-in motion-safe:fade-in" />;
 
-  if (err) return <>{scrim}<p role="alert" className="fixed inset-x-4 bottom-28 z-50 rounded-2xl bg-white p-4 text-[15px] text-[#B4232A] shadow-xl">{err}</p></>;
-  if (!s) return (<>{scrim}
+  if (err) return top(<>{scrim}<p role="alert" className="fixed inset-x-4 bottom-28 z-50 rounded-2xl bg-white p-4 text-[15px] text-[#B4232A] shadow-xl">{err}</p></>);
+  if (!s) return top(<>{scrim}
     <div className="fixed inset-x-0 bottom-28 z-50 flex justify-center" aria-live="polite">
       <span className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[15px] font-semibold text-white shadow-xl ring-1 ring-white/15"
         style={{ background: THEME[home ? "home" : "lax"].vars["--el-base"] }}>
         <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />Opening Leo
       </span>
-    </div></>
-  );
+    </div></>);
   const theme = THEME[home ? "home" : "lax"];
-  return (<>{scrim}
+  return top(<>{scrim}
     <Convai
       ref={(el: HTMLElement | null) => { if (el && !el.dataset.called) { el.dataset.called = "1"; autoCall(el); } }}
       style={theme.vars}
@@ -144,6 +147,5 @@ export function LeoWidget({ token, context, home, onClose }: { token: string; co
       worklet-path-raw-audio-processor="/maya/raw-audio-processor.js"
       worklet-path-audio-concat-processor="/maya/audio-concat-processor.js"
       worklet-path-libsamplerate="/maya/libsamplerate.worklet.js"
-    /></>
-  );
+    /></>);
 }
