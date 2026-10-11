@@ -9939,6 +9939,36 @@ export type Database = {
         }
         Relationships: []
       }
+      hunter_call_outcomes: {
+        Row: {
+          actual_outcome: string
+          called_at: string
+          conversation_id: string | null
+          created_at: string
+          id: number
+          lead_id: string
+          owner: string
+        }
+        Insert: {
+          actual_outcome: string
+          called_at?: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: number
+          lead_id: string
+          owner: string
+        }
+        Update: {
+          actual_outcome?: string
+          called_at?: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: number
+          lead_id?: string
+          owner?: string
+        }
+        Relationships: []
+      }
       hunter_campaigns: {
         Row: {
           area: string
@@ -9999,6 +10029,66 @@ export type Database = {
           ok?: boolean
           problems?: Json
           source?: string
+        }
+        Relationships: []
+      }
+      hunter_lead_scores: {
+        Row: {
+          best_window: string
+          dm_role: string
+          id: string
+          inputs: Json
+          latency_ms: number | null
+          lead_id: string
+          lead_table: string
+          model: string | null
+          outcome_probs: Json
+          owner: string
+          p_fit: number
+          p_reach_dm: number
+          priority: number | null
+          reason: string
+          scored_at: string
+          scorer: string
+          tokens_in: number | null
+        }
+        Insert: {
+          best_window: string
+          dm_role: string
+          id?: string
+          inputs?: Json
+          latency_ms?: number | null
+          lead_id: string
+          lead_table: string
+          model?: string | null
+          outcome_probs: Json
+          owner: string
+          p_fit: number
+          p_reach_dm: number
+          priority?: number | null
+          reason: string
+          scored_at?: string
+          scorer: string
+          tokens_in?: number | null
+        }
+        Update: {
+          best_window?: string
+          dm_role?: string
+          id?: string
+          inputs?: Json
+          latency_ms?: number | null
+          lead_id?: string
+          lead_table?: string
+          model?: string | null
+          outcome_probs?: Json
+          owner?: string
+          p_fit?: number
+          p_reach_dm?: number
+          priority?: number | null
+          reason?: string
+          scored_at?: string
+          scorer?: string
+          tokens_in?: number | null
         }
         Relationships: []
       }
@@ -10082,6 +10172,8 @@ export type Database = {
           enabled: boolean
           id: boolean
           min_fit: number
+          score_cap_free: number
+          score_cap_jev: number
           telnyx_daily_cap: number
           updated_at: string
         }
@@ -10089,6 +10181,8 @@ export type Database = {
           enabled?: boolean
           id?: boolean
           min_fit?: number
+          score_cap_free?: number
+          score_cap_jev?: number
           telnyx_daily_cap?: number
           updated_at?: string
         }
@@ -10096,6 +10190,8 @@ export type Database = {
           enabled?: boolean
           id?: boolean
           min_fit?: number
+          score_cap_free?: number
+          score_cap_jev?: number
           telnyx_daily_cap?: number
           updated_at?: string
         }
@@ -15964,6 +16060,7 @@ export type Database = {
           amount_cents: number | null
           answer: boolean | null
           approved_at: string | null
+          archived_at: string | null
           confirmation: string | null
           created_at: string
           evidence: Json
@@ -15989,6 +16086,7 @@ export type Database = {
           amount_cents?: number | null
           answer?: boolean | null
           approved_at?: string | null
+          archived_at?: string | null
           confirmation?: string | null
           created_at?: string
           evidence?: Json
@@ -16014,6 +16112,7 @@ export type Database = {
           amount_cents?: number | null
           answer?: boolean | null
           approved_at?: string | null
+          archived_at?: string | null
           confirmation?: string | null
           created_at?: string
           evidence?: Json
@@ -17240,6 +17339,117 @@ export type Database = {
           job_id?: string | null
           slug?: string
           url?: string
+        }
+        Relationships: []
+      }
+      skytouch_cards: {
+        Row: {
+          ask: string | null
+          client_name: string | null
+          client_number: string | null
+          created_at: string
+          fits_hours: boolean | null
+          id: string
+          jared_said: string | null
+          job: string
+          kind: string
+          status: string
+          suggested_reply: string | null
+          thread_key: string
+          updated_at: string
+          why: string | null
+        }
+        Insert: {
+          ask?: string | null
+          client_name?: string | null
+          client_number?: string | null
+          created_at?: string
+          fits_hours?: boolean | null
+          id?: string
+          jared_said?: string | null
+          job?: string
+          kind: string
+          status?: string
+          suggested_reply?: string | null
+          thread_key: string
+          updated_at?: string
+          why?: string | null
+        }
+        Update: {
+          ask?: string | null
+          client_name?: string | null
+          client_number?: string | null
+          created_at?: string
+          fits_hours?: boolean | null
+          id?: string
+          jared_said?: string | null
+          job?: string
+          kind?: string
+          status?: string
+          suggested_reply?: string | null
+          thread_key?: string
+          updated_at?: string
+          why?: string | null
+        }
+        Relationships: []
+      }
+      skytouch_settings: {
+        Row: {
+          auto_first_reply: boolean
+          id: boolean
+          master_enabled: boolean
+          morning_enabled: boolean
+          morning_text_jared: boolean
+          stale_hours: number
+          triage_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          auto_first_reply?: boolean
+          id?: boolean
+          master_enabled?: boolean
+          morning_enabled?: boolean
+          morning_text_jared?: boolean
+          stale_hours?: number
+          triage_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          auto_first_reply?: boolean
+          id?: boolean
+          master_enabled?: boolean
+          morning_enabled?: boolean
+          morning_text_jared?: boolean
+          stale_hours?: number
+          triage_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      skytouch_state: {
+        Row: {
+          availability_date: string | null
+          availability_text: string | null
+          brief: Json
+          counts: Json
+          id: boolean
+          updated_at: string
+        }
+        Insert: {
+          availability_date?: string | null
+          availability_text?: string | null
+          brief?: Json
+          counts?: Json
+          id?: boolean
+          updated_at?: string
+        }
+        Update: {
+          availability_date?: string | null
+          availability_text?: string | null
+          brief?: Json
+          counts?: Json
+          id?: boolean
+          updated_at?: string
         }
         Relationships: []
       }
@@ -21022,6 +21232,33 @@ export type Database = {
         }
         Relationships: []
       }
+      trip_voice_sessions: {
+        Row: {
+          agent_slug: string
+          conversation_id: string | null
+          created_at: string
+          expires_at: string
+          key: string
+          token: string
+        }
+        Insert: {
+          agent_slug?: string
+          conversation_id?: string | null
+          created_at?: string
+          expires_at?: string
+          key: string
+          token: string
+        }
+        Update: {
+          agent_slug?: string
+          conversation_id?: string | null
+          created_at?: string
+          expires_at?: string
+          key?: string
+          token?: string
+        }
+        Relationships: []
+      }
       turo_allstar_rules: {
         Row: {
           checked_at: string
@@ -24295,6 +24532,11 @@ export type Database = {
         Returns: Json
       }
       admin_agent_spend: { Args: { p_slug: string }; Returns: Json }
+      admin_agent_ticket_counts: { Args: { p_slug: string }; Returns: Json }
+      admin_agent_tickets: {
+        Args: { p_slug: string; p_view: string }
+        Returns: Json
+      }
       admin_agents: { Args: never; Returns: Json }
       admin_archived_calls: {
         Args: { p_limit?: number; p_source: string }
@@ -26100,6 +26342,8 @@ export type Database = {
       }
       hunter_handoff: { Args: never; Returns: Json }
       hunter_insert_leads: { Args: { p: Json }; Returns: Json }
+      hunter_jev_key_put: { Args: { p_value: string }; Returns: string }
+      hunter_jev_status: { Args: never; Returns: Json }
       hunter_lead_set: {
         Args: { p_id: string; p_reason?: string; p_status: string }
         Returns: Json
@@ -26110,6 +26354,35 @@ export type Database = {
       }
       hunter_net_result: { Args: { p_id: number }; Returns: Json }
       hunter_overview: { Args: never; Returns: Json }
+      hunter_reese_priority: {
+        Args: never
+        Returns: {
+          best_window: string
+          lead_id: string
+          priority: number
+          reason: string
+        }[]
+      }
+      hunter_score_caps_set: {
+        Args: { p_free?: number; p_jev?: number }
+        Returns: Json
+      }
+      hunter_score_queue: {
+        Args: {
+          p_all?: boolean
+          p_lead?: string
+          p_maya?: number
+          p_reese?: number
+        }
+        Returns: {
+          input: Json
+          lead_id: string
+          lead_table: string
+          owner: string
+        }[]
+      }
+      hunter_scores_list: { Args: never; Returns: Json }
+      hunter_secret: { Args: { p_name: string }; Returns: string }
       hunter_settings_set: {
         Args: {
           p_enabled?: boolean
@@ -26436,6 +26709,7 @@ export type Database = {
       lax_trip_kind: { Args: { p_airport: string }; Returns: string }
       lax_trip_kind_for: { Args: { p_token: string }; Returns: string }
       lax_watchdog: { Args: never; Returns: Json }
+      leo_file_ticket: { Args: { p: Json }; Returns: Json }
       live_range: {
         Args: { _from?: string; _range?: string; _to?: string }
         Returns: {
@@ -27654,6 +27928,10 @@ export type Database = {
         Returns: string
       }
       settlement_approve_all: { Args: { p_ids?: string[] }; Returns: number }
+      settlement_archive: {
+        Args: { p_id: string; p_on: boolean }
+        Returns: undefined
+      }
       settlement_bank_credit: {
         Args: {
           p_cents: number
@@ -27669,6 +27947,10 @@ export type Database = {
       settlement_bank_unmatched_resolve: {
         Args: { p_claim?: string; p_unmatched: number }
         Returns: undefined
+      }
+      settlement_claim_snapshot: {
+        Args: { c: Database["public"]["Tables"]["settlement_claims"]["Row"] }
+        Returns: Json
       }
       settlement_daily: { Args: never; Returns: Json }
       settlement_details_t: {
@@ -27818,6 +28100,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      settlement_recent_changes: { Args: { p_limit?: number }; Returns: Json }
       settlement_rejudge_list_t: {
         Args: { p_limit?: number; p_token: string }
         Returns: Json
@@ -27827,6 +28110,7 @@ export type Database = {
         Args: { p_limit?: number; p_token: string }
         Returns: Json
       }
+      settlement_undo_last: { Args: { p_claim: string }; Returns: Json }
       settlement_undo_paid: { Args: { p_id: string }; Returns: undefined }
       settlement_unjudged_t: {
         Args: { p_limit?: number; p_token: string }
@@ -27904,6 +28188,44 @@ export type Database = {
         Returns: string
       }
       sky_tomtom_key: { Args: never; Returns: string }
+      skytouch_admin: { Args: never; Returns: Json }
+      skytouch_card_close: {
+        Args: { p_id: string; p_status?: string }
+        Returns: undefined
+      }
+      skytouch_card_save: { Args: { p: Json }; Returns: Json }
+      skytouch_connect: {
+        Args: { p_calendar_urls?: string; p_gmail_app_password?: string }
+        Returns: Json
+      }
+      skytouch_effective: { Args: { p_job: string }; Returns: boolean }
+      skytouch_gate: { Args: { p_job: string }; Returns: Json }
+      skytouch_intake_claim: {
+        Args: {
+          p_ask: string
+          p_name: string
+          p_number: string
+          p_thread_key: string
+        }
+        Returns: boolean
+      }
+      skytouch_intake_done: {
+        Args: { p_ok: boolean; p_thread_key: string; p_why?: string }
+        Returns: undefined
+      }
+      skytouch_set: {
+        Args: {
+          p_auto_first_reply?: boolean
+          p_master?: boolean
+          p_morning?: boolean
+          p_morning_text_jared?: boolean
+          p_stale_hours?: number
+          p_triage?: boolean
+        }
+        Returns: Json
+      }
+      skytouch_state_save: { Args: { p: Json }; Returns: undefined }
+      skytouch_sync_watch: { Args: never; Returns: undefined }
       social_bank_commit: {
         Args: { p_bank_id: string; p_media_urls: string[]; p_slot: string }
         Returns: Json
