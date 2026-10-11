@@ -1,0 +1,15 @@
+[Unit]
+Description=Bestly Yes Button: hears the lock-screen Yes, file all tap on Nickel's digest (HA websocket -> settlement_digest_action_t)
+After=network-online.target home-assistant.service docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/bestly/settlement-digest
+ExecStart=/usr/bin/python3 -u /opt/bestly/settlement-digest/ha_action_listener.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
