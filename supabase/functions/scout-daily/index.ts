@@ -455,7 +455,7 @@ async function failureChunks(since: string): Promise<{ chunks: RChunk[]; counts:
   for (const [tid, xs] of byThread) {
     if (!xs.some((x) => !x.ok)) continue;   // a thread where nothing failed has no lesson to teach
     const steps = xs.map((x) => ({ id: String(x.id).slice(0, 8), tool: x.tool, ok: x.ok, at: String(x.created_at).slice(5, 16),
-      args: clip(x.tool === "commit_files" ? { message: x.args?.message, paths: (x.args?.files ?? x.args?.edits ?? []).map((f: any) => f.path) } : x.args, 220),
+      args: clip(x.tool === "commit_files" ? { message: x.args?.message, paths: [x.args?.files, x.args?.edits].filter(Array.isArray).flat().map((f: any) => f?.path).filter(Boolean) } : x.args, 220),
       result: x.ok ? clip(x.result, 100) : clip(x.result, 320) }));
     const text = JSON.stringify({ thread: tid, steps });
     threads.push({ id: tid, text: text.length > CHUNK_USER_CHARS ? JSON.stringify({ thread: tid, steps: steps.slice(-30) }) : text, scopes: xs.map((x) => `tool:${x.tool}`).join(" ") + " " + text.slice(0, 3000) });
