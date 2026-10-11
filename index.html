@@ -5,13 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0a0a0a" />
     <script>
-      // Deploy-swap self-heal (2026-10-11): a page opened while Vercel swaps deploys can ask for the old
-      // hashed CSS/JS, which 404s, and renders unstyled. Reload once (max every 30 s) to pick up the new files.
+      // Asset self-heal (2026-10-11): a hashed CSS/JS file can fail (deploy swap, or a bad cached copy in the
+      // browser). CSS gets re-requested with a cache-buster; JS reloads the page once (max every 30 s).
       window.addEventListener("error", function (e) {
         var t = e.target;
         if (!t || (t.tagName !== "LINK" && t.tagName !== "SCRIPT")) return;
         var u = t.href || t.src || "";
         if (u.indexOf("/assets/") < 0) return;
+        // A stylesheet that fails is usually a bad cached copy of that exact file: load it again with a
+        // cache-buster right away (no reload), so the page styles itself even when the cache stays bad.
+        if (t.tagName === "LINK" && !t.getAttribute("data-retried")) {
+          var l = document.createElement("link");
+          l.rel = "stylesheet"; l.setAttribute("data-retried", "1");
+          l.href = u + (u.indexOf("?") < 0 ? "?" : "&") + "r=" + Date.now();
+          t.parentNode.insertBefore(l, t.nextSibling);
+          return;
+        }
         try {
           var k = "bestly:asset-reloaded-at", last = +sessionStorage.getItem(k) || 0;
           if (Date.now() - last < 30000) return;
