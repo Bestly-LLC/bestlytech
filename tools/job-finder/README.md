@@ -23,7 +23,7 @@ Tailor resume / Apply checklist). The old `application-profile.json` rules (neve
 `job_finder_settings` (switch and cards-per-tier), changed with `select job_finder_set(p_enabled => false)` / `job_finder_set(p_max_per_tier => 5)` as an admin.
 
 ## Credentials
-Read from Supabase Vault through `pi_secret_get`: `nextcloud_user`, `nextcloud_app_password`, `nextcloud_base_url`. Never in a file or in the job output.
+Read from Supabase Vault through `pi_secret`: `nextcloud_user`, `nextcloud_app_password`, `nextcloud_base_url`. Never in a file or in the job output.
 **The old Claude task prompt held a Nextcloud account password in plain text. Rotate that password.**
 
 ## Install / test

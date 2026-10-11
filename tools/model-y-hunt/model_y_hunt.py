@@ -218,8 +218,8 @@ FSD_NEG = re.compile(
     r"(?:no|not|without|lacks?|missing|never had|doesn'?t have|does not have)\s+(?:\w+\s+){0,2}(?:fsd|full[\s-]*self)|"
     r"(?:fsd|full[\s-]*self[\s-]*driving)\s+(?:is\s+)?(?:not|n'?t)\s+(?:included|transferr?\w*|available)|"
     r"eap|enhanced autopilot|autopilot only|basic autopilot)\b", re.I)
-FSD_BUY = re.compile(r"\b(?:purchas\w*|paid|pay(?:ed|ment)? in full|bought|owned|own\b|included|comes? with|one[\s-]*time|lifetime|"
-                     r"permanent|fully paid|paid[\s-]*off|\$\s*\d{1,2},?\d{3})\b", re.I)
+FSD_BUY = re.compile(r"(?:\b(?:purchas\w*|paid|pay(?:ed|ment)? in full|bought|owned|one[\s-]*time|lifetime|permanent|fully paid|paid[\s-]*off)\b|"
+                     r"\$\s*\d{1,2},?\d{3}\b)", re.I)
 HW4_YES = re.compile(r"\b(?:hw\s?-?4|ai\s?-?4|hardware\s?4|hw\s?4\.0|4\.0\s*(?:hw|hardware)|ap4)\b", re.I)
 HW3_NO = re.compile(r"\b(?:hw\s?-?3|ai\s?-?3|hardware\s?3|hw\s?3\.0|3\.0\s*\(?hw3?)\b", re.I)
 
@@ -453,7 +453,9 @@ def grade(l, cfg, deadline=None):
         st = str(ai.get("fsd_status") or "").lower()
         if st in ("subscription", "trial", "capable_only", "eap", "autopilot_only") and quote_ok(ai.get("fsd_quote", ""), text):
             return "rejected", "AI read: " + st.replace("_", " ") + " (" + squash(ai.get("fsd_quote", ""))[:70] + ")", extra
-        if st == "purchased" and quote_ok(ai.get("fsd_quote", ""), text):
+        q = squash(ai.get("fsd_quote", ""))
+        # the AI may only promote to CONFIRMED on words that really say purchased: a bare mention ("Full Self Driving (FSD)" in a features list) is not proof
+        if st == "purchased" and quote_ok(q, text) and FSD_WORD.search(q) and FSD_BUY.search(q):
             purchased = True
             evidence = 'Listing says "%s"' % squash(ai["fsd_quote"])[:140]
         if str(ai.get("hw4", "")).lower() == "no" and quote_ok(ai.get("hw4_quote", ""), text):

@@ -19,7 +19,7 @@ What it does, same as the Claude task:
 What it does NOT do (the Claude task could, with a browser): submit applications. This job only finds and files. The Next-step checklist
 on each card is for Jared.
 
-Credentials come from Supabase Vault through the Pi's pi_secret_get (nextcloud_user, nextcloud_app_password, nextcloud_base_url).
+Credentials come from Supabase Vault through the Pi's pi_secret (nextcloud_user, nextcloud_app_password, nextcloud_base_url).
 Nothing secret is ever written to a file, a log or the job summary.
 
 Flags: --dry (search and score only: no Deck writes, no notification, no heartbeat), --limit N (cap new cards per tier).
@@ -355,9 +355,9 @@ def main(argv):
     per_tier = int(argv[argv.index("--limit") + 1]) if "--limit" in argv else int(cfg.get("max_per_tier") or 8)
     deadline = time.time() + 1500
 
-    user = (lib.rpc("pi_secret_get", p_name="nextcloud_user") or "").strip()
-    pw = (lib.rpc("pi_secret_get", p_name="nextcloud_app_password") or "").strip()
-    base = (lib.rpc("pi_secret_get", p_name="nextcloud_base_url") or "").strip() or "https://cloud.bestly.tech"
+    user = (lib.rpc("pi_secret", p_name="nextcloud_user") or "").strip()
+    pw = (lib.rpc("pi_secret", p_name="nextcloud_app_password") or "").strip()
+    base = (lib.rpc("pi_secret", p_name="nextcloud_base_url") or "").strip() or "https://cloud.bestly.tech"
     if not user or not pw:
         return "skip: Nextcloud login not saved in Vault yet (nextcloud_user / nextcloud_app_password)"
     deck = Deck(base, user, pw)

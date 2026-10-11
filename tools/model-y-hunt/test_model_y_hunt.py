@@ -177,6 +177,31 @@ class Grading(unittest.TestCase):
             M.freellm = None
 
 
+class AiPromotion(unittest.TestCase):
+    def ai(self, quote):
+        class AI:
+            @staticmethod
+            def chat(messages, **kw):
+                return {"content": json.dumps({"fsd_status": "purchased", "fsd_quote": quote, "hw4": "yes", "hw4_quote": ""})}, "fake"
+        return AI
+
+    def test_bare_feature_mention_stays_likely(self):
+        M.freellm = self.ai("Full Self Driving (FSD)")
+        try:
+            v, why, e = M.grade(L(text="Features: Full Self Driving (FSD), glass roof"), CFG)
+            self.assertEqual((v, e["fsd_grade"]), ("match", "LIKELY"))
+        finally:
+            M.freellm = None
+
+    def test_purchase_wording_in_the_quote_promotes(self):
+        M.freellm = self.ai("FSD was purchased at delivery")
+        try:
+            v, why, e = M.grade(L(text="FSD was purchased at delivery, clean car"), CFG)
+            self.assertEqual((v, e["fsd_grade"]), ("match", "CONFIRMED"))
+        finally:
+            M.freellm = None
+
+
 class Run(unittest.TestCase):
     def setUp(self):
         FAKE.calls.clear()

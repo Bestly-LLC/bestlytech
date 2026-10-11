@@ -19,7 +19,7 @@ class FakeLib(types.ModuleType):
         self.calls.append((name, kw))
         if name == "job_finder_gate":
             return self.gate
-        if name == "pi_secret_get":
+        if name == "pi_secret":
             return self.secrets.get(kw["p_name"], "")
         return None
 

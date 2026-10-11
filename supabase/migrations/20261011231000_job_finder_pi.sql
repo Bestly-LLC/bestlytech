@@ -2,7 +2,7 @@
 --
 -- Old home (Claude scheduled task, DISABLED once the Pi version ran OK, kept as the fallback):
 --   trig_01W3dUTL4HFVoCcfRYFAW8GG  "Job Finder"   (slug job-finder)
--- New home: Pi cron job job_finder (tools/job-finder/). It reads the Nextcloud login from Vault (pi_secret_get), never from a file.
+-- New home: Pi cron job job_finder (tools/job-finder/). It reads the Nextcloud login from Vault (pi_secret), never from a file.
 -- Dedupe needs no table of its own: the board's cards carry a <!-- linkedin-id: N --> marker.
 -- No emails or phones are stored here, so nothing for privacy_data_map. Service role only, so nothing for security_public_rpcs.
 
