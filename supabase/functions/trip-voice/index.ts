@@ -30,6 +30,7 @@ const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { sta
 
 const XI = "https://api.elevenlabs.io/v1";
 const AGENT_SLUG = "leo";
+let req_ua = "";
 const NO_TRIP = { ok: false, error: "No trip is linked to this chat. Ask the guest to open their trip page and tap Talk to our team 24/7 there." };
 
 type Session = { key: string; token: string; conversation_id: string | null; expires_at: string };
@@ -199,8 +200,18 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
   const b = (await req.json().catch(() => ({}))) as Any;
+  req_ua = req.headers.get("user-agent") ?? "";
   const t = new URL(req.url).searchParams.get("tool");
   if (t) return tool(t, b);
   if (b.op === "session") return openSession(b);
+  if (b.op === "diag") {
+    // What Leo's widget hit on a real device (CSP block, widget error text). Small, capped, no personal data.
+    const kind = clip(b.kind, 30) || "error";
+    const { count } = await sb.from("leo_client_diag").select("id", { count: "exact", head: true }).gte("at", new Date(Date.now() - 3600_000).toISOString());
+    if ((count ?? 0) < 300) await sb.from("leo_client_diag").insert({ token: clip(b.token, 60) || null, kind,
+      detail: { msg: clip((b.detail as Any)?.msg, 400), blocked: clip((b.detail as Any)?.blocked, 300), directive: clip((b.detail as Any)?.directive, 80),
+        source: clip((b.detail as Any)?.source, 300) }, ua: clip(req_ua, 200) });
+    return json({ ok: true });
+  }
   return json({ ok: false, error: "unknown request" }, 400);
 });
