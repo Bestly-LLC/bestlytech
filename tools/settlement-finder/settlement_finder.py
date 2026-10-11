@@ -476,7 +476,12 @@ def ai_json(system, user, deadline):
         msg, who = freellm.chat([{"role": "system", "content": system}, {"role": "user", "content": user}],
                                 max_tokens=700, deadline=deadline, json_mode=True)
         try:
-            return _json_obj(msg.get("content")), who
+            obj = _json_obj(msg.get("content"))
+            if isinstance(obj, list) and obj and isinstance(obj[0], dict):
+                obj = obj[0]
+            if not isinstance(obj, dict):
+                raise ValueError("reply was not a JSON object")
+            return obj, who
         except ValueError as e:
             last = e
     raise RuntimeError(f"AI returned unparseable JSON: {last}")
@@ -571,7 +576,7 @@ def match(dry, limit, state):
                 m, ev, q, note = "no", [], None, "duplicate listing of " + judged[sg]
             else:
                 m, ev, q, note = judge_one(s, deadline)
-        except RuntimeError as e:
+        except Exception as e:  # noqa: BLE001  one bad AI reply must never kill the run; it stays unjudged for tomorrow
             fails += 1
             left += 1
             log(f"left unjudged: {s.get('name')[:60]} ({str(e)[:160]})")
