@@ -4,6 +4,7 @@ import { Footer } from "./Footer";
 import { CookieConsent } from "@/components/CookieConsent";
 import { PageTransition } from "@/components/PageTransition";
 import { MayaWidget } from "@/components/maya/MayaWidget";
+import { MayaTestHook } from "@/components/maya/MayaTestHook";
 
 export function Layout() {
   const { pathname } = useLocation();
@@ -33,6 +34,7 @@ export function Layout() {
       {!isCyGetStarted && <CookieConsent />}
       {/* Talk to Maya: public marketing pages only (allowlist lives in MayaWidget). Loads on tap. */}
       {!isCyGetStarted && <MayaWidget />}
+      <MayaTestHook />
     </div>
   );
 }

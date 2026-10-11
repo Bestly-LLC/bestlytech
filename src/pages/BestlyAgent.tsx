@@ -303,7 +303,7 @@ export default function BestlyAgent() {
             </p>
             <div className="mt-8 flex justify-center">
               <Button size="lg" className="min-h-[44px]" asChild>
-                <Link to="/contact">
+                <Link to="/contact?topic=agent">
                   Get your own agent <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                 </Link>
               </Button>

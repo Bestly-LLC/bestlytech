@@ -6,7 +6,8 @@
  *   under her) and a bottom sheet on phones. No scrim: the site stays live and scrollable, because the site is the
  *   presentation.
  * - Voice and typing in one place. Opening the panel starts nothing; a session begins on the first message or the mic.
- * - Her client tools come from presenter.ts (show_section, describe_screen, navigate_site_page, open_site_modal).
+ * - Her client tools come from presenter.ts (show_section, describe_screen, navigate_site_page, open_site_modal,
+ *   cloud_calculator, fill_contact_form).
  *   When she shows something, a "Showing" strip names it with a Show again button; on phones the sheet tucks into a
  *   pill so the page is visible, and the pill brings her back.
  * - Sessions come from maya-session (signed URL; her agent is private). Worklets are self-hosted under /maya, so the
@@ -23,6 +24,7 @@ import { mayaProductForPath, normalizePath } from "./siteTools";
 import { findHeading, presenterTools, spotlight } from "./presenter";
 import { getMayaSession, mayaDiag } from "./mayaSession";
 import { CALC_CHANGED } from "@/components/cloud/calcBridge";
+import { FORM_CHANGED, setMayaConversationId } from "./formBridge";
 
 type Any = Record<string, unknown>;
 type Item = { id: number; kind: "maya" | "you"; text: string } | { id: number; kind: "note"; text: string };
@@ -59,6 +61,7 @@ function labelFor(tool: string): string {
     case "navigate_site_page": case "open_site_modal": return "Opening the page";
     case "describe_screen": return "Looking at your screen";
     case "cloud_calculator": return "Running your numbers";
+    case "fill_contact_form": return "Filling in your details";
     case "file_ticket": return "Saving that for the team";
     case "verify_start": case "verify_check": return "Checking your account";
     default: return "Working on it";
@@ -124,9 +127,10 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
           clientTools: tools,
           onConnect: () => {
             setPhase("live");
+            try { setMayaConversationId(c.getId()); } catch { /* id not ready: the lead is just not linked to the call */ }
             if (history && items.length > 1) try { c.sendContextualUpdate(`Earlier in this chat:\n${history}`); } catch { /* ignore */ }
           },
-          onDisconnect: () => { conv.current = null; setPhase("ended"); setVoice(false); setSpeaking(false); setWorking(null); },
+          onDisconnect: () => { conv.current = null; setMayaConversationId(null); setPhase("ended"); setVoice(false); setSpeaking(false); setWorking(null); },
           onModeChange: ({ mode }: { mode: string }) => setSpeaking(mode === "speaking"),
           onMessage: ({ message, role }: { message: string; role: string }) => {
             const t = String(message ?? "").replace(/\[[a-z ]+\]\s*/gi, "").trim();
@@ -210,6 +214,16 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
     };
     window.addEventListener(CALC_CHANGED, f);
     return () => window.removeEventListener(CALC_CHANGED, f);
+  }, []);
+
+  // The visitor edited the contact form by hand (after Maya typed, or before): she hears what is on it now.
+  useEffect(() => {
+    const f = (e: Event) => {
+      const say = String((e as CustomEvent<string>).detail ?? "");
+      try { if (say) conv.current?.sendContextualUpdate(`The visitor edited the form: ${say} Don't re-type what they changed.`); } catch { /* not connected */ }
+    };
+    window.addEventListener(FORM_CHANGED, f);
+    return () => window.removeEventListener(FORM_CHANGED, f);
   }, []);
 
   useEffect(() => {

@@ -1,0 +1,18 @@
+/* Maya fills a form on screen (formBridge.ts). The field she is typing in gets a soft glow that feathers outward,
+   never a hard ring; it settles and fades once the value is in. Pointer events and layout are untouched.
+   Reduce Motion: no transition, the glow just appears and goes. */
+[data-maya-fill] {
+  --maya-glow: 232 85% 62%;
+  transition: box-shadow 0.45s cubic-bezier(0.32, 0.72, 0, 1), border-color 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+}
+/* Important on purpose: it replaces the control's own focus ring (also a box-shadow) with the feathered glow. */
+[data-maya-fill="typing"] {
+  border-color: hsl(var(--maya-glow) / 0.55) !important;
+  box-shadow: 0 0 22px 4px hsl(var(--maya-glow) / 0.26), 0 0 64px 16px hsl(var(--maya-glow) / 0.11) !important;
+}
+[data-maya-fill="done"] {
+  box-shadow: 0 0 20px 3px hsl(var(--maya-glow) / 0.13), 0 0 52px 12px hsl(var(--maya-glow) / 0.05) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-maya-fill] { transition: none; }
+}
