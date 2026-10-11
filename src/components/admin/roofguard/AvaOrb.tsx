@@ -9,13 +9,18 @@ import { cn } from "@/lib/utils";
 export const AVA_GLOW = "#FFA270";
 
 /** Sidebar-sized Orb, shaped like a lucide icon component (className in, sized by the caller's h/w classes). */
-export function AvaOrbIcon({ className }: { className?: string }) {
-  return <span className={cn("inline-grid place-items-center", className)}><AvaOrb size={20} /></span>;
+export function AvaOrbIcon({ className, hue }: { className?: string; hue?: number }) {
+  return <span className={cn("inline-grid place-items-center", className)}><AvaOrb size={20} hue={hue} /></span>;
 }
 
-export function AvaOrb({ size = 40, glow = AVA_GLOW, speaking = false, label, className }:
-  { size?: number; glow?: string; speaking?: boolean; label?: string; className?: string }) {
+/** Glow color for a template agent's orb: its 0 to 359 hue from voice_agents.orb_hue. */
+export const orbGlow = (hue: number) => `hsl(${Math.round(hue) % 360} 100% 72%)`;
+
+/** `hue` (0 to 359) tints the glow for template agents; leave it out and the orb looks exactly as it always did (Ava, Reese). */
+export function AvaOrb({ size = 40, glow = AVA_GLOW, hue, speaking = false, label, className }:
+  { size?: number; glow?: string; hue?: number; speaking?: boolean; label?: string; className?: string }) {
   const id = useId().replace(/:/g, "");
+  if (hue != null && Number.isFinite(hue)) glow = orbGlow(hue);
   return (
     <svg width={size} height={size} viewBox="0 0 200 200" className={cn("shrink-0", className)}
       role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
