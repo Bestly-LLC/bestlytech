@@ -14,7 +14,11 @@
 //                                         rate-limited SQL the text helper (lax-ask) uses: lax_agent_diag, lax_agent_act,
 //                                         lax_agent_job, lax_agent_driver, or lax_demo_tool on the demo pages.
 //
-// Tools: trip_status, key_fix, job_status, extra_driver, notify_host, file_ticket.
+// Tools: trip_status, key_fix, job_status, extra_driver, notify_host, file_ticket,
+//        and (2026-10-11, demo trips only for now) car_status, car_lock, car_climate, find_superchargers,
+//        send_to_car_nav, charging_summary, send_sms -> leo_demo_car (pretend car). On real trips these answer
+//        "not live yet" until the trip-api gate (docs: Leo Car Concierge API Spec) is built. Never touches the real car.
+//        Phone calls get their trip_key from leo-phone-init (ElevenLabs call-start webhook) instead of door 1.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsWith } from "../_shared/cors.ts";
 
@@ -124,12 +128,38 @@ async function run(token: string, name: string, args: Any): Promise<unknown> {
 
 const KEY_FIX = new Set(["check_key", "resend_key", "make_key_now", "refresh_car"]);
 const DRIVER = new Set(["status", "check", "resend", "notify_host"]);
+// New car tools (2026-10-11): demo trips use the pretend car; real trips are not live yet.
+const CAR_TOOLS = new Set(["car_status", "car_lock", "car_climate", "find_superchargers", "send_to_car_nav", "charging_summary", "send_sms"]);
+const NOT_LIVE = {
+  ok: false,
+  not_live: true,
+  say: "I can't do that one from here yet. I can check your key or message Jared for you.",
+};
+
+async function carTool(name: string, token: string, b: Any): Promise<Response> {
+  if (!token.startsWith("demo:")) {
+    // Real trip: never touch the car from here until the trip-stage gate exists. Unlock is never a voice action.
+    return json(name === "car_lock" && clip(b.action, 10).toLowerCase() === "unlock"
+      ? { ok: false, say: "Unlocking works through your Tesla app key. Want me to check your key?" }
+      : NOT_LIVE);
+  }
+  const args: Any = {
+    action: clip(b.action, 20),
+    target_temp_f: b.target_temp_f ?? null,
+    destination: clip(b.destination, 120),
+    limit: b.limit ?? null,
+  };
+  const { data, error } = await sb.rpc("leo_demo_car", { p_link: "d:" + token.slice(5), p_name: name, p_args: args });
+  if (error) return json({ ok: false, error: "That didn't work. Offer to take a message for the host." }, 500);
+  return json(data);
+}
 
 async function tool(name: string, b: Any): Promise<Response> {
   const s = await session(b);
   if (s instanceof Response) return s;
   const t = s.token;
   try {
+    if (CAR_TOOLS.has(name)) return await carTool(name, t, b);
     switch (name) {
       case "trip_status": return json({ ok: true, status: await run(t, "diagnose", {}) });
       case "key_fix": {

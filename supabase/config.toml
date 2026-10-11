@@ -148,3 +148,6 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.trip-voice]
   verify_jwt = false
+
+[functions.leo-phone-init]
+  verify_jwt = false
