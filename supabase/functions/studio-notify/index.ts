@@ -11,6 +11,10 @@
 // and demo alerts landed in her channel.
 // v7: an email can carry a list of TASKS — one block per thing waiting on her,
 // each with its own large button straight to the work.
+// v9 (2026-10-11): daily digests. payload.sections = [{title, lines[]}] renders a short list under the count
+// boxes (the producers' evening digest), and payload.note overrides the small print under the button (the
+// client's one-a-day email). Per-item rows are parked by the database (hold_until = infinity) and folded
+// into one digest row by studio_digest_run(); this function still just turns rows into emails.
 // v8 (2026-09-23): the x-notify-key is no longer in this file. It lives in Vault
 // as studio_notify_key; edge_key_ok() (service-role only) checks it, and the
 // studio-notify-drain cron reads the same Vault secret to send it.
@@ -111,6 +115,22 @@ function counts(cs: Count[]): string {
 }
 const countsText = (cs: Count[]) => cs.map((c) => `${c.n}  ${c.label}`).join("\n");
 
+/* A short titled list under the count boxes: "Needs you", "What happened". */
+type Section = { title: string; lines: string[] };
+function isSections(v: unknown): v is Section[] {
+  return Array.isArray(v) && v.length > 0 &&
+    v.every((x) => x && typeof x === "object" && typeof x.title === "string" && Array.isArray(x.lines) && x.lines.length > 0);
+}
+function sectionsHTML(ss: Section[]): string {
+  return ss.map((x) => `<div style="margin:22px 0 0">
+    <div style="font:700 11px/1 ${FONT};letter-spacing:.08em;text-transform:uppercase;color:#6E6E73;padding-bottom:9px">${esc(x.title)}</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">${x.lines.map((l) =>
+      `<tr><td width="16" valign="top" style="font:400 15px/1.5 ${FONT};color:#1F7F77;padding:0 0 7px">&bull;</td><td style="font:400 15px/1.5 ${FONT};color:#1D1D1F;padding:0 0 7px">${esc(String(l))}</td></tr>`).join("")}</table>
+  </div>`).join("");
+}
+const sectionsText = (ss: Section[]) =>
+  ss.map((x) => `${x.title.toUpperCase()}\n${x.lines.map((l) => "- " + l).join("\n")}`).join("\n\n");
+
 /* Things waiting ON her, one block each, with its own large button. Jared,
    2026-09-23: "links directly to action work, easy to understand, stupid easy
    copy and large buttons." A count tells her there is work; a button takes her
@@ -148,16 +168,19 @@ function html(subject: string, body: string, link: string | null, audience: stri
       blocks: tasksHTML(ts),
       body: "",
       cta: link ? { href: link, label: "Open my board" } : undefined,
-      note: audience === "client"
-        ? "This is just what you said you would do, in one place. Reply to this email if anything should come off the list."
-        : "Switch these off under Settings › People in Studio.",
+      note: typeof pay?.note === "string" && pay.note
+        ? esc(pay.note)
+        : audience === "client"
+          ? "This is just what you said you would do, in one place. Reply to this email if anything should come off the list."
+          : "Switch these off under Settings › People in Studio.",
     });
   }
   const cs = pay?.counts;
+  const secs = pay?.sections;
   return layout({
     title: subject,
     intro: isCounts(cs) ? (body || undefined) : undefined,
-    blocks: isCounts(cs) ? counts(cs) : undefined,
+    blocks: isCounts(cs) ? counts(cs) + (isSections(secs) ? sectionsHTML(secs) : "") : undefined,
     body: isCounts(cs) ? "" : p(esc(body).replace(/\n/g, "<br>")),
     cta: link ? { href: link, label: audience === "client" ? "Open my board" : "Open Studio" } : undefined,
     note: audience === "client"
@@ -221,6 +244,7 @@ Deno.serve(async (req) => {
           text: [body,
                  isTasks(row.payload?.tasks) ? tasksText(row.payload.tasks) : "",
                  isCounts(cs) ? countsText(cs) : "",
+                 isSections(row.payload?.sections) ? sectionsText(row.payload.sections) : "",
                  row.link ?? ""].filter(Boolean).join("\n\n"),
           html: html(subject, body, row.link, row.audience, row.payload) }),
       });
