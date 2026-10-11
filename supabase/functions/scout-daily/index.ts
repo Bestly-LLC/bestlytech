@@ -9,15 +9,20 @@
 //   op deck_check  can we reach the Deck board
 //   op todo_owner  {id} rename a call to-do's Deck card to "<owner>: <task>" after todo_set_owner()
 //                  moved it (v3: to-dos from one-mic meetings could land on the wrong person)
-//   op reflect  {days} learn from the last day(s): what failed, what fixed it -> scout_lessons
-//               (+ mirrored to bestly_memory lessons/scout-playbook). Nightly at 2am LA via tick_reflect.
+//   op reflect  {days, dry, paid} learn from the last day(s): Jared's own messages (corrections, repeats, friction) AND what failed
+//               and what fixed it -> scout_lessons (+ mirrored to bestly_memory lessons/scout-playbook). Chunked, retried
+//               across the free ladder. dry=true proposes lessons without saving.
+//   op tick_reflect  hourly cron (:20): from 2 AM LA until today's reflect has finished (resumes a partial night, 8 tries a day)
+//   op reflect_job {force}  the same job by hand (claims the day, records the attempt)
 //
 // Called by pg_cron / a trigger with the service key, or by an admin from the browser.
 // Nothing here sends anything to anyone: drafts wait for Jared's tap in his own mail app.
 // v7: AI runs free-only via ../_shared/free-llm.ts (see claude() below). $0.
+// v18 (2026-10-10): reflect rebuilt (chunked, retried, reads Jared's messages, never exits early, watchdog scout.reflect.stale).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { llm, LlmUnavailable, type LlmTask } from "../_shared/free-llm.ts";
+import { runLadder, chunkStartMin, type Attempt } from "../_shared/reflect-ladder.ts";
 import { corsWith } from "../_shared/cors.ts";
 import { isBlocked, type BlockRow } from "../_shared/spam-rules.ts";
 
@@ -368,36 +373,160 @@ async function wrap(day: string) {
 
 /* ───────── 2am: reflect (self-learning) ───────── */
 
-async function reflect(days = 1) {
-  const since = new Date(Date.now() - days * 864e5).toISOString();
-  const [{ data: acts }, { data: jobs }, { data: inc }, { data: known }] = await Promise.all([
-    db.from("admin_chat_actions").select("id, thread_id, tool, args, result, ok, created_at").gte("created_at", since).order("created_at").limit(400),
+// v18 (2026-10-10, Scout audit): reflect failed 7 of 14 nights. One ~30K-token prompt only ever fit a slow FreeLLM rung, FreeLLM timed
+// out 3-5 times and ate the whole deadline before Groq was reached, and a failed night was never retried. It also read only what
+// FAILED and quit when nothing had, so it never learned from Jared himself. Now:
+//   * the input is cut into chunks of about 4K tokens (fits Groq's 7K window), Jared's own messages first;
+//   * every chunk is tried FreeLLM > Groq > Cloudflare, then Groq > Cloudflare without FreeLLM, then Cloudflare alone, with backoff,
+//     and only then paid (the Paid AI switch still governs that: if it is off the paid rung refuses and the watchdog says so);
+//   * a night that does not finish is resumed by the hourly tick_reflect (done chunks are remembered), up to 8 attempts a day;
+//   * it never exits early because nothing failed; every run checks in as scout-learner (agent_beat);
+//   * public.scout_reflect_watch() raises scout.reflect.stale (owner scout-learner) if no run finished in 26 hours.
+const REFLECT_SLUG = "scout-learner";
+const REFLECT_BUDGET_MS = 120_000;   // per invocation: the cron request gives the function ~150 s
+const REFLECT_MAX_ATTEMPTS = 8;       // per LA day
+const CHUNK_USER_CHARS = 11_000;      // ~3.1K tokens; with the prompt and 1.4K of output that stays under Groq's 7K
+const reflectBeat = (ok: boolean, summary: string) => db.rpc("agent_beat", { p_slug: REFLECT_SLUG, p_ok: ok, p_summary: summary.slice(0, 200) }).then(() => {}, () => {});
+
+type RChunk = { id: string; kind: "jared" | "failures" | "ops"; text: string; scopes: string; items: number };
+const clip = (v: unknown, n: number) => { const t = typeof v === "string" ? v : JSON.stringify(v ?? ""); return t.length > n ? t.slice(0, n) + "…" : t; };
+const hash6 = (t: string) => { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+
+/** Jared's words say what Scout should do differently. Corrections and repeats first. */
+const CORRECTION = /\b(no[,.!]|nope|wrong|not what|that'?s not|thats not|i said|i told you|i asked|again|already|still (not|wrong|going|broken)|why did you|you (forgot|missed|didn'?t|should(n'?t| not)? have)|stop|don'?t|do not|undo|revert|instead|never|always|i want|i need you to|remember)\b/i;
+const NOT_HIM = /^(Autopilot fix attempt|The Mac mini job|\[Stopped\]|\[File:|\[Video:)/;
+const TAP = /^(keep going|do it|not now|yes|no|yes, do it|show me first|skip it|ok|okay|thanks|status\??)\.?$/i;
+const toks = (t: string) => new Set(t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 3));
+const similar = (a: Set<string>, b: Set<string>) => { if (a.size < 3 || b.size < 3) return false; let n = 0; for (const w of a) if (b.has(w)) n++; return n / Math.min(a.size, b.size) >= 0.6; };
+
+async function jaredChunks(since: string): Promise<{ chunks: RChunk[]; stats: Record<string, number> }> {
+  const { data } = await db.from("admin_chat_messages").select("id, thread_id, role, body, created_at").gte("created_at", since).order("created_at").limit(1500);
+  const byThread = new Map<string, any[]>();
+  for (const m of (data ?? []) as any[]) { if (!byThread.has(m.thread_id)) byThread.set(m.thread_id, []); byThread.get(m.thread_id)!.push(m); }
+  const items: { id: string; weight: number; text: string; scope: string }[] = [];
+  const stats = { jared_messages: 0, corrections: 0, repeats: 0, keep_going_taps: 0, paid_asks: 0 };
+  for (const [tid, msgs] of byThread) {
+    let lastBot = "";
+    const seen: Set<string>[] = [];
+    let keepGoing = 0, paidAsks = 0;
+    for (const m of msgs) {
+      const body = String(m.body ?? "");
+      if (m.role !== "user") { if (!/^(Working:|Worked \d+ steps)/.test(body)) lastBot = body; continue; }
+      if (NOT_HIM.test(body)) continue;
+      stats.jared_messages++;
+      const t = body.replace(/\s+/g, " ").trim();
+      if (/^keep going\b/i.test(t)) { keepGoing++; stats.keep_going_taps++; continue; }
+      if (/\b(use|with|switch to)\s+(paid|pair)\s*ai\b|\buse (claude|opus|sonnet)\b/i.test(t)) { paidAsks++; stats.paid_asks++; }
+      if (TAP.test(t)) continue;
+      const tk = toks(t);
+      const repeat = seen.some((x) => similar(x, tk));
+      seen.push(tk);
+      const corr = CORRECTION.test(t);
+      if (repeat) stats.repeats++;
+      if (corr) stats.corrections++;
+      items.push({
+        id: String(m.id).slice(0, 8), scope: "jared",
+        weight: (corr ? 3 : 0) + (repeat ? 3 : 0) + (paidAsks ? 1 : 0) + (t.length > 40 ? 1 : 0),
+        text: JSON.stringify({ id: String(m.id).slice(0, 8), thread: String(tid).slice(0, 8), scout_said: clip(lastBot.replace(/^\s*OPTIONS:.*$/gm, "").trim(), 260), jared: clip(t, 420), flags: [corr ? "correction" : "", repeat ? "repeated ask" : ""].filter(Boolean) }),
+      });
+    }
+    if (keepGoing >= 2 || paidAsks >= 2) {
+      items.push({ id: `t${String(tid).slice(0, 6)}`, scope: "jared", weight: 4, text: JSON.stringify({ thread: String(tid).slice(0, 8), friction: [keepGoing >= 2 ? `Jared typed "Keep going" ${keepGoing} times: Scout stopped before the job was done` : "", paidAsks >= 2 ? `Jared asked for paid AI ${paidAsks} times in this thread` : ""].filter(Boolean) }) });
+    }
+  }
+  // Highest-signal first; plain asks fill the rest. The chunks go to the model in that order.
+  items.sort((a, b) => b.weight - a.weight);
+  const chunks: RChunk[] = [];
+  let cur: typeof items = [], size = 0;
+  const flush = () => { if (cur.length) { chunks.push({ id: `j:${hash6(cur.map((x) => x.id).join(","))}`, kind: "jared", text: `[${cur.map((x) => x.text).join(",")}]`, scopes: "jared", items: cur.length }); cur = []; size = 0; } };
+  for (const it of items.slice(0, 160)) { if (cur.length && size + it.text.length > CHUNK_USER_CHARS) flush(); cur.push(it); size += it.text.length + 1; }
+  flush();
+  return { chunks, stats };
+}
+
+async function failureChunks(since: string): Promise<{ chunks: RChunk[]; counts: Record<string, number> }> {
+  const [{ data: acts }, { data: jobs }, { data: inc }] = await Promise.all([
+    db.from("admin_chat_actions").select("id, thread_id, tool, args, result, ok, created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(800),
     db.from("mac_jobs").select("id, thread_id, title, status, exit_code, script, output, created_at").gte("created_at", since).in("status", ["done", "failed"]).limit(60),
     db.from("monitor_issues").select("key, title, body, status, self_healed, heal_attempts, resolved_at").gte("updated_at", since).limit(60),
-    db.from("scout_lessons").select("scope, title, do_text").eq("active", true).limit(200),
   ]);
-  const trim = (v: unknown, n: number) => { const t = typeof v === "string" ? v : JSON.stringify(v ?? ""); return t.length > n ? t.slice(0, n) + "…" : t; };
-  const a = (acts ?? []).map((x: any) => ({ id: x.id, thread: String(x.thread_id).slice(0, 8), tool: x.tool, ok: x.ok, at: x.created_at.slice(5, 16),
-    args: trim(x.tool === "commit_files" ? { message: x.args?.message, paths: (x.args?.files ?? x.args?.edits ?? []).map((f: any) => f.path) } : x.args, 300),
-    result: x.ok ? trim(x.result, 120) : trim(x.result, 400) }));
-  const failures = a.filter((x) => !x.ok).length + (jobs ?? []).filter((j: any) => j.status === "failed").length;
-  if (!failures && !(inc ?? []).length) return { learned: 0, note: "nothing failed" };
+  const byThread = new Map<string, any[]>();
+  for (const x of ((acts ?? []) as any[]).reverse()) { const k = String(x.thread_id).slice(0, 8); if (!byThread.has(k)) byThread.set(k, []); byThread.get(k)!.push(x); }
+  const threads: { id: string; text: string; scopes: string }[] = [];
+  for (const [tid, xs] of byThread) {
+    if (!xs.some((x) => !x.ok)) continue;   // a thread where nothing failed has no lesson to teach
+    const steps = xs.map((x) => ({ id: String(x.id).slice(0, 8), tool: x.tool, ok: x.ok, at: String(x.created_at).slice(5, 16),
+      args: clip(x.tool === "commit_files" ? { message: x.args?.message, paths: [x.args?.files, x.args?.edits].filter(Array.isArray).flat().map((f: any) => f?.path).filter(Boolean) } : x.args, 220),
+      result: x.ok ? clip(x.result, 100) : clip(x.result, 320) }));
+    const text = JSON.stringify({ thread: tid, steps });
+    threads.push({ id: tid, text: text.length > CHUNK_USER_CHARS ? JSON.stringify({ thread: tid, steps: steps.slice(-30) }) : text, scopes: xs.map((x) => `tool:${x.tool}`).join(" ") + " " + text.slice(0, 3000) });
+  }
+  const chunks: RChunk[] = [];
+  let cur: typeof threads = [], size = 0;
+  const flush = () => { if (cur.length) { chunks.push({ id: `f:${hash6(cur.map((x) => x.id).join(","))}`, kind: "failures", text: `[${cur.map((x) => x.text).join(",")}]`, scopes: cur.map((x) => x.scopes).join(" "), items: cur.length }); cur = []; size = 0; } };
+  for (const t of threads) { if (cur.length && size + t.text.length > CHUNK_USER_CHARS) flush(); cur.push(t); size += t.text.length + 1; }
+  flush();
+  const opsItems = [
+    ...((jobs ?? []) as any[]).filter((j) => j.status === "failed").map((j) => ({ job: String(j.id).slice(0, 8), title: j.title, exit: j.exit_code, script: clip(j.script, 300), output_tail: clip(String(j.output ?? "").slice(-300), 300) })),
+    ...((inc ?? []) as any[]).map((i) => ({ incident: i.key, title: i.title, status: i.status, healed: i.self_healed, tries: i.heal_attempts, body: clip(i.body, 240) })),
+  ];
+  let oc: any[] = [], os = 0;
+  const oflush = () => { if (oc.length) { const t = JSON.stringify(oc); chunks.push({ id: `o:${hash6(t.slice(0, 400))}`, kind: "ops", text: t, scopes: t.slice(0, 3000), items: oc.length }); oc = []; os = 0; } };
+  for (const it of opsItems) { const l = JSON.stringify(it).length; if (oc.length && os + l > CHUNK_USER_CHARS) oflush(); oc.push(it); os += l + 1; }
+  oflush();
+  return { chunks, counts: { actions: (acts ?? []).length, failed_threads: threads.length, failed_jobs: opsItems.filter((i: any) => i.job).length, incidents: (inc ?? []).length } };
+}
 
-  const out = await claude(
-    `You are Scout's reflection step. Scout is the assistant in Jared's admin (tools: run_sql, db_write, read_file, list_files, commit_files, mac_run, pi_command, recorder, ...). ` +
-    `Below is what Scout did recently: its tool calls in order (grouped by thread), Mac mini jobs, and monitor incidents. ` +
-    `Find LESSONS: something failed and then something else worked (same thread or same kind of task), or the same mistake repeats and the fix is clear from the data. ` +
-    `A lesson must be specific and reusable: e.g. scope "table:cloud_leads", when "reading cloud leads", do "the columns are contact_name, company_name, status (there is no name column)". ` +
-    `Scopes: tool:<name>, table:<name>, project:<name>, mac, pi, deploy, recorder. Never invent a fix that the data doesn't show. Skip one-off noise. ` +
-    `Also list UNSOLVED problems: failures that repeat with no fix yet. Existing lessons (update one by reusing its exact scope+title): ${JSON.stringify(known ?? [])}. ` +
-    `Return JSON only: {"lessons":[{"scope":"...","title":"<60 chars","when":"...","do":"...","avoid":"... or null","signature":"key words from the error","evidence":["<action or job ids>"]}],"unsolved":[{"scope":"...","problem":"one line"}]}. At most 12 lessons.`,
-    JSON.stringify({ actions: a, jobs: (jobs ?? []).map((j: any) => ({ id: j.id, title: j.title, status: j.status, exit: j.exit_code, script: trim(j.script, 500), output_tail: trim(String(j.output ?? "").slice(-500), 500) })),
-      incidents: (inc ?? []).map((i: any) => ({ key: i.key, title: i.title, status: i.status, healed: i.self_healed, tries: i.heal_attempts, body: trim(i.body, 300) })) }),
-    4000, "reflect",
-  );
+const REFLECT_BASE =
+  `You are Scout's reflection step. Scout is the assistant in Jared's admin (tools: run_sql, db_write, read_file, list_files, commit_files, mac_run, pi_command, recorder, ...). ` +
+  `A LESSON must be specific and reusable and must be shown by the data: never invent a fix the data doesn't show; skip one-off noise. ` +
+  `Fields: scope (tool:<name>, table:<name>, project:<name>, mac, pi, deploy, recorder, or jared:<topic> for Jared's own preferences and corrections), title (under 60 chars), ` +
+  `when (the situation), do (what Scout should do next time, one or two sentences), avoid (what went wrong, or null), signature (key words from the error or his words), evidence (the ids given). ` +
+  `Return JSON only: {"lessons":[{"scope":"...","title":"...","when":"...","do":"...","avoid":"... or null","signature":"...","evidence":["<ids>"]}],"unsolved":[{"scope":"...","problem":"one line"}]}. At most 6 lessons; zero is fine.`;
+const REFLECT_KIND: Record<RChunk["kind"], string> = {
+  jared: `This batch is JARED'S OWN MESSAGES to Scout (each with what Scout had just said). Learn from Jared, not from errors: a correction ("no", "wrong", "I said", "again", "you should not have"), a repeated ask, a stated preference or rule, or friction (he had to type Keep going or ask for paid AI again and again) each become a lesson with scope jared:<topic> (for example jared:replies, jared:code-changes, jared:paid-ai, jared:ui, jared:turo). do = what Scout does differently next time, in his terms. Only when his own words show it; put his short quote in "when". Never turn a one-time task request into a lesson. GUARDRAIL: a lesson may never tell Scout to spend money, use paid AI on its own, skip a confirmation, or act without his yes (his approval and Paid AI rules are fixed in code, not learned). A paid-AI lesson can only say that when he types a request for paid AI, the run is paid. A lesson about a person, product or repo must come from his words, not a guess.`,
+  failures: `This batch is Scout's TOOL CALLS grouped by chat thread (steps in order, ok true/false). Find lessons where something failed and then something else worked, or the same mistake repeats and the fix is clear from the data (a table's real columns, a tool's argument, a path). Also list UNSOLVED problems: failures that repeat with no fix yet.`,
+  ops: `This batch is failed Mac mini jobs and monitor incidents. Find lessons where the cause and the fix are both visible. List UNSOLVED ones that repeat with no fix.`,
+};
 
+/** Once FreeLLM has timed out during this invocation, later chunks start at Groq instead of waiting 30 s on it again (the Oct 7-10 failures were exactly that wait). */
+const reflectRun = { freellmDown: false };
+const sawFreellmTimeout = (tried: { provider: string; outcome: string }[]) => tried.some((t) => t.provider === "freellm" && t.outcome === "timeout");
+const ATTEMPTS: Attempt[] = [
+  { name: "freellm>groq>cloudflare", skip: [], deadline: 38_000, paid: "never", wait: 0 },
+  { name: "groq>cloudflare", skip: ["freellm"], deadline: 32_000, paid: "never", wait: 6_000 },
+  { name: "cloudflare", skip: ["freellm", "groq"], deadline: 32_000, paid: "never", wait: 15_000 },
+];
+
+/** One chunk through the ladder with retries; paid last (still behind the Paid AI switch, and its time is reserved up front: see _shared/reflect-ladder.ts). */
+async function reflectChunk(c: RChunk, known: { scope: string; title: string }[], allowPaid: boolean, deadline: number): Promise<{ json: any; via: string }> {
+  const scopesLC = c.scopes.toLowerCase();
+  const mine = known.filter((k) => k.scope.startsWith("jared:") ? c.kind === "jared" : scopesLC.includes(k.scope.replace(/^[a-z]+:/, "").toLowerCase())).slice(0, 20).map((k) => `${k.scope}|${k.title}`).join("\n").slice(0, 1500);
+  const system = `${REFLECT_BASE}\n\n${REFLECT_KIND[c.kind]}${mine ? `\n\nLessons that already exist (to update one, reuse its exact scope and title):\n${mine}` : ""}`;
+  const plan: Attempt[] = [...ATTEMPTS, ...(allowPaid ? [{ name: "paid", skip: [], deadline: 45_000, paid: "first" as const, wait: 2_000 }] : [])];
+  return await runLadder({
+    plan, deadline,
+    describe: (at, e) => e instanceof LlmUnavailable ? `${at.name}: ${e.reason} (${e.tried.map((t) => `${t.provider} ${t.outcome}`).join(", ")})` : `${at.name}: ${(e as Error).message}`,
+    call: async ({ at, deadlineMs }) => {
+      try {
+        const r = await llm({
+          task: "reflect", system, user: c.text, json: true, job: "reflect", ref: c.id, fn: "scout-daily", scope: "background",
+          paid: at.paid, paidModel: "claude-haiku-4-5", maxTokens: 1400, deadlineMs,
+          validate: SHAPE.reflect, skip: (reflectRun.freellmDown ? [...new Set([...at.skip, "freellm"])] : at.skip) as any,
+        });
+        if (sawFreellmTimeout(r.tried)) reflectRun.freellmDown = true;
+        return { json: r.json, via: `${at.name}:${r.provider}` };
+      } catch (e) {
+        if (e instanceof LlmUnavailable && sawFreellmTimeout(e.tried)) reflectRun.freellmDown = true;
+        throw e;
+      }
+    },
+  }) as { json: any; via: string };
+}
+
+async function saveLessons(lessons: any[], source: string): Promise<number> {
   let learned = 0;
-  for (const l of (out.lessons ?? []).slice(0, 12)) {
+  for (const l of (lessons ?? []).slice(0, 8)) {
     if (!l?.scope || !l?.title || !l?.when || !l?.do) continue;
     const scope = String(l.scope).toLowerCase().slice(0, 60), title = String(l.title).slice(0, 90);
     const { data: prev } = await db.from("scout_lessons").select("id, evidence").eq("scope", scope).eq("title", title).maybeSingle();
@@ -405,19 +534,94 @@ async function reflect(days = 1) {
     const row = { scope, title, when_text: String(l.when).slice(0, 400), do_text: String(l.do).slice(0, 800), avoid_text: l.avoid ? String(l.avoid).slice(0, 400) : null,
       signature: String(l.signature ?? "").toLowerCase().slice(0, 200), evidence, updated_at: new Date().toISOString() };
     const { error } = prev ? await db.from("scout_lessons").update(row).eq("id", (prev as any).id)
-      : await db.from("scout_lessons").insert({ ...row, source: "reflect" });
+      : await db.from("scout_lessons").insert({ ...row, source });
     if (!error) learned++;
   }
-  await mirrorPlaybook();
-  const unsolved = (out.unsolved ?? []).slice(0, 5);
-  if (learned || unsolved.length) {
-    await db.rpc("scout_notify", {
-      p_title: learned ? `Scout learned ${learned} thing${learned === 1 ? "" : "s"} overnight` : "Scout found something it can't fix yet",
-      p_body: [unsolved.length ? `Still stuck on: ${unsolved.map((u: any) => u.problem).join("; ")}` : "", "See /admin/playbook."].filter(Boolean).join(" ").slice(0, 500),
-      p_severity: unsolved.length ? "warning" : "info", p_push: false, p_url: "/admin/playbook", p_dedupe: `scout.reflect.${la().day}`,
-    });
+  return learned;
+}
+
+type ReflectState = { since?: string; done?: string[]; fails?: Record<string, number>; learned?: number; unsolved?: string[]; attempts?: number; via?: string[] };
+type ReflectOpts = { days?: number; dry?: boolean; allowPaid?: boolean; state?: ReflectState };
+
+async function reflect(opts: ReflectOpts = {}) {
+  const t0 = Date.now(), deadline = t0 + REFLECT_BUDGET_MS;
+  reflectRun.freellmDown = false;
+  const st: ReflectState = { ...(opts.state ?? {}) };
+  const since = st.since ?? new Date(Date.now() - (opts.days ?? 1) * 864e5).toISOString();
+  st.since = since;
+  const done = new Set(st.done ?? []), fails = { ...(st.fails ?? {}) };
+  const [{ chunks: jc, stats }, { chunks: fc, counts }, { data: known }] = await Promise.all([
+    jaredChunks(since), failureChunks(since),
+    db.from("scout_lessons").select("scope, title").eq("active", true).limit(300),
+  ]);
+  const all = [...jc, ...fc];   // Jared first
+  let learned = st.learned ?? 0, ranChunks = 0;
+  const unsolved = new Set(st.unsolved ?? []), via: string[] = [], proposed: any[] = [];
+  const failed: string[] = [], skipped: string[] = [];
+  for (const c of all) {
+    if (done.has(c.id)) continue;
+    if ((fails[c.id] ?? 0) >= 3) { skipped.push(c.id); continue; }   // a chunk that failed on three separate runs is set aside, not retried forever
+    if (Date.now() + chunkStartMin(opts.allowPaid !== false) > deadline) break;   // enough time for the free rungs AND the paid reserve
+    try {
+      const r = await reflectChunk(c, (known ?? []) as any[], opts.allowPaid !== false, deadline);
+      via.push(r.via);
+      if (opts.dry) proposed.push(...(r.json.lessons ?? []).map((l: any) => ({ ...l, from: c.kind })));
+      else learned += await saveLessons(r.json.lessons ?? [], c.kind === "jared" ? "reflect:jared" : "reflect");
+      for (const u of (r.json.unsolved ?? []).slice(0, 4)) if (u?.problem) unsolved.add(String(u.problem).slice(0, 160));
+      done.add(c.id); ranChunks++;
+    } catch (e) {
+      fails[c.id] = (fails[c.id] ?? 0) + 1;
+      failed.push(`${c.kind} ${c.id}: ${(e as Error).message}`.slice(0, 300));
+    }
   }
-  return { learned, unsolved: unsolved.length, looked_at: { actions: a.length, jobs: (jobs ?? []).length, incidents: (inc ?? []).length } };
+  const remaining = all.filter((c) => !done.has(c.id) && (fails[c.id] ?? 0) < 3).length;
+  const finished = remaining === 0;
+  const out: Record<string, unknown> = {
+    ok: finished, learned, unsolved: unsolved.size, chunks: { total: all.length, done: done.size, ran_now: ranChunks, failed_now: failed.length, set_aside: skipped.length },
+    jared: stats, looked_at: counts, via, ms: Date.now() - t0,
+    ...(failed.length ? { failed } : {}), ...(opts.dry ? { dry_run: true, proposed } : {}),
+    partial: finished ? undefined : { since, done: [...done], fails, learned, unsolved: [...unsolved].slice(0, 8) },
+  };
+  if (!opts.dry) {
+    if (finished) {
+      await mirrorPlaybook();
+      const u = [...unsolved].slice(0, 5);
+      if (learned || u.length) {
+        await db.rpc("scout_notify", {
+          p_title: learned ? `Scout learned ${learned} thing${learned === 1 ? "" : "s"} overnight` : "Scout found something it can't fix yet",
+          p_body: [u.length ? `Still stuck on: ${u.join("; ")}` : "", "See /admin/playbook."].filter(Boolean).join(" ").slice(0, 500),
+          p_severity: u.length ? "warning" : "info", p_push: false, p_url: "/admin/playbook", p_dedupe: `scout.reflect.${la().day}`,
+        });
+      }
+    }
+    await reflectBeat(finished, finished
+      ? `Learned ${learned} from ${all.length} batches (${stats.jared_messages} of Jared's messages, ${stats.corrections} corrections)`
+      : `Partial: ${done.size} of ${all.length} batches done; ${failed[0] ?? "out of time"}`);
+  }
+  return out;
+}
+
+/** The nightly job: claim the day, resume where an earlier attempt stopped, record every attempt. */
+async function reflectJob(day: string, force: boolean) {
+  const { data: row } = await db.from("scout_daily_runs").select("ran_at, result").eq("day", day).eq("job", "reflect").maybeSingle();
+  const prev = ((row as any)?.result ?? {}) as Record<string, any>;
+  if (!force && row) {
+    if (prev.ok === true || (prev.ok === undefined && prev.learned !== undefined && !prev.error)) return { skipped: "already finished today" };   // old rows had no ok flag
+    if ((prev.attempts ?? 1) >= REFLECT_MAX_ATTEMPTS) return { skipped: `gave up after ${REFLECT_MAX_ATTEMPTS} attempts today` };
+    if (prev.running === true && Date.now() - Date.parse((row as any).ran_at) < 10 * 60_000) return { skipped: "an attempt is running" };
+  }
+  const attempts = (row && !force ? Number(prev.attempts ?? 1) : 0) + 1;
+  await db.from("scout_daily_runs").upsert({ day, job: "reflect", ran_at: new Date().toISOString(), result: { ...prev, running: true, attempts, ok: false } });
+  try {
+    const res = await reflect({ days: 1, state: (prev.partial ?? undefined) as ReflectState | undefined });
+    await finishRun(day, "reflect", { ...res, attempts, running: false });
+    return res;
+  } catch (e) {
+    const err = { ok: false, error: (e as Error).message, attempts, running: false, partial: prev.partial };
+    await finishRun(day, "reflect", err);
+    await reflectBeat(false, `Reflect crashed: ${(e as Error).message}`);
+    return err;
+  }
 }
 
 /** The playbook every Claude session can read: bestly_memory lessons/scout-playbook. */
@@ -460,7 +664,7 @@ async function isAdmin(jwt: string) {
 async function job(name: string, day: string, force: boolean) {
   if (!(await claimRun(day, name, force))) return { skipped: "already ran today" };
   try {
-    const res = name === "morning" ? await morning(day) : name === "drafts" ? await drafts(day) : name === "reflect" ? await reflect(1) : await wrap(day);
+    const res = name === "morning" ? await morning(day) : name === "drafts" ? await drafts(day) : await wrap(day);
     await finishRun(day, name, res);
     return res;
   } catch (e) {
@@ -498,9 +702,12 @@ Deno.serve(async (req) => {
       case "call":
         return J(await call(String(body.id), !!body.force));
       case "tick_reflect":
-        return J({ ok: true, hour, ran: hour === 2 ? await job("reflect", day, false) : null });
-      case "reflect":
-        return J({ ok: true, reflect: await reflect(Math.min(30, Math.max(1, Number(body.days) || 1))) });
+        // v18: from 2 AM on, every hour, until today's reflect has finished (a night that failed is retried, not skipped).
+        return J({ ok: true, hour, ran: hour >= 2 ? await reflectJob(day, false) : null });
+      case "reflect_job":
+        return J({ ok: true, reflect: await reflectJob(day, !!body.force) });
+      case "reflect":   // direct run, nothing claimed. body.dry = true proposes lessons without saving; body.paid = true allows the paid rung.
+        return J({ ok: true, reflect: await reflect({ days: Math.min(30, Math.max(1, Number(body.days) || 1)), dry: !!body.dry, allowPaid: body.paid === true }) });
       case "todo_owner": {
         const { data: t } = await db.from("scout_daily").select("id, title, action").eq("id", String(body.id)).maybeSingle();
         const cardId = Number((t as any)?.action?.deck_card);

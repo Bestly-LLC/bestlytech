@@ -38,6 +38,8 @@ export interface LlmRequest {
   paidModel?: string;
   deadlineMs?: number;
   validate?: (json: any) => string | null;
+  /** v12 (2026-10-10): providers to leave out of this call. scout-daily reflect retries without FreeLLM when FreeLLM timed out the first time. */
+  skip?: Provider[];
 }
 
 export interface LlmResult {
@@ -334,8 +336,110 @@ const THINK_META: RegExp[] = [
   /\bi recall\b|\bperhaps i (?:can|should)\b|\bi think (?:i|we|for)\b/i,
   /\bjared'?s last message\b|\breply to jared\b/i,
 ];
-export function thinkingLeak(text: string): boolean {
+/**
+ * 2026-10-10 audit (47 threads, Oct 7-10): 37 replies that narrated a step ("We need to find where... Let's read X"),
+ * 32 that were raw tool JSON ({ "repo": "site", "path": "..." }), none caught: they were short (the leak test below needs
+ * a meta phrase or 600+ characters) or had no prose at all. Both are the model's next step, never an answer.
+ */
+const TOOLISH_KEYS = /"(?:name|arguments|tool|function|path|repo|query|sql|find|line_start|line_end|command|script|input|args|confirmed|mail_id|id)"\s*:/i;
+/** Scout's tool names. A JSON object naming one of these is a tool call; a JSON config with a "name" or "id" is not. */
+const KNOWN_TOOLS = new Set(["ask_paid", "ask_user", "clear_alerts", "code_job", "commit_files", "db_write", "incidents", "learn", "list_files", "look",
+  "mac_command", "mac_run", "make_video", "mark_done", "meeting_transcript", "notify", "pi_command", "read_email", "read_file", "recorder",
+  "report_spam", "resolve_incident", "run_sql", "search_code", "search_mail", "send_email", "today", "todo_owner"]);
+const CALL_NAME_KEYS = ["tool", "tool_name", "toolname", "function", "name", "action"];
+const CALL_ARG_KEYS = ["arguments", "args", "input", "parameters", "params"];
+/** Keys only a tool's arguments carry. An object made of these (repo+path, sql, line_start...) is the model's next call, not data. */
+const ARG_ONLY_KEYS = new Set(["repo", "path", "find", "query", "sql", "line_start", "line_end", "command", "script", "confirmed", "mail_id", "files", "edits", "message", "branch"]);
+const ARG_STRONG = (k: Set<string>) => k.has("sql") || k.has("line_start") || k.has("line_end") || k.has("mail_id") || (k.has("repo") && (k.has("path") || k.has("find") || k.has("query")));
+/** Does this parsed JSON look like a tool call? strict = only the call forms (a name/tool key plus a known tool or arguments), no bare argument objects. */
+function toolCallShaped(o: unknown, strict: boolean): boolean {
+  if (Array.isArray(o)) return o.some((x) => toolCallShaped(x, strict));
+  if (!o || typeof o !== "object") return false;
+  const rec = o as Record<string, unknown>, keys = Object.keys(rec).map((k) => k.toLowerCase());
+  const str = (k: string) => { const v = rec[Object.keys(rec).find((x) => x.toLowerCase() === k) as string]; return typeof v === "string" ? v : undefined; };
+  const fn = Object.keys(rec).find((x) => x.toLowerCase() === "function");
+  if (fn && rec[fn] && typeof rec[fn] === "object" && toolCallShaped(rec[fn], strict)) return true;   // OpenAI style {"function":{"name":..,"arguments":..}}
+  const hasArgs = keys.some((k) => CALL_ARG_KEYS.includes(k));
+  for (const k of CALL_NAME_KEYS) {
+    const v = str(k);
+    if (!v) continue;
+    if (KNOWN_TOOLS.has(v)) return true;                                                   // {"name":"read_file",...}
+    if (hasArgs && (k === "tool" || k === "tool_name" || k === "toolname" || k === "function") && /^[a-z][a-z0-9_.-]*$/i.test(v)) return true;   // {"tool":"x","args":{...}}
+  }
+  if (strict) return false;
+  const ks = new Set(keys);
+  return keys.length > 0 && keys.every((k) => ARG_ONLY_KEYS.has(k)) && ARG_STRONG(ks);
+}
+/** Same test for JSON the model got wrong (trailing commas, single quotes): look at the keys. */
+function looseToolShaped(raw: string, strict: boolean): boolean {
+  if (/"(?:name|tool|tool_name|function|action)"\s*:\s*"(?:\w+)"/i.test(raw)) {
+    const named = [...raw.matchAll(/"(?:name|tool|tool_name|function|action)"\s*:\s*"(\w+)"/gi)].map((m) => m[1]);
+    if (named.some((n) => KNOWN_TOOLS.has(n))) return true;
+    if (/"(?:tool|tool_name|function)"\s*:/i.test(raw) && /"(?:arguments|args|input|parameters)"\s*:/i.test(raw)) return true;
+  }
+  if (strict) return false;
+  const ks = new Set([...raw.matchAll(/"(\w+)"\s*:/g)].map((m) => m[1].toLowerCase()));
+  return ks.size > 0 && [...ks].every((k) => ARG_ONLY_KEYS.has(k)) && ARG_STRONG(ks);
+}
+/** Top-level {...} spans of a string (brace depth, string-aware). */
+function jsonSpans(t: string): { start: number; end: number; raw: string }[] {
+  const out: { start: number; end: number; raw: string }[] = [];
+  let depth = 0, start = -1, inStr = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (inStr) { if (c === "\\") i++; else if (c === '"') inStr = false; continue; }
+    if (c === '"' && depth > 0) { inStr = true; continue; }
+    if (c === "{") { if (depth === 0) start = i; depth++; }
+    else if (c === "}" && depth > 0) { depth--; if (depth === 0) out.push({ start, end: i + 1, raw: t.slice(start, i + 1) }); }
+  }
+  return out;
+}
+const FENCE = /```[a-z]*\s*([\s\S]*?)(?:```|$)/gi;
+const isToolJson = (raw: string, strict: boolean) => { try { return toolCallShaped(JSON.parse(raw), strict); } catch { return looseToolShaped(raw, strict); } };
+/** A fenced block that is itself a tool call (strict form). Any other fenced block is something Jared asked to see and is left alone. */
+function fencedToolCall(text: string): boolean {
+  for (const m of text.matchAll(FENCE)) {
+    const inner = m[1].trim();
+    if (inner.startsWith("{") || inner.startsWith("[")) { if (isToolJson(inner, true)) return true; }
+  }
+  return false;
+}
+/**
+ * v44 final-answer gate. True when the whole reply is the model's next tool call written out as text.
+ * 2026-10-10 review fix: (1) fenced code blocks are an answer (a JSON config Jared asked to see) and pass untouched, unless the block is
+ * itself a tool call and nothing else is said; (2) unfenced JSON counts only when it looks like a tool call (tool/function plus arguments,
+ * a known tool name, or an arguments-only object such as repo+path), never because it has an ordinary key like "name" or "id".
+ */
+export function rawToolJson(text: string): boolean {
+  const orig = String(text ?? "");
+  if (orig.trim().length < 2) return false;
+  const unfenced = orig.replace(FENCE, " ").replace(/^\s*OPTIONS:.*$/gim, " ");
+  // gpt-oss harmony leakage: "assistantcommentary to=functions.read_file json{...}"
+  if (/\bto=functions\.\w+|<\|(?:call|channel|constrain|message)\|>|\bcommentary to=/i.test(unfenced)) return true;
+  const spans = jsonSpans(unfenced);
+  const rest = (spans.length ? spans.reduceRight((acc, s) => acc.slice(0, s.start) + " " + acc.slice(s.end), unfenced) : unfenced).replace(/\s+/g, " ").trim();
+  // Whatever is left once the JSON is removed is too little to be an answer.
+  if (rest.length >= 40) return false;
+  if (spans.some((s) => isToolJson(s.raw, false))) return true;
+  return fencedToolCall(orig) && !spans.length && rest.length < 20;
+}
+const STEP_START = /^\s*(?:we(?:['\u2019]re| are| need| should| must| have to| can| could| will| got| see| now)\b|we['\u2019]ll\b|let['\u2019]?s\b|need to\b|next,? (?:we|i|let)|first,? (?:we|i|let)|i(?:['\u2019]ll| will| need to| should| can)\s+(?:now\s+)?(?:read|check|search|look|list|open|find|grep|query|fetch)\b|maybe (?:it|the|there)\b)/i;
+const STEP_ACTION = /\b(?:let['\u2019]?s|need to|should|will|going to|must)\s+(?:now\s+)?(?:read|list|search|check|look|open|find|grep|query|fetch|see|run|call|use|inspect|examine|view|get|try|scan)\b/i;
+export function narratesStep(text: string): boolean {
+  const t = String(text ?? "").replace(/^\s*OPTIONS:.*$/gim, "").trim();
+  if (t.length < 8 || t.length > 1200) return false;
+  if (!STEP_START.test(t.slice(0, 140))) return false;
+  if (/```/.test(t) && !fencedToolCall(t)) return false;   // a reply carrying a code block is an answer, not a step
+  const blob = jsonSpans(t.replace(FENCE, " ")).some((sp) => isToolJson(sp.raw, false));
+  return blob || STEP_ACTION.test(t.slice(0, 500));
+}
+/**
+ * chat: true when the caller declared tools (llmChat). Then a step the model wrote as text is NOT a leak here: the caller
+ * (admin-chat textToolCall / its nudge) turns it into the real call or sends it back, so it must reach the caller.
+ */
+export function thinkingLeak(text: string, chat = false): boolean {
   const t = String(text ?? "");
+  if (!chat && (rawToolJson(t) || narratesStep(t))) return true;
   if (t.length < 60) return false;
   const hits = THINK_META.filter((re) => re.test(t)).length;
   if (THINK_START.test(t.slice(0, 120))) return hits >= 1 || t.length > 600;
@@ -590,6 +694,7 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
     const skip = (outcome: Outcome) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0 });
     if (left < 3000) { skip("timeout"); continue; }
     const p = prov[rung.provider];
+    if (req.skip?.includes(rung.provider)) { skip("skipped_off"); continue; }
     if (p && !p.enabled) { skip("skipped_off"); continue; }
     if (privacy === "private" && p && !p.private_ok) { skip("skipped_privacy"); continue; }
     if (pass === 0 && p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now()) { cooled.push(rung); skip("rate_limited"); continue; }
@@ -839,7 +944,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       }
       // 2026-10-07: reasoning written as content. With tool calls it is just noise beside them, so drop it;
       // on its own it is a miss and the next model answers (logged "invalid" so no provider gets paused).
-      const leaked = thinkingLeak(content);
+      const leaked = thinkingLeak(content, toolNames.size > 0);
       if (leaked && toolCalls.length) content = "";
       const inT = Number(j.usage?.prompt_tokens ?? 0), outT = Number(j.usage?.completion_tokens ?? 0);
       const c: Call = { text: content, model: String(j.model ?? rung.model), inT, outT, cost: 0 };

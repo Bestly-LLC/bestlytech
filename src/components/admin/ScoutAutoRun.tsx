@@ -31,6 +31,8 @@ async function fetchPrefs() {
   };
   emit();
 }
+/** v44: re-read the switches now. Scout.tsx calls this after every reply, so a typed "use paid AI" shows the Paid AI pill turn on at once, not up to 30 s later. */
+export function refreshScoutPrefs() { fetchPrefs().catch(() => {}); }
 let poll: ReturnType<typeof setInterval> | null = null;
 function load() {
   if (!loading) loading = fetchPrefs();
