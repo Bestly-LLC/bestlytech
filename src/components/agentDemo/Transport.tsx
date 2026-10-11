@@ -68,8 +68,12 @@ export function Transport({ clock, marks, caption, captionWho }: { clock: DemoCl
         <RotateCcw size={18} aria-hidden="true" />
       </button>
 
-      <span className="ad-time" aria-hidden="true">
+      {/* Phone: one line, "0:40 / 1:01". Wider screens: elapsed on the left of the scrubber and time remaining on the right, like Apple's players. */}
+      <span className="ad-time ad-time-c" aria-hidden="true">
         {formatClock(t)} / {formatClock(duration)}
+      </span>
+      <span className="ad-time ad-time-l" aria-hidden="true">
+        {formatClock(t)}
       </span>
 
       <div
@@ -101,6 +105,10 @@ export function Transport({ clock, marks, caption, captionWho }: { clock: DemoCl
         ))}
         <span className="ad-seek-thumb" aria-hidden="true" style={{ left: `${pct}%` }} />
       </div>
+
+      <span className="ad-time ad-time-r" aria-hidden="true">
+        -{formatClock(Math.max(0, duration - t))}
+      </span>
 
       <button
         type="button"

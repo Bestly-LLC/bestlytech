@@ -23,6 +23,9 @@ const SUPABASE_URL = "https://rcqfqhguwpmaarseifqg.supabase.co";
 const BUCKET_URL = `${SUPABASE_URL}/storage/v1/object/public/agent-demo`;
 const OUT_DIR = join(root, "public/agent-demo");
 const CLIPS_DIR = join(here, "clips"); // downloaded clips (not committed)
+const MODEL = "eleven_v4"; // one model for every line. Voices must be fine-tuned for it (checked with the edge function's "voice" op).
+const REC_FORMAT = "mp3_44100_128"; // what ElevenLabs records; the final web files are encoded once at WEB_KBPS.
+const WEB_KBPS = "96k";
 const LEAD_IN_S = 0.25;
 const RATE = 44100;
 const BYTES_PER_S = RATE * 2; // mono s16le
@@ -36,7 +39,7 @@ async function loadScenarios() {
 const spoken = (l) => l.say ?? l.text;
 const voiceFor = (s, l, MAYA) => (l.who === "agent" ? MAYA : s.caller.voiceId);
 const hashOf = (s, MAYA) =>
-  createHash("sha256").update(s.lines.map((l) => `${voiceFor(s, l, MAYA)}|${spoken(l)}`).join("\n")).digest("hex");
+  createHash("sha256").update(MODEL + "\n" + s.lines.map((l) => `${voiceFor(s, l, MAYA)}|${spoken(l)}`).join("\n")).digest("hex");
 const existingHash = (id) => {
   try { return JSON.parse(readFileSync(join(OUT_DIR, `${id}.json`), "utf8")).hash; } catch { return null; }
 };
@@ -55,7 +58,7 @@ function run(cmd, args, input) {
 const decode = (file) => run("ffmpeg", ["-v", "error", "-i", file, "-f", "s16le", "-ac", "1", "-ar", String(RATE), "pipe:1"]);
 
 async function download(url, file) {
-  const r = await fetch(url);
+  const r = await fetch(`${url}?t=${Date.now()}`); // cache-bust: a re-recording overwrites the same Storage path
   if (!r.ok) throw new Error(`${url} answered ${r.status}`);
   writeFileSync(file, Buffer.from(await r.arrayBuffer()));
 }
@@ -75,7 +78,7 @@ function alignedStarts(align) {
 
 async function buildOne(mod, s) {
   const { MAYA_VOICE_ID, TURN_GAP_S } = mod;
-  const dir = join(CLIPS_DIR, s.id);
+  const dir = join(CLIPS_DIR, s.id, hashOf(s, MAYA_VOICE_ID).slice(0, 10)); // keyed by hash, so stale clips are never reused
   mkdirSync(dir, { recursive: true });
   const chunks = [Buffer.alloc(Math.round(LEAD_IN_S * RATE) * 2)];
   let cursor = LEAD_IN_S;
@@ -104,7 +107,7 @@ async function buildOne(mod, s) {
   mkdirSync(OUT_DIR, { recursive: true });
   // One encode of the whole call, so the file is a single consistent mono 64 kbps / 44.1 kHz mp3.
   const mp3 = await run("ffmpeg", ["-v", "error", "-f", "s16le", "-ar", String(RATE), "-ac", "1", "-i", "pipe:0",
-    "-c:a", "libmp3lame", "-b:a", "64k", "-ar", String(RATE), "-ac", "1", "-f", "mp3", "pipe:1"], Buffer.concat(chunks));
+    "-c:a", "libmp3lame", "-b:a", WEB_KBPS, "-ar", String(RATE), "-ac", "1", "-f", "mp3", "pipe:1"], Buffer.concat(chunks));
   writeFileSync(join(OUT_DIR, `${s.id}.mp3`), mp3);
   const duration = +(Buffer.concat(chunks).length / BYTES_PER_S).toFixed(3);
   writeFileSync(join(OUT_DIR, `${s.id}.json`),
@@ -133,7 +136,7 @@ async function check(mod) {
       const words = Math.max(spoken(s.lines[i]).split(" ").length, 4);
       const d = ln.end - ln.start, wps = words / d;
       if (i > 0 && ln.start <= j.lines[i - 1].start) notes.push(`line ${i} start not increasing`);
-      if (wps < 1.5 || wps > 5) notes.push(`line ${i}: ${words} words in ${d.toFixed(2)}s (${wps.toFixed(1)} w/s)`);
+      if ((wps < 1.5 && d > 4) || wps > 5) notes.push(`line ${i}: ${words} words in ${d.toFixed(2)}s (${wps.toFixed(1)} w/s)`);
     });
     console.log(`${notes.length ? "WARN" : "ok  "} ${s.id}: ${j.duration}s, ${j.lines.length} lines, ${statSync(mf).size} bytes${notes.length ? "\n   " + notes.join("\n   ") : ""}`);
     bad += notes.length ? 1 : 0;
@@ -153,7 +156,7 @@ if (cmd === "check") await check(mod);
 else if (cmd === "sql") {
   for (const s of todo) {
     if (!force && existingHash(s.id) === hashOf(s, mod.MAYA_VOICE_ID)) { console.log(`-- ${s.id}: unchanged, skipped`); continue; }
-    const payload = { id: s.id, lines: s.lines.map((l, n) => ({ n, voiceId: voiceFor(s, l, mod.MAYA_VOICE_ID), text: spoken(l) })) };
+    const payload = { id: s.id, model: MODEL, format: REC_FORMAT, lines: s.lines.map((l, n) => ({ n, voiceId: voiceFor(s, l, mod.MAYA_VOICE_ID), text: spoken(l) })) };
     const chars = payload.lines.reduce((a, l) => a + l.text.length, 0);
     console.log(`-- ${s.id}: ${chars} characters of speech`);
     console.log(`select public.invoke_edge_function('agent-demo-tts', $j$${JSON.stringify(payload)}$j$::jsonb, 120000);`);

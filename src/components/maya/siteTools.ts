@@ -182,7 +182,7 @@ const SECTION_ALIASES: { words: string[]; path: string; heading: string; need?: 
   { words: ["book", "call", "discovery", "schedule", "get started"], path: "/cloud", heading: "Four steps" },
   { words: ["faq", "questions", "concerns", "breaks", "maintains"], path: "/cloud", heading: "The four questions everybody asks" },
   { words: ["demo", "example call", "sample call", "watch a call", "listen to a call"], path: "/agent", heading: "Watch Maya take a call" },
-  { words: ["how it works", "how does it work", "how agent works"], need: "agent", path: "/agent", heading: "How it works" },
+  { words: ["how it works", "how does it work", "how agent works"], need: "agent", path: "/agent", heading: "We set it all up for you." },
 ];
 
 const STOP = new Set(["the", "a", "an", "me", "show", "see", "of", "for", "to", "on", "in", "and", "your", "you", "our",

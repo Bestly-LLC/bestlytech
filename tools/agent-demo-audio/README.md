@@ -1,8 +1,8 @@
 # Bestly Agent demo audio
 
-Builds `public/agent-demo/<id>.mp3` (one mono 64 kbps / 44.1 kHz file per sample call, two voices alternating, 0.25 s
+Builds `public/agent-demo/<id>.mp3` (one mono 96 kbps / 44.1 kHz file per sample call, two voices alternating, 0.25 s
 lead-in, 0.45 s between lines) and `<id>.json` (line start/end, per-word starts, total duration, content hash) for the
-five calls in `src/components/agentDemo/scenarios.ts`. Model: `eleven_multilingual_v2`. Spoken text is `say ?? text`;
+five calls in `src/components/agentDemo/scenarios.ts`. Model: `eleven_v4` (all five caller voices and Maya are fine-tuned for it; recorded at 128 kbps, final files encoded once at 96 kbps mono). Spoken text is `say ?? text`;
 word timings come from ElevenLabs character alignment and are only written for lines without `say`.
 
 ## Re-record (only when a scenario's text or voice changed)
@@ -24,7 +24,7 @@ nothing is paid for twice. Budget is about 3,600 characters for all five calls.
    increase, words-per-second is plausible, hash matches the scenarios).
 5. Commit `public/agent-demo/*`.
 
-If you re-record a scenario, delete `tools/agent-demo-audio/clips/<id>/` first so stale clips are not reused.
+If you re-record a scenario, clips are cached per content hash, so stale ones are never reused.
 
 Needs ffmpeg and ffprobe on the PATH; uses the repo's existing esbuild to read the TypeScript scenarios. No new dependencies.
 
@@ -33,3 +33,9 @@ Needs ffmpeg and ffprobe on the PATH; uses the repo's existing esbuild to read t
 `maya-watch` (Line Check) checks about hourly that `bestly.tech/agent` answers, every `/agent-demo/<id>.json` has a
 duration over 20 s and every `.mp3` answers, and counts visitor-side `agent-demo-audio` reports. Problems alert under
 `maya.site` and tell you to re-run this build.
+
+## Voices
+
+Callers are ElevenLabs Professional Voice Clones from the shared library, added to the account with the edge function's
+`add` op and picked with its `voices` / `voice` ops (check the voice's `ft.state` shows `eleven_v4: fine_tuned`).
+Maya is `tnSpp4vdxKPjI9w0GnoV` (her live voice, not changed). Voice ids live in `scenarios.ts`.

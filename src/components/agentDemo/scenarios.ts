@@ -63,7 +63,7 @@ export const SCENARIOS: Scenario[] = [
     appName: "Ledgerly Support",
     windowTitle: "Ledgerly Support — Inbox",
     clock: "2:14 PM",
-    caller: { name: "Dan Ortiz", phone: "(555) 014-2290", voiceId: "iP95p4xoKVk53GoZ742B", voiceName: "Chris" },
+    caller: { name: "Dan Ortiz", phone: "(555) 014-2290", voiceId: "pwMBn0SsmN1220Aorv15", voiceName: "Matt" },
     lines: [
       { who: "agent", text: "Thanks for calling Ledgerly support, this is Maya. Who do I have the pleasure of helping today?",
         events: [{ at: 0, do: "incoming" }] },
@@ -105,7 +105,7 @@ export const SCENARIOS: Scenario[] = [
     appName: "Brightside Schedule",
     windowTitle: "Brightside Schedule — Tomorrow",
     clock: "6:48 PM",
-    caller: { name: "Kelly Moran", phone: "(555) 013-7714", voiceId: "cgSgspJ2msm6clMCkdW9", voiceName: "Jessica" },
+    caller: { name: "Kelly Moran", phone: "(555) 013-7714", voiceId: "nf4MCGNSdM0hxM95ZBQR", voiceName: "Sarah Eve" },
     lines: [
       { who: "agent", text: "Brightside Dental, this is Maya. How can I help?",
         events: [{ at: 0, do: "incoming" }] },
@@ -141,7 +141,7 @@ export const SCENARIOS: Scenario[] = [
     appName: "Ridgeline Dispatch",
     windowTitle: "Ridgeline Dispatch — Tonight",
     clock: "9:12 PM",
-    caller: { name: "Mark Ellis", phone: "(555) 016-3308", voiceId: "nPczCjzI2devNBz1zQrb", voiceName: "Brian" },
+    caller: { name: "Mark Ellis", phone: "(555) 016-3308", voiceId: "xKhbyU7E3bC6T89Kn26c", voiceName: "Adam Spencer" },
     lines: [
       { who: "agent", text: "Ridgeline Plumbing, this is Maya. What's going on?",
         events: [{ at: 0, do: "incoming" }] },
@@ -176,7 +176,7 @@ export const SCENARIOS: Scenario[] = [
     appName: "Harbor & Pine Leads",
     windowTitle: "Harbor & Pine Leads — Pipeline",
     clock: "10:05 AM",
-    caller: { name: "Alex Kim", phone: "(555) 012-4471", voiceId: "bIHbv24MWmeRgasZH58o", voiceName: "Will" },
+    caller: { name: "Alex Kim", phone: "(555) 012-4471", voiceId: "3jR9BuQAOPMWUjWpi0ll", voiceName: "Mark" },
     lines: [
       { who: "agent", text: "Harbor and Pine Realty, this is Maya. How can I help?",
         events: [{ at: 0, do: "incoming" }] },
@@ -213,7 +213,7 @@ export const SCENARIOS: Scenario[] = [
     appName: "Lume Reservations",
     windowTitle: "Lume Reservations — Friday",
     clock: "4:31 PM",
-    caller: { name: "Dana Reyes", phone: "(555) 015-9026", voiceId: "EXAVITQu4vr4xnSDxMaL", voiceName: "Sarah" },
+    caller: { name: "Dana Reyes", phone: "(555) 015-9026", voiceId: "EIsgvJT3rwoPvRFG6c4n", voiceName: "Clara" },
     lines: [
       { who: "agent", text: "Osteria Lume, this is Maya. How can I help?",
         events: [{ at: 0, do: "incoming" }] },
