@@ -29,7 +29,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TripContext } from "./AskSheet";
 import { LeoMiniPill, LeoOrb, THEME, loadLeoSdk, takeLeoMode, type LeoMini, type LeoTheme } from "./LeoWidget";
 import { leoOpening } from "./leoOffer";
-import { audioLocked, resumeAllAudio } from "./audioRescue";
+import { audioLocked, audioState, playStreamPlayers, resumeAllAudio } from "./audioRescue";
 import { track } from "./track";
 import { MINIMIZE, askPage, emitLeoCar, useLeoDid } from "./leoBridge";
 import { useDemoOpen } from "./demoState";
@@ -210,6 +210,7 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
         window.clearTimeout(lockTimer);
         conv.current = c;
         setVoice(withVoice);
+        if (withVoice) playStreamPlayers(); // mic is live now, so iOS lets Leo's player start (see audioRescue.ts)
         return c;
       } catch (e) {
         const msg = (e as Error)?.message ?? String(e);
@@ -224,6 +225,19 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
     return starting.current;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, home, greeting, context?.stage, items, push, showCard, showResult, pageAction]);
+
+  // During a voice call, keep checking that Leo can actually be heard. If the phone paused his audio, show the tap button.
+  useEffect(() => {
+    if (!voice || phase !== "live") return;
+    let logged = false;
+    const id = window.setInterval(() => {
+      if (!audioLocked()) return;
+      playStreamPlayers();
+      setLocked(true);
+      if (!logged && !lockLogged.current) { logged = true; lockLogged.current = true; const st = audioState(); diag(token, "audio_locked", { msg: `live call, Leo's audio paused (contexts ${st.contexts}; players ${st.players})` }); }
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [voice, phase, token]);
 
   // Clear the tap prompt as soon as the audio is actually running (the page-wide tap listener resumes it).
   useEffect(() => {
