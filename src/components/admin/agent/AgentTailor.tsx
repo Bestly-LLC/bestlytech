@@ -4,15 +4,16 @@
  * Prompt-only changes (tone, script, knowledge) don't need code: the Prompt and Knowledge sections above do that for free.
  */
 import { useState } from "react";
-import { Binoculars, Check, Copy, Wand2 } from "lucide-react";
+import { Binoculars, Check, Copy, Sparkles, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { askScout } from "@/components/admin/scoutBus";
-import { btnPrimary, btnQuiet, fieldCls, type AgentInfo } from "./agentApi";
+import { openSection } from "@/components/admin/roofguard/CollapsibleSection";
+import { PROMPT_NOTE, btnPrimary, btnQuiet, copyText, fieldCls, pendingPromptNote, type AgentInfo } from "./agentApi";
 
 export function buildPrompt(a: AgentInfo, request: string): string {
   const slug = a.slug;
   return [
-    `Work in the repo Bestly-LLC/bestlytech. Read CLAUDE.md and docs/agent-template-opusplan.md first.`,
+    `Work in the repo Bestly-LLC/bestlytech. Read CLAUDE.md, docs/agents.md and docs/agent-template-opusplan.md first.`,
     ``,
     `Agent to tailor: ${a.name} (${a.purpose})`,
     `- slug: ${slug}`,
@@ -39,9 +40,14 @@ export function AgentTailor({ agent }: { agent: AgentInfo }) {
   const [done, setDone] = useState(false);
   const prompt = buildPrompt(agent, text);
   const copy = async () => {
-    try { await navigator.clipboard.writeText(prompt); }
-    catch { const t = document.createElement("textarea"); t.value = prompt; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
-    setDone(true); setTimeout(() => setDone(false), 1500);
+    if (await copyText(prompt)) { setDone(true); setTimeout(() => setDone(false), 1500); }
+  };
+  // Prompt-only requests (tone, script, what it knows) need no code: hand the request to the Prompt section's free-AI "Suggest a change".
+  const tryFree = () => {
+    const note = text.trim().replace(/\s+/g, " ").slice(0, 240);
+    pendingPromptNote.set(agent.slug, note);
+    openSection(`${agent.slug}-prompt`);
+    setTimeout(() => window.dispatchEvent(new CustomEvent(PROMPT_NOTE, { detail: { slug: agent.slug, note } })), 400);
   };
   const id = `${agent.slug}-tailor`;
   return (
@@ -49,7 +55,7 @@ export function AgentTailor({ agent }: { agent: AgentInfo }) {
       <h3 id={`${id}-h`} className="flex items-center gap-2 text-[15px] font-semibold text-white"><Wand2 className="h-4 w-4 text-white/70" aria-hidden />Tailor this agent</h3>
       <p className="mt-1 text-[13px] leading-snug text-white/60">
         The template covers calls, the Coach, voice, knowledge and the script. For anything it can't do, say what you want and hand it to Claude.
-        Changing tone, script or what {agent.name} knows needs no code: use Prompt and Knowledge above.
+        Changing tone, script or what {agent.name} knows needs no code: "Try with free AI" drafts the change in Prompt for you to review, and Knowledge holds the facts.
       </p>
       <label htmlFor={id} className="mt-4 block text-[13px] font-medium text-white">What should {agent.name} do that the template can't?</label>
       <textarea id={id} value={text} onChange={(e) => setText(e.target.value)} rows={4} maxLength={2000}
@@ -58,6 +64,8 @@ export function AgentTailor({ agent }: { agent: AgentInfo }) {
       <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" onClick={() => void copy()} className={btnPrimary}>
           {done ? <Check className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}{done ? "Copied" : "Copy build prompt for Claude"}</button>
+        <button type="button" disabled={text.trim().length < 5} onClick={tryFree} className={btnQuiet}>
+          <Sparkles className="h-4 w-4" aria-hidden />Try with free AI</button>
         <button type="button" disabled={text.trim().length < 5} onClick={() => askScout(prompt, { about: `agent:${agent.slug}` })} className={btnQuiet}>
           <Binoculars className="h-4 w-4" aria-hidden />Ask Scout to build it (paid AI)</button>
       </div>

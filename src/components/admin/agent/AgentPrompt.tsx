@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { CollapsibleSection } from "@/components/admin/roofguard/CollapsibleSection";
-import { announceAgentChanged, boxCls, btnPrimary, btnQuiet, fieldCls, hub, type AgentInfo } from "./agentApi";
+import { PROMPT_NOTE, announceAgentChanged, boxCls, btnPrimary, btnQuiet, fieldCls, hub, pendingPromptNote, type AgentInfo } from "./agentApi";
 
 const PB_OPEN = "<!-- playbook -->";
 const MAX_PROMPT = 60000;
@@ -62,7 +62,7 @@ function Body({ agent }: { agent: AgentInfo }) {
   const [first, setFirst] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(() => pendingPromptNote.get(agent.slug) ?? "");
   const [improving, setImproving] = useState(false);
   const [sugg, setSugg] = useState<string | null>(null);
   const [suggErr, setSuggErr] = useState<string | null>(null);
@@ -74,6 +74,13 @@ function Body({ agent }: { agent: AgentInfo }) {
     setOrig({ prompt: r.data.prompt, first: r.data.first_message }); setPrompt(r.data.prompt); setFirst(r.data.first_message);
   }, [agent.slug]);
   useEffect(() => { void load(); }, [load]);
+  // "Try with free AI" on the Tailor card hands its request over as the note.
+  useEffect(() => { pendingPromptNote.delete(agent.slug); }, [agent.slug]);
+  useEffect(() => {
+    const h = (e: Event) => { const d = (e as CustomEvent<{ slug: string; note: string }>).detail; if (d?.slug === agent.slug) { setNote(d.note); pendingPromptNote.delete(agent.slug); } };
+    window.addEventListener(PROMPT_NOTE, h);
+    return () => window.removeEventListener(PROMPT_NOTE, h);
+  }, [agent.slug]);
 
   const dirty = !!orig && (prompt !== orig.prompt || first !== orig.first);
   const valid = prompt.trim().length >= 20 && prompt.length <= MAX_PROMPT && first.length <= 500;
