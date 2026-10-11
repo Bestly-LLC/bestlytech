@@ -7,53 +7,28 @@
  * Hard rule: a claim form is a sworn statement. "Yes, file all" only approves the claims that are on screen when it is tapped
  * (the ids are passed explicitly), so nothing Jared has not seen can be approved.
  */
-import { Fragment, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { BadgeDollarSign, Check, ChevronRight, CircleAlert, ExternalLink, FileCheck2, Loader2, Undo2, X } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { Section, Sheet, btnDestructivePlain, btnPlain, btnPrimary, btnTinted, card, field, label, secondary, tertiary, tint } from "./laxUi";
+import { ClassDefinition, DeadlineChip, Nb, count, rpc, shortDay, shortTime, usd } from "./settlementsShared";
+import { DigestCard, Digest, Fact, FactsSection, Profile, ProfileCard } from "./settlementsParts";
 
 type Evidence = { kind?: string; ref?: string; summary?: string };
 type SettlementInfo = { name: string; defendant: string | null; administrator: string | null; claim_url: string | null; info_url: string | null;
   class_definition: string | null; proof_required: boolean | null; est_payout: string | null; deadline: string | null; status: string };
 type Claim = { id: string; status: string; match: string; evidence: Evidence[] | null; question: string | null; answer: boolean | null; approved_at: string | null;
   filed_at: string | null; confirmation: string | null; payout_method: string | null; needs_you_url: string | null; needs_you_why: string | null;
-  amount_cents: number | null; paid_at: string | null; paid_via: "mail" | "email" | "button" | null; notes: string | null; settlement: SettlementInfo };
+  amount_cents: number | null; paid_at: string | null; paid_via: "mail" | "email" | "button" | null; notes: string | null; settlement: SettlementInfo;
+  fact_key?: string | null }; // fact_key: shared question key, read defensively (added to the board by the facts work)
 type Unmatched = { id: number; via: "mail" | "email"; summary: string | null; amount_cents: number | null; at: string };
 type Board = { claims: Claim[]; unmatched: Unmatched[]; paid_total_cents: number; paid_count: number; paid_unknown_amount: number; last_scan: string | null;
   worker: { last_ok_at: string | null; last_summary: string | null; ok: boolean | null } | null };
 
-// The settlement RPCs are not in the generated types yet, so call them through a narrow cast.
-const rpc = <T,>(fn: string, args?: object) =>
-  (supabase.rpc as unknown as (f: string, a?: object) => Promise<{ data: T | null; error: { message: string } | null }>)(fn, args);
-
-const TZ = "America/Los_Angeles";
-const usd = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const shortDay = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("en-US", { timeZone: TZ, month: "short", day: "numeric" }) : "";
-const shortTime = (iso?: string | null) => iso ? new Date(iso).toLocaleTimeString("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit", hour12: true }) : "";
-const todayLA = () => new Date().toLocaleDateString("en-CA", { timeZone: TZ }); // YYYY-MM-DD
-const daysUntil = (ymd: string) => Math.round((Date.parse(`${ymd}T00:00:00Z`) - Date.parse(`${todayLA()}T00:00:00Z`)) / 864e5);
-const dayFromYmd = (ymd: string) => new Date(`${ymd}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
 const VIA: Record<string, string> = { mail: "USPS mail", email: "Payment email", button: "You" };
-
-/** Keeps every dollar amount in one piece so the number never wraps away from its sign or cents. */
-function Nb({ text }: { text: string }) {
-  const parts = text.split(/(\$\s?[\d,]+(?:\.\d+)?)/g);
-  return <>{parts.map((p, i) => (i % 2 ? <span key={i} className="whitespace-nowrap">{p}</span> : <Fragment key={i}>{p}</Fragment>))}</>;
-}
-
-function DeadlineChip({ ymd }: { ymd: string | null }) {
-  if (!ymd) return <span className={cn("text-[13px]", secondary)}>No deadline listed</span>;
-  const n = daysUntil(ymd);
-  const left = n < 0 ? "passed" : n === 0 ? "today" : `${n} ${n === 1 ? "day" : "days"} left`;
-  return (
-    <span className={cn("text-[13px]", n <= 3 ? tint.orange : secondary)}>
-      Deadline <span className="whitespace-nowrap">{dayFromYmd(ymd)}</span> · <span className="whitespace-nowrap">{left}</span>
-    </span>
-  );
-}
 
 function Why({ items }: { items: Evidence[] }) {
   if (!items.length) return <p className={cn("mt-2 text-[13px]", secondary)}>No records attached. Nickel is relying on your answer.</p>;
@@ -69,18 +44,6 @@ function Why({ items }: { items: Evidence[] }) {
         ))}
       </ul>
     </div>
-  );
-}
-
-function ClassDefinition({ text }: { text: string | null }) {
-  if (!text) return null;
-  return (
-    <details className="group mt-3">
-      <summary className={cn("flex min-h-[44px] cursor-pointer list-none items-center gap-1 text-[14px] font-medium sm:min-h-0", tint.blue)}>
-        <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" aria-hidden /> Who counts as a class member
-      </summary>
-      <p className={cn("mt-1 whitespace-pre-wrap rounded-xl bg-[#ffffff0d] px-3 py-2.5 text-[14px] leading-snug bento:bg-[#0000000a]", secondary)}><Nb text={text} /></p>
-    </details>
   );
 }
 
@@ -114,17 +77,39 @@ export default function Settlements() {
   const [board, setBoard] = useState<Board | null>(null);
   const [paidSheet, setPaidSheet] = useState<{ id: string; name: string; hasAmount: boolean } | null>(null);
   const [amount, setAmount] = useState("");
+  // null = the RPC is not there (section stays hidden), undefined = still loading
+  const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
+  const [facts, setFacts] = useState<Fact[] | null>(null);
+  const [digest, setDigest] = useState<Digest | null | undefined>(undefined);
+  const [digestBusy, setDigestBusy] = useState(false);
+  const [params] = useSearchParams();
+  const digestId = params.get("digest");
 
   const load = useCallback(async () => {
     const { data, error } = await rpc<Board>("settlements_board");
     if (error) { toast.error(error.message); return; }
     if (data) setBoard(data);
   }, []);
+  const loadProfile = useCallback(async () => {
+    const { data, error } = await rpc<Profile>("settlement_profile_get");
+    setProfile(error ? null : (data ?? {}));
+  }, []);
+  const loadFacts = useCallback(async () => {
+    const { data, error } = await rpc<Fact[]>("settlement_facts_list");
+    setFacts(error || !Array.isArray(data) ? null : data);
+  }, []);
+  const loadDigest = useCallback(async () => {
+    if (!digestId) { setDigest(undefined); return; }
+    const { data, error } = await rpc<Digest>("settlement_digest_get", { p_digest: digestId });
+    if (error) { toast.error(error.message); setDigest(null); return; }
+    setDigest(data ?? null);
+  }, [digestId]);
   useEffect(() => {
-    void load();
-    const t = setInterval(() => { if (!document.hidden) void load(); }, 60000);
+    void load(); void loadProfile(); void loadFacts();
+    const t = setInterval(() => { if (!document.hidden) { void load(); void loadFacts(); } }, 60000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, loadProfile, loadFacts]);
+  useEffect(() => { void loadDigest(); }, [loadDigest]);
 
   /** Optimistic update: show the result now, call the database, put it back if it fails, then re-read the truth. */
   const act = useCallback(async (optimistic: (b: Board) => Board, call: () => Promise<{ error: { message: string } | null }>, ok: string) => {
@@ -142,6 +127,18 @@ export default function Settlements() {
 
   const ready = by("ready");
   const asks = (board?.claims ?? []).filter((c) => c.status === "found" && c.match === "ask");
+  // Questions that share a fact_key are shown once ("applies to N settlements"); a claim with no fact_key stays on its own.
+  const askGroups = useMemo(() => {
+    const groups: { key: string | null; claims: Claim[] }[] = [];
+    const byKey = new Map<string, { key: string | null; claims: Claim[] }>();
+    for (const c of asks) {
+      if (c.fact_key) {
+        const g = byKey.get(c.fact_key);
+        if (g) g.claims.push(c); else { const n = { key: c.fact_key, claims: [c] }; byKey.set(c.fact_key, n); groups.push(n); }
+      } else groups.push({ key: null, claims: [c] });
+    }
+    return groups;
+  }, [asks]); // eslint-disable-line react-hooks/exhaustive-deps
   const needs = by("needs_you");
   const filing = (board?.claims ?? []).filter((c) => c.status === "approved" || c.status === "filing");
   const filed = by("filed");
@@ -160,6 +157,36 @@ export default function Settlements() {
   };
   const answer = (c: Claim, yes: boolean) => void act(patch(c.id, (x) => ({ ...x, status: yes ? "ready" : "skipped" })), () => rpc("settlement_answer", { p_id: c.id, p_yes: yes }),
     yes ? "Thanks. It moved to Ready to file." : "Skipped.");
+  const confirmDigest = async () => {
+    if (!digestId || !digest || digestBusy) return;
+    setDigestBusy(true);
+    const before = digest;
+    const ids = new Set(digest.claims.filter((c) => c.status === "ready").map((c) => c.id));
+    setDigest({ ...digest, acted_at: new Date().toISOString(), approved_n: ids.size, claims: digest.claims.map((c) => (ids.has(c.id) ? { ...c, status: "approved" } : c)) });
+    const { data, error } = await rpc<{ state: string; n: number }>("settlement_digest_confirm", { p_digest: digestId });
+    setDigestBusy(false);
+    if (error) { setDigest(before); toast.error(error.message); return; }
+    if (data?.state === "approved") toast.success(`Approved ${data.n}. Nickel is filing ${data.n === 1 ? "it" : "them"} now.`);
+    else if (data?.state === "already") toast.message("That digest was already approved.");
+    else toast.error("That digest can no longer be approved. Review the Ready list below.");
+    void load(); void loadDigest();
+  };
+  const setFact = async (key: string, answer: boolean | null) => {
+    const before = facts;
+    setFacts((f) => (f ? f.map((x) => (x.key === key ? { ...x, answer, answered_at: answer == null ? null : new Date().toISOString() } : x)) : f));
+    const { error } = await rpc<number>("settlement_fact_set", { p_key: key, p_answer: answer });
+    if (error) { setFacts(before); toast.error(error.message); return false; }
+    void load(); void loadFacts();
+    return true;
+  };
+  const answerFact = (key: string, yes: boolean, ids: string[]) => {
+    const before = board;
+    if (before) setBoard({ ...before, claims: before.claims.map((c) => (ids.includes(c.id) ? { ...c, status: yes ? "ready" : "skipped" } : c)) });
+    void setFact(key, yes).then((ok) => {
+      if (!ok && before) setBoard(before);
+      else if (ok) toast.success(yes ? "Thanks. Matching settlements moved to Ready to file." : "Skipped. Nickel will not file those.");
+    });
+  };
   const skip = (c: Claim) => void act(patch(c.id, (x) => ({ ...x, status: "skipped" })), () => rpc("settlement_skip", { p_id: c.id }), "Skipped. Nickel will not file it.");
   const markFiled = (c: Claim, conf: string) => void act(
     patch(c.id, (x) => ({ ...x, status: "filed", filed_at: new Date().toISOString(), confirmation: conf || x.confirmation, needs_you_url: null, needs_you_why: null })),
@@ -204,6 +231,12 @@ export default function Settlements() {
 
       {!board ? <Loader2 className="h-5 w-5 animate-spin text-white/50" aria-label="Loading" /> : (
         <>
+          {digestId && digest !== undefined && (
+            <DigestCard digest={digest} detailsConfirmed={profile == null || !!profile.confirmed_at} busy={digestBusy} onConfirm={() => void confirmDigest()} />
+          )}
+
+          {profile && <ProfileCard profile={profile} onSaved={setProfile} />}
+
           {empty && (
             <section className={cardCenter}>
               <BadgeDollarSign className={cn("mx-auto h-8 w-8", tint.blue)} aria-hidden />
@@ -252,6 +285,7 @@ export default function Settlements() {
                 </button>
                 <p className={cn("mt-3 text-[14px] leading-snug", label)}>Tapping yes means you&rsquo;re swearing you&rsquo;re part of each class below.</p>
                 <p className={cn("mt-1 text-[13px] leading-snug", secondary)}>Not sure about one? Skip it first. Skipped claims are never filed.</p>
+                {profile && !profile.confirmed_at && <p className={cn("mt-1 text-[13px] leading-snug", tint.orange)}>Confirm your claim details above first, or Nickel will wait to file.</p>}
               </section>
               {ready.map((c) => (
                 <section key={c.id} className={card}>
@@ -270,20 +304,44 @@ export default function Settlements() {
             </Section>
           )}
 
-          {asks.length > 0 && (
+          {askGroups.length > 0 && (
             <Section title="Quick questions" footer="A yes moves it to Ready to file. Nothing is filed until you tap Yes, file all.">
-              {asks.map((c) => (
-                <section key={c.id} className={card}>
-                  <Title s={c.settlement} />
-                  <Facts s={c.settlement} />
-                  <p className={cn("mt-3 text-[16px] font-medium leading-snug", label)}>{c.question ?? "Were you part of this class?"}</p>
-                  <ClassDefinition text={c.settlement.class_definition} />
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" className={btnPrimary} onClick={() => answer(c, true)}>Yes</button>
-                    <button type="button" className={btnTinted} onClick={() => answer(c, false)}>No</button>
-                  </div>
-                </section>
-              ))}
+              {askGroups.map((g) => {
+                const c = g.claims[0];
+                const many = g.claims.length > 1;
+                const yes = (v: boolean) => (g.key ? answerFact(g.key, v, g.claims.map((x) => x.id)) : answer(c, v));
+                return (
+                  <section key={g.key ?? c.id} className={card}>
+                    {many ? (
+                      <>
+                        <p className={cn("text-[16px] font-medium leading-snug", label)}>{c.question ?? "Were you part of this class?"}</p>
+                        <p className={cn("mt-1 text-[13px] font-semibold", tint.blue)}>Applies to {count(g.claims.length, "settlement")}</p>
+                        <ul className="mt-2 divide-y divide-[#38383A] bento:divide-[#C6C6C8]">
+                          {g.claims.map((x) => (
+                            <li key={x.id} className="py-2 first:pt-0 last:pb-0">
+                              <p className={cn("text-[15px] font-medium leading-snug", label)}>{x.settlement.name}</p>
+                              <p><DeadlineChip ymd={x.settlement.deadline} /></p>
+                              <ClassDefinition text={x.settlement.class_definition} />
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : (
+                      <>
+                        <Title s={c.settlement} />
+                        <Facts s={c.settlement} />
+                        <p className={cn("mt-3 text-[16px] font-medium leading-snug", label)}>{c.question ?? "Were you part of this class?"}</p>
+                        <ClassDefinition text={c.settlement.class_definition} />
+                      </>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" className={btnPrimary} onClick={() => yes(true)}>Yes</button>
+                      <button type="button" className={btnTinted} onClick={() => yes(false)}>No</button>
+                    </div>
+                    {g.key && <p className={cn("mt-2 text-[13px]", secondary)}>Nickel remembers your answer for matching settlements.</p>}
+                  </section>
+                );
+              })}
             </Section>
           )}
 
@@ -330,6 +388,8 @@ export default function Settlements() {
               ))}
             </Section>
           )}
+
+          {facts && facts.length > 0 && <FactsSection facts={facts} onSet={(k, a) => void setFact(k, a)} />}
 
           {board.unmatched.length > 0 && (
             <Section title="Mail and emails to sort" footer="These look like settlement money but Nickel could not tell which claim they belong to. Assigning one checks that claim off as paid.">
