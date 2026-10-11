@@ -419,7 +419,8 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
     refreshChips();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-  useEffect(() => { body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" }); }, [msgs, open]);
+  // Follow the conversation; with nothing said yet, stay at the top so Leo's card is the first thing seen.
+  useEffect(() => { if (msgs.length) body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" }); }, [msgs, open]);
 
   const patch = (id: Msg["id"], m: Partial<Msg>) => setMsgs((xs) => xs.map((x) => (x.id === id ? { ...x, ...m } : x)));
 
