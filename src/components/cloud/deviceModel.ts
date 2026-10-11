@@ -19,7 +19,7 @@ let gltfPromise: Promise<GLTF> | null = null;
 export function loadDeviceGLTF(): Promise<GLTF> {
   if (!gltfPromise) {
     const draco = new DRACOLoader();
-    draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
+    draco.setDecoderPath("/draco/" /* self-hosted (three 0.160 libs/draco): the site CSP only allows same-origin fetches */);
     const loader = new GLTFLoader();
     loader.setDRACOLoader(draco);
     gltfPromise = loader.loadAsync("/models/device-web-split.glb");
