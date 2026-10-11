@@ -13,11 +13,15 @@
  *   (trip-voice {op:"session"}), so the widget never sees the trip token.
  * - The widget has no slot for custom suggestion buttons, so Leo opens by offering the two things that fit the
  *   trip right now (override-first-message from the trip's stage and key state).
- * - Mounted expanded when "Talk to our team 24/7" is tapped; unmounted when the sheet state closes.
+ * - Docked bar (LeoBar, 2026-10-11, Jared): the old "Talk to our team 24/7" button is now a full-width bar in the
+ *   bottom dock that looks like the widget's own compact card: "Leo, 24/7 trip helper - real help", Call Leo, chat,
+ *   expand. Each button mounts the real widget expanded (Call dials right away; chat and expand open it quietly).
+ *   No dim or blur behind it. The widget's Dismiss, or Collapse while no call is running, hands back to the bar; a
+ *   live call keeps the widget's own compact card so it never drops.
  */
 import { useEffect, useState, type ElementType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Loader2 } from "lucide-react";
+import { Loader2, Maximize2, MessageCircle, Phone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { loadEmbed } from "@/components/maya/MayaWidget";
 import type { TripContext } from "./AskSheet";
@@ -38,7 +42,7 @@ export function leoGreeting(ctx: TripContext | undefined, home: boolean): string
 }
 
 const TEXT = JSON.stringify({
-  main_label: "Leo, trip helper",
+  main_label: "Leo, 24/7 trip helper - real help",
   start_call: "Call Leo",
   start_chat: "Message Leo",
   end_call: "End",
@@ -77,6 +81,43 @@ const THEME = {
   },
 } as const;
 
+/** How the widget should open: dial right away, open for typing, or just open. Set by LeoBar right before it opens. */
+export type LeoMode = "call" | "chat" | "open";
+let nextMode: LeoMode = "open";
+
+/**
+ * The docked bar in the trip page's bottom dock (replaces "Talk to our team 24/7"). Two rows like the widget's compact
+ * card: Leo's orb and name, then Call Leo plus chat and expand. `hidden` keeps its space while the widget is open.
+ */
+export function LeoBar({ home, hidden, onOpen }: { home: boolean; hidden?: boolean; onOpen: () => void }) {
+  const t = THEME[home ? "home" : "lax"];
+  const [o1, o2] = t.orb;
+  const go = (m: LeoMode) => { nextMode = m; onOpen(); };
+  const icon = "grid h-12 w-12 shrink-0 place-items-center rounded-full text-white ring-1 ring-white/25 transition-transform active:scale-95 motion-reduce:transition-none";
+  return (
+    <div className={`rounded-[22px] p-3 ring-1 ring-white/15 ${hidden ? "invisible" : ""}`} aria-hidden={hidden || undefined}
+      style={{ background: t.vars["--el-base"], boxShadow: "0 12px 32px -14px rgba(0,0,0,.75)" }}>
+      <div className="flex items-center gap-3">
+        <span aria-hidden className="h-10 w-10 shrink-0 rounded-full"
+          style={{ background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,.85), rgba(255,255,255,0) 45%), conic-gradient(from 210deg, ${o1}, ${o2}, ${o1}, ${o2}, ${o1})`,
+            boxShadow: `0 0 18px -2px ${o1}99` }} />
+        <p className="min-w-0 text-[16px] font-semibold leading-snug text-white">
+          Leo, 24/7 trip helper <span className="whitespace-nowrap font-medium" style={{ color: t.vars["--el-base-subtle"] }}>- real help</span>
+        </p>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <button type="button" onClick={() => go("call")}
+          className="flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-full text-[17px] font-semibold transition-transform active:scale-[0.98] motion-reduce:transition-none"
+          style={{ background: t.vars["--el-accent"], color: t.vars["--el-accent-primary"] }}>
+          <Phone className="h-5 w-5 shrink-0" aria-hidden /> <span className="whitespace-nowrap">Call Leo</span>
+        </button>
+        <button type="button" aria-label="Message Leo" onClick={() => go("chat")} className={icon}><MessageCircle className="h-5 w-5" aria-hidden /></button>
+        <button type="button" aria-label="Open Leo" onClick={() => go("open")} className={icon}><Maximize2 className="h-5 w-5" aria-hidden /></button>
+      </div>
+    </div>
+  );
+}
+
 /** Load the widget embed early (idle, about 2 seconds after the trip page opens) so the guest's first tap unlocks audio. */
 export function preloadLeo() {
   const go = () => { void loadEmbed().catch(() => {}); };
@@ -85,8 +126,17 @@ export function preloadLeo() {
 }
 
 /** Press the widget's own "Call Leo" button once it renders, so the card opens straight into a voice call. */
-function autoCall(el: HTMLElement | null) {
+function autoCall(el: HTMLElement | null, mode: LeoMode) {
   if (!el) return;
+  if (mode === "chat") {
+    let n = 0;
+    const f = window.setInterval(() => {
+      const ta = el.shadowRoot?.querySelector<HTMLTextAreaElement>("textarea");
+      if (ta || ++n > 40) { window.clearInterval(f); ta?.focus(); }
+    }, 125);
+    return;
+  }
+  if (mode !== "call") return;
   // ?nocall=1 opens the card without dialing (screenshots and checks without a mic prompt).
   try { if (new URLSearchParams(window.location.search).get("nocall") === "1") return; } catch { /* ignore */ }
   let tries = 0;
@@ -96,12 +146,33 @@ function autoCall(el: HTMLElement | null) {
   }, 125);
 }
 
+
+/** Hand back to the docked bar when the guest dismisses the widget, or collapses it while no call is running. */
+function watchClose(el: HTMLElement, onClose: () => void) {
+  let n = 0;
+  const t = window.setInterval(() => {
+    const sr = el.shadowRoot;
+    if (!sr && ++n < 40) return;
+    window.clearInterval(t);
+    sr?.addEventListener("click", (e) => {
+      const label = (e.target as Element | null)?.closest?.("button")?.getAttribute("aria-label");
+      if (label === "Dismiss") window.setTimeout(onClose, 60);
+      if (label === "Collapse") window.setTimeout(() => {
+        const inCall = [...sr.querySelectorAll("button")].some((b) =>
+          (b.getAttribute("aria-label") ?? b.textContent ?? "").trim() === "End" && b.getBoundingClientRect().width > 0);
+        if (!inCall) onClose();
+      }, 300);
+    });
+  }, 125);
+}
+
 /** Render at the top of <body>: trip pages fade their own content while a sheet is open, and that must not reach Leo. */
 const top = (n: ReactNode) => (typeof document === "undefined" ? n : createPortal(n, document.body));
 
 export function LeoWidget({ token, context, home, onClose }: { token: string; context?: TripContext; home: boolean; onClose: () => void }) {
   const [s, setS] = useState<{ url: string; key: string } | null>(null);
   const [err, setErr] = useState("");
+  const [mode] = useState<LeoMode>(() => { const m = nextMode; nextMode = "open"; return m; });
 
   useEffect(() => {
     let live = true;
@@ -119,22 +190,23 @@ export function LeoWidget({ token, context, home, onClose }: { token: string; co
     return () => { live = false; };
   }, [token]);
 
-  // Pull-out card: dim the trip page behind the widget so its glass panel stays readable; tap outside to close.
-  const scrim = <button type="button" aria-label="Close Leo" onClick={onClose}
-    className="fixed inset-0 z-40 cursor-default bg-black/60 backdrop-blur-[2px] motion-safe:animate-in motion-safe:fade-in" />;
-
-  if (err) return top(<>{scrim}<p role="alert" className="fixed inset-x-4 bottom-28 z-50 rounded-2xl bg-white p-4 text-[15px] text-[#B4232A] shadow-xl">{err}</p></>);
-  if (!s) return top(<>{scrim}
-    <div className="fixed inset-x-0 bottom-28 z-50 flex justify-center" aria-live="polite">
+  // No dim or blur behind Leo (Jared, 2026-10-11): the page stays as it is; the widget's own buttons close it.
+  if (err) return top(
+    <button type="button" onClick={onClose} role="alert"
+      className="fixed inset-x-4 bottom-28 z-50 rounded-2xl bg-white p-4 text-left text-[15px] text-[#B4232A] shadow-xl">
+      {err} <span className="whitespace-nowrap font-semibold text-[#1A1140]">Tap to close</span>
+    </button>);
+  if (!s) return top(
+    <div className="pointer-events-none fixed inset-x-0 bottom-28 z-50 flex justify-center" aria-live="polite">
       <span className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[15px] font-semibold text-white shadow-xl ring-1 ring-white/15"
         style={{ background: THEME[home ? "home" : "lax"].vars["--el-base"] }}>
         <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />Opening Leo
       </span>
-    </div></>);
+    </div>);
   const theme = THEME[home ? "home" : "lax"];
-  return top(<>{scrim}
+  return top(
     <Convai
-      ref={(el: HTMLElement | null) => { if (el && !el.dataset.called) { el.dataset.called = "1"; autoCall(el); } }}
+      ref={(el: HTMLElement | null) => { if (el && !el.dataset.called) { el.dataset.called = "1"; autoCall(el, mode); watchClose(el, onClose); } }}
       style={theme.vars}
       signed-url={s.url}
       dynamic-variables={JSON.stringify({ trip_key: s.key })}
@@ -151,5 +223,5 @@ export function LeoWidget({ token, context, home, onClose }: { token: string; co
       worklet-path-raw-audio-processor="/maya/raw-audio-processor.js"
       worklet-path-audio-concat-processor="/maya/audio-concat-processor.js"
       worklet-path-libsamplerate="/maya/libsamplerate.worklet.js"
-    /></>);
+    />);
 }
