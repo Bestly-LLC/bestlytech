@@ -167,12 +167,13 @@ export function MayaTicketsModule({ messages, agent }: { messages: (orderCls: st
 
   return (
     <>
-      <div className={cn("grid gap-2", solo ? "grid-cols-2 max-w-sm" : "grid-cols-4 xl:max-w-2xl")} aria-label="Tickets at a glance">
+      {/* Other agents skip the tiles: the Service header already shows open and overdue (2026-10-11 cleanup). */}
+      {!solo && <div className="grid grid-cols-4 gap-2 xl:max-w-2xl" aria-label="Tickets at a glance">
         <Stat label="Open" value={counts?.open} />
         <Stat label="Overdue" value={counts?.overdue} warn />
-        {!solo && <Stat label="Leads" value={counts?.leads} />}
-        {!solo && <Stat label="Privacy" value={counts?.privacy_open} />}
-      </div>
+        <Stat label="Leads" value={counts?.leads} />
+        <Stat label="Privacy" value={counts?.privacy_open} />
+      </div>}
 
       {/* Jared asked for all three columns to be collapsible (CollapsibleSection's header note about always-open areas does not apply here). */}
       <div className={cn("grid grid-cols-1 items-start gap-4 lg:grid-cols-2", !solo && "xl:grid-cols-3")}>
