@@ -292,6 +292,10 @@ def refresh_login():
         r = subprocess.run([f"{HOME}/.local/node/bin/npx", "wrangler", "whoami"], capture_output=True, text=True,
                            timeout=90, env=env, cwd=DIR)
         text = (r.stdout + r.stderr).lower()
+        # 2026-10-11: wrangler 4.149 prints "missing some expected OAuth scopes ... run `wrangler login`" while the login still
+        # works ("You are logged in"). That warning is not a logout; matching "wrangler login" raised a false alert every minute.
+        if "you are logged in" in text:
+            return True
         if "not authenticated" in text or "not logged in" in text or "wrangler login" in text:
             raise CfAuthError("wrangler is logged out")
         return True
