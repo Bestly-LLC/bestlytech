@@ -5,18 +5,20 @@ Built 2026-10-10 for the ElevenLabs-in-Studio plan (`docs/elevenlabs-studio-opus
 
 ## What it does
 Every minute cron runs `/opt/bestly/cron/run.sh whisper_stt` (= `whisper_stt.py` in `/opt/bestly/cron/jobs/`). It reads
-`studio_audio_jobs` for the oldest row with `feature='stt'`, `status='confirmed'` and `inputs->>'engine' = 'whisper'`, claims it
-(`confirmed -> running`, one atomic PATCH), downloads the audio, runs faster-whisper, and writes the result back with `status='done'`,
-`actual_credits=0`, `cost_usd=0`. Idle = one cheap REST read, then it exits (no model load).
+`studio_audio_jobs` for the oldest row with `feature='stt'`, `engine='whisper'` and `status='confirmed'` (audio-core's quote step routes STT
+to Whisper by default and Jared's yes confirms it), claims it with `studio_audio_start(code)` (`confirmed -> running`, switch gate re-checked),
+downloads the audio, runs faster-whisper, and closes it with `studio_audio_finish(code, ok, path, error, meta)`: `status='done'`, 0 credits,
+cost 0, and the requester's thread gets the "ready" message. Idle = one cheap REST read, then it exits (no model load).
 
-Inputs (`studio_audio_jobs.inputs`): `engine: "whisper"`, and the audio as `audio_url` (https) or `bucket` + `path` (Supabase Storage,
-read with the service key). Optional `language` (default auto-detect) and `model` (`tiny|base|small|medium`, default `small`).
+Inputs (`studio_audio_jobs.inputs`): the audio as `audio_url` (https) or `bucket` + `path` (Supabase Storage, read with the service key).
+Optional `language` (default auto-detect) and `model` (`tiny|base|small|medium`, default `small`).
 
 Result:
-- `provenance.whisper`: `text` (first 20,000 characters), `language`, `language_probability`, `avg_logprob`, `duration_s`, `elapsed_s`,
-  `model`, `needs_scribe` (true when `avg_logprob` is under -0.8, so audio-core's router can re-run it on ElevenLabs Scribe).
-- `output_path`: `studio-audio/<owner>/<code>.stt.json` in Storage, with the full text and timed segments (for captions).
-- On failure: `status='failed'`, `held_reason` = why, and one Spark info alert (`audio-stt.fail-<code>`, no push).
+- `output_path`: `studio-audio/<owner>/<code>.stt.json` in Storage (bucket created on first use, private), with the full text and timed
+  segments (for captions).
+- `meta`: `engine`, `model`, `language`, `avg_logprob`, `duration_s`, `elapsed_s`, `needs_scribe` (true when `avg_logprob` is under -0.8,
+  so audio-core's router can re-run it on ElevenLabs Scribe), `transcript_chars`, `transcript` (first 20,000 characters).
+- On failure: `status='failed'`, `error` = why, the requester's thread is told, and one Spark info alert (`audio-stt.fail-<code>`, no push).
 
 ## Pieces on the Pi
 | What | Where |

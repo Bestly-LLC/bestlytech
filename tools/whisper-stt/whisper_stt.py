@@ -1,19 +1,20 @@
 """Whisper STT (Spark's tool, 2026-10-10): free speech-to-text on the Pi. Cron job, every minute: /opt/bestly/cron/run.sh whisper_stt
 
-Picks the oldest studio_audio_jobs row with feature='stt', status='confirmed' and engine 'whisper' (inputs->>'engine'), claims it
-(status confirmed -> running, one atomic PATCH), downloads the audio, runs faster-whisper (small, int8, CPU) in its venv, and writes the
-transcript + avg_logprob back on the row with status 'done' (cost 0: it is free). Idle = one cheap REST read, then exit.
+Picks the oldest studio_audio_jobs row with feature='stt', engine='whisper' and status='confirmed' (Jared said yes to the quote; Whisper
+is free), claims it with studio_audio_start(code) (confirmed -> running, switch gate re-checked), downloads the audio, runs faster-whisper
+(small, int8, CPU) in its venv, and closes the row with studio_audio_finish(code, ok, path, error, meta): status done, 0 credits, cost 0,
+the requester's thread gets the message. Idle = one cheap REST read, then exit (no model load).
 
 Audio comes from inputs.audio_url (https) or inputs.bucket + inputs.path (Supabase Storage, read with the service key).
-Optional inputs: language (default auto), model (default small).
-Result (provenance.whisper): {text-in-output, language, avg_logprob, duration_s, elapsed_s, model, needs_scribe}. The full text and the
-segments (for captions) are uploaded to storage as studio-audio/<owner>/<code>.stt.json and the row's output_path points at it; the plain
-transcript is also in provenance.whisper.text (first 20,000 characters).
-needs_scribe = true when avg_logprob is under WEAK_LOGPROB: audio-core's router may then re-run the job on ElevenLabs Scribe.
+Optional inputs: language (default auto), model (tiny|base|small|medium, default small).
+Result: output_path = studio-audio/<owner>/<code>.stt.json (full text + timed segments for captions); row.meta = {engine, model, language,
+avg_logprob, duration_s, elapsed_s, needs_scribe, transcript_chars, transcript (first 20,000 characters)}. needs_scribe is true when
+avg_logprob is under WEAK_LOGPROB: audio-core's router may then re-run the job on ElevenLabs Scribe.
 
 Safety: off switch /opt/bestly/cron/state/whisper_stt.OFF; refuses audio over 2 hours or files over 500 MB; a row stuck in 'running'
-for 45 min is put back once, then failed; the heartbeat (pi_job_report) is sent every minute while it transcribes so the Team card
-never shows a long transcription as a silent job. Failures set status 'failed' with the reason and tell Jared once (Spark, info).
+for 45 min is put back to confirmed once, then failed; the heartbeat (pi_job_report) is sent every minute while it transcribes so the
+Team card never shows a long transcription as a silent job. Failures close the row as failed with the reason and tell Jared once
+(Spark, info, alert prefix audio-stt). Until audio-core's tables exist it reports "skip".
 """
 import json
 import os
@@ -54,7 +55,7 @@ def _rest(method, path, body=None, prefer=None, timeout=60):
 
 
 def _is_whisper(row):
-    return str((row.get("inputs") or {}).get("engine") or row.get("engine") or "").lower() == "whisper"
+    return str(row.get("engine") or (row.get("inputs") or {}).get("engine") or "").lower() == "whisper"
 
 
 def _heartbeat(summary):
@@ -94,35 +95,42 @@ def _upload_json(owner, code, data):
     if lib.KEY.startswith("eyJ"):
         h["Authorization"] = "Bearer " + lib.KEY
     path = f"{owner}/{code}.stt.json"
-    urllib.request.urlopen(urllib.request.Request(f"{lib.URL}/storage/v1/object/studio-audio/{path}", method="POST", headers=h,
-                                                  data=json.dumps(data).encode()), timeout=120).read()
+    req = lambda: urllib.request.Request(f"{lib.URL}/storage/v1/object/studio-audio/{path}", method="POST", headers=h,  # noqa: E731
+                                         data=json.dumps(data).encode())
+    try:
+        urllib.request.urlopen(req(), timeout=120).read()
+    except urllib.error.HTTPError as e:
+        if e.code not in (400, 404):
+            raise
+        hb = {"apikey": lib.KEY, "Content-Type": "application/json", **({"Authorization": "Bearer " + lib.KEY} if lib.KEY.startswith("eyJ") else {})}
+        try:       # the private bucket does not exist yet: create it once, then retry
+            urllib.request.urlopen(urllib.request.Request(f"{lib.URL}/storage/v1/bucket", method="POST", headers=hb,
+                                                          data=json.dumps({"id": "studio-audio", "name": "studio-audio", "public": False}).encode()), timeout=30).read()
+        except urllib.error.HTTPError:
+            pass
+        urllib.request.urlopen(req(), timeout=120).read()
     return "studio-audio/" + path
 
 
 def _fail(row, why):
-    prov = dict(row.get("provenance") or {})
-    prov["whisper"] = {"error": why[:400], "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-    _rest("PATCH", f"/rest/v1/studio_audio_jobs?code=eq.{row['code']}", {"status": "failed", "held_reason": why[:400],
-          "provenance": prov, "finished_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+    """Close the row as failed (studio_audio_finish also tells the requester's thread) and tell Jared once."""
+    r = lib.rpc("studio_audio_finish", p_code=row["code"], p_ok=False, p_error=why[:400], p_meta={"engine": "whisper", "failed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+    if not (r or {}).get("ok"):        # not 'running' (e.g. the switch gate refused to start it): mark it directly
+        _rest("PATCH", f"/rest/v1/studio_audio_jobs?code=eq.{row['code']}&status=in.(confirmed,running)", {"status": "failed", "error": why[:400]})
     lib.notify("Spark: a speech-to-text job failed", f"{row.get('owner_slug')}: job {row['code']} could not be transcribed on the Pi ({why[:300]}).",
                severity="info", push=False, url="/admin/team", dedupe=f"audio-stt.fail-{row['code']}")
 
 
 def _requeue_stale():
-    """A job 'running' for 45+ min lost its worker: back to confirmed once, failed the second time."""
+    """A job 'running' for 45+ min lost its worker: back to confirmed once (attempts < 2), failed after that."""
     n = 0
     cut = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - STALE_MIN * 60))
-    rows = _rest("GET", "/rest/v1/studio_audio_jobs?select=*&feature=eq.stt&status=eq.running&order=created_at.asc&limit=20") or []
+    rows = _rest("GET", f"/rest/v1/studio_audio_jobs?select=*&feature=eq.stt&engine=eq.whisper&status=eq.running&started_at=lt.{cut}&limit=20") or []
     for r in rows:
-        w = (r.get("provenance") or {}).get("whisper") or {}
-        if not _is_whisper(r) or (w.get("started_at") or "9") > cut:
-            continue
-        if w.get("requeued"):
+        if int(r.get("attempts") or 0) >= 2:
             _fail(r, f"stuck in running for {STALE_MIN}+ min twice")
         else:
-            prov = dict(r.get("provenance") or {})
-            prov["whisper"] = {**w, "requeued": True}
-            _rest("PATCH", f"/rest/v1/studio_audio_jobs?code=eq.{r['code']}&status=eq.running", {"status": "confirmed", "provenance": prov})
+            _rest("PATCH", f"/rest/v1/studio_audio_jobs?code=eq.{r['code']}&status=eq.running", {"status": "confirmed"})
         n += 1
     return n
 
@@ -134,7 +142,7 @@ def main(argv):
         raise RuntimeError("whisper venv or transcribe.py missing under /mnt/ssd/whisper-stt")
     try:
         requeued = _requeue_stale()
-        rows = _rest("GET", "/rest/v1/studio_audio_jobs?select=*&feature=eq.stt&status=eq.confirmed&order=created_at.asc&limit=20") or []
+        rows = _rest("GET", "/rest/v1/studio_audio_jobs?select=*&feature=eq.stt&engine=eq.whisper&status=eq.confirmed&order=created_at.asc&limit=20") or []
     except RuntimeError as e:
         if any(t in str(e) for t in ("HTTP 404", "PGRST205", "does not exist")):
             return "skip: studio_audio_jobs is not created yet (audio-core's migration)"
@@ -149,13 +157,13 @@ def main(argv):
         return f"skip: only {free_gb:.1f} GB free on /mnt/ssd"
     row = rows[0]
     code = row["code"]
-    started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    prov = dict(row.get("provenance") or {})
-    prov["whisper"] = {"started_at": started, **({"requeued": True} if (prov.get("whisper") or {}).get("requeued") else {})}
-    got = _rest("PATCH", f"/rest/v1/studio_audio_jobs?code=eq.{code}&status=eq.confirmed", {"status": "running", "provenance": prov},
-                prefer="return=representation")
-    if not got:
-        return f"skip: {code} was taken by another run"
+    st = lib.rpc("studio_audio_start", p_code=code) or {}
+    if not st.get("ok"):
+        if st.get("error") in ("already_running", "not_confirmed"):
+            return f"skip: {code} was taken by another run"
+        _fail(row, f"could not start: {st.get('text') or st.get('error')}")        # e.g. switch_off: the stt switch was turned off after the yes
+        return f"failed {code}: {st.get('error')}"
+    row = {**row, **(st.get("job") or {})}
     os.makedirs(WORK, exist_ok=True)
     audio, out = f"{WORK}/{code}.audio", f"{WORK}/{code}.json"
     try:
@@ -183,13 +191,13 @@ def main(argv):
             raise RuntimeError(f"audio is {res['duration_s'] / 60:.0f} min, over the 2 hour limit")
         path = _upload_json(row.get("owner_slug") or "unknown", code, res)
         lp = res.get("avg_logprob")
-        prov["whisper"] = {"model": res["model"], "compute_type": res["compute_type"], "language": res["language"],
-                           "language_probability": res["language_probability"], "avg_logprob": lp, "duration_s": res["duration_s"],
-                           "elapsed_s": res["elapsed_s"], "needs_scribe": lp is None or lp < WEAK_LOGPROB,
-                           "text": res["text"][:20000], "engine": "whisper", "finished_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-        _rest("PATCH", f"/rest/v1/studio_audio_jobs?code=eq.{code}", {
-            "status": "done", "actual_credits": 0, "cost_usd": 0, "output_path": path, "provenance": prov,
-            "finished_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+        meta = {"engine": "whisper", "model": res["model"], "compute_type": res["compute_type"], "language": res["language"],
+                "language_probability": res["language_probability"], "avg_logprob": lp, "duration_s": res["duration_s"],
+                "elapsed_s": res["elapsed_s"], "needs_scribe": lp is None or lp < WEAK_LOGPROB, "transcript_chars": len(res["text"]),
+                "transcript": res["text"][:20000]}
+        fin = lib.rpc("studio_audio_finish", p_code=code, p_ok=True, p_path=path, p_meta=meta) or {}
+        if not fin.get("ok"):
+            raise RuntimeError(f"studio_audio_finish refused: {fin}")
         return f"ok {code}: {res['duration_s']:.0f}s of audio in {res['elapsed_s']:.0f}s, logprob {lp}, {res['language']}"
     except Exception as e:  # noqa: BLE001
         _fail(row, f"{type(e).__name__}: {e}")
