@@ -11,8 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
 import { track } from "./track";
 import { Lines } from "./Lines";
-import { LeoVoice } from "./LeoVoice";
-import { LeoWidget, useWidgetPreview } from "./LeoWidget";
+import { LeoWidget, preloadLeo } from "./LeoWidget";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 type Msg = { id: number | string; role: "user" | "assistant"; content: string; status?: string };
@@ -375,21 +374,15 @@ function Dots() {
 }
 
 const DRIVER_CHIPS = ["My key link doesn't work", "I accepted, but the car isn't in my Tesla app", "How do I unlock the car?", "Where is the car?"];
-/** What Leo should offer to help with right now: two questions from the trip's stage and key state. */
+/** The trip's stage and key state, so Leo can open with what fits (see leoGreeting in LeoWidget). */
 export type TripContext = { stage: "pickup" | "return" | null; keyState?: string | null };
-function leoSuggestions(ctx: TripContext | undefined, home: boolean): string[] {
-  const k = ctx?.keyState ?? null;
-  if (k === "soon" || k === "making") return ["Why isn't my key here yet?", "What do I need to do before pickup?"];
-  if (k === "problem") return ["My key isn't working. Can you fix it?", "Can you check on my key?"];
-  if (k === "ready") return ["Help me add the car to my Tesla app", "My key link isn't working"];
-  if (ctx?.stage === "pickup") return ["How do I unlock and start the car?", home ? "Where is the car parked?" : "How do I get into the garage?"];
-  if (ctx?.stage === "return") return ["Where can I Supercharge, and what will it cost?", "How much charge do I need when I return?"];
-  return ["My phone key isn't working", "How does charging work on this trip?"];
-}
 
 export function AskSheet({ open, onClose, token, slug, home = false, driver = false, context }: { open: boolean; onClose: () => void; token?: string; slug?: string; home?: boolean; driver?: boolean; context?: TripContext }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
-  const widgetPreview = useWidgetPreview(token);
+  // Leo (official ElevenLabs widget) is the helper on personal trip links and demo pages; driver pages and the
+  // token-less /lax page keep this text helper, since Leo's tools need a trip.
+  const leo = !!token && !driver;
+  useEffect(() => { if (leo) preloadLeo(); }, [leo]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState<number | null>(null);
@@ -408,7 +401,7 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
       .catch(() => setChips(nextChips([], askedRef.current, home)));
 
   useEffect(() => {
-    if (!open || loaded.current) return;
+    if (!open || loaded.current || leo) return;
     loaded.current = true;
     rpc("lax_ask_history", who).then(({ data }) => {
       if (!Array.isArray(data) || !data.length) return;
@@ -489,8 +482,7 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
     return null;
   })();
 
-  // Preview of the official ElevenLabs widget (demo links with ?widget=1 only): it replaces this sheet entirely.
-  if (widgetPreview) return open && token ? <LeoWidget token={token} context={context} home={home} onClose={onClose} /> : null;
+  if (leo) return open && token ? <LeoWidget token={token} context={context} home={home} onClose={onClose} /> : null;
 
   return (
     <TripSheet open={open} onClose={onClose} kicker="Trip helper" title="Talk to our team 24/7" footer={footer} bodyRef={body}>
@@ -506,8 +498,6 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
             className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-2.5 py-1.5 font-semibold text-white"><RotateCcw className="h-3.5 w-3.5" aria-hidden />Reset</button>
         </div>
       )}
-      {/* Leo, the voice helper: personal trip links and the host's demo pages only (his tools are scoped to one trip). */}
-      {token && !driver && <LeoVoice token={token} open={open} suggestions={leoSuggestions(context, home)} />}
       {msgs.length === 0 ? (
         <div>
           <p className="text-[15px] leading-relaxed text-white/75">{driver ? "Ask anything about your phone key or getting into the car. I can check your key and send a fresh one if it's not working." : home ? "Ask anything about your phone key, finding the car, driving it, or returning it." : "Ask anything about getting to the garage, the lobby door, the car, or returning it."} Answers come from your trip guide.</p>

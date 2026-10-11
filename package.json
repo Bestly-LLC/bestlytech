@@ -12,7 +12,6 @@
     "test:e2e": "npx playwright test"
   },
   "dependencies": {
-    "@elevenlabs/client": "^1.27.0",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/newsreader": "^5.2.10",
     "@fontsource/plus-jakarta-sans": "^5.2.8",

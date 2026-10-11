@@ -1,8 +1,12 @@
 /**
  * Leo in the official ElevenLabs widget (<elevenlabs-convai>), as a pull-out card on the trip pages.
  *
- * PREVIEW (2026-10-11): only on demo links with ?widget=1, so Jared can try it before it replaces the custom
- * helper sheet. Guests see nothing new.
+ * Live for every personal trip link and demo page (2026-10-11); replaces the custom helper sheet there. Driver pages
+ * and the token-less /lax page keep the text helper (Leo's tools need a trip).
+ *
+ * Voice first, text second (Jared): opening the card starts a voice call with Leo; the widget's "Type instead"
+ * switches to text. iPhone only plays audio from an AudioContext unlocked inside a tap, and the embed arms that unlock
+ * when it loads, so trip pages preload the embed shortly after the page opens (preloadLeo), before any tap.
  *
  * - Same pinned embed + SRI and self-hosted audio worklets as Maya's widget (loadEmbed in MayaWidget).
  * - Leo requires signed sessions: each open trades the trip token for a fresh signed URL + opaque trip_key
@@ -72,9 +76,23 @@ const THEME = {
   },
 } as const;
 
-export function useWidgetPreview(token?: string): boolean {
-  if (typeof window === "undefined" || !token?.startsWith("demo-")) return false;
-  try { return new URLSearchParams(window.location.search).get("widget") === "1"; } catch { return false; }
+/** Load the widget embed early (idle, about 2 seconds after the trip page opens) so the guest's first tap unlocks audio. */
+export function preloadLeo() {
+  const go = () => { void loadEmbed().catch(() => {}); };
+  const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+  window.setTimeout(() => (w.requestIdleCallback ? w.requestIdleCallback(go, { timeout: 4000 }) : go()), 2000);
+}
+
+/** Press the widget's own "Call Leo" button once it renders, so the card opens straight into a voice call. */
+function autoCall(el: HTMLElement | null) {
+  if (!el) return;
+  // ?nocall=1 opens the card without dialing (screenshots and checks without a mic prompt).
+  try { if (new URLSearchParams(window.location.search).get("nocall") === "1") return; } catch { /* ignore */ }
+  let tries = 0;
+  const t = window.setInterval(() => {
+    const b = el.shadowRoot?.querySelector<HTMLButtonElement>('button[aria-label="Call Leo"]');
+    if (b || ++tries > 40) { window.clearInterval(t); b?.click(); }
+  }, 125);
 }
 
 export function LeoWidget({ token, context, home, onClose }: { token: string; context?: TripContext; home: boolean; onClose: () => void }) {
@@ -109,6 +127,7 @@ export function LeoWidget({ token, context, home, onClose }: { token: string; co
   const theme = THEME[home ? "home" : "lax"];
   return (<>{scrim}
     <Convai
+      ref={(el: HTMLElement | null) => { if (el && !el.dataset.called) { el.dataset.called = "1"; autoCall(el); } }}
       style={theme.vars}
       signed-url={s.url}
       dynamic-variables={JSON.stringify({ trip_key: s.key })}
