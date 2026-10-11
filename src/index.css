@@ -1150,3 +1150,8 @@ body.leo-open nav[aria-label="Trip steps"] { transform: translateY(105%); opacit
   nav[aria-label="Trip steps"] { transition: opacity 150ms linear; }
   body.leo-open nav[aria-label="Trip steps"] { transform: none; }
 }
+
+/* Leo's orb while he talks: a slow breathe and spin. Still for Reduce Motion. */
+@keyframes leo-orb-breathe { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.08) rotate(180deg); } }
+.leo-orb-live { animation: leo-orb-breathe 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .leo-orb-live { animation: none; } }

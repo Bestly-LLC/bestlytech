@@ -440,7 +440,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
         <VideoPlayer />
         <ScrollFx />
         <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home
-          context={{ stage: tripTab(pub.trip, ended, pub.car_connected_at, key?.state ?? pub.key?.state), keyState: key?.state ?? pub.key?.state }} />
+          context={{ stage: tripTab(pub.trip, ended, pub.car_connected_at, key?.state ?? pub.key?.state), keyState: key?.state ?? pub.key?.state, keyLink: key?.link ?? pub.key?.link ?? null }} />
 
         <BestlyAd campaign="home-trip-page" blurb="We make websites, apps, and tools for small businesses. Like this page: a phone key that shows up by itself, live car info and A/C buttons." />
       </main>
