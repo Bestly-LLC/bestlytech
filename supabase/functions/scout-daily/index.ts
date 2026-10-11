@@ -483,12 +483,15 @@ const REFLECT_BASE =
   `when (the situation), do (what Scout should do next time, one or two sentences), avoid (what went wrong, or null), signature (key words from the error or his words), evidence (the ids given). ` +
   `Return JSON only: {"lessons":[{"scope":"...","title":"...","when":"...","do":"...","avoid":"... or null","signature":"...","evidence":["<ids>"]}],"unsolved":[{"scope":"...","problem":"one line"}]}. At most 6 lessons; zero is fine.`;
 const REFLECT_KIND: Record<RChunk["kind"], string> = {
-  jared: `This batch is JARED'S OWN MESSAGES to Scout (each with what Scout had just said). Learn from Jared, not from errors: a correction ("no", "wrong", "I said", "again", "you should not have"), a repeated ask, a stated preference or rule, or friction (he had to type Keep going or ask for paid AI again and again) each become a lesson with scope jared:<topic> (for example jared:replies, jared:code-changes, jared:paid-ai, jared:ui, jared:turo). do = what Scout does differently next time, in his terms. Only when his own words show it; put his short quote in "when". Never turn a one-time task request into a lesson.`,
+  jared: `This batch is JARED'S OWN MESSAGES to Scout (each with what Scout had just said). Learn from Jared, not from errors: a correction ("no", "wrong", "I said", "again", "you should not have"), a repeated ask, a stated preference or rule, or friction (he had to type Keep going or ask for paid AI again and again) each become a lesson with scope jared:<topic> (for example jared:replies, jared:code-changes, jared:paid-ai, jared:ui, jared:turo). do = what Scout does differently next time, in his terms. Only when his own words show it; put his short quote in "when". Never turn a one-time task request into a lesson. GUARDRAIL: a lesson may never tell Scout to spend money, use paid AI on its own, skip a confirmation, or act without his yes (his approval and Paid AI rules are fixed in code, not learned). A paid-AI lesson can only say that when he types a request for paid AI, the run is paid. A lesson about a person, product or repo must come from his words, not a guess.`,
   failures: `This batch is Scout's TOOL CALLS grouped by chat thread (steps in order, ok true/false). Find lessons where something failed and then something else worked, or the same mistake repeats and the fix is clear from the data (a table's real columns, a tool's argument, a path). Also list UNSOLVED problems: failures that repeat with no fix yet.`,
   ops: `This batch is failed Mac mini jobs and monitor incidents. Find lessons where the cause and the fix are both visible. List UNSOLVED ones that repeat with no fix.`,
 };
 
 type Attempt = { name: string; skip: string[]; deadline: number; paid: "never" | "first"; wait: number };
+/** Once FreeLLM has timed out during this invocation, later chunks start at Groq instead of waiting 30 s on it again (the Oct 7-10 failures were exactly that wait). */
+const reflectRun = { freellmDown: false };
+const sawFreellmTimeout = (tried: { provider: string; outcome: string }[]) => tried.some((t) => t.provider === "freellm" && t.outcome === "timeout");
 const ATTEMPTS: Attempt[] = [
   { name: "freellm>groq>cloudflare", skip: [], deadline: 38_000, paid: "never", wait: 0 },
   { name: "groq>cloudflare", skip: ["freellm"], deadline: 32_000, paid: "never", wait: 6_000 },
@@ -510,10 +513,12 @@ async function reflectChunk(c: RChunk, known: { scope: string; title: string }[]
       const r = await llm({
         task: "reflect", system, user: c.text, json: true, job: "reflect", ref: c.id, fn: "scout-daily", scope: "background",
         paid: at.paid, paidModel: "claude-haiku-4-5", maxTokens: 1400, deadlineMs: Math.min(at.deadline, deadline - Date.now()),
-        validate: SHAPE.reflect, skip: at.skip as any,
+        validate: SHAPE.reflect, skip: (reflectRun.freellmDown ? [...new Set([...at.skip, "freellm"])] : at.skip) as any,
       });
+      if (sawFreellmTimeout(r.tried)) reflectRun.freellmDown = true;
       return { json: r.json, via: `${at.name}:${r.provider}` };
     } catch (e) {
+      if (e instanceof LlmUnavailable && sawFreellmTimeout(e.tried)) reflectRun.freellmDown = true;
       last = e instanceof LlmUnavailable ? `${at.name}: ${e.reason} (${e.tried.map((t) => `${t.provider} ${t.outcome}`).join(", ")})` : `${at.name}: ${(e as Error).message}`;
     }
   }
@@ -541,6 +546,7 @@ type ReflectOpts = { days?: number; dry?: boolean; allowPaid?: boolean; state?: 
 
 async function reflect(opts: ReflectOpts = {}) {
   const t0 = Date.now(), deadline = t0 + REFLECT_BUDGET_MS;
+  reflectRun.freellmDown = false;
   const st: ReflectState = { ...(opts.state ?? {}) };
   const since = st.since ?? new Date(Date.now() - (opts.days ?? 1) * 864e5).toISOString();
   st.since = since;
