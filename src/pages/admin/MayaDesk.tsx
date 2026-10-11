@@ -1,34 +1,29 @@
 /**
  * /admin/maya: Maya Desk. Maya is Bestly's Sales & Service phone agent, (213) 641-0074: support for every Bestly product,
  * privacy requests (CCPA, 45 days), and Bestly Agent demo requests.
- *   Needs follow-up   support_tickets that are not leads, soonest due first (admin_maya_tickets 'open')
- *   Leads             demo requests (kind sales_lead)
- *   Calls             her recent calls with transcripts (edge fn maya-admin)
- *   Done              closed tickets, with Reopen
+ * Three collapsible columns (plan: docs/maya-desk-columns-opusplan.md):
+ *   Sales      open demo requests (kind sales_lead), plus a "Closed leads" disclosure
+ *   Service    support_tickets that are not leads, soonest due first, plus a "Done" disclosure with Reopen
+ *   Messages   her recent calls with transcripts (edge fn maya-admin)
  * Data: support_tickets via admin_maya_tickets / admin_maya_ticket_set / admin_maya_counts (admin only). Line health: ava_line_health 'maya'.
- * Plan: docs/maya-desk-opusplan.md. Nothing here touches Ava or Reese.
+ * Nothing here touches Ava or Reese.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Headset } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronRight, Headset, LifeBuoy, MessagesSquare, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { LineStatus, rpcArgs } from "@/components/admin/roofguard/AvaShared";
-import { TicketCard, type TicketAct } from "@/components/admin/maya/TicketCard";
-import { MayaCalls } from "@/components/admin/maya/MayaCalls";
-import type { Ticket } from "@/components/admin/maya/mayaFormat";
+import { CollapsibleSection } from "@/components/admin/roofguard/CollapsibleSection";
+import { TicketCard, type TicketAct, type TicketMode } from "@/components/admin/maya/TicketCard";
+import { MayaCallsList, useMayaCalls } from "@/components/admin/maya/MayaCalls";
+import { clock, dayWord, type Ticket } from "@/components/admin/maya/mayaFormat";
 
-type Seg = "open" | "leads" | "calls" | "done";
+type View = "open" | "leads" | "done";
 type Counts = { open: number; overdue: number; leads: number; privacy_open: number };
-const SEG_KEY = "maya-desk-segment";
-const SEGS: { id: Seg; label: string }[] = [
-  { id: "open", label: "Needs follow-up" }, { id: "leads", label: "Leads" }, { id: "calls", label: "Calls" }, { id: "done", label: "Done" },
-];
+type Lists = Record<View, Ticket[] | null>;
+type Errs = Record<View, string | null>;
+const VIEWS: View[] = ["open", "leads", "done"];
 const NB = " ";
-
-function readSeg(): Seg {
-  try { const v = localStorage.getItem(SEG_KEY); if (v === "open" || v === "leads" || v === "calls" || v === "done") return v; } catch { /* private mode */ }
-  return "open";
-}
 
 function Stat({ label, value, warn }: { label: string; value: number | undefined; warn?: boolean }) {
   const hot = warn && (value ?? 0) > 0;
@@ -40,12 +35,53 @@ function Stat({ label, value, warn }: { label: string; value: number | undefined
   );
 }
 
+/** Count pill in a column header. */
+function Pill({ n, hot, label }: { n: number | undefined; hot?: boolean; label: string }) {
+  if (n == null) return null;
+  return (
+    <span aria-label={label} className={cn("inline-flex min-w-[28px] items-center justify-center rounded-full px-2.5 py-1 text-[13px] font-semibold tabular-nums",
+      hot ? "bg-orange-500/20 text-orange-200" : n > 0 ? "bg-white/15 text-white" : "bg-white/[0.07] text-white/60")}>{n}</span>
+  );
+}
+
+const plural = (n: number, one: string, many: string) => `${n}${NB}${n === 1 ? one : many}`;
+const box = "rounded-2xl bg-white/[0.04] p-5 text-[15px] text-white/75 ring-1 ring-white/10";
+const bodyCls = "space-y-3 p-3";
+
+function Skeleton({ n, h = 150 }: { n: number; h?: number }) {
+  return <>{Array.from({ length: n }, (_, i) => <div key={i} style={{ height: h }} className="rounded-2xl bg-white/[0.04] ring-1 ring-white/10 motion-safe:animate-pulse" aria-hidden />)}</>;
+}
+
+function ColError({ msg, retry }: { msg: string; retry: () => void }) {
+  return (
+    <div role="alert" className="rounded-2xl bg-amber-500/10 p-4 text-[15px] text-amber-100 ring-1 ring-amber-500/30">
+      <p>{msg}</p>
+      <button type="button" onClick={retry} className="mt-2 min-h-[44px] rounded-xl bg-white/10 px-4 font-medium text-white hover:bg-white/15">Retry</button>
+    </div>
+  );
+}
+
+/** Small disclosure row inside a column ("Done · 12"). Collapsed by default, expands in place. */
+function Disclosure({ label, count, children }: { label: string; count: number | null; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
+        className="flex min-h-[44px] w-full items-center gap-2 rounded-2xl px-3 text-left text-[15px] font-medium text-white/75 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+        <ChevronRight className={cn("h-4 w-4 shrink-0 text-white/55 transition-transform duration-200 motion-reduce:transition-none", open && "rotate-90")} aria-hidden />
+        <span className="whitespace-nowrap">{label}{count != null ? ` · ${count}` : ""}</span>
+      </button>
+      {open && <div className="mt-2 space-y-3">{children}</div>}
+    </div>
+  );
+}
+
 export default function MayaDesk() {
-  const [seg, setSeg] = useState<Seg>(readSeg);
   const [counts, setCounts] = useState<Counts | null>(null);
-  const [rows, setRows] = useState<Ticket[] | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const req = useRef(0);
+  const [lists, setLists] = useState<Lists>({ open: null, leads: null, done: null });
+  const [errs, setErrs] = useState<Errs>({ open: null, leads: null, done: null });
+  const calls = useMayaCalls();
+  const reqs = useRef<Record<View, number>>({ open: 0, leads: 0, done: 0 });
   const pending = useRef(0);     // writes in flight: a poll must not resurrect a card that was just closed
 
   const loadCounts = useCallback(async () => {
@@ -53,60 +89,81 @@ export default function MayaDesk() {
     if (data) setCounts(data);
   }, []);
 
-  const loadRows = useCallback(async (s: Seg) => {
-    if (s === "calls") return;
-    const id = ++req.current;
-    const { data, error } = await rpcArgs<Ticket[]>("admin_maya_tickets", { p_view: s });
-    if (id !== req.current || pending.current > 0) return;
-    if (error) { setErr("Couldn't load tickets. Try again in a minute."); return; }
-    setErr(null); setRows(data ?? []);
+  const loadView = useCallback(async (v: View) => {
+    const id = ++reqs.current[v];
+    const { data, error } = await rpcArgs<Ticket[]>("admin_maya_tickets", { p_view: v });
+    if (id !== reqs.current[v] || pending.current > 0) return;
+    if (error) { setErrs((e) => ({ ...e, [v]: "Couldn't load tickets. Try again in a minute." })); return; }
+    setErrs((e) => ({ ...e, [v]: null }));
+    setLists((l) => ({ ...l, [v]: data ?? [] }));
   }, []);
 
-  const pick = (s: Seg) => {
-    setSeg(s);
-    try { localStorage.setItem(SEG_KEY, s); } catch { /* private mode */ }
-  };
+  const { load: loadCalls } = calls;
+  const refresh = useCallback(() => { VIEWS.forEach((v) => void loadView(v)); void loadCounts(); void loadCalls(); }, [loadView, loadCounts, loadCalls]);
 
-  // Load the list for the chosen segment, then keep it and the counts fresh every 60 seconds while the tab is visible.
+  // Load everything, then keep it fresh every 60 seconds while the tab is visible.
   useEffect(() => {
-    setRows(null); setErr(null);
-    void loadRows(seg); void loadCounts();
-    const t = setInterval(() => { if (!document.hidden) { void loadRows(seg); void loadCounts(); } }, 60000);
-    const vis = () => { if (!document.hidden) { void loadRows(seg); void loadCounts(); } };
+    refresh();
+    const t = setInterval(() => { if (!document.hidden) refresh(); }, 60000);
+    const vis = () => { if (!document.hidden) refresh(); };
     document.addEventListener("visibilitychange", vis);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", vis); };
-  }, [seg, loadRows, loadCounts]);
+  }, [refresh]);
 
   const onAct: TicketAct = async (t, status, note) => {
-    const before = rows;
-    setRows((r) => (r ?? []).filter((x) => x.code !== t.code));       // optimistic
+    const before = lists;
+    const from: View = t.status !== "open" ? "done" : t.kind === "sales_lead" ? "leads" : "open";
+    setLists((l) => ({ ...l, [from]: (l[from] ?? []).filter((x) => x.code !== t.code) }));       // optimistic
     pending.current += 1;
     const { error } = await rpcArgs("admin_maya_ticket_set", { p_code: t.code, p_status: status, p_note: note });
     pending.current -= 1;
     if (error) {
-      setRows(before);
+      setLists(before);
       toast.error(`Couldn't update ${t.code}. Try again.`);
       return;
     }
-    void loadCounts();
+    VIEWS.forEach((v) => void loadView(v)); void loadCounts();
     if (status === "open") { toast.success(`${t.code} reopened`); return; }
     toast(`${t.code} marked ${status === "spam" ? "spam" : "done"}`, {
       duration: 5000,
       action: { label: "Undo", onClick: async () => {
         const u = await rpcArgs("admin_maya_ticket_set", { p_code: t.code, p_status: "open", p_note: null });
         if (u.error) toast.error(`Couldn't undo for ${t.code}.`);
-        void loadRows(seg); void loadCounts();
+        VIEWS.forEach((v) => void loadView(v)); void loadCounts();
       } },
     });
   };
 
-  const empty: Record<Exclude<Seg, "calls">, string> = {
-    open: "Nothing waiting. Maya has it covered.",
-    leads: "No demo requests waiting. When someone asks for a Bestly Agent demo on the phone, it lands here.",
-    done: "Nothing closed yet.",
-  };
-  const badge = (s: Seg) => s === "open" ? counts?.open : s === "leads" ? counts?.leads : undefined;
-  const idx = SEGS.findIndex((s) => s.id === seg);
+  const leads = lists.leads;
+  const doneLeads = lists.done?.filter((t) => t.kind === "sales_lead") ?? null;
+  const doneOther = lists.done?.filter((t) => t.kind !== "sales_lead") ?? null;
+
+  const cards = (rows: Ticket[], mode: TicketMode) => rows.map((t) => <TicketCard key={t.code} t={t} mode={mode} onAct={onAct} />);
+  const doneBlock = (label: string, rows: Ticket[] | null) => (
+    <Disclosure label={label} count={rows ? rows.length : null}>
+      {errs.done && <ColError msg={errs.done} retry={() => void loadView("done")} />}
+      {rows === null && !errs.done && <Skeleton n={2} />}
+      {rows?.length === 0 && <p className={box}>Nothing closed yet.</p>}
+      {rows && cards(rows, "done")}
+    </Disclosure>
+  );
+
+  // Closed-state summaries (shown in the header while a column is collapsed).
+  const leadCount = counts?.leads ?? leads?.length;
+  const newestLead = leads && leads.length ? leads.reduce((a, b) => (Date.parse(b.created_at) > Date.parse(a.created_at) ? b : a)) : null;
+  const salesSummary = !leadCount ? "Nothing waiting" : `${plural(leadCount, "demo request", "demo requests")}${newestLead ? ` · newest ${clock(newestLead.created_at)}` : ""}`;
+
+  const openCount = counts?.open ?? lists.open?.length;
+  const serviceSummary = !openCount ? "Nothing waiting" : [
+    `${openCount} open`,
+    counts?.overdue ? `${counts.overdue} overdue` : null,
+    counts?.privacy_open ? `${counts.privacy_open} privacy` : null,
+  ].filter(Boolean).join(" · ");
+
+  const callRows = calls.rows;
+  const todays = callRows?.filter((c) => c.started_at && dayWord(c.started_at) === "Today") ?? null;
+  const lastCall = callRows?.find((c) => c.started_at);
+  const messagesSummary = !callRows?.length ? "No calls yet" : `${plural(todays?.length ?? 0, "call", "calls")} today${lastCall?.started_at ? ` · last ${dayWord(lastCall.started_at) === "Today" ? "" : `${dayWord(lastCall.started_at)} `}${clock(lastCall.started_at)}` : ""}`;
 
   return (
     <div className="space-y-5 pb-24">
@@ -123,7 +180,7 @@ export default function MayaDesk() {
           </div>
           <LineStatus source="maya" />
         </div>
-        <div className="grid grid-cols-4 gap-2" aria-label="Maya at a glance">
+        <div className="grid grid-cols-4 gap-2 xl:max-w-2xl" aria-label="Maya at a glance">
           <Stat label="Open" value={counts?.open} />
           <Stat label="Overdue" value={counts?.overdue} warn />
           <Stat label="Leads" value={counts?.leads} />
@@ -131,37 +188,35 @@ export default function MayaDesk() {
         </div>
       </header>
 
-      <div role="tablist" aria-label="Maya Desk views" className="relative grid grid-cols-4 rounded-2xl bg-white/[0.06] p-1 ring-1 ring-white/10">
-        <span aria-hidden className="absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/4)] rounded-xl bg-white/[0.14] shadow-sm motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.2,0.8,0.2,1)]"
-          style={{ transform: `translateX(${idx * 100}%)` }} />
-        {SEGS.map((s) => {
-          const n = badge(s.id);
-          return (
-            <button key={s.id} type="button" role="tab" aria-selected={seg === s.id} onClick={() => pick(s.id)}
-              className={cn("relative z-10 flex min-h-[44px] flex-col items-center justify-center rounded-xl px-1 text-center text-[13px] font-medium leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 sm:text-[15px]",
-                seg === s.id ? "text-white" : "text-white/65 hover:text-white")}>
-              <span>{s.label}</span>
-              {n != null && n > 0 && <span className="text-[12px] tabular-nums text-white/70">{n}</span>}
-            </button>
-          );
-        })}
-      </div>
+      {/* Jared asked for all three columns to be collapsible (CollapsibleSection's header note about always-open areas does not apply here). */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {/* Phone order: Service, Sales, Messages. Tablet: Service | Messages, Sales full width below. Desktop: Sales | Service | Messages. */}
+        <CollapsibleSection id="maya-col-sales" defaultOpen className="order-2 lg:order-3 lg:col-span-2 xl:order-1 xl:col-span-1" bodyClassName={bodyCls}
+          title="Sales" icon={<TrendingUp className="h-5 w-5 text-emerald-300" />} summary={salesSummary}
+          badge={<Pill n={leadCount} label={`${leadCount ?? 0} open demo requests`} />}>
+          {errs.leads && <ColError msg={errs.leads} retry={() => void loadView("leads")} />}
+          {leads === null && !errs.leads && <Skeleton n={2} />}
+          {leads?.length === 0 && <p className={box}>No demo requests yet. Maya pitches the Bestly Agent when a caller runs a business.</p>}
+          {leads && cards(leads, "lead")}
+          {doneBlock("Closed leads", doneLeads)}
+        </CollapsibleSection>
 
-      <div role="tabpanel" className="space-y-3">
-        {seg === "calls" ? <MayaCalls /> : (<>
-          {err && (
-            <div role="alert" className="rounded-2xl bg-amber-500/10 p-4 text-[15px] text-amber-100 ring-1 ring-amber-500/30">
-              <p>{err}</p>
-              <button type="button" onClick={() => void loadRows(seg)} className="mt-2 min-h-[44px] rounded-xl bg-white/10 px-4 font-medium text-white hover:bg-white/15">Retry</button>
-            </div>
-          )}
-          {rows === null && !err && Array.from({ length: 3 }, (_, i) => (
-            <div key={i} className="h-[150px] rounded-2xl bg-white/[0.04] ring-1 ring-white/10 motion-safe:animate-pulse" aria-hidden />
-          ))}
-          {rows?.length === 0 && <p className="rounded-2xl bg-white/[0.04] p-5 text-[15px] text-white/75 ring-1 ring-white/10">{empty[seg]}</p>}
-          {rows?.map((t) => <TicketCard key={t.code} t={t} mode={seg === "leads" ? "lead" : seg === "done" ? "done" : "followup"} onAct={onAct} />)}
-          {seg === "done" && rows && rows.length >= 100 && <p className="text-[13px] text-white/55">Showing the 100 most recent.</p>}
-        </>)}
+        <CollapsibleSection id="maya-col-service" defaultOpen className="order-1 lg:order-1 xl:order-2" bodyClassName={bodyCls}
+          title="Service" icon={<LifeBuoy className="h-5 w-5 text-sky-300" />} summary={serviceSummary}
+          badge={<Pill n={openCount} hot={(counts?.overdue ?? 0) > 0} label={`${openCount ?? 0} open tickets${(counts?.overdue ?? 0) > 0 ? `, ${counts?.overdue} overdue` : ""}`} />}>
+          {errs.open && <ColError msg={errs.open} retry={() => void loadView("open")} />}
+          {lists.open === null && !errs.open && <Skeleton n={3} />}
+          {lists.open?.length === 0 && <p className={box}>Nothing waiting. Maya has it covered.</p>}
+          {lists.open && cards(lists.open, "followup")}
+          {doneBlock("Done", doneOther)}
+          {lists.done && lists.done.length >= 100 && <p className="px-1 text-[13px] text-white/55">Done shows the 100 most recent.</p>}
+        </CollapsibleSection>
+
+        <CollapsibleSection id="maya-col-messages" defaultOpen className="order-3 lg:order-2 xl:order-3" bodyClassName={bodyCls}
+          title="Messages" icon={<MessagesSquare className="h-5 w-5 text-violet-300" />} summary={messagesSummary}
+          badge={callRows ? <Pill n={todays?.length ?? 0} label={`${todays?.length ?? 0} calls today`} /> : null}>
+          <MayaCallsList rows={callRows} err={calls.err} busy={calls.busy} load={calls.load} />
+        </CollapsibleSection>
       </div>
     </div>
   );
