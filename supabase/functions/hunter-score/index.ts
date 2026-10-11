@@ -30,6 +30,11 @@ const db: any = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: {
 const PT = "America/Los_Angeles";
 const JEV_URL = "https://api.typesafe.ai/v1/systemone";
 const JEV_MODEL = "jev-latest";
+// Jev is also on Vercel AI Gateway (no waitlist), same request and reply shape. A gateway key starts with "vck_".
+// Docs: vercel.com/docs/ai-gateway/sdks-and-apis/typesafe (checked 2026-10-11).
+const GW_URL = "https://ai-gateway.vercel.sh/typesafe/v1/systemone";
+const GW_MODEL = "typesafe-ai/jev";
+const jevRoute = (key: string) => key.startsWith("vck_") ? { url: GW_URL, model: GW_MODEL } : { url: JEV_URL, model: JEV_MODEL };
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type, apikey, x-client-info, x-proxy-key", "access-control-allow-methods": "POST, OPTIONS" };
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json", ...CORS } });
@@ -160,12 +165,13 @@ const jevMessage = (e: unknown): string => {
 
 async function jevScore(key: string, owner: Owner, input: Record<string, any>): Promise<Scored> {
   const t0 = Date.now();
+  const route = jevRoute(key);
   let res: Response;
   try {
-    res = await fetch(JEV_URL, {
+    res = await fetch(route.url, {
       method: "POST", signal: AbortSignal.timeout(15_000),
       headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({ state: stateText(owner, input), model: JEV_MODEL, questions: QUESTIONS(owner) }),
+      body: JSON.stringify({ state: stateText(owner, input), model: route.model, questions: QUESTIONS(owner) }),
     });
   } catch { throw new JevError(0, "timeout"); }
   const latency = Date.now() - t0;
@@ -178,7 +184,7 @@ async function jevScore(key: string, owner: Owner, input: Record<string, any>): 
   const fit = clamp01(a.fit?.noul);
   if (!ROLES.includes(role as never) || !WINDOWS.includes(win as never) || Number.isNaN(fit)) throw new Error("Jev answered in a shape I did not expect");
   return { p_reach_dm: probs.decision_maker, outcome_probs: probs, dm_role: role, best_window: win, p_fit: Math.round(fit * 10000) / 10000,
-    model: String(j.model ?? JEV_MODEL), latency_ms: latency, tokens_in: Number(j.usage?.input_tokens ?? 0) || null };
+    model: String(j.model ?? route.model), latency_ms: latency, tokens_in: Number(j.usage?.input_tokens ?? 0) || null };
 }
 
 /* ───────── free AI ladder, asked for the same shape ───────── */

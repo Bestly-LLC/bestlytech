@@ -117,7 +117,7 @@ export function JevCard() {
           </div>
           <p className="text-[13px] leading-relaxed text-white/65">
             {st.key_saved ? `Saved ${when(st.saved_at)}. ` : ""}It goes straight to the Bestly vault and is never shown again.{" "}
-            {!st.key_saved && <>Get one at{" "}<a href="https://console.typesafe.ai" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-sky-300 underline-offset-2 hover:underline">console.typesafe.ai<ExternalLink className="h-3 w-3" aria-hidden /></a> (early access).</>}
+            {!st.key_saved && <>Fastest: a Vercel{" "}<a href="https://vercel.com/bestly/~/ai/api-keys" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-sky-300 underline-offset-2 hover:underline">AI Gateway key<ExternalLink className="h-3 w-3" aria-hidden /></a> (starts with vck_, no waitlist). A TypeSafe key works too.</>}
           </p>
         </form>
 
