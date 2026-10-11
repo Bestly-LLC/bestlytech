@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { AdminMark } from "@/components/AdminMark";
-import { BookOpen, GripVertical, Network, Plane, Projector } from "lucide-react";
+import { BookOpen, GripVertical, Network, Plane, Plus, Projector } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
@@ -273,10 +273,14 @@ export function AdminSidebar() {
       if (!document.hidden) loadCounts(true);
     }, COUNT_POLL_MS);
     const onFocus = () => loadCounts();
+    // "+ New agent" finished: show it in the Agents group now instead of at the next poll.
+    const onAgents = () => { void supabase.rpc("admin_agents" as never).then(({ data }) => { if (Array.isArray(data)) setAgents(data as unknown as AgentNav[]); }); };
     window.addEventListener("focus", onFocus);
+    window.addEventListener("bestly:agents-changed", onAgents);
     return () => {
       clearInterval(interval);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("bestly:agents-changed", onAgents);
     };
   }, [loadCounts]);
 
@@ -524,6 +528,17 @@ export function AdminSidebar() {
             <SidebarGroup>
               <SidebarGroupLabel className="group/label flex items-center justify-between text-[0.625rem] uppercase tracking-widest text-white/50 font-semibold px-3">
                 <span>{section.label}</span>
+                {!collapsed && section.label === "Agents" && (
+                  <Link
+                    to="/admin/agents/new"
+                    onClick={closeMobile}
+                    aria-label="New agent"
+                    title="New agent"
+                    className="-my-2.5 ml-auto grid h-11 w-11 place-items-center rounded-md text-white/60 transition hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Link>
+                )}
                 {!collapsed && (
                   <button
                     type="button"

@@ -114,6 +114,7 @@ const AvaAssistant = lazyPage(() => import("./pages/admin/AvaAssistant"));
 const MayaDesk = lazyPage(() => import("./pages/admin/MayaDesk"));
 const AgentDesk = lazyPage(() => import("./pages/admin/AgentDesk"));
 const Hunter = lazyPage(() => import("./pages/admin/Hunter"));
+const AgentNew = lazyPage(() => import("./pages/admin/AgentNew"));
 const ClaimsCloser = lazyPage(() => import("./pages/admin/ClaimsCloser"));
 const Settlements = lazyPage(() => import("./pages/admin/Settlements"));
 const Wall = lazyPage(() => import("./pages/admin/Wall"));
@@ -264,6 +265,7 @@ const App = () => {
                   <Route path="roofguard" element={<RoofGuard />} />
                   <Route path="ava" element={<AvaAssistant />} />
                   <Route path="maya" element={<MayaDesk />} />
+                  <Route path="agents/new" element={<AgentNew />} />
                   <Route path="agents/:slug" element={<AgentDesk />} />
                   <Route path="hunter" element={<Hunter />} />
                   <Route path="wall" element={<Wall />} />
