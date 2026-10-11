@@ -60,3 +60,45 @@ works the email-partner list and does not use the table.
 
 - No National Do Not Call Registry scrub exists (`docs/ava-calling-compliance-opusplan.md` step 5, needs Jared's FTC registration). Hunter marks every lead `dnc_checked = false` and queues landlines only; B2B landlines sit outside the registry, but a sole proprietor's landline can be a home line.
 - 456 of 1,164 RoofGuard numbers came back `voip`. RoofGuard's dialer accepts voip; the Hunter brief only lets landline through, so expect a lower yield (open decision for Jared).
+
+## Phase 1.5: Jev scoring and the priority hand-off (2026-10-11)
+
+Every lead a caller may dial now carries odds, so the queue is ordered by "most likely to reach the person who decides", not
+only by fit. No Claude tokens: the scorer is an edge function (`hunter-score`) on pg_cron.
+
+**Tables.** `hunter_lead_scores` (one row per owner + lead id: `p_reach_dm`, `outcome_probs`, `dm_role`, `best_window`, `p_fit`,
+`priority = p_reach_dm * p_fit`, one-line `reason`, the `inputs` the scorer was shown, `scorer` jev or free_ai) and
+`hunter_call_outcomes` (what really happened per call, for calibration; filled in Phase 4). Rows hold a lead id and numbers only,
+never a phone, email or name, so RoofGuard stays separable and `privacy_data_map` needs no row. Admin-read RLS, explicit grants.
+
+**Scorer.** `hunter-score` ops `run` (nightly, 1 to 5:50 AM PT every 10 minutes), `backfill`, `test`. Jev is used when the Vault
+secret `jev_api_key` exists, otherwise the free AI ladder (`free-llm` run op, privacy private, paid never) is asked the same four
+questions and the answer is validated and clamped to the same shape (`scorer = free_ai`). A lead whose Jev call fails falls back to
+free AI on its own; Jev is parked for the run after a 401/402/403 or four failures with no success. Per-night caps live in
+`hunter_settings` (`score_cap_jev` 500, `score_cap_free` 150). A score is refreshed after 7 days. Scoring never blocks the night.
+
+**Priority hand-off.** `hunter_handoff()` now orders each campaign's pick by `priority desc nulls last`, then `fit_score desc`,
+then created_at, so an unscored lead sorts last and the fit order is the fallback.
+
+**Reese (read only).** `hunter_reese_priority()` returns `(lead_id, priority, best_window, reason)` for fresh scores of callable
+`rg_leads`, using the same eligibility as `rg_next_call_batch` (phone present, line type landline or voip, not dnc, not in `rg_dnc`,
+call_status not booked / not_interested / do_not_call / wrong_number / in_progress). Worker-only (service role). **`roofguard-dial`
+and `rg_next_call_batch` are untouched**: wiring Reese to read this is Phase 3.
+
+**Jev (TypeSafe AI) System One, confirmed from docs.typesafe.ai:** `POST https://api.typesafe.ai/v1/systemone`, header
+`Authorization: Bearer <key>`, body `{state, model: "jev-latest", questions: {id: {type: "choice" | "score" | "noul", instructions,
+criteria?}}}`; answers come back as `{type, choice | score | noul, probabilities, confidence}` plus `usage {input_tokens, output_tokens}`.
+Pricing is $0.042 per million input tokens, output free. **Not confirmed** (docs silent): rate limits, the error body shape, and any
+calibration guarantee, so the adapter treats any unexpected shape as a failure and falls back to free AI.
+
+**Watchdog.** `hunter-run` op `watch` also judges scoring: lead scoring failed 2 nights runs one pass, then alerts
+"Hunter: scoring failed 2 nights"; a saved Jev key failing 2 nights gets one test call, then "Hunter: Jev is failing, using free AI
+estimates" (scoring continues on free AI). The team card hunter and the tool card hunter-scorer are in
+`20261011050300_hunter_score_cron_and_team_card.sql`.
+
+**Screens.** `/admin/leads/hunter` (Hunter, with the Jev card: status, write-only key field into Vault via `hunter_jev_key_put`,
+on/off, caps, "Score one lead") and `/admin/leads/hunter/scores` (the score screen). `/admin/hunter` and `/admin/hunter/scores`
+redirect.
+
+**Open.** The Jev key has to be pasted by Jared on the Jev card. `hunter_call_outcomes` stays empty until Phase 4. The free AI is about
+10 seconds a lead, so a first backfill is slow (it is rate-limited, not stuck). No National Do Not Call scrub yet (unchanged).

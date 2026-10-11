@@ -145,3 +145,9 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.agent-coach]
   verify_jwt = true
+
+[functions.trip-voice]
+  verify_jwt = false
+
+[functions.leo-phone-init]
+  verify_jwt = false

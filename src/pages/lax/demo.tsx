@@ -207,7 +207,7 @@ export function DemoBar({ kind, stage, onStage, weather, onWeather }: { kind: "h
     onBlur: () => { busy.current = false; later(2500); },
   };
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[8.5rem] z-40 flex justify-center px-3" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+    <div className="pointer-events-none fixed inset-x-0 bottom-[13.25rem] z-40 flex justify-center px-3" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
       {open ? (
         <div onPointerDown={poke} onKeyDown={poke}
           className="pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-2xl bg-black/85 px-3 py-2 text-white shadow-2xl ring-1 ring-white/20 backdrop-blur transition-opacity duration-200 motion-reduce:transition-none">

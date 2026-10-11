@@ -69,7 +69,7 @@ export function ProfileCard({ profile, onSaved }: { profile: Profile; onSaved: (
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className={cn("text-[17px] font-semibold leading-snug", label)}>{profile.full_name}</p>
-              <p className={cn("mt-0.5 text-[14px] leading-snug", secondary)}>{profile.email}{profile.phone ? ` · ${profile.phone}` : ""}</p>
+              <p className={cn("mt-0.5 text-[14px] leading-snug", secondary)}>{profile.email}{profile.phone ? <> · <span className="whitespace-nowrap">{profile.phone}</span></> : ""}</p>
               <p className={cn("text-[14px] leading-snug", secondary)}>{line}</p>
               <p className={cn("mt-1 text-[14px] leading-snug", label)}>Paid by {payout}</p>
               <p className={cn("mt-1 flex items-center gap-1 text-[13px]", tint.green)}>

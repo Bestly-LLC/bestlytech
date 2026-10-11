@@ -4,13 +4,14 @@
  * Opens in the same luggage bottom sheet as Pickup / Return.
  */
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Loader2, MapPin, MessageCircleQuestion, MessageSquare, Navigation, Phone, RotateCcw, UserPlus, Wrench } from "lucide-react";
+import { ArrowUp, CheckCircle2, Download, ExternalLink, FileText, Headset, Loader2, MapPin, MessageSquare, Navigation, Phone, RotateCcw, UserPlus, Wrench } from "lucide-react";
 import { ackText } from "./ExtraDrivers";
 import { useHasApp } from "./Guide";
 import { supabase } from "@/integrations/supabase/client";
 import { TripSheet } from "./TripSheet";
 import { track } from "./track";
 import { Lines } from "./Lines";
+import { LeoBar, LeoWidget, preloadLeo } from "./LeoWidget";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 type Msg = { id: number | string; role: "user" | "assistant"; content: string; status?: string };
@@ -112,12 +113,17 @@ function Chips({ list, onPick, disabled }: { list: string[]; onPick: (s: string)
   );
 }
 
-/** Slim button in the bottom bar, above the Pickup / Return tags. */
-export function AskButton({ onOpen }: { onOpen: () => void }) {
+/**
+ * The helper in the bottom bar, above the Pickup / Return tags. Trip links with Leo get the docked Leo bar
+ * (`leo`; `active` while the widget is open keeps its space without showing it twice); driver pages and the
+ * token-less /lax page keep the slim text-helper button.
+ */
+export function AskButton({ onOpen, leo = false, home = false, active = false }: { onOpen: () => void; leo?: boolean; home?: boolean; active?: boolean }) {
+  if (leo) return <LeoBar home={home} hidden={active} onOpen={onOpen} />;
   return (
     <button type="button" onClick={onOpen}
       className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white/[0.08] text-[15px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.98] motion-reduce:transition-none">
-      <MessageCircleQuestion className="h-[18px] w-[18px]" style={{ color: PEACH }} aria-hidden /> Ask any question here
+      <Headset className="h-[18px] w-[18px]" style={{ color: PEACH }} aria-hidden /> Talk to our team 24/7
     </button>
   );
 }
@@ -373,8 +379,15 @@ function Dots() {
 }
 
 const DRIVER_CHIPS = ["My key link doesn't work", "I accepted, but the car isn't in my Tesla app", "How do I unlock the car?", "Where is the car?"];
-export function AskSheet({ open, onClose, token, slug, home = false, driver = false }: { open: boolean; onClose: () => void; token?: string; slug?: string; home?: boolean; driver?: boolean }) {
+/** The trip's stage and key state, so Leo can open with what fits (see leoGreeting in LeoWidget). */
+export type TripContext = { stage: "pickup" | "return" | null; keyState?: string | null };
+
+export function AskSheet({ open, onClose, token, slug, home = false, driver = false, context }: { open: boolean; onClose: () => void; token?: string; slug?: string; home?: boolean; driver?: boolean; context?: TripContext }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
+  // Leo (official ElevenLabs widget) is the helper on personal trip links and demo pages; driver pages and the
+  // token-less /lax page keep this text helper, since Leo's tools need a trip.
+  const leo = !!token && !driver;
+  useEffect(() => { if (leo) preloadLeo(); }, [leo]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState<number | null>(null);
@@ -393,7 +406,7 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
       .catch(() => setChips(nextChips([], askedRef.current, home)));
 
   useEffect(() => {
-    if (!open || loaded.current) return;
+    if (!open || loaded.current || leo) return;
     loaded.current = true;
     rpc("lax_ask_history", who).then(({ data }) => {
       if (!Array.isArray(data) || !data.length) return;
@@ -406,7 +419,8 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
     refreshChips();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-  useEffect(() => { body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" }); }, [msgs, open]);
+  // Follow the conversation; with nothing said yet, stay at the top so Leo's card is the first thing seen.
+  useEffect(() => { if (msgs.length) body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" }); }, [msgs, open]);
 
   const patch = (id: Msg["id"], m: Partial<Msg>) => setMsgs((xs) => xs.map((x) => (x.id === id ? { ...x, ...m } : x)));
 
@@ -473,8 +487,10 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
     return null;
   })();
 
+  if (leo) return open && token ? <LeoWidget token={token} context={context} home={home} onClose={onClose} /> : null;
+
   return (
-    <TripSheet open={open} onClose={onClose} kicker="Trip helper" title="Ask any question here" footer={footer} bodyRef={body}>
+    <TripSheet open={open} onClose={onClose} kicker="Trip helper" title="Talk to our team 24/7" footer={footer} bodyRef={body}>
       {urgent && (
         <div className="mb-3 rounded-xl bg-[#E4527A]/20 p-3 text-[14px] font-semibold leading-snug text-white ring-1 ring-[#E4527A]/50">
           If anyone is hurt, call 911 first. Then use Roadside Assistance in the Turo app and message your host there.

@@ -438,7 +438,7 @@ export default function LaxGuest() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-md px-5 pb-48 pt-5">
+      <main className={`mx-auto max-w-md px-5 ${token ? "pb-64" : "pb-48"} pt-5`}>
         <HostPanel token={token || undefined} />
         {!pub ? (
           <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-white/60" /></div>
@@ -679,10 +679,11 @@ export default function LaxGuest() {
               )}
             
             </TripSheet>
-            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} hideTags={ended} only={tripTab(pub?.trip, ended, pub?.car_connected_at, pub?.key?.state)}
+            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton leo={!!token} active={sheet === "ask"} onOpen={() => openSheet("ask")} />} hideTags={ended} only={tripTab(pub?.trip, ended, pub?.car_connected_at, pub?.key?.state)}
               glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
             {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} weather={weather} onWeather={(w) => { setWeather(w); setPub(demoPub(dKind, stageRef.current) as Pub); }} />}
-            <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug} />
+            <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug}
+              context={{ stage: tripTab(pub?.trip, ended, pub?.car_connected_at, key?.state ?? pub?.key?.state), keyState: key?.state ?? pub?.key?.state }} />
             {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
             {token && !ended && <InstallToast token={token} kind="lax" />}
             {token && !ended && <PhoneHandoff token={token} keyReady={!!key && ["ready", "making"].includes(key.state)} />}

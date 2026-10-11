@@ -5,14 +5,15 @@
  *   Top bar     orb tinted by orb_hue, name, purpose chip, line number (tap to copy), status lights, live pills, spend chip, settings
  *   Live        a banner with the transcript so far, while a call is happening
  *   Body        modules, in collapsible columns:
- *                 tickets + privacy  Maya's Sales and Service columns, TicketCard and PrivacyCasePanel unchanged
+ *                 tickets + privacy  Maya's Sales and Service columns, TicketCard and PrivacyCasePanel unchanged;
+ *                                    other agents get only their own Service tickets (no Sales column)
  *                 calls              Messages (Maya) or Calls: numbered rows, call sheet with recording, share, Coach review
  *                 coach, voice, knowledge, and the Prompt (template agents), then "Tailor this agent"
  * Ava and Reese keep their own pages. Nothing here touches them.
  */
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { AlertTriangle, Check, Copy, MessagesSquare, Phone, Plus } from "lucide-react";
+import { AlertTriangle, Check, Copy, Globe, MessagesSquare, Phone, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AvaOrb } from "@/components/admin/roofguard/AvaOrb";
 import { CollapsibleSection, openSection } from "@/components/admin/roofguard/CollapsibleSection";
@@ -50,7 +51,7 @@ function LineNumber({ name, e164 }: { name: string; e164: string | null }) {
   const [copied, setCopied] = useState(false);
   if (!e164) return (
     <span className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-white/[0.04] px-3.5 text-[15px] text-white/60 ring-1 ring-white/10">
-      <Phone className="h-4 w-4" aria-hidden />Web only, no phone number</span>
+      <Globe className="h-4 w-4" aria-hidden />Web only, no phone number</span>
   );
   const copy = async () => {
     try { await navigator.clipboard.writeText(fmtPhone(e164).replace(/ /g, " ")); }
@@ -144,7 +145,7 @@ export default function AgentDesk({ slug: slugProp }: { slug?: string }) {
 
       <AgentLiveBanners agent={agent} calls={live} />
 
-      {ticketsOn ? <MayaTicketsModule messages={messagesCol} /> : has("calls") ? <div className="grid grid-cols-1 items-start gap-4">{messagesCol("")}</div> : null}
+      {ticketsOn ? <MayaTicketsModule messages={messagesCol} agent={{ slug: agent.slug, name: agent.name }} /> : has("calls") ? <div className="grid grid-cols-1 items-start gap-4">{messagesCol("")}</div> : null}
 
       <div className="space-y-4">
         {has("coach") && <AgentCoachSection agent={agent} coach={coach.data} err={coach.err} reload={async () => { await coach.reload(); }} />}

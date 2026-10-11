@@ -1,22 +1,27 @@
 /**
- * /admin/hunter: Hunter, Bestly's lead-generation employee (free, no Claude tokens).
+ * /admin/leads/hunter: Hunter, Bestly's lead-generation employee (free, no Claude tokens). Lives under Leads in the sidebar.
+ * Sub-page: /admin/leads/hunter/scores, the Jev score screen (who to call first).
  * Finds local service businesses every night for Maya's cold-calling campaigns, reads their websites, scores the fit,
  * checks the phone line type and tops each campaign's queue up to its daily target.
  *   Campaigns   daily target and on/off per campaign (hunter_campaign_set)
  *   Settings    pause everything, the minimum fit score, the daily cap on paid line-type lookups (hunter_settings_set)
  *   Sources     where leads come from, last good run, last error (hunter_source_set)
+ *   Jev         the scoring model: status, key (write-only, to the Vault), nightly limits, test button
  *   Runs        what each step did most recently
  * Data: hunter_overview() (admin only), queue health from hunter_health (written by the 6 AM check).
  * Compliance: the National Do Not Call Registry is not scrubbed yet, so every lead is stored as "not checked".
  * Nothing here touches RoofGuard or Reese.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Crosshair, Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, CheckCircle2, ChevronRight, Crosshair, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { rpcArgs } from "@/components/admin/roofguard/AvaShared";
 import { Switch } from "@/components/ui/switch";
+import { Card, NB, NumberField, Stat, when } from "@/components/admin/hunter/shared";
+import { JevCard } from "@/components/admin/hunter/JevCard";
 
 type Campaign = {
   slug: string; owner: string; name: string; area: string; business_types: string[]; daily_target: number; enabled: boolean;
@@ -30,54 +35,9 @@ type Overview = {
 };
 type Health = { ok: boolean; problems: string[] | null; healed: boolean; checked_at: string };
 
-const NB = " ";
-const STEP_LABEL: Record<string, string> = { find: "Find", read: "Read sites", check: "Line type", handoff: "Hand off" };
+const STEP_LABEL: Record<string, string> = { find: "Find", read: "Read sites", check: "Line type", handoff: "Hand off", score: "Score" };
 const FUNNEL: Array<[string, string]> = [["new", "New"], ["checked", "Checked"], ["queued", "Queued"], ["called", "Called"], ["booked", "Booked"], ["rejected", "Rejected"], ["opted_out", "Opted out"]];
 
-const when = (iso: string | null) => iso
-  ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso)).replace(/\s(AM|PM)/, `${NB}$1`)
-  : "never";
-
-function Stat({ label, value, warn }: { label: string; value: number | string | undefined; warn?: boolean }) {
-  return (
-    <div className={cn("rounded-2xl px-3 py-3 ring-1", warn ? "bg-orange-500/10 ring-orange-500/30" : "bg-white/[0.04] ring-white/10")}>
-      <div className={cn("text-[26px] font-semibold leading-none tabular-nums", warn ? "text-orange-300" : "text-white")}>{value ?? "–"}</div>
-      <div className={cn("mt-1.5 text-[12px]", warn ? "text-orange-200" : "text-white/60")}>{label}</div>
-    </div>
-  );
-}
-
-function Card({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-2xl bg-white/[0.04] p-4 ring-1 ring-white/10 sm:p-5">
-      <h2 className="text-[17px] font-semibold text-white">{title}</h2>
-      {hint && <p className="mt-1 text-[14px] text-white/60">{hint}</p>}
-      <div className="mt-3">{children}</div>
-    </section>
-  );
-}
-
-function NumberField({ label, value, min, max, onSave, suffix }: { label: string; value: number; min: number; max: number; onSave: (n: number) => void; suffix?: string }) {
-  const [v, setV] = useState(String(value));
-  useEffect(() => setV(String(value)), [value]);
-  const commit = () => {
-    const n = Math.round(Number(v));
-    if (!Number.isFinite(n) || n < min || n > max) { setV(String(value)); toast.error(`${label} must be ${min} to ${max}.`); return; }
-    if (n !== value) onSave(n);
-  };
-  return (
-    <label className="flex items-center justify-between gap-3 text-[15px] text-white/85">
-      <span>{label}</span>
-      <span className="flex items-center gap-2">
-        <input inputMode="numeric" value={v} onChange={(e) => setV(e.target.value.replace(/[^\d]/g, ""))} onBlur={commit}
-          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-          className="h-11 w-20 rounded-xl bg-white/[0.06] px-3 text-right text-[15px] tabular-nums text-white outline-none ring-1 ring-white/10 focus:ring-white/30"
-          aria-label={label} />
-        {suffix && <span className="text-[13px] text-white/55">{suffix}</span>}
-      </span>
-    </label>
-  );
-}
 
 export default function Hunter() {
   const [data, setData] = useState<Overview | null>(null);
@@ -150,6 +110,14 @@ export default function Hunter() {
           <Stat label="Daily target" value={target} />
           <Stat label="Landlines waiting" value={ready} />
         </div>
+        <Link to="/admin/leads/hunter/scores"
+          className="flex min-h-[56px] items-center justify-between gap-3 rounded-2xl bg-white/[0.06] px-4 py-3 ring-1 ring-white/10 transition-colors hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50">
+          <span className="min-w-0">
+            <span className="block text-[16px] font-semibold text-white">Lead scores</span>
+            <span className="block text-[13px] text-white/65">Who to call first, and the odds a call reaches a decision maker</span>
+          </span>
+          <ChevronRight className="h-5 w-5 shrink-0 text-white/60" aria-hidden />
+        </Link>
         {s && !s.enabled && <p className="rounded-2xl bg-amber-500/10 p-3 text-[15px] text-amber-100 ring-1 ring-amber-500/30">Hunter is paused. Nothing is found, checked or queued until you turn it back on.</p>}
       </header>
 
@@ -208,9 +176,11 @@ export default function Hunter() {
           </p>
         </Card>
 
+        <JevCard />
+
         <Card title="Sources" hint="Free, public listings only.">
           <ul className="divide-y divide-white/10">
-            {data.sources.map((x) => (
+            {data.sources.filter((x) => x.slug !== "jev").map((x) => (
               <li key={x.slug} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
                 <div className="min-w-0">
                   <p className="text-[15px] font-medium text-white">{x.name}</p>
@@ -242,9 +212,9 @@ export default function Hunter() {
             <ul className="divide-y divide-white/10 text-[14px]">
               {data.recent_runs.map((r) => (
                 <li key={r.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2.5 first:pt-0 last:pb-0">
-                  <span className="text-white/85">{STEP_LABEL[r.step] ?? r.step}{r.source ? ` · ${r.source}` : ""}{r.campaign_slug ? ` · ${r.campaign_slug.replace("maya-", "")}` : ""}</span>
+                  <span className="text-white/85">{STEP_LABEL[r.step] ?? r.step}{r.source ? ` · ${r.source === "free_ai" ? "free AI" : r.source}` : ""}{r.campaign_slug ? ` · ${r.campaign_slug.replace("maya-", "")}` : ""}</span>
                   <span className="tabular-nums text-white/55">
-                    {r.error ? <span className="text-amber-300">failed</span> : `${r.found} found · ${r.checked} checked · ${r.queued} queued`}{" · "}{when(r.started_at)}
+                    {r.error ? <span className="text-amber-300">failed</span> : r.step === "score" ? `${r.checked} scored${r.rejected ? ` · ${r.rejected} failed` : ""}` : `${r.found} found · ${r.checked} checked · ${r.queued} queued`}{" · "}{when(r.started_at)}
                   </span>
                 </li>
               ))}

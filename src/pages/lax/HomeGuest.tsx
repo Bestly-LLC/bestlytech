@@ -327,7 +327,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
       </div>
       <DecoRule className="mx-5 -mt-px" />
 
-      <main className="mx-auto max-w-md px-5 pb-48 pt-5">
+      <main className="mx-auto max-w-md px-5 pb-64 pt-5">
         <HostPanel token={token} />
         {!ended && <p className="text-[17px] leading-relaxed text-white/85">Your Turo Tesla is parked on <b className="text-white">{street.replace(/^\d+\s*/, "")}</b>. <b className="text-white">Your phone is the key.</b> No meetup, no keys.</p>}
 
@@ -432,14 +432,15 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           <p className="mt-5 text-[14px] text-white/60">Your key turns off by itself after the trip. Nothing to hand back.</p>
         </TripSheet>
 
-        <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton onOpen={() => openSheet("ask")} />} variant="home" hideTags={ended} only={tripTab(pub.trip, ended, pub.car_connected_at, pub.key?.state)}
+        <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton leo home active={sheet === "ask"} onOpen={() => openSheet("ask")} />} variant="home" hideTags={ended} only={tripTab(pub.trip, ended, pub.car_connected_at, pub.key?.state)}
           glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
         {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
         {!ended && <InstallToast token={token} kind="home" />}
         {!ended && <PhoneHandoff token={token} keyReady={!!key && ["ready", "making"].includes(key.state)} />}
         <VideoPlayer />
         <ScrollFx />
-        <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home />
+        <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token} home
+          context={{ stage: tripTab(pub.trip, ended, pub.car_connected_at, key?.state ?? pub.key?.state), keyState: key?.state ?? pub.key?.state }} />
 
         <BestlyAd campaign="home-trip-page" blurb="We make websites, apps, and tools for small businesses. Like this page: a phone key that shows up by itself, live car info and A/C buttons." />
       </main>
