@@ -23,10 +23,13 @@ Deno.serve(async (req) => {
   if (!key) key = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
   if (!key) return text("Something went wrong. Call Bestly at (213) 641-0074.", 500);
 
+  // Use the portal config Maya set up, if the account has no default of its own.
+  const { data: st } = await sb.from("maya_billing_settings").select("portal_configuration_id").eq("id", true).maybeSingle();
+  const cfg = (st as { portal_configuration_id?: string } | null)?.portal_configuration_id ?? "";
   const r = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ customer: row.stripe_customer_id, return_url: "https://bestly.tech" }).toString(),
+    body: new URLSearchParams({ customer: row.stripe_customer_id, return_url: "https://bestly.tech", ...(cfg ? { configuration: cfg } : {}) }).toString(),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j?.url) {
