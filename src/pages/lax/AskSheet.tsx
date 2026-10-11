@@ -380,8 +380,10 @@ function Dots() {
 }
 
 const DRIVER_CHIPS = ["My key link doesn't work", "I accepted, but the car isn't in my Tesla app", "How do I unlock the car?", "Where is the car?"];
-/** The trip's stage and key state, so Leo can open with what fits (see leoGreeting in LeoWidget). */
-export type TripContext = { stage: "pickup" | "return" | null; keyState?: string | null; keyLink?: string | null };
+/** The trip's stage and key state, so Leo can open with what fits (see leoGreeting in LeoWidget and leoOffer.ts). */
+export type TripContext = { stage: "pickup" | "return" | null; keyState?: string | null; keyLink?: string | null;
+  first?: string | null; startsAt?: string | null; endsAt?: string | null; ended?: boolean; controlsState?: string | null;
+  insideF?: number | null; climateOn?: boolean | null; hasEmail?: boolean };
 
 export function AskSheet({ open, onClose, token, slug, home = false, driver = false, context }: { open: boolean; onClose: () => void; token?: string; slug?: string; home?: boolean; driver?: boolean; context?: TripContext }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);

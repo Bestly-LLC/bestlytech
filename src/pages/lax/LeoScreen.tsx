@@ -27,7 +27,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { TripContext } from "./AskSheet";
-import { LeoMiniPill, LeoOrb, THEME, leoGreeting, loadLeoSdk, takeLeoMode, type LeoMini, type LeoTheme } from "./LeoWidget";
+import { LeoMiniPill, LeoOrb, THEME, loadLeoSdk, takeLeoMode, type LeoMini, type LeoTheme } from "./LeoWidget";
+import { leoOpening } from "./leoOffer";
 import { audioLocked, resumeAllAudio } from "./audioRescue";
 import { track } from "./track";
 import { MINIMIZE, askPage, emitLeoCar, useLeoDid } from "./leoBridge";
@@ -63,7 +64,8 @@ function diag(token: string, kind: string, detail: Record<string, string>) {
 export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { token: string; context?: TripContext; home: boolean; pageOpen?: boolean; onEnd: () => void }) {
   const theme = THEME[home ? "home" : "lax"];
   const [mode] = useState(takeLeoMode);
-  const greeting = leoGreeting(context, home);
+  const opening = leoOpening({ ...context, tab: context?.stage ?? null });
+  const greeting = opening.text;
   const [items, setItems] = useState<Item[]>([{ id: seq++, kind: "leo", text: greeting }]);
   const [phase, setPhase] = useState<Phase>("idle");
   const [voice, setVoice] = useState(false);
@@ -176,7 +178,9 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
           libsampleratePath: "/maya/libsamplerate.worklet.js",
           overrides: { agent: { firstMessage: items.length > 1 ? "I'm here. Go ahead." : greeting }, conversation: { textOnly: !withVoice } },
           dynamicVariables: { trip_key: String(s.key), call_mode: "page", caller_type: token.startsWith("demo-") ? "test_guest" : "guest",
-            pickup_place: home ? "home" : "lax", trip_stage: context?.stage ?? "unknown" },
+            pickup_place: home ? "home" : "lax", trip_stage: context?.stage ?? "unknown",
+            guest_first_name: /^Hi (\S+), I'm Leo\./.exec(opening.text)?.[1] ?? "",
+            minutes_to_pickup: opening.mtp ?? 9999, controls_state: context?.controlsState ?? "unknown", greeting_offer: opening.offer },
           clientTools: { show_card: async (p: Any) => showCard(String(p?.card ?? "")), page_action: async (p: Any) => pageAction(p) },
           onConnect: () => { setPhase("live"); if (history && items.length > 1) try { c.sendContextualUpdate(`Earlier on this screen:\n${history}`); } catch { /* ignore */ } },
           onDisconnect: () => { conv.current = null; setPhase("ended"); setVoice(false); setSpeaking(false); setWorking(null); },

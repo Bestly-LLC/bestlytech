@@ -5,7 +5,7 @@
  * full-screen conversation (LeoScreen.tsx) built on the ElevenLabs SDK, where his actions show up as cards with real
  * buttons and a short confirmation toast. This file keeps:
  * - THEME: one agent, two looks (LAX purple + peach, Home teal + mustard).
- * - leoGreeting: Leo's opening line from the trip's stage and key state.
+ * - leoGreeting: Leo's opening line from the trip's stage, key state, car and timing (leoOffer.ts).
  * - LeoBar: the docked bar that replaced "Talk to our team 24/7" ("Leo, 24/7 trip helper - real help": Call Leo,
  *   message, open). It hands LeoScreen how to open (takeLeoMode) and steps aside while Leo is open.
  * - preloadLeo: imports the SDK shortly after the trip page opens. iPhone only plays audio from an AudioContext unlocked
@@ -15,20 +15,14 @@ import { useEffect, useState } from "react";
 import { Loader2, Maximize2, MessageCircle, Phone } from "lucide-react";
 import type { TripContext } from "./AskSheet";
 import { installAudioRescue } from "./audioRescue";
+import { leoOpening } from "./leoOffer";
 
 // Before the SDK can load: track its audio contexts so a stuck (silent) one resumes on the next tap. See audioRescue.ts.
 installAudioRescue();
 
-/** Leo's opening line: says who he is, then offers the two things that fit this moment of the trip. */
-export function leoGreeting(ctx: TripContext | undefined, home: boolean): string {
-  const hi = "Hi, I'm Leo, your trip helper.";
-  const k = ctx?.keyState ?? null;
-  if (k === "soon" || k === "making") return `${hi} Your key shows up once your host has checked your license. I can check where it's at, or walk you through pickup. What would help?`;
-  if (k === "problem") return `${hi} Looks like your key hit a snag. Want me to check it and send a fresh one?`;
-  if (k === "ready") return `${hi} Your key is ready. Want help adding the car to your Tesla app, or is the link giving you trouble?`;
-  if (ctx?.stage === "pickup") return `${hi} I can help you unlock and start the car, or find ${home ? "where it's parked" : "your way into the garage"}. What do you need?`;
-  if (ctx?.stage === "return") return `${hi} I can find you a Supercharger, or tell you how much charge to bring it back with. What do you need?`;
-  return `${hi} I can help with your phone key, the car's A/C, charging, or anything about the trip. What do you need?`;
+/** Leo's opening line: says who he is, then offers the one thing that fits this moment of the trip (see leoOffer.ts). */
+export function leoGreeting(ctx: TripContext | undefined, _home: boolean): string {
+  return leoOpening(ctx ?? {}).text;
 }
 
 /** Leo's palette per page: LAX = deep purple, peach + pink. Home (WeHo) = deep teal, mustard + orange. */
