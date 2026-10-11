@@ -19,7 +19,12 @@ from real rows (an email's subject and date, a device name, a vehicle), never fr
 Auth: the house db-watchdog token (db_watchdog_ok) read from /home/pi/.bestly/db_watchdog_token (mode 600),
 sent with the project's publishable key. The token is never printed or logged.
 
-  python3 settlement_finder.py [--dry] [--find-only] [--match-only] [--limit N] [--rejudge-asks]
+  DETAILS  settlement_needs_details_t -> the official settlement site (robots.txt, 4 s apart; its FAQ / "who is included" page
+           when linked; the listing text when the site is blocked or empty) -> AI -> settlement_details_t (who qualifies, class period,
+           places, exclusions, payouts, proof, how to check).  Then one plain-English "why you might qualify" line per live claim ->
+           settlement_reason_t.  A details failure never fails the run.
+
+  python3 settlement_finder.py [--dry] [--find-only] [--match-only] [--details-only] [--limit N] [--rejudge-asks]
 """
 import fcntl
 import gzip
@@ -58,6 +63,9 @@ TCA_FEED = "https://topclassactions.com/category/lawsuit-settlements/open-lawsui
 SOURCE_GAP_SEC = 4          # polite pause between requests to different pages/hosts
 MATCH_CAP = 60              # settlements judged per run (rest wait for tomorrow)
 MATCH_BUDGET_SEC = 40 * 60  # stop judging after this long
+DETAILS_CAP = 40            # settlements whose official site is read per run
+DETAILS_BUDGET_SEC = 35 * 60
+DETAILS_STALE_DAYS = 14     # (also enforced by settlement_needs_details_t)
 MAIL_LIMIT = 15  # legacy (settlement_mail_search_t); the matcher now uses settlement_mail_search2_t
 
 _robots = {}
@@ -429,6 +437,7 @@ Administrator: {administrator}
 Who qualifies: {cls}
 Claim deadline: {deadline}
 Proof required: {proof}
+From the official settlement site (may be incomplete; trust it over the short listing when they differ): {extra}
 
 Facts already known about him (key (answer): question). Reuse a key when it is exactly the same fact:
 {facts}
@@ -487,14 +496,14 @@ def _json_obj(text):
         raise
 
 
-def ai_json(system, user, deadline):
+def ai_json(system, user, deadline, max_tokens=900):
     """Free AI ladder -> parsed JSON dict. One retry on bad JSON. Raises RuntimeError if every model fails."""
     if freellm is None:
         raise RuntimeError("freellm ladder not importable")
     last = None
     for _ in range(2):
         msg, who = freellm.chat([{"role": "system", "content": system}, {"role": "user", "content": user}],
-                                max_tokens=900, deadline=deadline, json_mode=True)
+                                max_tokens=max_tokens, deadline=deadline, json_mode=True)
         try:
             obj = _json_obj(msg.get("content"))
             if isinstance(obj, list) and obj and isinstance(obj[0], dict):
@@ -572,6 +581,9 @@ def extract_period(text):
 
 def period_of(tri, s):
     a, b = iso_date(tri.get("period_start")), iso_date(tri.get("period_end"))
+    cp = (s.get("details") or {}).get("class_period") or {}
+    if not a and isinstance(cp, dict):  # read from the official site's FAQ: more reliable than the listing blurb
+        a, b = iso_date(cp.get("start")), iso_date(cp.get("end")) or b
     if not a:
         a, b2 = extract_period(s.get("class_definition") or "")
         b = b or b2
@@ -658,7 +670,8 @@ def judge_one(s, deadline, run):
     (the settlement stays unjudged). Evidence rows always come from real rows (email, device, vehicle), never from AI text."""
     ctx = {"name": s.get("name"), "defendant": s.get("defendant") or "unknown", "administrator": s.get("administrator") or "unknown",
            "cls": squash(s.get("class_definition") or "not stated", 900), "deadline": s.get("deadline") or "unknown",
-           "proof": {True: "yes", False: "no", None: "unknown"}[s.get("proof_required")], "facts": run.facts_block()}
+           "proof": {True: "yes", False: "no", None: "unknown"}[s.get("proof_required")], "facts": run.facts_block(),
+           "extra": details_blurb(s.get("details"))}
     tri, _ = ai_json(TRIAGE_SYS, TRIAGE_USER.format(**ctx), deadline)
     plaus = str(tri.get("plausibility", "")).lower()
     if plaus not in ("none", "low", "medium", "high"):
@@ -802,6 +815,323 @@ def rejudge_asks(dry, state, run):
     return len(todo), tally, left
 
 
+# ---------------------------------------------------------------- DETAILS: richer eligibility info per settlement
+
+CHALLENGE_RX = re.compile(r"just a moment|cf-chl|checking your browser|attention required|enable javascript and cookies|verify you are human|"
+                          r"captcha|access denied|request blocked|are you a robot", re.I)
+SKIP_HOSTS = ("topclassactions.com",)  # HTML sits behind a Cloudflare challenge: never fetched (the RSS text is already in the listing)
+_last_fetch = [0.0]
+_done = set()  # settlement ids handled by the details phase in this run
+
+
+def polite_get(url):
+    """One page, text only. robots.txt obeyed, >= 4 s after the previous details request, a block/challenge is NOT worked
+    around. Returns (html, status) where status is ok | blocked | robots | error."""
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    if any(host.endswith(h) for h in SKIP_HOSTS) or not re.match(r"https?://", url or ""):
+        return None, "skipped"
+    wait = SOURCE_GAP_SEC - (time.time() - _last_fetch[0])
+    if wait > 0:
+        time.sleep(wait)
+    _last_fetch[0] = time.time()
+    try:
+        raw = _http(url, tries=2, timeout=30)
+    except urllib.error.HTTPError as e:
+        return None, "blocked" if e.code in (401, 403, 451) else "error"
+    except RuntimeError as e:
+        return None, "robots" if "robots.txt" in str(e) else "error"
+    except Exception:  # noqa: BLE001
+        return None, "error"
+    finally:
+        _last_fetch[0] = time.time()
+    h = raw[:600000].decode("utf-8", "replace")
+    if CHALLENGE_RX.search(h[:6000]) and len(strip_html(h)) < 1500:
+        return None, "blocked"
+    return h, "ok"
+
+
+def page_text(h, cap):
+    """Readable text of a page: title + distinct lines of 4+ words (menus and footers mostly fall away)."""
+    title = re.search(r"(?is)<title[^>]*>(.*?)</title>", h)
+    seen, out, n = set(), [], 0
+    for ln in strip_html(h).split("\n"):
+        ln = squash(ln)
+        if len(ln.split()) < 4 or ln.lower() in seen:
+            continue
+        seen.add(ln.lower())
+        out.append(ln)
+        n += len(ln)
+        if n > cap:
+            break
+    head = squash(strip_html(title.group(1)), 120) + "\n" if title else ""
+    return (head + "\n".join(out))[:cap]
+
+
+def page_links(h, base):
+    return [(urllib.parse.urljoin(base, html.unescape(href).strip()), squash(strip_html(inner), 80))
+            for href, inner in re.findall(r'(?is)<a\s[^>]*href="([^"#][^"]*)"[^>]*>(.*?)</a>', h)]
+
+
+def faq_links(links, base):
+    """Same-site pages that answer 'who is included': FAQ first, then eligibility, then important dates."""
+    bh = (urllib.parse.urlsplit(base).hostname or "").lower().removeprefix("www.")
+    scored = {}
+    for u, t in links:
+        pu = urllib.parse.urlsplit(u)
+        if (pu.hostname or "").lower().removeprefix("www.") != bh or pu.scheme not in ("http", "https"):
+            continue
+        if re.search(r"\.(pdf|docx?|xlsx?|zip|png|jpe?g)$", pu.path, re.I) or u.rstrip("/") == base.rstrip("/"):
+            continue
+        key = f"{t} {pu.path}".lower()
+        sc = 3 if re.search(r"faq|frequently|questions", key) else 2 if re.search(r"who[- ]?is|eligib|class[- ]?member|am[- ]?i[- ]?(a[- ]?)?(included|eligible)|qualif", key) else \
+            1 if re.search(r"important[- ]?dates|deadline|about|summary|settlement[- ]?info|learn[- ]?more", key) else 0
+        if sc and scored.get(u.split("?")[0], (0,))[0] < sc:
+            scored[u.split("?")[0]] = (sc, u)
+    return [v[1] for v in sorted(scored.values(), key=lambda x: -x[0])[:2]]
+
+
+def claim_form_link(links, fallback):
+    for u, t in links:
+        if re.search(r"(file|submit|make|start)\s+(a|your)?\s*claim|claim\s*form|online claim", t, re.I) and u.startswith("http"):
+            return u
+    return fallback
+
+
+DETAILS_SYS = (
+    "You read the public website of ONE class action settlement and explain it to ONE person: an adult consumer living in West "
+    "Hollywood, California. Use ONLY facts stated in the text. Never guess; leave a field empty or null when the text does not say. "
+    "Write short, plain, everyday English sentences (8th grade, no legal words like 'putative', 'releasor', 'pursuant'). "
+    "Reply with ONE JSON object and nothing else.")
+
+DETAILS_USER = """Settlement: {name}
+Defendant: {defendant}
+Claim deadline: {deadline}
+Estimated payout (listing): {payout}
+Proof required (listing): {proof}
+
+TEXT FROM THE SETTLEMENT SITE AND LISTING:
+{text}
+
+Return JSON with exactly these keys:
+"who_qualifies": 1 to 4 short plain sentences in second person saying who can claim, like "You qualify if you bought a Levoit Core 300 air purifier in the US between 2019 and 2024." Max 170 characters each.
+"class_start" and "class_end": the class period as YYYY-MM-DD ("" if not stated or open-ended; use the 1st of the month when only a month is given).
+"locations": where the class applies, as short names like ["California"] or ["Nationwide"] or ["Illinois"]. [] when not stated.
+"excluded": 0 to 4 short plain sentences about who is left out (employees, people who opted out, businesses, judges...). [] when not stated.
+"payout_no_proof": what a person gets WITHOUT documents, like "Up to $50" or "$15 per person". "" if not stated.
+"payout_with_proof": what a person can get WITH documents, like "Up to $5,000 for documented losses". "" if not stated.
+"proof_examples": 0 to 5 short items naming what counts as proof, like "Receipt", "Bank statement showing the charge", "Order confirmation email". [] when not stated.
+"how_to_check": ONE plain sentence on how a person can tell if they are in the class, like "Look for a notice email from Acme sent in 2023, or check if you bought the product." Max 200 characters.
+"""
+
+REASON_SYS = (
+    "You are Nickel, a careful assistant who explains to ONE person (Jared, an adult consumer living in West Hollywood, California) "
+    "why he might qualify for a class action settlement. Plain, short, friendly English. No legal words. Never claim evidence that "
+    "is not listed under EVIDENCE: if EVIDENCE is empty, say that nothing in his records points either way yet (his synced email "
+    "only goes back to April 2026, so an empty search is NOT a sign he is out). Reply with ONE JSON object and nothing else.")
+
+REASON_USER = """Settlement: {name}
+Defendant: {defendant}
+Claim deadline: {deadline}
+Where Nickel stands: {stand}
+What the official site says: {extra}
+
+EVIDENCE (real records only):
+{evidence}
+
+Current question for him: {question}
+{fact_line}
+Return JSON with exactly these keys:
+"reasoning": 1 to 3 short plain sentences (max 420 characters in total): why he might qualify, what in his records points either way (only what is listed under EVIDENCE), and what would prove it (a receipt, an email, an account). Say "you", not "he".
+"question": ONLY when the current question is not "(none)": the same yes/no question rewritten in second person with the specific dates / places / product from the official site, max 140 characters, ends with "?". It must ask about the SAME underlying fact. Otherwise "".
+"fact_question": ONLY when a fact key is given: a generic yes/no question for exactly that fact, max 140 characters, ends with "?", no dates that only fit this one settlement. Otherwise "".
+"""
+
+
+def _strs(v, n, width):
+    out = []
+    for x in (v if isinstance(v, list) else []):
+        x = squash(str(x), width)
+        if len(x) >= 3 and x.lower() not in [o.lower() for o in out]:
+            out.append(x)
+    return out[:n]
+
+
+def _money(v):
+    v = squash(str(v or ""), 160)
+    return v if v and v.lower() not in ("none", "n/a", "null", "not stated", "unknown") else None
+
+
+def clean_details(d, official, claim_form):
+    """AI object -> the contract shape. URLs come from code (the fetched page's own links), never from AI text."""
+    a, b = iso_date(d.get("class_start")), iso_date(d.get("class_end"))
+    if a and b and b < a:
+        a, b = b, a
+    return {
+        "who_qualifies": _strs(d.get("who_qualifies"), 4, 190),
+        "class_period": {"start": a.isoformat() if a else None, "end": b.isoformat() if b else None},
+        "locations": _strs(d.get("locations"), 6, 60),
+        "excluded": _strs(d.get("excluded"), 4, 190),
+        "payout_no_proof": _money(d.get("payout_no_proof")),
+        "payout_with_proof": _money(d.get("payout_with_proof")),
+        "proof_examples": _strs(d.get("proof_examples"), 5, 90),
+        "how_to_check": squash(d.get("how_to_check") or "", 220) or None,
+        "official_site": official, "claim_form": claim_form,
+        "fetched_at": datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+
+
+def details_blurb(d):
+    """Compact text of a settlement's details for the triage / reasoning prompts ('not read yet' when there are none)."""
+    if not isinstance(d, dict) or not d:
+        return "not read yet"
+    cp = d.get("class_period") or {}
+    bits = []
+    if d.get("who_qualifies"):
+        bits.append("who qualifies: " + " ".join(d["who_qualifies"])[:500])
+    if cp.get("start") or cp.get("end"):
+        bits.append(f"class period {cp.get('start') or '?'} to {cp.get('end') or '?'}")
+    if d.get("locations"):
+        bits.append("places: " + ", ".join(d["locations"]))
+    if d.get("excluded"):
+        bits.append("left out: " + " ".join(d["excluded"])[:300])
+    if d.get("how_to_check"):
+        bits.append("how to check: " + d["how_to_check"])
+    return "; ".join(bits)[:1200] or "not read yet"
+
+
+def gather_text(s):
+    """Fetch the official site (+ its FAQ pages) politely. Returns (text, official_site, claim_form, basis)."""
+    listing = squash(" | ".join(x for x in (
+        "Who is eligible (listing): " + (s.get("class_definition") or ""),
+        "Proof (listing): " + ((s.get("raw") or {}).get("proof_text") or ""),
+        "Payout (listing): " + (s.get("est_payout") or "")) if x.split(": ", 1)[1].strip()), 1500)
+    base = s.get("claim_url") or s.get("info_url")
+    pages, links, official, status = [], [], None, "skipped"
+    first = None
+    for u in (s.get("claim_url"), s.get("info_url")):
+        if not u:
+            continue
+        h, status = polite_get(u)
+        if h:
+            first = (u, h)
+            break
+    if first:
+        u, h = first
+        official = u
+        links = page_links(h, u)
+        pages.append(page_text(h, 3500))
+        for fu in faq_links(links, u):
+            fh, fst = polite_get(fu)
+            if fh:
+                pages.append(page_text(fh, 4500))
+                links += page_links(fh, fu)
+    body = "\n\n".join(p for p in pages if p)
+    basis = "site" if len(body) > 400 else "listing"
+    text = (("OFFICIAL SITE:\n" + body + "\n\n") if body else "") + "LISTING:\n" + listing
+    return text[:9000], (official or (base if base and not any(h in base for h in SKIP_HOSTS) else None)), \
+        claim_form_link(links, s.get("claim_url")), basis, status
+
+
+def extract_details(s, deadline):
+    text, official, form, basis, status = gather_text(s)
+    if not text.split("LISTING:", 1)[-1].strip() and basis == "listing":
+        raise RuntimeError("no text to read")
+    d, _ = ai_json(DETAILS_SYS, DETAILS_USER.format(
+        name=s.get("name"), defendant=s.get("defendant") or "unknown", deadline=s.get("deadline") or "unknown",
+        payout=s.get("est_payout") or "not stated", proof={True: "yes", False: "no", None: "unknown"}[s.get("proof_required")], text=text),
+        deadline, max_tokens=1100)
+    det = clean_details(d, official, form)
+    det["basis"] = basis  # extra, harmless: 'site' = read from the settlement's own pages, 'listing' = only the listing text
+    if not (det["who_qualifies"] or det["how_to_check"] or det["payout_no_proof"] or det["payout_with_proof"]):
+        raise RuntimeError(f"AI returned nothing usable (basis {basis}, site {status})")
+    return det, basis, status
+
+
+EVIDENCE_CLAIM_RX = re.compile(r"\bwe (found|saw)\b|\bI found\b|\bfound (an?|your) (email|receipt|order)\b|"
+                               r"\byour (emails?|records|inbox|receipts?|account) (show|shows|showed|confirm|confirms|prove|proves|include|includes|contain)\b|"
+                               r"\bin your (inbox|mailbox)\b", re.I)
+
+
+def reason_one(row, deadline):
+    """1-3 plain sentences (+ sharper questions). Evidence only from the claim's real rows."""
+    ev = row.get("claim_evidence") or []
+    ev_lines = "\n".join(f"- {e.get('kind')}: {squash(e.get('summary'), 200)}" for e in ev if isinstance(e, dict)) or "(none)"
+    match, status = row.get("claim_match"), row.get("claim_status")
+    stand = {"proven": "his own records appear to prove he is in the class", "likely": "his records suggest he is in the class but it is not confirmed",
+             "ask": "nothing in his records settles it; he is being asked a yes/no question"}.get(match, str(match))
+    if row.get("claim_answer") is True:
+        stand += "; he already answered YES to the question"
+    elif row.get("claim_answer") is False:
+        stand += "; he already answered NO to the question"
+    cq = row.get("claim_question") if (status == "found" and row.get("claim_answer") is None) else None
+    fk = row.get("claim_fact_key")
+    j, _ = ai_json(REASON_SYS, REASON_USER.format(
+        name=row.get("name"), defendant=row.get("defendant") or "unknown", deadline=row.get("deadline") or "unknown", stand=stand,
+        extra=details_blurb(row.get("details")), evidence=ev_lines, question=cq or "(none)",
+        fact_line=(f'Fact key (the underlying fact, do not change what it means): {fk}\n' if fk and cq else "")), deadline, max_tokens=600)
+    txt = squash(j.get("reasoning") or "", 700)
+    if len(txt) < 20:
+        raise RuntimeError("empty reasoning")
+    if not ev and EVIDENCE_CLAIM_RX.search(txt):
+        # the AI claimed a record that does not exist: fall back to the plain, true statement
+        txt = "Nothing in your records points either way yet. " + ("Check the official site to see if you qualify." if not cq else "Your answer to the question below settles it.")
+    q = squash(j.get("question") or "", 180) if cq else None
+    if q and not (q.endswith("?") and 12 <= len(q) <= 180 and re.search(r"\byou(r)?\b", q, re.I)):
+        q = None
+    fq = squash(j.get("fact_question") or "", 180) if (fk and cq) else None
+    if fq and not (fq.endswith("?") and 12 <= len(fq) <= 180 and re.search(r"\byou(r)?\b", fq, re.I)):
+        fq = None
+    return txt, q, fq
+
+
+def details_phase(dry, cap, budget_sec, only_reasoning=False, log_examples=None):
+    """Read the official sites for settlements missing fresh details and write a reason for each live claim.
+    Returns a stats dict. Raises nothing for a single bad settlement; RuntimeError only when the RPC itself is unreachable."""
+    st = {"todo": 0, "details": 0, "site": 0, "listing": 0, "reasons": 0, "failed": 0, "ai_down": False}
+    deadline = time.time() + budget_sec
+    rows = sb("settlement_needs_details_t", p_limit=cap) or []
+    st["todo"] = len(rows)
+    fails = 0
+    for r in rows:
+        if r["id"] in _done:
+            continue
+        if time.time() > deadline:
+            break
+        _done.add(r["id"])
+        try:
+            if r.get("need_details") and not only_reasoning:
+                det, basis, status = extract_details(r, deadline)
+                r["details"] = det
+                if not dry:
+                    sb("settlement_details_t", p_settlement=r["id"], p_details=det)
+                st["details"] += 1
+                st[basis] += 1
+                log(f"details {basis:7} {r['name'][:56]} :: {(det['who_qualifies'] or ['-'])[0][:90]}")
+            if (r.get("claim_id") and r.get("claim_match") != "no" and r.get("claim_status") not in ("skipped", "expired")
+                    and (r.get("claim_reasoning") is None or r.get("need_details"))):
+                if r.get("details"):
+                    txt, q, fq = reason_one(r, deadline)
+                    if not dry:
+                        sb("settlement_reason_t", p_claim=r["claim_id"], p_reasoning=txt, p_question=q, p_fact_question=fq)
+                    st["reasons"] += 1
+                    if log_examples is not None:
+                        log_examples.append({"name": r["name"], "details": r.get("details"), "reasoning": txt, "question": q})
+            fails = 0
+        except Exception as e:  # noqa: BLE001  one bad site / reply never stops the phase
+            st["failed"] += 1
+            fails += 1
+            log(f"details failed: {r.get('name', '')[:56]} ({str(e)[:140]})")
+            if fails >= 4 and st["details"] + st["reasons"] == 0:
+                st["ai_down"] = True
+                break
+    return st
+
+
+def details_summary(st):
+    out = f"details {st['details']}/{st['todo']} ({st['site']} from site, {st['listing']} from listing text), {st['reasons']} reasons"
+    return out + (f", {st['failed']} failed" if st["failed"] else "") + (" [free AI unavailable]" if st["ai_down"] else "")
+
+
 # ---------------------------------------------------------------- entry point (runjob.py calls main(argv) -> summary)
 
 def main(argv):
@@ -827,6 +1157,15 @@ def main(argv):
         if left:
             parts.append(f"{left} left as ask")
         return ", ".join(parts) + (" [dry run, nothing written]" if dry else "")
+    if "--details-only" in argv:
+        # manual / catch-up pass: details + reasons only (no find, no judging). --limit N = how many settlements to read.
+        ex = []
+        st = details_phase(dry, limit if "--limit" in argv else DETAILS_CAP, DETAILS_BUDGET_SEC, log_examples=ex)
+        if "--examples" in argv:
+            print("EXAMPLES " + json.dumps(ex[:3], ensure_ascii=False, indent=1), flush=True)
+        if st["ai_down"]:
+            raise RuntimeError("free AI unavailable, no details written. " + details_summary(st))
+        return details_summary(st) + (" [dry run, nothing written]" if dry else "")
     if "--match-only" not in argv:
         rows, notes, new = find(dry, today, state)
         found = len(rows)
@@ -834,6 +1173,11 @@ def main(argv):
             save_state(state)
         parts.append(f"found {found} open, {new} new")
     if "--find-only" not in argv:
+        try:  # DETAILS first, so the matcher below can use class period / places from the official site. Never fails the run.
+            st = details_phase(dry, DETAILS_CAP, DETAILS_BUDGET_SEC)
+            parts.append(details_summary(st))
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"details phase skipped: {str(e)[:140]}")
         try:
             run = Run()
             run.load()
@@ -845,6 +1189,13 @@ def main(argv):
                 parts.append(f"{left} left unjudged for tomorrow")
         except RuntimeError as e:
             raise RuntimeError(f"matcher failed: {e} (finder part: {', '.join(parts)})")
+    if "--find-only" not in argv:
+        try:  # reasons for the claims judged just now (their details are already saved)
+            st2 = details_phase(dry, 30, 12 * 60, only_reasoning=True)
+            if st2["reasons"] or st2["failed"]:
+                parts.append(f"{st2['reasons']} more reasons" + (f" ({st2['failed']} failed)" if st2["failed"] else ""))
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"reasons pass skipped: {str(e)[:140]}")
     summary = ", ".join(parts) + ("; " + "; ".join(notes) if notes else "")
     if ai_down:
         # every free model failed and nothing was judged: surface it as a failed run so the Team page / Scout see it
