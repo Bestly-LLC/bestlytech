@@ -1,4 +1,4 @@
-import { BadgeDollarSign, Brush, FileWarning,
+import { BadgeDollarSign, Brush, FileWarning, Scissors,
   LayoutDashboard,
   Settings,
   BarChart3,
@@ -117,6 +117,7 @@ const agentItems = [
 // so it isn't buried under Turo.
 const moneyItems = [
   { title: "Settlements", url: "/admin/settlements", icon: BadgeDollarSign },
+  { title: "Cost Cutter", url: "/admin/cost-cutter", icon: Scissors },
 ];
 
 // Signs you straight into the HOKU store admin (see lib/openHokuAdmin).
