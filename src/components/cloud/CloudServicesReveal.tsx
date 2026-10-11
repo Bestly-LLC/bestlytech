@@ -62,7 +62,7 @@ export function CloudServicesReveal() {
     const disposables: Array<{ dispose: () => void }> = [{ dispose: () => pmrem.dispose() }, envTex];
     let cancelled = false;
     const draco = new DRACOLoader();
-    draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
+    draco.setDecoderPath("/draco/" /* self-hosted (three 0.160 libs/draco): the site CSP only allows same-origin fetches */);
     const loader = new GLTFLoader();
     loader.setDRACOLoader(draco);
     loader.load("/models/device-web-split.glb", (gltf) => {
