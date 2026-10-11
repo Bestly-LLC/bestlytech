@@ -34,6 +34,7 @@ const Hoku = lazyPage(() => import("./pages/Hoku"));
 const InHouseCloud = lazyPage(() => import("./pages/InHouseCloud"));
 const BestlyStudio = lazyPage(() => import("./pages/BestlyStudio"));
 const NeckPilot = lazyPage(() => import("./pages/NeckPilot"));
+const BestlyAgent = lazyPage(() => import("./pages/BestlyAgent"));
 const PressKit = lazyPage(() => import("./pages/PressKit"));
 const PrivacyPolicy = lazyPage(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazyPage(() => import("./pages/TermsOfService"));
@@ -178,6 +179,9 @@ const App = () => {
                   <Route path="/in-house-cloud" element={<InHouseCloud />} />
                   <Route path="/studio" element={<BestlyStudio />} />
                   <Route path="/neckpilot" element={<NeckPilot />} />
+                  <Route path="/agent" element={<BestlyAgent />} />
+                  <Route path="/bestly-agent" element={<Navigate to="/agent" replace />} />
+                  <Route path="/demo" element={<Navigate to="/agent" replace />} />
                   <Route path="/press" element={<PressKit />} />
                   <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                   <Route path="/privacy" element={<CookieYetiPrivacy />} />

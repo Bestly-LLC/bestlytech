@@ -24,6 +24,7 @@ export const PAGE_PRODUCT: Record<string, string> = {
   "/in-house-cloud": "Bestly Cloud",
   "/get-started": "Bestly Cloud",
   "/studio": "Bestly Studio",
+  "/agent": "Bestly Agent",
   "/neckpilot": "NeckPilot",
   "/services": "Bestly services",
   "/apple-modernization": "Apple modernization service",
@@ -47,13 +48,12 @@ const NAV_ALIASES: Record<string, string> = {
   "/pricing": "/products",
   "/product": "/products",
   "/contact-us": "/contact",
+  "/bestly-agent": "/agent",
+  "/demo": "/agent",
 };
 
 /** Products Maya supports that have no page on bestly.tech yet. Key: normalized path. */
 const NO_PAGE_YET: Record<string, string> = {
-  "/agent": "the Bestly Agent",
-  "/bestly-agent": "the Bestly Agent",
-  "/demo": "Bestly Agent demos",
   "/schoolpilot": "SchoolPilot",
   "/school-pilot": "SchoolPilot",
   "/parentiq": "ParentIQ",
@@ -181,6 +181,8 @@ const SECTION_ALIASES: { words: string[]; path: string; heading: string; need?: 
   { words: ["jared", "founder", "owner", "who runs", "who made", "who built", "behind bestly"], path: "/about", heading: "Hey, I'm Jared" },
   { words: ["book", "call", "discovery", "schedule", "get started"], path: "/cloud", heading: "Four steps" },
   { words: ["faq", "questions", "concerns", "breaks", "maintains"], path: "/cloud", heading: "The four questions everybody asks" },
+  { words: ["demo", "example call", "sample call", "watch a call", "listen to a call"], path: "/agent", heading: "Watch Maya take a call" },
+  { words: ["how it works", "how does it work", "how agent works"], need: "agent", path: "/agent", heading: "How it works" },
 ];
 
 const STOP = new Set(["the", "a", "an", "me", "show", "see", "of", "for", "to", "on", "in", "and", "your", "you", "our",

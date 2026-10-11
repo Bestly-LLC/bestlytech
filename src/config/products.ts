@@ -5,7 +5,7 @@ import neckpilotIcon from "@/assets/neckpilot-icon.png";
 import schoolpilotIcon from "@/assets/schoolpilot-icon.png";
 import hoacureIcon from "@/assets/hoacure-icon.png";
 import confeshIcon from "@/assets/confesh-icon.png";
-import { Droplets, Gem, HeartHandshake, Compass, Leaf, Flower2, ShoppingBag, Clapperboard } from "lucide-react";
+import { Droplets, Gem, HeartHandshake, Compass, Leaf, Flower2, ShoppingBag, Clapperboard, PhoneCall } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type ProductCategory =
@@ -117,6 +117,21 @@ export const products: Product[] = [
     category: "Social",
     status: "In Development",
     features: ["Fully anonymous posting", "End-to-end encryption", "No account required", "Community moderation"],
+  },
+  {
+    id: "bestly-agent",
+    name: "Bestly Agent",
+    description: "An AI that answers your business phone and does the work while it talks.",
+    href: "/agent",
+    icon: PhoneCall,
+    category: "Productivity",
+    status: "Live",
+    features: [
+      "Answers every call, day or night",
+      "Books, refunds and dispatches while it talks",
+      "Texts confirmations for you",
+      "Hands you the calls that need a person",
+    ],
   },
   {
     id: "bestly-studio",
