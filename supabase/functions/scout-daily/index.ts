@@ -22,6 +22,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { llm, LlmUnavailable, type LlmTask } from "../_shared/free-llm.ts";
+import { runLadder, chunkStartMin, type Attempt } from "../_shared/reflect-ladder.ts";
 import { corsWith } from "../_shared/cors.ts";
 import { isBlocked, type BlockRow } from "../_shared/spam-rules.ts";
 
@@ -488,7 +489,6 @@ const REFLECT_KIND: Record<RChunk["kind"], string> = {
   ops: `This batch is failed Mac mini jobs and monitor incidents. Find lessons where the cause and the fix are both visible. List UNSOLVED ones that repeat with no fix.`,
 };
 
-type Attempt = { name: string; skip: string[]; deadline: number; paid: "never" | "first"; wait: number };
 /** Once FreeLLM has timed out during this invocation, later chunks start at Groq instead of waiting 30 s on it again (the Oct 7-10 failures were exactly that wait). */
 const reflectRun = { freellmDown: false };
 const sawFreellmTimeout = (tried: { provider: string; outcome: string }[]) => tried.some((t) => t.provider === "freellm" && t.outcome === "timeout");
@@ -497,32 +497,31 @@ const ATTEMPTS: Attempt[] = [
   { name: "groq>cloudflare", skip: ["freellm"], deadline: 32_000, paid: "never", wait: 6_000 },
   { name: "cloudflare", skip: ["freellm", "groq"], deadline: 32_000, paid: "never", wait: 15_000 },
 ];
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** One chunk through the ladder with retries; paid last (still behind the Paid AI switch). Returns the model JSON or throws. */
+/** One chunk through the ladder with retries; paid last (still behind the Paid AI switch, and its time is reserved up front: see _shared/reflect-ladder.ts). */
 async function reflectChunk(c: RChunk, known: { scope: string; title: string }[], allowPaid: boolean, deadline: number): Promise<{ json: any; via: string }> {
   const scopesLC = c.scopes.toLowerCase();
   const mine = known.filter((k) => k.scope.startsWith("jared:") ? c.kind === "jared" : scopesLC.includes(k.scope.replace(/^[a-z]+:/, "").toLowerCase())).slice(0, 20).map((k) => `${k.scope}|${k.title}`).join("\n").slice(0, 1500);
   const system = `${REFLECT_BASE}\n\n${REFLECT_KIND[c.kind]}${mine ? `\n\nLessons that already exist (to update one, reuse its exact scope and title):\n${mine}` : ""}`;
-  let last = "";
   const plan: Attempt[] = [...ATTEMPTS, ...(allowPaid ? [{ name: "paid", skip: [], deadline: 45_000, paid: "first" as const, wait: 2_000 }] : [])];
-  for (const at of plan) {
-    if (Date.now() + 8_000 > deadline) throw new Error(`out of time (${last || "not tried"})`);
-    if (at.wait) await sleep(Math.min(at.wait, Math.max(0, deadline - Date.now() - 8_000)));
-    try {
-      const r = await llm({
-        task: "reflect", system, user: c.text, json: true, job: "reflect", ref: c.id, fn: "scout-daily", scope: "background",
-        paid: at.paid, paidModel: "claude-haiku-4-5", maxTokens: 1400, deadlineMs: Math.min(at.deadline, deadline - Date.now()),
-        validate: SHAPE.reflect, skip: (reflectRun.freellmDown ? [...new Set([...at.skip, "freellm"])] : at.skip) as any,
-      });
-      if (sawFreellmTimeout(r.tried)) reflectRun.freellmDown = true;
-      return { json: r.json, via: `${at.name}:${r.provider}` };
-    } catch (e) {
-      if (e instanceof LlmUnavailable && sawFreellmTimeout(e.tried)) reflectRun.freellmDown = true;
-      last = e instanceof LlmUnavailable ? `${at.name}: ${e.reason} (${e.tried.map((t) => `${t.provider} ${t.outcome}`).join(", ")})` : `${at.name}: ${(e as Error).message}`;
-    }
-  }
-  throw new Error(last);
+  return await runLadder({
+    plan, deadline,
+    describe: (at, e) => e instanceof LlmUnavailable ? `${at.name}: ${e.reason} (${e.tried.map((t) => `${t.provider} ${t.outcome}`).join(", ")})` : `${at.name}: ${(e as Error).message}`,
+    call: async ({ at, deadlineMs }) => {
+      try {
+        const r = await llm({
+          task: "reflect", system, user: c.text, json: true, job: "reflect", ref: c.id, fn: "scout-daily", scope: "background",
+          paid: at.paid, paidModel: "claude-haiku-4-5", maxTokens: 1400, deadlineMs,
+          validate: SHAPE.reflect, skip: (reflectRun.freellmDown ? [...new Set([...at.skip, "freellm"])] : at.skip) as any,
+        });
+        if (sawFreellmTimeout(r.tried)) reflectRun.freellmDown = true;
+        return { json: r.json, via: `${at.name}:${r.provider}` };
+      } catch (e) {
+        if (e instanceof LlmUnavailable && sawFreellmTimeout(e.tried)) reflectRun.freellmDown = true;
+        throw e;
+      }
+    },
+  }) as { json: any; via: string };
 }
 
 async function saveLessons(lessons: any[], source: string): Promise<number> {
@@ -562,7 +561,7 @@ async function reflect(opts: ReflectOpts = {}) {
   for (const c of all) {
     if (done.has(c.id)) continue;
     if ((fails[c.id] ?? 0) >= 3) { skipped.push(c.id); continue; }   // a chunk that failed on three separate runs is set aside, not retried forever
-    if (Date.now() + 10_000 > deadline) break;
+    if (Date.now() + chunkStartMin(opts.allowPaid !== false) > deadline) break;   // enough time for the free rungs AND the paid reserve
     try {
       const r = await reflectChunk(c, (known ?? []) as any[], opts.allowPaid !== false, deadline);
       via.push(r.via);
