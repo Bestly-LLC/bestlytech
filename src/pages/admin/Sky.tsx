@@ -524,17 +524,30 @@ export default function Sky() {
           {car && (() => {
             const fresh = Date.now() - car.at < CAR_STALE_MS;
             const cm = toMi(car.lat, car.lon, home);
-            let cx = X(cm.x), cy = Y(cm.y);
-            // on top of Home (or within 150 ft of it): sit beside the Home label instead
-            const nearHome = homeShown && (feetBetween(HOME, [car.lat, car.lon]) <= 150 || Math.hypot(cx - X(homeMi.x), cy - Y(homeMi.y)) < 44 * u);
-            if (nearHome) {
-              const m = (mapUp * Math.PI) / 180, off = 66 * u;
-              cx = X(homeMi.x) + off * Math.cos(m); cy = Y(homeMi.y) - off * Math.sin(m);
-            }
-            const inside = fresh && (nearHome || Math.hypot(cm.x, cm.y) <= radius * 1.04);
-            const drive = car.shift != null && /^[DR]$/i.test(car.shift) && car.mph != null;
-            const label = drive ? `${car.name} · ${Math.round(car.mph as number)}${NB}mph` : car.name;
+            const label = car.shift != null && /^[DR]$/i.test(car.shift) && car.mph != null ? `${car.name} · ${Math.round(car.mph)}${NB}mph` : car.name;
             const cs = Math.max(0.8, u * 0.62), fsz = 12 * u, tw = label.length * fsz * 0.62 + fsz * 1.6, th = fsz * 1.75;
+            let cx = X(cm.x), cy = Y(cm.y);
+            let inside = fresh && Math.hypot(cm.x, cm.y) <= radius * 1.04;
+            if (homeShown) {
+              // Real bounding-box test in screen axes (the tags are counter-rotated, so screen right = group (cos m, -sin m)).
+              // Home = house icon + HOME text; car = icon + halo core + name pill. Never touch: keep a 10u gap, car goes to Home's right.
+              const m = (mapUp * Math.PI) / 180, hx = X(homeMi.x), hy = Y(homeMi.y), hs = Math.max(1, u * 0.75), gap = 10 * u;
+              type Box = [number, number, number, number];
+              const homeBoxes: Box[] = [[-11 * hs - 2, -12 * hs - 2, 11 * hs + 2, 10 * hs + 2], [-21 * u, 22 * u - 9 * u, 21 * u, 22 * u + 4 * u]];
+              const carBoxes = (ox: number, oy: number): Box[] => [[ox - 46 * cs * 0.55 - 8 * cs, oy - 46 * cs * 0.55 - 8 * cs, ox + 46 * cs * 0.55 + 8 * cs, oy + 46 * cs * 0.55 + 8 * cs], [ox - tw / 2, oy + 28 * cs, ox + tw / 2, oy + 28 * cs + th]];
+              const hit = (A: Box[], B: Box[]) => A.some((a) => B.some((b) => a[0] < b[2] + gap && a[2] > b[0] - gap && a[1] < b[3] + gap && a[3] > b[1] - gap));
+              // natural spot relative to Home, in screen axes
+              const gx = cx - hx, gy = cy - hy, sx = gx * Math.cos(m) - gy * Math.sin(m), sy = gx * Math.sin(m) + gy * Math.cos(m);
+              let ux = 0;
+              while (ux < 600 * u && hit(carBoxes(ux, 0), homeBoxes)) ux += u;
+              const d = Math.hypot(sx, sy);
+              const w = hit(carBoxes(sx, sy), homeBoxes) || feetBetween(HOME, [car.lat, car.lon]) <= 150 ? 1 : Math.max(0, Math.min(1, (ux + 60 * u - d) / (60 * u)));
+              if (w > 0) {
+                const tx = sx + w * (ux - sx), ty = sy + w * (0 - sy);   // blend toward "right of Home"
+                cx = hx + tx * Math.cos(m) + ty * Math.sin(m); cy = hy - tx * Math.sin(m) + ty * Math.cos(m);
+                inside = fresh;
+              }
+            }
             return (
               <g style={{ opacity: inside ? 1 : 0, transition: "opacity .6s ease, transform 1.5s linear", transform: `translate(${cx}px, ${cy}px)`, pointerEvents: "none" }} aria-hidden={!inside}>
                 <circle r={46 * cs} fill="url(#sky-car)" />
