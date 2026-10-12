@@ -101,6 +101,13 @@ Anything that stops ElevenLabs puts the job in status `held` (`held_reason`, `he
 `provider: "piper"` is the MANUAL switch: every video is then voiced by Piper (log line `voice: piper (manual switch ...)`). It is never chosen automatically.
 `model: "eleven_flash_v2_5"` halves the cost.
 
+## Video format (normalize)
+Every file is made standard before the checks and the upload: H.264 High 4.1, `yuv420p`, limited (tv) range, bt709 tags, AAC, faststart.
+The Remotion render came out `yuvj420p` / full range / bt470bg with no bt709 tags (found 2026-10-12): Chrome plays that, Safari and the Studio app on a Mac do not.
+`worker.normalize(out, jid)` probes the file and, when it is not standard, re-encodes it (`-crf 19 -preset slow`) and swaps it in, with a job note.
+`worker.check()` still flags any non-standard result, so a missed normalize fails the job instead of filing it. Needs no settings.
+Older videos: re-encode, upload to `video/<client>/<name>.<sha10>.mp4` (the signer `studio_ship_sign_upload` allows that write-once path), then `studio_item_set_media`.
+
 ## Watchdogs
 - cron `montage-watch` every 5 min (requeue stalled jobs 3x, then fail + push; push if work waits and the worker is quiet).
 - `agent_beats` row `montage` every 2 min while idle, every minute while working (Team card pulse).
