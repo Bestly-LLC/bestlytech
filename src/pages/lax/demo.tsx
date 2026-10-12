@@ -108,15 +108,17 @@ export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
 const H = 3600e3;
 const iso = (ms: number) => new Date(ms).toISOString();
 
-/** Two sample Supercharger stops (the real numbers come from TezLab during the trip, then Tesla's bill). */
-function demoCharging(start: number, ended: boolean) {
+/** Two sample Supercharger stops (the real numbers come from TezLab during the trip, then Tesla's bill).
+ *  MUST match what Leo says on the demo: leo_demo_car('charging_summary') in
+ *  supabase/migrations/20261011190000_leo_demo_open.sql — Barstow $18.42 at now − 20 hr, Baker $9.75 at now − 14 hr,
+ *  61.4 kWh, $28.17 total. Change both together (Jared, 2026-10-11: he records the page and Leo side by side). */
+function demoCharging(ended: boolean) {
+  const now = Math.floor(Date.now() / 60e3) * 60e3; // whole minute, so the page and Leo read the same clock time
   const sessions = [
-    { at: iso(start + 4 * H), place: "Los Angeles, CA - Venice Boulevard", kwh: 14.5, from: 42, to: 77, cost: 7.19, idle: 0, final: ended, invoices: ended ? [{ id: "demo-1" }] : null },
-    { at: iso(start + 20 * H), place: "Santa Monica, CA", kwh: 15.3, from: 42, to: 80, cost: 8.19, idle: ended ? 1.0 : 0, final: ended, invoices: ended ? [{ id: "demo-2" }] : null },
-  ].filter((x) => +new Date(x.at) < Date.now());
-  const total = sessions.reduce((a, x) => a + x.cost + x.idle, 0);
-  return { sessions, total: Math.round(total * 100) / 100, idle: ended ? 1 : 0, kwh: Math.round(sessions.reduce((a, x) => a + x.kwh, 0) * 10) / 10,
-    count: sessions.length, final: ended, updated_at: iso(Date.now() - 12 * 60e3) };
+    { at: iso(now - 20 * H), place: "Barstow, CA", kwh: 38.4, from: 21, to: 80, cost: 18.42, idle: 0, final: ended, invoices: ended ? [{ id: "demo-1" }] : null },
+    { at: iso(now - 14 * H), place: "Baker, CA", kwh: 23.0, from: 44, to: 79, cost: 9.75, idle: 0, final: ended, invoices: ended ? [{ id: "demo-2" }] : null },
+  ];
+  return { sessions, total: 28.17, idle: 0, kwh: 61.4, count: sessions.length, final: ended, updated_at: iso(now - 12 * 60e3) };
 }
 
 const anchor = { stage: "", t: 0 };
@@ -172,7 +174,7 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
     })(), controls: controls_state === "on", controls_state, demo_open: open,
     controls_opens_at: iso(s - H), find_hold: stage === "held" && !open, email: null, reminder_at: null, reminder_sent_at: null, pickup_battery: now >= s ? (stage === "returning" ? 90 : 76) : null, pickup_battery_at: now >= s ? iso(s) : null, car_connected_at: now >= s ? iso(s + 10 * 60e3) : null, demo: true,
     range_check: now >= s && now < e + 0.5 * H ? { range_mi: 188, miles: 6.4, spare: 182, status: "ok" } : null,
-    charging: now < s ? null : demoCharging(s, now >= e),
+    charging: now < s ? null : demoCharging(now >= e),
     battery_health: { score: "good", pct: 80, range_full: 192 },
   };
   if (kind === "home") {

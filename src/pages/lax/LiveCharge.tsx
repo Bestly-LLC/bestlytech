@@ -47,10 +47,11 @@ export function ChargeNow({ state, battery, detail, target }: { state?: string |
 }
 
 type Site = { name: string; lat: number; lon: number; miles: number; open: number | null; total: number | null; closed?: boolean };
+// MUST match Leo's demo answer: leo_demo_car('find_superchargers') in supabase/migrations/20261011190000_leo_demo_open.sql.
 const DEMO_SITES: Site[] = [
-  { name: "Santa Monica, CA", lat: 34.024563, lon: -118.485488, miles: 0.4, open: 35, total: 62 },
-  { name: "Santa Monica, CA - Cloverfield Blvd", lat: 34.025043, lon: -118.469222, miles: 0.6, open: 2, total: 16 },
-  { name: "Los Angeles, CA - W Olympic Blvd", lat: 34.038566, lon: -118.44367, miles: 2.2, open: 6, total: 16 },
+  { name: "Los Angeles - Century Blvd", lat: 33.9456, lon: -118.3712, miles: 1.2, open: 12, total: 20 },
+  { name: "Hawthorne, CA", lat: 33.9167, lon: -118.3526, miles: 3.4, open: 8, total: 16 },
+  { name: "Culver City, CA", lat: 34.0029, lon: -118.3931, miles: 5.9, open: 4, total: 12 },
 ];
 const nice = (n: string) => n.replace(/, CA\b/, "").replace(/^Los Angeles - /, "");
 
