@@ -14,21 +14,57 @@ import { useDemoClock } from "./useDemoClock";
 export type DemoStageHandle = {
   /** Load a call. With `play`, start it right away (call this from a click, so sound is allowed). */
   select: (id: string, play?: boolean) => void;
+  /** Play the call that is on screen now: resume it if paused, start it over if it has ended. Call from a click. */
+  playCurrent: () => void;
 };
+
+/** The call in the address bar (?call=dental), or the first call when it is missing or not one of ours. */
+function callFromUrl(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const id = new URLSearchParams(window.location.search).get("call");
+    const i = id ? SCENARIOS.findIndex((s) => s.id === id) : -1;
+    return i > 0 ? i : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Keep the chosen call in the address bar so a reload or a shared link lands on it. replaceState on purpose: no router
+ * navigation (nothing remounts, the page does not scroll) and no extra history entries. The router's own history state
+ * is passed back in so Back and Forward keep working. The first call is the default, so it leaves the bar clean.
+ */
+function rememberCall(id: string, first: boolean) {
+  try {
+    const url = new URL(window.location.href);
+    if (first) url.searchParams.delete("call");
+    else url.searchParams.set("call", id);
+    const next = url.pathname + url.search + url.hash;
+    if (next !== window.location.pathname + window.location.search + window.location.hash) {
+      window.history.replaceState(window.history.state, "", next);
+    }
+  } catch {
+    /* the address bar just will not remember it */
+  }
+}
 
 /**
  * The demo stage: pick a business, press play, and watch the call and the software side by side. Maya's call (left)
  * and the mock desktop window (right) are both drawn from one clock, see useDemoClock.
  */
 export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(function DemoStage({ onTalk }, ref) {
-  const [idx, setIdx] = useState(0);
+  const [idx, setIdx] = useState(callFromUrl);
   const scenario = SCENARIOS[idx];
   const clock = useDemoClock(scenario);
   const { timeline, t } = clock;
+  const clockRef = useRef(clock); // the clock object changes every frame; handlers read it through this instead
+  clockRef.current = clock;
   const [nudge, setNudge] = useState(false);
   const root = useRef<HTMLElement>(null);
   const chipsRef = useRef<HTMLDivElement>(null);
   const pendingPlay = useRef(false);
+  const chosenByVisitor = useRef(false);
   const nudged = useRef(false);
 
   const events = useMemo(() => allEvents(scenario, timeline), [scenario, timeline]);
@@ -49,13 +85,14 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
   const choose = useCallback(
     (i: number, play: boolean) => {
       if (i === idx) {
-        if (play) clock.replay();
+        if (play) clockRef.current.replay();
         return;
       }
       pendingPlay.current = play;
+      chosenByVisitor.current = true;
       setIdx(i);
     },
-    [idx, clock],
+    [idx],
   );
 
   // The caller's photo starts loading the moment a chip is chosen, so it never pops in mid-call.
@@ -63,14 +100,19 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
     preloadPerson(scenario.caller.name);
   }, [scenario.caller.name]);
 
-  // A new call has just loaded (the clock reset itself first): warm its audio, and start it if asked to.
   useEffect(() => {
-    if (idx > 0 || pendingPlay.current) clock.prime();
+    rememberCall(scenario.id, idx === 0);
+  }, [scenario.id, idx]);
+
+  // A new call has just loaded (the clock reset itself first): warm its audio, and start it if asked to. A call that
+  // came from the address bar waits for the first press of Play instead, so a shared link never downloads audio unasked.
+  useEffect(() => {
+    const c = clockRef.current;
+    if (chosenByVisitor.current || pendingPlay.current) c.prime();
     if (pendingPlay.current) {
       pendingPlay.current = false;
-      clock.play();
+      c.play();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scenario.id]);
 
   useImperativeHandle(
@@ -80,6 +122,7 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
         const i = SCENARIOS.findIndex((s) => s.id === id);
         if (i >= 0) choose(i, play);
       },
+      playCurrent: () => clockRef.current.play(),
     }),
     [choose],
   );
@@ -103,17 +146,25 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
     return () => io.disconnect();
   }, []);
 
-  // While the stage is on screen, the site's floating Maya launcher and call pill step aside (html.maya-yield, see
-  // maya-widget.css) so they never sit on top of the demo. They return the moment the stage leaves view.
+  // While the demo itself is on screen, the site's floating Maya pill and scroll-to-top button step aside (html.maya-yield,
+  // see maya-widget.css) so they never sit on top of the call, the window or the transport. They come straight back when
+  // the demo leaves view. Only the bottom 10% of the screen counts, because that is the corner they live in.
   useEffect(() => {
     const el = root.current;
     const html = document.documentElement;
     if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver((entries) => {
-      const last = entries[entries.length - 1];
-      html.classList.toggle("maya-yield", last.isIntersecting);
-    });
-    io.observe(el);
+    const live = new Set<Element>();
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) live.add(e.target);
+          else live.delete(e.target);
+        }
+        html.classList.toggle("maya-yield", live.size > 0);
+      },
+      { rootMargin: "-90% 0px 0px 0px" },
+    );
+    el.querySelectorAll(".ad-grid, .ad-dock").forEach((n) => io.observe(n));
     return () => {
       io.disconnect();
       html.classList.remove("maya-yield");
@@ -153,6 +204,7 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
 
   const onStageKey = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key !== " " && e.code !== "Space") return;
+    if (e.repeat) return;
     const el = e.target as HTMLElement;
     if (el.closest("button, a, input, textarea, select")) return; // those handle Space themselves
     e.preventDefault();
@@ -168,6 +220,7 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
       className="ad-stage"
       data-nudge={nudge && !clock.started ? "1" : "0"}
       data-playing={clock.playing ? "1" : "0"}
+      data-busy={clock.playing ? "true" : undefined}
       aria-labelledby="demo-title"
       onKeyDown={onStageKey}
     >
@@ -210,6 +263,8 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
               events={events}
               t={t}
               started={clock.started}
+              playing={clock.playing}
+              buffering={clock.buffering}
               ended={clock.ended}
               onNext={() => choose((idx + 1) % SCENARIOS.length, true)}
               onTalk={onTalk}

@@ -89,10 +89,15 @@ export default function BestlyAgent() {
     const bar = document.querySelector("header");
     const barH = bar && getComputedStyle(bar).position !== "static" ? bar.getBoundingClientRect().height : 0;
     const top = el.getBoundingClientRect().top + window.scrollY - barH - 14;
-    window.scrollTo({ top: Math.max(0, top), behavior: reduce ? "auto" : "smooth" });
+    window.scrollTo({ top: Math.max(0, top), behavior: reduce ? "instant" : "smooth" });
   };
   const watch = (id: string, play: boolean) => {
     stage.current?.select(id, play); // inside the click, so the browser allows sound
+    toStage();
+  };
+  // The hero button plays whichever call is on the stage right now, not always the first one.
+  const watchCurrent = () => {
+    stage.current?.playCurrent();
     toStage();
   };
 
@@ -126,7 +131,7 @@ export default function BestlyAgent() {
               hang up.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Button size="lg" className="min-h-[44px]" onClick={() => watch("saas-support", true)}>
+              <Button size="lg" className="min-h-[44px]" onClick={watchCurrent}>
                 Watch a call <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
               </Button>
               <Button size="lg" variant="outline" className="min-h-[44px]" onClick={openMaya}>
@@ -238,9 +243,9 @@ export default function BestlyAgent() {
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                       <a.icon className="h-5 w-5" aria-hidden="true" />
                     </span>
-                    <h3 className="font-modern text-lg font-semibold text-foreground">{a.title}</h3>
+                    <h3 className="font-modern text-lg font-semibold tracking-[-0.012em] [word-spacing:0.05em] text-foreground">{a.title}</h3>
                   </div>
-                  <p className="mt-4 text-muted-foreground">{a.body}</p>
+                  <p className={`mt-4 ${a.names.length ? "text-muted-foreground" : "text-foreground/75"}`}>{a.body}</p>
                   {a.names.length > 0 && (
                     <ul className="mt-4 flex flex-wrap gap-2" aria-label={`${a.title} examples`}>
                       {a.names.map((n) => (
@@ -272,9 +277,9 @@ export default function BestlyAgent() {
             <p className="mt-4 text-lg text-muted-foreground">
               Customers reach you in different ways. The same agent, with the same know-how, answers all of them.
             </p>
-            <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <ul className="mt-8 grid grid-cols-1 gap-3 min-[390px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
               {channels.map((c) => (
-                <li key={c.label} className="flex min-h-[44px] items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 text-foreground">
+                <li key={c.label} className="flex min-h-[44px] items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-3 text-foreground sm:px-4">
                   <c.icon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                   <span className="whitespace-nowrap font-medium">{c.label}</span>
                 </li>
@@ -286,7 +291,7 @@ export default function BestlyAgent() {
               <span className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Languages className="h-5 w-5" aria-hidden="true" />
               </span>
-              <h3 className="font-modern text-2xl font-semibold text-foreground">
+              <h3 className="font-modern text-2xl font-semibold tracking-[-0.012em] [word-spacing:0.05em] text-foreground">
                 Speaks <span className="whitespace-nowrap">90+ languages.</span>
               </h3>
               <p className="mt-3 text-lg text-muted-foreground">
@@ -338,7 +343,7 @@ export default function BestlyAgent() {
                   <Plus className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <span className="font-modern text-xl font-semibold tracking-[-0.012em] [word-spacing:0.05em] text-foreground">Yours</span>
-                <span className="mt-2 block text-muted-foreground">Tell Maya what you do and she&rsquo;ll show you how it would work.</span>
+                <span className="mt-2 block text-foreground/75">Tell Maya what you do and she&rsquo;ll show you how it would work.</span>
                 <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
                   Talk to Maya <Mic className="h-4 w-4" aria-hidden="true" />
                 </span>
@@ -382,7 +387,7 @@ export default function BestlyAgent() {
             {faqs.map((f, i) => (
               <AnimatedSection key={f.q} animation="fade-in-up" delay={i * 50}>
                 <div className="h-full rounded-2xl border border-border bg-card p-6">
-                  <dt className="font-modern text-lg font-semibold text-foreground">{f.q}</dt>
+                  <dt className="font-modern text-lg font-semibold tracking-[-0.012em] [word-spacing:0.05em] text-foreground">{f.q}</dt>
                   <dd className="mt-2 text-muted-foreground">{f.a}</dd>
                 </div>
               </AnimatedSection>

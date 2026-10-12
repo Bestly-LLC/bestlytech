@@ -13,6 +13,10 @@ import { estimateTimeline, parseTimeline, type Timeline } from "./timeline";
 
 const SOUND_KEY = "agent-demo:sound";
 const FRAME_MS = 1000 / 30;
+/** Sound is on but the audio has not moved for this long: stop waiting and let the captions carry the call. */
+const STALL_MS = 8000;
+/** Audio that has been short of data this long shows "Buffering" instead of looking frozen. */
+const BUFFER_SHOW_MS = 500;
 
 function readSoundPref(): boolean {
   try {
@@ -33,6 +37,8 @@ export type DemoClock = {
   soundOn: boolean;
   /** True when sound is wanted but the file would not load, so captions are carrying the call. */
   audioFailed: boolean;
+  /** The call is playing with sound but the audio is waiting on the network. */
+  buffering: boolean;
   play: () => void;
   pause: () => void;
   toggle: () => void;
@@ -53,6 +59,7 @@ export function useDemoClock(scenario: Scenario): DemoClock {
   const [started, setStarted] = useState(false);
   const [soundOn, setSoundOnState] = useState(readSoundPref);
   const [audioFailed, setAudioFailed] = useState(false);
+  const [buffering, setBuffering] = useState(false);
 
   const audio = useRef<HTMLAudioElement | null>(null);
   const tRef = useRef(0);
@@ -65,6 +72,9 @@ export function useDemoClock(scenario: Scenario): DemoClock {
   const lastFrame = useRef(0);
   const lastPush = useRef(0);
   const raf = useRef(0);
+  const audioSeen = useRef({ t: -1, at: 0 }); // last audio position we saw move, and when
+  const waitSince = useRef(0); // when the audio first ran short of data (0 = it has not)
+  const bufRef = useRef(false);
 
   durationRef.current = timeline.duration;
   idRef.current = scenario.id;
@@ -85,6 +95,9 @@ export function useDemoClock(scenario: Scenario): DemoClock {
     setStarted(false);
     setAudioFailed(false);
     failedRef.current = false;
+    waitSince.current = 0;
+    bufRef.current = false;
+    setBuffering(false);
     setTime(0);
     const a = audio.current;
     if (a) {
@@ -118,12 +131,37 @@ export function useDemoClock(scenario: Scenario): DemoClock {
     mayaDiag("agent-demo-audio", { id, error: error.slice(0, 120) });
   }, []);
 
+  /**
+   * A play() that was cancelled by our own pause(), a chip change or a seek rejects with AbortError. That is not a broken
+   * file, and treating it as one used to flip the NEXT call to captions only after a quick pause or chip switch.
+   */
+  const playFailed = useCallback((e: unknown, forId: string) => {
+    if (e instanceof DOMException && e.name === "AbortError") return;
+    if (forId !== idRef.current) return;
+    reportFailure(e instanceof Error ? `${e.name}: ${e.message}` : "play failed");
+  }, [reportFailure]);
+
   const wireAudio = useCallback(
     (el: HTMLAudioElement | null) => {
       audio.current = el;
       if (!el) return;
       el.preload = "none";
-      el.onerror = () => reportFailure(el.error?.message || `media error ${el.error?.code ?? ""}`.trim());
+      el.onerror = () => {
+        // Clearing the previous call's file can raise a late error; only a file we asked for counts.
+        if (!el.getAttribute("src")) return;
+        reportFailure(el.error?.message || `media error ${el.error?.code ?? ""}`.trim());
+      };
+      // The system stopped the audio (a phone call, the screen locking, another tab taking over): show it as paused
+      // instead of a running call whose clock has frozen. Our own pauses clear playingRef or turn sound off first.
+      el.onpause = () => {
+        if (!el.paused || !playingRef.current || !soundRef.current || failedRef.current || el.ended) return; // el.paused: a late event from our own pause()
+        playingRef.current = false;
+        setPlaying(false);
+        cancelAnimationFrame(raf.current);
+        bufRef.current = false;
+        setBuffering(false);
+        setT(tRef.current);
+      };
       el.onended = () => {
         if (!playingRef.current) return;
         playingRef.current = false;
@@ -157,6 +195,23 @@ export function useDemoClock(scenario: Scenario): DemoClock {
       let next: number;
       if (a && soundRef.current && !failedRef.current && a.getAttribute("src")) {
         next = a.currentTime;
+        if (next !== audioSeen.current.t) audioSeen.current = { t: next, at: now };
+        const short = a.readyState < 3 && !a.ended;
+        if (!short) waitSince.current = 0;
+        else if (!waitSince.current) waitSince.current = now;
+        const show = short && now - waitSince.current > BUFFER_SHOW_MS;
+        if (show !== bufRef.current) {
+          bufRef.current = show;
+          setBuffering(show);
+        }
+        if (now - audioSeen.current.at > STALL_MS) {
+          // The sound never started, or stopped for good (a dead connection): carry on with captions, from here.
+          reportFailure("stalled");
+          a.pause();
+          bufRef.current = false;
+          setBuffering(false);
+          next = tRef.current + dt;
+        }
       } else {
         next = tRef.current + dt;
       }
@@ -175,7 +230,7 @@ export function useDemoClock(scenario: Scenario): DemoClock {
       }
       raf.current = requestAnimationFrame(loop);
     },
-    [setTime],
+    [setTime, reportFailure],
   );
 
   const startLoop = useCallback(() => {
@@ -193,6 +248,8 @@ export function useDemoClock(scenario: Scenario): DemoClock {
     playingRef.current = true;
     setPlaying(true);
     setStarted(true);
+    audioSeen.current = { t: -1, at: performance.now() };
+    waitSince.current = 0;
     if (wantsAudio()) {
       loadAudio();
       const a = audio.current as HTMLAudioElement;
@@ -201,19 +258,20 @@ export function useDemoClock(scenario: Scenario): DemoClock {
       } catch {
         /* metadata not ready yet: it starts from 0 and the clock follows the audio */
       }
-      a.play().catch((e: unknown) => {
-        // Blocked or undecodable: keep the call going on the virtual clock.
-        reportFailure(e instanceof Error ? `${e.name}: ${e.message}` : "play failed");
-      });
+      const forId = idRef.current;
+      // Blocked or undecodable: keep the call going on the virtual clock.
+      a.play().catch((e: unknown) => playFailed(e, forId));
     }
     startLoop();
-  }, [loadAudio, reportFailure, setTime, startLoop]);
+  }, [loadAudio, playFailed, setTime, startLoop]);
 
   const pause = useCallback(() => {
     playingRef.current = false;
     setPlaying(false);
     stopLoop();
     audio.current?.pause();
+    bufRef.current = false;
+    setBuffering(false);
     setT(tRef.current);
   }, []);
 
@@ -223,6 +281,7 @@ export function useDemoClock(scenario: Scenario): DemoClock {
     (sec: number) => {
       const v = Math.min(durationRef.current, Math.max(0, sec));
       setTime(v);
+      audioSeen.current = { t: -1, at: performance.now() };
       const a = audio.current;
       if (a && a.getAttribute("src")) {
         try {
@@ -266,19 +325,23 @@ export function useDemoClock(scenario: Scenario): DemoClock {
       if (!a) return;
       if (!on) {
         a.pause(); // the virtual clock carries on from tRef
+        bufRef.current = false;
+        setBuffering(false);
         return;
       }
       if (playingRef.current && !failedRef.current) {
+        audioSeen.current = { t: -1, at: performance.now() };
         loadAudio();
         try {
           a.currentTime = tRef.current;
         } catch {
           /* ignore */
         }
-        a.play().catch((e: unknown) => reportFailure(e instanceof Error ? `${e.name}: ${e.message}` : "play failed"));
+        const forId = idRef.current;
+        a.play().catch((e: unknown) => playFailed(e, forId));
       }
     },
-    [loadAudio, reportFailure],
+    [loadAudio, playFailed],
   );
 
   const prime = useCallback(() => {
@@ -299,6 +362,7 @@ export function useDemoClock(scenario: Scenario): DemoClock {
       ended,
       soundOn,
       audioFailed,
+      buffering,
       play,
       pause,
       toggle,
@@ -307,6 +371,6 @@ export function useDemoClock(scenario: Scenario): DemoClock {
       setSoundOn,
       prime,
     }),
-    [wireAudio, timeline, t, playing, started, ended, soundOn, audioFailed, play, pause, toggle, replay, seek, setSoundOn, prime],
+    [wireAudio, timeline, t, playing, started, ended, soundOn, audioFailed, buffering, play, pause, toggle, replay, seek, setSoundOn, prime],
   );
 }
