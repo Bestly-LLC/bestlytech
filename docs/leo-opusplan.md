@@ -36,4 +36,11 @@ Watchdog: Switchboard (`agent-watch`) re-attaches Leo's `tool_ids` and webhook e
 
 1. **Live charging numbers.** A `trip_charging` tool reading what the Charging card shows (stops, cost so far, return-at level), so Leo says the guest's own totals.
 2. **Driver pages.** Extra drivers' own pages (`/d/:token`) don't show Leo yet; the session check would need to accept driver tokens.
-3. **Phone line.** Leo is web-only. Giving him a number means tools see `trip_key = none` and fall back to messages unless the caller can be matched to a trip.
+3. ~~**Phone line.**~~ Done 2026-10-12: `leo_phone_caller` mints a scoped `trip_voice_sessions` key for every caller (`channel` column). Matched guest (full E.164 or last 10 digits of the Turo phone / texting number) = `phone`: `trip_status` (thin, key-free), `notify_host`, `file_ticket`, `reminder_email` (set only when no email is on file). Unmatched = `phone_unknown`: `file_ticket` + `notify_host` (files a callback ticket). Jared's cell = `phone_test` (demo trip, every tool). Caller ID can be spoofed, so the scope is enforced in `trip-voice` `tool()`/`run()`, and the hourly selftest fails loudly (signed Leo, error) if a phone session could ever reach car, key, nav or text tools.
+
+## Server rules added 2026-10-12
+
+- **Held key.** `lax_key_held()` is the one rule. `lax_agent_diag` reports `key.status = held` (meaning = why, no invite fields) and `lax_agent_act` refuses `check_key` / `resend_key` / `make_key_now` while the host hasn't confirmed the license and check-in. (`lax_agent_diag` / `lax_agent_act` had drifted out of migrations; `20261012030000_leo_server_gaps.sql` is now their source.)
+- **Tool results.** Every failure is `ok:false` with a `say` starting `Not sent:` or `Didn't work:`. `trip_status` no longer carries `systems` / `recent_jobs`; it has `car_reachable`.
+- **Watchdog.** `leo-health` (pg_cron, every 10 min, free) reads `leo_client_diag` and `leo_tool_log` (one row per tool call, no personal data), raises `leo.health.screen` / `leo.health.tools` signed Leo, re-runs the phone-webhook check and demo self-test as its auto-recovery, and clears itself. Warnings are held for the recap; it only escalates (the "still down" kind of news) when guests have been blocked over an hour. Not covered: drift of Leo's ElevenLabs tool enums (nothing stores the expected values to compare against).
+

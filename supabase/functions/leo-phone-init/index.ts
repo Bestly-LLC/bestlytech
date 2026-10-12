@@ -1,5 +1,7 @@
 // ElevenLabs call-start webhook for Leo's phone line (310) 622-7052, plus an hourly self-heal watch.
 // POST (no op): ElevenLabs asks for dynamic variables at call start. Returns trip_key etc. so calls don't fail.
+//   trip_key is a SCOPED phone session minted by leo_phone_caller (matched guest = trip_status/notify_host/file_ticket/reminder_email only,
+//   unknown caller = file_ticket + notify_host only, Jared's own cell = demo trip with every tool). trip-voice enforces the scope.
 // POST ?op=watch: pg_cron checks ElevenLabs still points its call-start webhook here and that Leo has the
 //   toggle on; repairs the webhook if it drifted, raises an alert (owner: Leo) if anything is off.
 // Auth: x-leo-init header must match Vault leo_phone_init_token (checked in SQL, never logged).
@@ -48,7 +50,7 @@ function greetFor(raw: Record<string, unknown>): { vars: Record<string, unknown>
     : Number.isFinite(mtp) && mtp !== 9999 ? new Date(Date.now() + mtp * 60000).toISOString() : null;
   const o = leoOpening({
     first: String(vars.guest_first_name ?? ""), startsAt, endsAt: typeof ends_at === "string" ? ends_at : null,
-    ended: vars.trip_stage === "ended", controlsState: String(vars.controls_state ?? "unknown"), canAct: String(vars.trip_key ?? "none") !== "none",
+    ended: vars.trip_stage === "ended", controlsState: String(vars.controls_state ?? "unknown"), canAct: String(vars.caller_type) === "test_guest", // phone callers get a key now, but only Jared's demo test line can run the car
   });
   return { vars: { ...vars, greeting_offer: o.offer }, text: o.text };
 }
