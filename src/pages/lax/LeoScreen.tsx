@@ -195,11 +195,16 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
           libsampleratePath: "/maya/libsamplerate.worklet.js",
           overrides: { agent: { firstMessage: items.length > 1 ? "I'm here. Go ahead." : greeting }, conversation: { textOnly: !withVoice } },
           dynamicVariables: { trip_key: String(s.key), call_mode: "page", caller_type: token.startsWith("demo-") ? "test_guest" : "guest",
-            pickup_place: home ? "home" : "lax", trip_stage: context?.stage ?? "unknown",
+            pickup_place: home ? "home" : "lax", trip_stage: context?.linkDown ? "link_down" : context?.stage ?? "unknown",
             guest_first_name: /^Hi (\S+), I'm Leo\./.exec(opening.text)?.[1] ?? "",
             minutes_to_pickup: opening.mtp ?? 9999, controls_state: context?.controlsState ?? "unknown", greeting_offer: opening.offer },
           clientTools: { show_card: async (p: Any) => showCard(String(p?.card ?? "")), page_action: async (p: Any) => pageAction(p) },
-          onConnect: () => { setPhase("live"); if (history && items.length > 1) try { c.sendContextualUpdate(`Earlier on this screen:\n${history}`); } catch { /* ignore */ } },
+          onConnect: () => {
+            setPhase("live");
+            // Link-down page (2026-10-11): Leo can't see a trip here. Tell him why and what he may do.
+            if (context?.linkDown) try { c.sendContextualUpdate(`This guest is on a trip link that no longer works (reason: ${context.linkDown}). You cannot see their trip, key or car from here. Help them: if they rebooked or changed the trip, they can sign in at bestly.tech/${home ? "turo-key" : "turo-lax"} with their phone number and last name to reach their current trip page. Otherwise take a message for the host with notify_host or file_ticket (ask for their name and best number).`); } catch { /* ignore */ }
+            if (history && items.length > 1) try { c.sendContextualUpdate(`Earlier on this screen:\n${history}`); } catch { /* ignore */ }
+          },
           onDisconnect: () => { conv.current = null; setPhase("ended"); setVoice(false); setSpeaking(false); setWorking(null); },
           onModeChange: ({ mode: m }: { mode: string }) => setSpeaking(m === "speaking"),
           onMessage: ({ message, role }: { message: string; role: string }) => {

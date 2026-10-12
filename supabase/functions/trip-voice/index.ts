@@ -32,6 +32,8 @@
 //   phone          caller's number matched a trip: trip_status (no key detail, no car, no stops), notify_host, file_ticket, reminder_email
 //                  (status and send_now to an email already on file; never "set"). No car, key, nav or text tools: they get a plain sentence pointing at the trip page link.
 //   phone_unknown  nobody matched: file_ticket and notify_host (files a callback ticket) only.
+//   page_unknown   a real trip link whose trip is gone (link-down page, 2026-10-11): same scope as phone_unknown,
+//                  10 sessions per link and 60 in all per hour. Made-up tokens still get no session.
 //   phone_test     Jared's own cell on the demo trip and pretend car: every tool.
 // Every failed result carries ok:false and a say line starting "Not sent:" or "Didn't work:". Every call is counted in leo_tool_log (no personal
 // data) for the leo-health watchdog (pg_cron every 10 min, raises signed Leo alerts).
@@ -75,16 +77,27 @@ async function openSession(b: Any): Promise<Response> {
   if (!raw) return json({ ok: false, error: "Open your trip link to talk to Leo." }, 400);
   const demo = /^demo-(home|lax)$/.test(raw);
   const token = demo ? `demo:${raw}` : raw;
+  // 2026-10-11 link-down pages: a real trip link whose trip is gone (changed, rebooked, canceled, long over) still gets
+  // Leo, on a limited channel (page_unknown): take a message for the host, nothing else. Made-up tokens get nothing.
+  let channel = "page";
   if (!demo) {
     const { data: diag } = await sb.rpc("lax_agent_diag", { p_token: token });
-    if (!diag || (diag as Any).error) return json({ ok: false, error: "This trip link isn't active." }, 404);
+    if (!diag || (diag as Any).error) {
+      const { data: link } = await sb.from("lax_guest_links").select("reservation_id").eq("token", token).maybeSingle();
+      if (!link) return json({ ok: false, error: "This trip link isn't active." }, 404);
+      channel = "page_unknown";
+    }
   }
   const since = new Date(Date.now() - 3600_000).toISOString();
   const { count } = await sb.from("trip_voice_sessions").select("key", { count: "exact", head: true }).eq("token", token).gte("created_at", since);
   // Opening the card starts a call, so a guest who opens and closes it a few times uses several sessions.
   // Demo pages get more room: the host tests and shows them off (200 an hour while the open demo is on).
-  const cap = demo ? ((await demoOpen()) ? 200 : 40) : 20;
+  const cap = demo ? ((await demoOpen()) ? 200 : 40) : channel === "page_unknown" ? 10 : 20;
   if ((count ?? 0) >= cap) return json({ ok: false, error: "Leo is busy on this trip right now. Try again in a few minutes, or message your host in the Turo app." }, 429);
+  if (channel === "page_unknown") {
+    const { count: all } = await sb.from("trip_voice_sessions").select("key", { count: "exact", head: true }).eq("channel", "page_unknown").gte("created_at", since);
+    if ((all ?? 0) >= 60) return json({ ok: false, error: "Leo is busy right now. Try again in a few minutes, or message your host in the Turo app." }, 429);
+  }
 
   const aid = await agentId();
   const key = await xiKey();
@@ -98,7 +111,7 @@ async function openSession(b: Any): Promise<Response> {
     return json({ ok: false, error: "Leo isn't available right now. Try again in a minute, or message your host in the Turo app." }, 502);
   }
   const sessionKey = `tv_${hex(24)}`;
-  const ins = await sb.from("trip_voice_sessions").insert({ key: sessionKey, agent_slug: AGENT_SLUG, token });
+  const ins = await sb.from("trip_voice_sessions").insert({ key: sessionKey, agent_slug: AGENT_SLUG, token, channel });
   if (ins.error) { await logTool("session_open", "page", demo, false, "error"); return json({ ok: false, error: "Leo isn't available right now. Try again in a minute, or message your host in the Turo app." }, 500); }
   return json({ ok: true, signed_url: j.signed_url, key: sessionKey });
 }
@@ -140,10 +153,12 @@ async function session(b: Any, name = "?"): Promise<Session | Response> {
 const PHONE_TOOLS = new Set(["trip_status", "notify_host", "file_ticket", "reminder_email"]);
 const UNKNOWN_TOOLS = new Set(["file_ticket", "notify_host"]);
 const PHONE_REFUSE = "Didn't work: I can't do that over the phone. Your trip page link, the one in your Turo message, does that. Or I can have your host get back to you. Want me to take a message?";
-const UNKNOWN_REFUSE = "Didn't work: I can't look up trips or run anything on this call, but I can take a message for the host. What's your name and the best number to reach you?";
+const LINK_DOWN_REFUSE = "Didn't work: this trip link no longer works, so I can't see the trip or the car from here. They can sign in again at bestly.tech/turo-key (home pickup) or bestly.tech/turo-lax (LAX) with their phone number and last name. Or I can take a message for the host: ask for their name and best number.";
+const UNKNOWN_REFUSE ="Didn't work: I can't look up trips or run anything on this call, but I can take a message for the host. What's your name and the best number to reach you?";
 function scopeRefusal(channel: string, name: string): Any | null {
   if (channel === "phone" && !PHONE_TOOLS.has(name)) return { ok: false, scope: true, error: "not available on a phone call", say: PHONE_REFUSE };
   if (channel === "phone_unknown" && !UNKNOWN_TOOLS.has(name)) return { ok: false, scope: true, error: "not available for an unmatched caller", say: UNKNOWN_REFUSE };
+  if (channel === "page_unknown" && !UNKNOWN_TOOLS.has(name)) return { ok: false, scope: true, error: "not available on a link that no longer works", say: LINK_DOWN_REFUSE };
   return null;
 }
 /** What Leo receives from the trip lookup: no internal system state, and on the phone only a thin, key-free view. */
@@ -744,7 +759,9 @@ async function selftest(): Promise<Any> {
   try {
     if (!scopeRefusal("phone", "car_lock") || !scopeRefusal("phone", "car_climate") || !scopeRefusal("phone", "key_fix") || !scopeRefusal("phone", "send_to_car_nav")
         || !scopeRefusal("phone", "send_sms") || !scopeRefusal("phone", "extra_driver") || scopeRefusal("phone", "trip_status") || scopeRefusal("phone", "file_ticket")
-        || !scopeRefusal("phone_unknown", "trip_status") || !scopeRefusal("phone_unknown", "reminder_email") || scopeRefusal("phone_unknown", "notify_host")) bad.push("PHONE SCOPE");
+        || !scopeRefusal("phone_unknown", "trip_status") || !scopeRefusal("phone_unknown", "reminder_email") || scopeRefusal("phone_unknown", "notify_host")
+        || !scopeRefusal("page_unknown", "car_lock") || !scopeRefusal("page_unknown", "trip_status") || !scopeRefusal("page_unknown", "key_fix")
+        || scopeRefusal("page_unknown", "notify_host") || scopeRefusal("page_unknown", "file_ticket")) bad.push("PHONE SCOPE");
     const r = await run("selftest-not-a-real-trip-token", "resend_key", {}, "phone") as Any;
     if (r?.ok !== false) bad.push("PHONE SCOPE run()");
   } catch (_e) { bad.push("PHONE SCOPE check error"); }
@@ -805,10 +822,11 @@ async function dispatch(name: string, b: Any, s: Session): Promise<{ out: Any; s
       return { out: { ok: true, result: await run(t, `driver_${action}`, { name: b.name, summary: b.summary }, ch) } };
     }
     case "notify_host": {
-      if (ch === "phone_unknown") {
+      if (ch === "phone_unknown" || ch === "page_unknown") {
         // Nobody matched this caller to a trip, so there is no trip to alert about: file a callback ticket (pings Jared signed Leo).
         const summary = clip(b.summary, 280);
-        const f = await fileTicket(s, { kind: "callback", name: b.name, phone: b.phone, issue: `Unmatched phone caller asked for the host: ${summary}` });
+        const who = ch === "page_unknown" ? "Guest on a trip link that no longer works" : "Unmatched phone caller";
+        const f = await fileTicket(s, { kind: "callback", name: b.name, phone: b.phone, issue: `${who} asked for the host: ${summary}` });
         if (f.out.ok === false) return f;
         return { out: { ok: true, result: { ok: true, note: "I left your message for the host and a callback is queued." }, ...(b.phone ? {} : { ask_for_phone: "No callback number yet: ask for one and file it with file_ticket." }) } };
       }

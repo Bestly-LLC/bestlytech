@@ -2,12 +2,11 @@
 //
 // Turo has no public API and no server-side token: the upcoming-trips feed is only readable
 // from inside a browser that holds Jared's session. So this function cannot go and fetch -
-// whatever holds the session (the Pi Turo reader, the Mac mini turo_sender via Chrome as fallback,
-// or a Claude session) pushes here instead, and this owns the messy part: de-duplicating the feed and writing it safely.
+// whatever holds the session (the Pi Turo reader, or a Claude session) pushes here instead, and this owns the messy part: de-duplicating the feed and writing it safely.
 //
 //   POST { trips: [<raw upcomingTripItems>], vehicle: <raw TezLab status> }
 //   headers: x-worker-key (Mac worker key) or x-tesla-worker (car/Turo helper token), or an admin session
-//   -> { ok, trips: {seen, written}, vehicle: "written" | "skipped", pruned, queued_links }
+//   -> { ok, trips: {seen, written}, vehicle: "written" | "skipped", pruned, links_synced }
 //
 // THE DE-DUPLICATION: the feed returns one item PER EVENT, not per trip. Every reservation shows up
 // twice, as OWNER_TRIP_START and OWNER_TRIP_END, and a trip already under way shows only its END item.
@@ -125,9 +124,10 @@ Deno.serve(async (req) => {
     }
     result.trips = { seen: body.trips.length, written: rows.length };
     result.pruned = pruned;
-    // New bookings -> trip page link + queued Turo message right away.
-    const { data: q } = await db.rpc("turo_link_enqueue");
-    result.queued_links = q ?? 0;
+    // New bookings -> trip page link right away. (The Turo auto-message sender was removed 2026-10-11;
+    // guests reach their page from bestly.tech/turo-key or the link Jared shares.)
+    const { data: q } = await db.rpc("lax_guest_sync");
+    result.links_synced = q ?? 0;
   }
 
   const v = body.vehicle;
