@@ -1,4 +1,4 @@
--- Leo's early-return check-in (2026-10-12).
+-- Leo's early-return check-in (2026-10-12). Additive only: policies are created if missing; the call session is channel 'phone' + purpose 'early_return'.
 -- Jared's rule: a guest Tesla key follows the Turo reservation. If a guest brings the car back early, the car is still theirs until THEY change the
 -- reservation in Turo, so nothing is ever revoked. When the car has been parked back at 733 N Kings Rd for 20 minutes and the trip still has 90+ minutes
 -- to run, Leo asks once: "Are you finished with the car?" YES gets the steps to end the trip in the Turo app, NO gets a thank-you.
@@ -28,9 +28,12 @@ create table if not exists public.leo_early_return (
   updated_at timestamptz not null default now()
 );
 alter table public.leo_early_return enable row level security;
-drop policy if exists leo_early_return_admin_read on public.leo_early_return;
-create policy leo_early_return_admin_read on public.leo_early_return for select to authenticated
+do $p$ begin
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'leo_early_return' and policyname = 'leo_early_return_admin_read') then
+    create policy leo_early_return_admin_read on public.leo_early_return for select to authenticated
   using (public.has_role(auth.uid(), 'admin'::app_role));
+  end if;
+end $p$;
 create index if not exists leo_early_return_status_idx on public.leo_early_return (status, updated_at);
 
 create table if not exists public.leo_early_return_state (
@@ -42,14 +45,16 @@ create table if not exists public.leo_early_return_state (
 );
 insert into public.leo_early_return_state (id) values (1) on conflict do nothing;
 alter table public.leo_early_return_state enable row level security;
-drop policy if exists leo_early_return_state_admin_read on public.leo_early_return_state;
-create policy leo_early_return_state_admin_read on public.leo_early_return_state for select to authenticated
+do $p$ begin
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'leo_early_return_state' and policyname = 'leo_early_return_state_admin_read') then
+    create policy leo_early_return_state_admin_read on public.leo_early_return_state for select to authenticated
   using (public.has_role(auth.uid(), 'admin'::app_role));
+  end if;
+end $p$;
 
--- The early-return phone session is its own channel so trip-voice can scope it (early_return_answer, notify_host, file_ticket, thin trip_status; no car, key or texts).
-alter table public.trip_voice_sessions drop constraint if exists trip_voice_sessions_channel_check;
-alter table public.trip_voice_sessions add constraint trip_voice_sessions_channel_check
-  check (channel = any (array['page', 'phone', 'phone_unknown', 'phone_test', 'page_unknown', 'phone_early_return']));
+-- The early-return call is a phone session (channel 'phone') with purpose 'early_return'; trip-voice scopes it by purpose
+-- (early_return_answer, notify_host, file_ticket, thin trip_status; no car, key or texts). Additive.
+alter table public.trip_voice_sessions add column if not exists purpose text;
 
 -- ---------- geometry ----------
 create or replace function public.leo_er_m(a double precision, b double precision, c double precision, d double precision) returns double precision
@@ -163,11 +168,11 @@ begin
   select * into g from public.lax_guest_links where reservation_id = p_reservation_id;
   if t.reservation_id is null or g.token is null then return null; end if;
   select s.key into k from public.trip_voice_sessions s
-   where s.token = g.token and s.channel = 'phone_early_return' and s.expires_at > now() + interval '30 minutes' order by s.created_at desc limit 1;
+   where s.token = g.token and s.channel = 'phone' and s.purpose = 'early_return' and s.expires_at > now() + interval '30 minutes' order by s.created_at desc limit 1;
   if k is null then
     k := 'tv_' || encode(extensions.gen_random_bytes(24), 'hex');
     if not p_dry then
-      insert into public.trip_voice_sessions (key, agent_slug, token, channel, expires_at) values (k, 'leo', g.token, 'phone_early_return', now() + interval '90 minutes');
+      insert into public.trip_voice_sessions (key, agent_slug, token, channel, purpose, expires_at) values (k, 'leo', g.token, 'phone', 'early_return', now() + interval '90 minutes');
     end if;
   end if;
   return jsonb_build_object('trip_key', k, 'call_mode', 'outbound', 'purpose', 'early_return', 'caller_type', 'guest',
@@ -183,7 +188,7 @@ language plpgsql security definer set search_path = public as $$
 declare k text := 'tv_' || encode(extensions.gen_random_bytes(24), 'hex');
 begin
   if not p_dry then
-    insert into public.trip_voice_sessions (key, agent_slug, token, channel, expires_at) values (k, 'leo', 'demo:demo-lax', 'phone_early_return', now() + interval '90 minutes');
+    insert into public.trip_voice_sessions (key, agent_slug, token, channel, purpose, expires_at) values (k, 'leo', 'demo:demo-lax', 'phone', 'early_return', now() + interval '90 minutes');
   end if;
   return jsonb_build_object('trip_key', k, 'call_mode', 'outbound', 'purpose', 'early_return', 'caller_type', 'guest', 'guest_first_name', 'Jared',
     'trip_stage', 'active', 'pickup_place', 'home', 'pickup_time_local', '',
@@ -305,77 +310,13 @@ begin
   return jsonb_build_object('retried', retried, 'alerted', bad);
 end $$;
 
--- leo_health_tick: unchanged except the last step (early-return watch), wrapped so it can never break the rest.
-create or replace function public.leo_health_tick() returns jsonb
-language plpgsql security definer set search_path = public as $$
-declare
-  diag_n int; diag_recent int; diag_kinds text;
-  calls int; errs int; errs_recent int; no_trip int; sess_fail int; open_fail int;
-  tools_bad boolean; blocked boolean; diag_bad boolean; opened timestamptz; why text; healed boolean := false; er jsonb := '{}'::jsonb;
-begin
-  select count(*), count(*) filter (where at > now() - interval '10 minutes'), string_agg(distinct kind, ', ')
-    into diag_n, diag_recent, diag_kinds
-    from public.leo_client_diag
-   where at > now() - interval '30 minutes' and kind in ('start', 'sdk', 'csp', 'audio_locked', 'page_action') and coalesce(token, '') not like 'demo%';
-  diag_bad := diag_n >= 5 and diag_recent >= 1;
-  if diag_bad then
-    perform public.bestly_raise('leo.health.screen', 'problem', 'warning', 'Leo: guests are hitting trouble starting a voice chat',
-      diag_n || ' failures (' || diag_kinds || ') from guests'' phones and browsers in the last 30 minutes. They can still type to me or message the host.', 'agents', null, false);
-  else
-    perform public.bestly_raise('leo.health.screen', 'resolved', 'info', 'Leo: voice chat starts normally again', 'No new failures from guests'' devices.', 'agents', null, true);
-  end if;
-
-  select count(*) filter (where code in ('ok', 'refused', 'error')),
-         count(*) filter (where code = 'error'),
-         count(*) filter (where code = 'error' and at > now() - interval '10 minutes'),
-         count(*) filter (where code = 'no_trip'),
-         count(*) filter (where code = 'session'),
-         count(*) filter (where tool = 'session_open' and code = 'error')
-    into calls, errs, errs_recent, no_trip, sess_fail, open_fail
-    from public.leo_tool_log where at > now() - interval '30 minutes' and not demo and channel <> 'phone_test';
-  tools_bad := (calls >= 5 and errs::numeric / calls >= 0.4 and errs_recent >= 1) or (errs >= 3 and errs_recent >= 1)
-            or (no_trip >= 3) or (sess_fail >= 3) or (open_fail >= 2);
-  blocked := (calls >= 5 and errs = calls) or no_trip >= 3 or sess_fail >= 3 or open_fail >= 2;
-  if tools_bad then
-    why := case when no_trip >= 3 then no_trip || ' tool calls arrived without a trip key (the call-start wiring may have drifted)'
-                when sess_fail >= 3 then sess_fail || ' tool calls could not be verified against a live call'
-                when open_fail >= 2 then 'the voice platform refused ' || open_fail || ' guest sessions'
-                else errs || ' of ' || calls || ' tool calls failed' end;
-    select opened_at into opened from public.monitor_issues where key = 'leo.health.tools' and status = 'open';
-    if blocked and opened is not null and opened < now() - interval '60 minutes' then
-      perform public.bestly_raise('leo.health.tools', 'problem', 'error', 'Leo: voice chat still down for guests',
-        'Guests have been blocked for over an hour: ' || why || '. I already re-checked my phone line and demo car; this needs a person.', 'agents', 'Open Leo in the admin and check the tool log', false);
-    else
-      perform public.bestly_raise('leo.health.tools', 'problem', 'warning', 'Leo: my tools are failing for some guests',
-        why || ' in the last 30 minutes. ' || case when blocked then 'Guests are blocked, so I am retrying my own checks.' else 'Most guests still get through.' end, 'agents', null, false);
-    end if;
-    if not exists (select 1 from public.monitor_events where key = 'leo.health.tools' and title like '%self-heal%' and created_at > now() - interval '30 minutes') then
-      begin
-        perform public.leo_phone_watch_tick();
-        perform public.invoke_edge_function('trip-voice', '{"op":"selftest"}'::jsonb, 30000);
-        insert into public.monitor_events (key, kind, severity, title, body, pushed)
-          values ('leo.health.tools', 'problem', 'info', 'Leo: self-heal ran', 'Re-checked the phone webhook and ran the demo-car self-test.', false);
-        healed := true;
-      exception when others then null;
-      end;
-    end if;
-  else
-    perform public.bestly_raise('leo.health.tools', 'resolved', 'info', 'Leo: my tools are working again', 'Tool calls are succeeding.', 'agents', null, true);
-  end if;
-
-  begin er := public.leo_early_return_watch(); exception when others then er := jsonb_build_object('error', left(sqlerrm, 120)); end;
-
-  return jsonb_build_object('ok', not (diag_bad or tools_bad), 'screen_failures_30m', diag_n, 'tool_calls_30m', calls, 'tool_errors_30m', errs,
-    'no_trip_30m', no_trip, 'session_fail_30m', sess_fail, 'blocked', blocked, 'self_heal_ran', healed, 'early_return', er);
-end $$;
-
 -- ---------- grants: everything here is called by pg_cron (postgres) or an edge function (service role) ----------
 do $$ declare f text; begin
   foreach f in array array[
     'leo_er_m(double precision,double precision,double precision,double precision)', 'leo_er_home_m(double precision,double precision)',
     'leo_early_return_eval(timestamptz)', 'leo_early_return_detect(boolean)', 'leo_early_return_vars(bigint,boolean)', 'leo_early_return_demo_vars(boolean)',
     'leo_early_return_pending_call(text)', 'leo_early_return_match_sms(text)', 'leo_early_return_note(bigint)',
-    'leo_early_return_answer(text,text,text)', 'leo_early_return_watch()', 'leo_health_tick()'] loop
+    'leo_early_return_answer(text,text,text)', 'leo_early_return_watch()'] loop
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
     execute format('grant execute on function public.%s to service_role', f);
   end loop;
@@ -397,16 +338,3 @@ end $$;
 revoke all on function public.leo_sms_in_secret(text) from public, anon, authenticated;
 grant execute on function public.leo_sms_in_secret(text) to service_role;
 
--- ---------- cron + team card ----------
-do $g$ begin perform cron.unschedule(jobid) from cron.job where jobname = 'leo-early-return'; end $g$;
-select cron.schedule('leo-early-return', '*/10 * * * *', $c$select public.leo_early_return_detect()$c$);
-
--- Update Leo's existing card (same slug): add the new job to his pulse and what he does.
-select public.team_onboard($j$[
- {"slug":"leo","name":"Leo","role":"Turo trip helper (voice)","reports_to":"jared","dept":"turo","runs_on":"cloud","icon":"phone-call","welcome":false,
-  "schedule":"answers calls; Switchboard checks his line every 10 min; health watchdog every 10 min; early-return check every 10 min (8 AM to 9 PM Pacific only); demo car self-test hourly at :23","admin_url":"/admin/agents/leo","sort":62,
-  "what_it_does":"Talks with Turo guests by voice from the Talk to Leo button on their trip page and by phone: checks their Tesla key and sends a fresh one (never while the key is held for the license and check-in), checks extra drivers, runs the car buttons (climate, lock, Supercharger navigation), answers Supercharging and return-charge questions, opens things on their trip page, alerts Jared when a guest needs him, and files tickets. On the phone he can only look up the trip, take a message and set up the reminder email, because caller ID can be faked; car and key actions need the trip page link. Every 10 minutes he checks that guests can start a voice chat and that his tools are succeeding, retries his own phone webhook and demo-car test if not, and tells you (signed Leo) only if guests stay blocked for over an hour. Every hour at :23 he runs his own test on the demo car and checks that unlock is still refused on real trips. Early return: every 10 minutes (never 9 PM to 8 AM Pacific) he checks whether a guest's car has been parked back at Kings Rd for 20 minutes with 90+ minutes left on the trip. If so he calls the guest once (or texts, once texting is approved) and asks if they are finished. Yes gets the steps to end the trip in the Turo app; no gets a thank-you. The key is never revoked: it follows the Turo reservation. Outcomes land in the 7 PM recap, not as a push. Switchboard watches his line and tools.",
-  "pulse":{"src":"at","table":"agent_health","col":"checked_at","ok":"ok","sum":"case when ok then 'Line OK' else 'Line problem' end","where":"agent_slug = 'leo'","gap":30,"alert":true,"on_demand":true,
-           "also":["agent-watch","leo-phone-watch","leo-demo-parity","leo-client-diag-trim","leo-health","leo-early-return"]},
-  "owns":["leo","leo.","agent.line.leo","leo.early_return"]}
-]$j$::jsonb);
