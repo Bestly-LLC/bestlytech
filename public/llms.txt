@@ -1,0 +1,24 @@
+# Bestly
+
+> Bestly (Bestly LLC, Los Angeles) builds AI agents for small businesses. Its main product, Bestly Agent, is an AI that answers your business phone every time, day or night, and does the work while it talks: it books the appointment in your calendar, updates your customer list, texts the confirmation, and hands you the calls that need a person.
+
+Who it's for: small and local service businesses (dental offices, plumbers, real estate agents, salons, software support teams and more) that miss calls or spend hours on the phone.
+
+What makes it different:
+- It does the work, not just takes a message. It connects to the apps the business already uses.
+- A custom integration with almost any business software can be set up in hours.
+- Callers are told up front they are talking to an AI.
+- Try it live: call Maya, Bestly's own AI agent, at (213) 641-0074.
+
+## AI agents
+- [Bestly Agent](https://www.bestly.tech/agent): AI phone agent (AI receptionist) that answers calls and does the work, with a live demo
+
+## Also from Bestly
+- [Products](https://www.bestly.tech/products): every Bestly product
+- [Cookie Yeti](https://www.bestly.tech/cookie-yeti): browser extension that dismisses cookie banners
+- [InventoryProof](https://www.bestly.tech/inventory-proof): iPhone app that builds an insurance-ready home inventory
+- [Private cloud for offices](https://www.bestly.tech/cloud): one server in your office that replaces common cloud subscriptions
+
+## Company
+- [About](https://www.bestly.tech/about)
+- [Contact](https://www.bestly.tech/contact)

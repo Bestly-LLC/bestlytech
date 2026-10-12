@@ -29,8 +29,8 @@
         location.reload();
       }, true);
     </script>
-    <title>Bestly — Stop renting your business from big tech</title>
-    <meta name="description" content="Bestly builds private cloud servers for businesses, plus privacy-first apps, browser extensions, and consumer hardware. One server in your office replaces Google Workspace, Slack, Zoom, Dropbox, DocuSign, 1Password, and your AI tool. Built in Los Angeles." />
+    <title>Bestly — AI Agents That Answer Your Phone and Do the Work</title>
+    <meta name="description" content="Bestly builds AI agents for small businesses. Bestly Agent answers every call, day or night, and does the work while it talks: books the appointment, updates your customer list and texts the confirmation. Also makes privacy-first apps and private cloud. Built in Los Angeles." />
     <meta name="author" content="Bestly LLC" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://www.bestly.tech/" />
@@ -59,27 +59,54 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Bestly" />
     <meta property="og:url" content="https://www.bestly.tech/" />
-    <meta property="og:title" content="Bestly — Stop renting your business from big tech" />
-    <meta property="og:description" content="Private cloud for your office. Apps that don't sell your data. Extensions that block surveillance. Built in Los Angeles." />
-    <meta property="og:image" content="https://www.bestly.tech/og-image.png" />
+    <meta property="og:title" content="Bestly — AI Agents That Answer Your Phone and Do the Work" />
+    <meta property="og:description" content="AI agents that answer your business phone 24/7 and do the work while they talk: book appointments, update your customer list, text confirmations. Built in Los Angeles." />
+    <meta property="og:image" content="https://www.bestly.tech/og-agent.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://www.bestly.tech/" />
-    <meta name="twitter:title" content="Bestly — Stop renting your business from big tech" />
-    <meta name="twitter:description" content="Private cloud for your office. Apps that don't sell your data. Extensions that block surveillance. Built in Los Angeles." />
-    <meta name="twitter:image" content="https://www.bestly.tech/og-image.png" />
+    <meta name="twitter:title" content="Bestly — AI Agents That Answer Your Phone and Do the Work" />
+    <meta name="twitter:description" content="AI agents that answer your business phone 24/7 and do the work while they talk: book appointments, update your customer list, text confirmations. Built in Los Angeles." />
+    <meta name="twitter:image" content="https://www.bestly.tech/og-agent.png" />
 
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "Organization",
-        "name": "Bestly LLC",
-        "url": "https://www.bestly.tech",
-        "logo": "https://www.bestly.tech/favicon.png",
-        "description": "Bestly builds private cloud servers for businesses, plus privacy-first apps, browser extensions, and consumer hardware. Built in Los Angeles."
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://www.bestly.tech/#org",
+            "name": "Bestly LLC",
+            "alternateName": "Bestly",
+            "url": "https://www.bestly.tech",
+            "logo": "https://www.bestly.tech/favicon-512.png",
+            "description": "Bestly builds AI agents for small businesses: AI phone agents that answer every call, day or night, and do the work inside the apps the business already uses. Bestly also makes privacy-first apps, browser extensions and private cloud servers. Built in Los Angeles.",
+            "knowsAbout": ["AI agents", "AI phone agents", "AI receptionist", "Voice AI", "Business automation", "Privacy-first software"],
+            "address": { "@type": "PostalAddress", "addressLocality": "Los Angeles", "addressRegion": "CA", "addressCountry": "US" },
+            "areaServed": "US"
+          },
+          {
+            "@type": "Service",
+            "@id": "https://www.bestly.tech/agent#service",
+            "name": "Bestly Agent",
+            "serviceType": "AI phone agent (AI receptionist)",
+            "url": "https://www.bestly.tech/agent",
+            "provider": { "@id": "https://www.bestly.tech/#org" },
+            "areaServed": "US",
+            "audience": { "@type": "BusinessAudience", "name": "Small and local service businesses" },
+            "description": "An AI agent that answers your business phone 24/7 and does the work while it talks: books appointments in your calendar, updates your customer list, texts confirmations, and hands you the calls that need a person."
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://www.bestly.tech/#site",
+            "url": "https://www.bestly.tech",
+            "name": "Bestly",
+            "publisher": { "@id": "https://www.bestly.tech/#org" }
+          }
+        ]
       }
     </script>
     <!-- Boot splash: the Bestly mark is on screen before any JS loads (React replaces #root's contents on mount). -->

@@ -72,9 +72,10 @@ export default function Index() {
   return (
     <>
       <SEOHead
-        title="Bestly — Stop renting your business from big tech"
-        description="Bestly builds private cloud servers for businesses, plus privacy-first apps, browser extensions, and consumer hardware. One server in your office replaces Google Workspace, Slack, Zoom, Dropbox, DocuSign, 1Password, and your AI tool. Built in Los Angeles."
+        title="Bestly — AI Agents That Answer Your Phone and Do the Work"
+        description="Bestly builds AI agents for small businesses. Bestly Agent answers every call, day or night, and does the work while it talks: books the appointment, updates your customer list and texts the confirmation. Also makes privacy-first apps and private cloud. Built in Los Angeles."
         path="/"
+        image="/og-agent.png"
       />
 
       {/* ---------- Hero ---------- */}
