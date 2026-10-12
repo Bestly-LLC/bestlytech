@@ -23,6 +23,7 @@ import { GuestFunnel } from "./GuestFunnel";
 import { GuestHelperCard } from "./AskCard";
 import { TripSettingsBody } from "./TripSettings";
 import { ChargingCard } from "./ChargingCard";
+import { LeoSmsCard } from "./LeoSmsCard";
 import { HostPassCard } from "./TeslaCard";
 import { Section, Segmented, btnPlain, btnPrimary, btnTinted, card, field, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
 
@@ -362,6 +363,7 @@ export default function LaxPass() {
         <div className="grid items-start gap-8 lg:grid-cols-2 2xl:grid-cols-3">
           <TripSettingsBody />
           <ChargingCard />
+          <LeoSmsCard />
           <Section title="Turo Watch run history" id="runs">
             <RunHistory />
           </Section>

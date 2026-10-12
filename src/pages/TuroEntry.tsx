@@ -254,9 +254,11 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
                     value={phone}
                     onChange={(e) => onPhone(e.target.value)}
                     aria-invalid={!!err}
-                    aria-describedby={err ? "te-err" : undefined}
+                    aria-describedby={err ? "te-err te-sms" : "te-sms"}
                   />
                 </div>
+                {/* Carrier opt-in disclosure (US 10DLC filing cites this line). Always English: the texts are sent in English. */}
+                <p id="te-sms" className="px-4 pb-3 text-[13px] leading-snug text-white/45">We&rsquo;ll text this number about your trip. Msg&nbsp;&amp;&nbsp;data rates may apply. Reply&nbsp;STOP to opt out.</p>
                 <div className="ml-4 h-px bg-white/10" />
                 <label className="block px-4 pt-3 text-[13px] font-medium text-white/60" htmlFor="te-last">{t.last}</label>
                 <input
