@@ -29,6 +29,7 @@ function status(a: Admin): { text: string; tone: "green" | "orange" | "gray" } {
   if (a.ready && a.mode !== "off") return { text: "Approved, switching on", tone: "green" };
   switch (a.filing.step) {
     case "need_ein": return { text: "Needs the EIN", tone: "orange" };
+    case "account_unverified": return { text: "Verify Telnyx account", tone: "orange" };
     case "brand_rejected": case "brand_not_accepted": return { text: "Brand needs a fix", tone: "orange" };
     case "campaign_rejected": case "campaign_rejected_by_tcr": return { text: "Campaign needs a fix", tone: "orange" };
     case "brand_created": case "campaign_created": case "waiting_for_carrier": return { text: "With the carrier", tone: "gray" };

@@ -121,7 +121,16 @@ async function advance(): Promise<Any> {
     const r = await tx("/10dlc/brand", { method: "POST", body: JSON.stringify({ ...BRAND, ein }) });
     if (r.status >= 300) {
       const why = errText(r.j);
-      await saveFiling({ step: "brand_rejected", error: why, ein_sig: sig });
+      // Telnyx refuses all 10DLC filing until the account itself is verified (portal > Account > Verifications). That is not a
+      // rejection of the brand: keep retrying every hourly tick (no ein_sig lock) so the filing goes through the moment it is verified.
+      if (/verification/i.test(why)) {
+        await saveFiling({ step: "account_unverified", error: why, note: "Waiting for the Telnyx account verification (Telnyx portal > Account > Verifications). I retry every hour.", ein_sig: null });
+        await raise("problem", "warning", "Leo: Telnyx needs its account verified before I can register texting",
+          "The EIN is saved. Telnyx will not accept any texting registration until the Bestly account is verified in their portal (Account > Verifications). I retry every hour and file the moment it is verified.",
+          "Finish the verification in the Telnyx portal: Account > Verifications", false);
+        return { ok: false, step: "account_unverified", error: why };
+      }
+      await saveFiling({ step: "brand_rejected", error: why, ein_sig: sig, note: null });
       await raise("problem", "warning", "Leo: the carrier rejected Bestly's brand registration", `${why}. Fix the detail named above and save the EIN again; I will re-file by myself.`, "Re-check the EIN on the Leo texting card", false);
       return { ok: false, step: "brand_rejected", error: why };
     }
