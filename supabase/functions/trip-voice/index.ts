@@ -26,6 +26,15 @@
 //        car_climate (page presets), car_lock (lock only), find_superchargers, send_to_car_nav, charging_summary,
 //        send_sms (fixed-link texts to the trip page; off until leo_settings.sms_mode is switched on and the 10DLC watchdog says ready). Real trips go through the page's own gate (lax_guest_car_command); demo trips use the
 //        pretend car (leo_demo_car). Phone calls get their trip_key from leo-phone-init instead of door 1.
+//
+// Session channels (trip_voice_sessions.channel, enforced here in tool() and run(), never in the prompt). Caller ID can be spoofed, so:
+//   page           the guest's own trip link: every tool.
+//   phone          caller's number matched a trip: trip_status (no key detail, no car, no stops), notify_host, file_ticket, reminder_email
+//                  (set only when no email is on file). No car, key, nav or text tools: they get a plain sentence pointing at the trip page link.
+//   phone_unknown  nobody matched: file_ticket and notify_host (files a callback ticket) only.
+//   phone_test     Jared's own cell on the demo trip and pretend car: every tool.
+// Every failed result carries ok:false and a say line starting "Not sent:" or "Didn't work:". Every call is counted in leo_tool_log (no personal
+// data) for the leo-health watchdog (pg_cron every 10 min, raises signed Leo alerts).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsWith } from "../_shared/cors.ts";
 
@@ -38,9 +47,10 @@ const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { sta
 const XI = "https://api.elevenlabs.io/v1";
 const AGENT_SLUG = "leo";
 let req_ua = "";
-const NO_TRIP = { ok: false, error: "No trip is linked to this chat. Ask the guest to open their trip page and tap Talk to our team 24/7 there." };
+const NO_TRIP = { ok: false, say: "Didn't work: I can't see a trip on this chat. If the guest is on the phone, offer to take a message for the host (file_ticket). If they are on the trip page, ask them to open the trip link from their Turo message and talk to me from there.",
+  error: "No trip is linked to this chat." };
 
-type Session = { key: string; token: string; conversation_id: string | null; expires_at: string };
+type Session = { key: string; token: string; conversation_id: string | null; expires_at: string; channel: string };
 type Any = Record<string, unknown>;
 
 async function xiKey(): Promise<string | null> {
@@ -53,6 +63,11 @@ async function agentId(): Promise<string | null> {
 }
 const hex = (n: number) => [...crypto.getRandomValues(new Uint8Array(n))].map((b) => b.toString(16).padStart(2, "0")).join("");
 const clip = (v: unknown, n: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+
+/** One row per tool call for the leo-health watchdog. No names, phones, emails or tokens. code: ok | refused | error | no_trip | session | expired */
+async function logTool(tool: string, channel: string, demo: boolean, ok: boolean, code: string) {
+  await sb.from("leo_tool_log").insert({ tool: tool.slice(0, 40), channel, demo, ok, code }).then(() => {}, () => {});
+}
 
 // ---------- door 1: the trip page asks for a session ----------
 async function openSession(b: Any): Promise<Response> {
@@ -79,42 +94,79 @@ async function openSession(b: Any): Promise<Response> {
   if (!r.ok || !j.signed_url) {
     await sb.rpc("bestly_raise", { p_key: `agent.line.${AGENT_SLUG}`, p_kind: "problem", p_severity: "warning",
       p_title: "Leo: guests can't start a voice chat", p_body: `The voice platform refused a session (${r.status}).`, p_area: "agents" }).then(() => {}, () => {});
+    await logTool("session_open", "page", demo, false, "error");
     return json({ ok: false, error: "Leo isn't available right now. Try again in a minute, or message your host in the Turo app." }, 502);
   }
   const sessionKey = `tv_${hex(24)}`;
   const ins = await sb.from("trip_voice_sessions").insert({ key: sessionKey, agent_slug: AGENT_SLUG, token });
-  if (ins.error) return json({ ok: false, error: "Leo isn't available right now. Try again in a minute, or message your host in the Turo app." }, 500);
+  if (ins.error) { await logTool("session_open", "page", demo, false, "error"); return json({ ok: false, error: "Leo isn't available right now. Try again in a minute, or message your host in the Turo app." }, 500); }
   return json({ ok: true, signed_url: j.signed_url, key: sessionKey });
 }
 
 // ---------- door 2: Leo's tools ----------
-async function session(b: Any): Promise<Session | Response> {
+async function session(b: Any, name = "?"): Promise<Session | Response> {
   const k = clip(b.trip_key, 80);
   const conv = clip(b.conversation_id, 80);
-  if (!/^tv_[0-9a-f]{48}$/.test(k)) return json(NO_TRIP);
-  if (!/^conv_[A-Za-z0-9]+$/.test(conv)) return json({ ok: false, error: "no conversation" }, 401);
-  const { data: s } = await sb.from("trip_voice_sessions").select("key, token, conversation_id, expires_at").eq("key", k).maybeSingle();
-  if (!s || Date.parse(s.expires_at) < Date.now()) return json({ ok: false, error: "This chat timed out. Ask the guest to tap Talk to our team 24/7 again." });
-  if (s.conversation_id) return s.conversation_id === conv ? s as Session : json({ ok: false, error: "wrong conversation" }, 401);
+  if (!/^tv_[0-9a-f]{48}$/.test(k)) { await logTool(name, "unknown", false, false, "no_trip"); return json(NO_TRIP); }
+  if (!/^conv_[A-Za-z0-9]+$/.test(conv)) { await logTool(name, "unknown", false, false, "session"); return json({ ok: false, say: "Didn't work: I lost the connection to this call's details. Offer to take a message for the host.", error: "no conversation" }, 401); }
+  const { data: s } = await sb.from("trip_voice_sessions").select("key, token, conversation_id, expires_at, channel").eq("key", k).maybeSingle();
+  if (!s || Date.parse(s.expires_at) < Date.now()) {
+    await logTool(name, s?.channel ?? "unknown", String(s?.token ?? "").startsWith("demo:"), false, s ? "expired" : "no_trip");
+    return json({ ok: false, error: "This chat timed out.", say: s?.channel?.startsWith("phone")
+      ? "Didn't work: this call has been going a long time and my access timed out. Offer to take a message for the host, or ask the guest to call back."
+      : "Didn't work: this chat timed out. Ask the guest to close and reopen Leo from their trip page (the trip link in their Turo message)." });
+  }
+  const sFail = async (err: string, say: string) => { await logTool(name, s.channel, String(s.token).startsWith("demo:"), false, "session"); return json({ ok: false, error: err, say }, 401); };
+  if (s.conversation_id) return s.conversation_id === conv ? s as Session : await sFail("wrong conversation", "Didn't work: I can't verify this call. Offer to take a message for the host.");
 
   // First tool call of this conversation: confirm with the voice platform, then bind.
   const [aid, key] = await Promise.all([agentId(), xiKey()]);
-  if (!aid || !key) return json({ ok: false, error: "tools unavailable" }, 503);
+  if (!aid || !key) { await logTool(name, s.channel, String(s.token).startsWith("demo:"), false, "error"); return json({ ok: false, error: "tools unavailable", say: "Didn't work: my tools are unavailable right now. Offer to take a message for the host." }, 503); }
   const r = await fetch(`${XI}/convai/conversations/${conv}`, { headers: { "xi-api-key": key } });
-  if (!r.ok) return json({ ok: false, error: "unknown conversation" }, 401);
+  if (!r.ok) return await sFail("unknown conversation", "Didn't work: I can't verify this call. Offer to take a message for the host.");
   const c = await r.json().catch(() => ({}));
   const started = Number(c?.metadata?.start_time_unix_secs ?? 0) * 1000;
-  if (c?.agent_id !== aid || !started || Date.now() - started > 2 * 3600_000) return json({ ok: false, error: "not a live Leo call" }, 401);
+  if (c?.agent_id !== aid || !started || Date.now() - started > 2 * 3600_000) return await sFail("not a live Leo call", "Didn't work: I can't verify this call. Offer to take a message for the host.");
   const up = await sb.from("trip_voice_sessions").update({ conversation_id: conv }).eq("key", k).is("conversation_id", null).select("key");
   if (up.error || !up.data?.length) {
     // Two tools fired at once at the start of a chat: the other call bound it first. Same conversation is fine.
     const { data: again } = await sb.from("trip_voice_sessions").select("conversation_id").eq("key", k).maybeSingle();
-    if (again?.conversation_id !== conv) return json({ ok: false, error: "wrong conversation" }, 401);
+    if (again?.conversation_id !== conv) return await sFail("wrong conversation", "Didn't work: I can't verify this call. Offer to take a message for the host.");
   }
   return { ...(s as Session), conversation_id: conv };
 }
 
-async function run(token: string, name: string, args: Any): Promise<unknown> {
+// ---------- scopes (see header): phone sessions never reach the key, the car, nav or texts ----------
+const PHONE_TOOLS = new Set(["trip_status", "notify_host", "file_ticket", "reminder_email"]);
+const UNKNOWN_TOOLS = new Set(["file_ticket", "notify_host"]);
+const PHONE_REFUSE = "Didn't work: I can't do that over the phone. Your trip page link, the one in your Turo message, does that. Or I can have your host get back to you. Want me to take a message?";
+const UNKNOWN_REFUSE = "Didn't work: I can't look up trips or run anything on this call, but I can take a message for the host. What's your name and the best number to reach you?";
+function scopeRefusal(channel: string, name: string): Any | null {
+  if (channel === "phone" && !PHONE_TOOLS.has(name)) return { ok: false, scope: true, error: "not available on a phone call", say: PHONE_REFUSE };
+  if (channel === "phone_unknown" && !UNKNOWN_TOOLS.has(name)) return { ok: false, scope: true, error: "not available for an unmatched caller", say: UNKNOWN_REFUSE };
+  return null;
+}
+/** What Leo receives from the trip lookup: no internal system state, and on the phone only a thin, key-free view. */
+function leoStatus(d: unknown, channel: string): Any {
+  const x = (d && typeof d === "object" ? { ...(d as Any) } : {}) as Any;
+  if (!d || x.error) return { ok: false, error: String(x.error ?? "no data"), say: "Didn't work: I can't find this trip right now. Offer to take a message for the host." };
+  const sys = (x.systems ?? {}) as Any;
+  delete x.systems; delete x.recent_jobs;
+  x.car_reachable = typeof sys.mac_helper_online === "boolean" ? sys.mac_helper_online : true;
+  if (x.key && typeof x.key === "object") { x.key = { ...(x.key as Any) }; delete (x.key as Any).last_error; }
+  if (channel !== "phone") return { ok: true, status: x };
+  // Phone: caller ID can be faked, so no key link or invite detail, no car data, no driver names, no stop locations.
+  const k = (x.key ?? {}) as Any; const held = (k.held ?? null) as Any | null; const sc = (x.supercharging ?? {}) as Any;
+  return { ok: true, status: { now: x.now, trip: x.trip,
+    key: { status: k.status, meaning: k.meaning, ...(held ? { held: { tell_guest: held.tell_guest, waiting_on_license: held.waiting_on_license, waiting_on_host_checkin: held.waiting_on_host_checkin } } : {}) },
+    buttons: x.buttons, car_reachable: x.car_reachable,
+    supercharging: { total_usd: sc.total_usd, stops: sc.stops, amounts_are: sc.amounts_are, note: sc.note },
+    phone_note: "This is a phone call, so I can't see or send the key link or run the car. The trip page link in their Turo message does those." } };
+}
+
+async function run(token: string, name: string, args: Any, channel = "page"): Promise<unknown> {
+  const refuse = scopeRefusal(channel, name === "diagnose" ? "trip_status" : name);
+  if (refuse) return refuse;
   if (token.startsWith("demo:")) return (await sb.rpc("lax_demo_tool", { p_link: "d:" + token.slice(5), p_name: name, p_args: args })).data;
   const act = async (a: string, note?: unknown) => (await sb.rpc("lax_agent_act", { p_token: token, p_action: a, p_note: note ? clip(note, 300) : null })).data;
   switch (name) {
@@ -193,10 +245,10 @@ async function waitJob(token: string, id: number, secs = 14): Promise<"done" | "
 /** Send one page action for a real trip and report it the way the page would. */
 async function pageCommand(token: string, action: string, okLine: string, card: Any, toast: string): Promise<Any> {
   const r = await rpcData("lax_guest_car_command", { p_token: token, p_action: action });
-  if (!r?.ok) return { ok: false, say: String(r?.error ?? "I couldn't reach the car just now.") };
+  if (!r?.ok) return { ok: false, broken: !r?.error, say: String(r?.error ?? "I couldn't reach the car just now.") };
   if (!r.id) return { ok: true, say: okLine, card, toast };
   const st = await waitJob(token, Number(r.id));
-  if (st === "failed") return { ok: false, say: "The car didn't take that one. I can try again, or let Jared know." };
+  if (st === "failed") return { ok: false, broken: true, say: "The car didn't take that one. I can try again, or let Jared know." };
   if (st === "running") return { ok: true, pending: true, say: "Sent. The car can take up to a minute to respond.", card: { ...card, pending: true }, toast };
   return { ok: true, say: okLine, card, toast };
 }
@@ -330,7 +382,7 @@ function whenPhrase(iso: string): string {
 const cleanSpokenEmail = (v: unknown) => clip(v, 200).toLowerCase().replace(/\s+at\s+/g, "@").replace(/\s+dot\s+/g, ".").replace(/\s+/g, "");
 const SENDER_FN = { lax: { fn: "wallet-pass", body: { op: "remind_due" } }, home: { fn: "trip-remind", body: {} } } as const;
 
-async function reminderEmail(token: string, conv: string | null, b: Any): Promise<Any> {
+async function reminderEmail(token: string, conv: string | null, b: Any, channel = "page"): Promise<Any> {
   const action = clip(b.action, 12).toLowerCase();
   if (!["set", "send_now", "status"].includes(action)) return { ok: false, say: "I can save an email, send the reminder now, or check what's saved." };
   const demo = token.startsWith("demo:");
@@ -377,11 +429,13 @@ async function reminderEmail(token: string, conv: string | null, b: Any): Promis
   }
 
   if (action === "set") {
+    // Caller ID can be faked: by phone an email can only be added when none is on file, never replaced.
+    if (channel === "phone" && link.email) return { ok: false, say: "There's already an email on file for this trip. To change it, use the Reminder email card on your trip page, or message your host in the Turo app." };
     const e = cleanSpokenEmail(b.email);
     if (!EMAIL_RE.test(e) || e.length > 200) return { ok: false, say: "That email doesn't look right. Can you spell it again?" };
     if (ended) return { ok: false, say: "This trip is over, so I can't set up a reminder." };
     const { data, error } = await sb.rpc("lax_guest_set_email", { p_token: token, p_email: e });
-    if (error) return { ok: false, say: /changes|doesn't look|ended/i.test(error.message) ? error.message.slice(0, 160) : "I couldn't save that email. Try the Reminder email card on your trip page." };
+    if (error) return { ok: false, broken: !/changes|doesn't look|ended/i.test(error.message), say: /changes|doesn't look|ended/i.test(error.message) ? error.message.slice(0, 160) : "I couldn't save that email. Try the Reminder email card on your trip page." };
     await log("set");
     const at = (data as { reminder_at?: string | null } | null)?.reminder_at ?? null;
     const m = maskEmail(e);
@@ -410,7 +464,7 @@ async function reminderEmail(token: string, conv: string | null, b: Any): Promis
   } catch { /* the check below decides what to say */ }
   const { data: after } = await sb.from("lax_guest_links").select("reminder_sent_at, reminder_error").eq("reservation_id", link.reservation_id).maybeSingle();
   if (after?.reminder_sent_at && Date.parse(after.reminder_sent_at) >= t0) return { ok: true, sent: true, say: `Sent to the email starting with ${sayEmail(e)}. It should land in a minute. Check spam if it doesn't.` };
-  return { ok: false, sent: false, say: "I couldn't send it just now. It will try again by itself within about 10 minutes, and you can also find everything on your trip page." };
+  return { ok: false, sent: false, broken: true, say: "I couldn't send it just now. It will try again by itself within about 10 minutes, and you can also find everything on your trip page." };
 }
 
 // ---------- send_sms (2026-10-12): one short link to the guest's trip page, never free text. Ships OFF (leo_settings.sms_mode). ----------
@@ -496,7 +550,7 @@ async function sendSms(token: string, conv: string | null, b: Any): Promise<Any>
     await log({ action: "failed", purpose, reservation_id: rid, to_last4: target!.slice(-4), telnyx_id: r.id ?? null, error_code: r.code });
     if (r.code === "40300") { await sb.from("leo_sms_optouts").upsert({ phone_hash: await sha256(target!), source: "telnyx_40300" }); return { ok: false, say: "That number opted out of texts. I can email it instead." }; }
     await smsBreaker();
-    return { ok: false, sent: false, say: "The text didn't go through. Everything is on your trip page, and I can email it instead." };
+    return { ok: false, sent: false, broken: true, say: "The text didn't go through. Everything is on your trip page, and I can email it instead." };
   }
   await log({ action: "send", purpose, reservation_id: rid, to_last4: target!.slice(-4), telnyx_id: r.id, status: r.status });
   return { ok: true, sent: true, say: `Sent to the number ending in ${target!.slice(-4)}. It has ${PURPOSE[purpose][0]}.` };
@@ -683,12 +737,23 @@ async function selftest(): Promise<Any> {
     const wj = await w.json().catch(() => ({}));
     if (!w.ok || wj?.ok !== true) bad.push("reminder sender auth");
   } catch (_e) { bad.push("reminder sender unreachable"); }
+  // Phone scope: a phone session must never reach the key, the car, nav or texts, and an unmatched caller only gets tickets + host message.
+  try {
+    if (!scopeRefusal("phone", "car_lock") || !scopeRefusal("phone", "car_climate") || !scopeRefusal("phone", "key_fix") || !scopeRefusal("phone", "send_to_car_nav")
+        || !scopeRefusal("phone", "send_sms") || !scopeRefusal("phone", "extra_driver") || scopeRefusal("phone", "trip_status") || scopeRefusal("phone", "file_ticket")
+        || !scopeRefusal("phone_unknown", "trip_status") || !scopeRefusal("phone_unknown", "reminder_email") || scopeRefusal("phone_unknown", "notify_host")) bad.push("PHONE SCOPE");
+    const r = await run("selftest-not-a-real-trip-token", "resend_key", {}, "phone") as Any;
+    if (r?.ok !== false) bad.push("PHONE SCOPE run()");
+  } catch (_e) { bad.push("PHONE SCOPE check error"); }
+  // Housekeeping (kept here, not in SQL): old logs and expired voice sessions.
   await sb.from("leo_reminder_log").delete().lt("at", new Date(Date.now() - 7 * 86400_000).toISOString()).then(() => {}, () => {});
-  const unsafe = bad.some((x) => x.startsWith("REAL TRIP") || x.startsWith("SMS DEMO"));
+  await sb.from("leo_tool_log").delete().lt("at", new Date(Date.now() - 7 * 86400_000).toISOString()).then(() => {}, () => {});
+  await sb.from("trip_voice_sessions").delete().lt("created_at", new Date(Date.now() - 2 * 86400_000).toISOString()).then(() => {}, () => {});
+  const unsafe = bad.some((x) => x.startsWith("REAL TRIP") || x.startsWith("SMS DEMO") || x.startsWith("PHONE SCOPE"));
   if (bad.length) {
     await sb.rpc("bestly_raise", { p_key: "leo.demo-parity", p_kind: "problem", p_severity: unsafe ? "error" : "warning",
       p_title: unsafe ? "Leo: a real trip was not refused" : "Leo: my demo car stopped answering",
-      p_body: `My hourly demo check failed on: ${bad.join(", ")}. ${unsafe ? "A real-shaped trip was allowed through something it must refuse (unlock, the reminder email or a text). I need this fixed now." : "Guests on real trips are not affected, but the demo page and my phone test line are."}`,
+      p_body: `My hourly demo check failed on: ${bad.join(", ")}. ${unsafe ? "A real-shaped trip was allowed through something it must refuse (unlock, the reminder email, a text or the phone scope). I need this fixed now." : "Guests on real trips are not affected, but the demo page and my phone test line are."}`,
       p_area: "agents" }).then(() => {}, () => {});
   } else {
     await sb.rpc("bestly_raise", { p_key: "leo.demo-parity", p_kind: "resolved", p_title: "Leo: my demo car is answering again",
@@ -699,47 +764,89 @@ async function selftest(): Promise<Any> {
   return out;
 }
 
-async function tool(name: string, b: Any): Promise<Response> {
-  const s = await session(b);
-  if (s instanceof Response) return s;
-  const t = s.token;
-  try {
-    if (CAR_TOOLS.has(name)) return json(await carTool(name, t, b));
-    if (name === "send_sms") return json(await sendSms(t, s.conversation_id, b));
-    switch (name) {
-      case "trip_status": return json({ ok: true, status: await run(t, "diagnose", {}) });
-      case "key_fix": {
-        const action = clip(b.action, 20);
-        if (!KEY_FIX.has(action)) return json({ ok: false, error: "action must be check_key, resend_key, make_key_now or refresh_car" });
-        return json({ ok: true, result: await run(t, action, { reason: clip(b.reason, 200) || "guest asked Leo by voice" }) });
-      }
-      case "job_status": return json({ ok: true, result: await run(t, "job_status", { job: Number(b.job) }) });
-      case "extra_driver": {
-        const action = clip(b.action, 20);
-        if (!DRIVER.has(action)) return json({ ok: false, error: "action must be status, check, resend or notify_host" });
-        return json({ ok: true, result: await run(t, `driver_${action}`, { name: b.name, summary: b.summary }) });
-      }
-      case "notify_host": return json({ ok: true, result: await run(t, "notify_host", { summary: `Leo (voice): ${clip(b.summary, 280)}` }) });
-      case "reminder_email": return json(await reminderEmail(t, s.conversation_id, b));
-      case "file_ticket": {
-        const { count } = await sb.from("support_tickets").select("id", { count: "exact", head: true }).eq("conversation_id", s.conversation_id);
-        if ((count ?? 0) >= 3) return json({ ok: false, error: "too many tickets on this call" }, 429);
-        if (t.startsWith("demo:")) return json({ ok: true, ticket: "DEMO-0000", kind: clip(b.kind, 20) || "support", follow_up: "today", note: "demo page: nothing was saved" });
-        const { data, error } = await sb.rpc("leo_file_ticket", { p: { kind: clip(b.kind, 20), name: clip(b.name, 80), phone: clip(b.phone, 30),
-          email: clip(b.email, 120), issue: clip(b.issue, 1000), conversation_id: s.conversation_id } });
-        if (error) {
-          await sb.rpc("bestly_raise", { p_key: `agent.line.${AGENT_SLUG}`, p_kind: "problem", p_severity: "warning",
-            p_title: "Leo: I couldn't save a guest's ticket", p_body: error.message.slice(0, 300), p_area: "agents" }).then(() => {}, () => {});
-          return json({ ok: false, error: "could not save" }, 500);
-        }
-        return json(data);
-      }
-      default: return json({ ok: false, error: "unknown tool" }, 404);
-    }
-  } catch (e) {
-    console.error(e);
-    return json({ ok: false, error: "That didn't work. Offer to take a message for the host." }, 500);
+const FAILED_SAY = "Didn't work: that didn't go through. Offer to take a message for the host.";
+const hasPrefix = (t: string) => /^(Not sent|Didn't work|Not done)\s*:/i.test(t);
+/** One shape for every failure: top-level ok:false and a `say` line that starts "Not sent:" or "Didn't work:" so Leo never reports a failure as success. */
+function shape(name: string, r: Any): Any {
+  let o: Any = r;
+  const inner = r.result && typeof r.result === "object" ? r.result as Any : null;
+  if (r.ok === true && inner && (inner.ok === false || (inner.error && inner.ok !== true))) {
+    o = { ok: false, error: String(inner.error ?? "failed"), ...(inner.held ? { held: true } : {}), result: inner,
+      ...(inner.held && inner.tell_guest ? { say: "The key link isn't released yet: your host confirms your license and finishes the car check-in first, then it shows up on your trip page by itself. " + String(inner.tell_guest) } : {}) };
   }
+  if (!(o.ok === false || (o.ok === undefined && o.error))) return o;
+  const base = clip(o.say ?? o.error ?? o.note ?? "", 400);
+  const isSend = name === "send_sms" || o.sent === false;
+  const pre = isSend ? "Not sent: " : "Didn't work: ";
+  return { ...o, ok: false, say: base ? (hasPrefix(base) ? base : pre + base) : FAILED_SAY };
+}
+
+/** The tool itself: returns the result and an HTTP status. Throws are caught by tool(). */
+async function dispatch(name: string, b: Any, s: Session): Promise<{ out: Any; status?: number }> {
+  const t = s.token, ch = s.channel ?? "page";
+  const refuse = scopeRefusal(ch, name);
+  if (refuse) return { out: refuse };
+  if (CAR_TOOLS.has(name)) return { out: await carTool(name, t, b) };
+  if (name === "send_sms") return { out: await sendSms(t, s.conversation_id, b) };
+  switch (name) {
+    case "trip_status": return { out: leoStatus(await run(t, "diagnose", {}, ch), ch) };
+    case "key_fix": {
+      const action = clip(b.action, 20);
+      if (!KEY_FIX.has(action)) return { out: { ok: false, error: "action must be check_key, resend_key, make_key_now or refresh_car" } };
+      return { out: { ok: true, result: await run(t, action, { reason: clip(b.reason, 200) || "guest asked Leo by voice" }, ch) } };
+    }
+    case "job_status": return { out: { ok: true, result: await run(t, "job_status", { job: Number(b.job) }, ch) } };
+    case "extra_driver": {
+      const action = clip(b.action, 20);
+      if (!DRIVER.has(action)) return { out: { ok: false, error: "action must be status, check, resend or notify_host" } };
+      return { out: { ok: true, result: await run(t, `driver_${action}`, { name: b.name, summary: b.summary }, ch) } };
+    }
+    case "notify_host": {
+      if (ch === "phone_unknown") {
+        // Nobody matched this caller to a trip, so there is no trip to alert about: file a callback ticket (pings Jared signed Leo).
+        const summary = clip(b.summary, 280);
+        const f = await fileTicket(s, { kind: "callback", name: b.name, phone: b.phone, issue: `Unmatched phone caller asked for the host: ${summary}` });
+        if (f.out.ok === false) return f;
+        return { out: { ok: true, result: { ok: true, note: "I left your message for the host and a callback is queued." }, ...(b.phone ? {} : { ask_for_phone: "No callback number yet: ask for one and file it with file_ticket." }) } };
+      }
+      return { out: { ok: true, result: await run(t, "notify_host", { summary: `Leo (${ch.startsWith("phone") ? "phone" : "voice"}): ${clip(b.summary, 280)}` }, ch) } };
+    }
+    case "reminder_email": return { out: await reminderEmail(t, s.conversation_id, b, ch) };
+    case "file_ticket": return await fileTicket(s, b);
+  }
+  return { out: { ok: false, error: "unknown tool" }, status: 404 };
+}
+
+async function fileTicket(s: Session, b: Any): Promise<{ out: Any; status?: number }> {
+  const t = s.token;
+  const { count } = await sb.from("support_tickets").select("id", { count: "exact", head: true }).eq("conversation_id", s.conversation_id);
+  if ((count ?? 0) >= 3) return { out: { ok: false, error: "too many tickets on this call" }, status: 429 };
+  if (t.startsWith("demo:")) return { out: { ok: true, ticket: "DEMO-0000", kind: clip(b.kind, 20) || "support", follow_up: "today", note: "demo page: nothing was saved" } };
+  const { data, error } = await sb.rpc("leo_file_ticket", { p: { kind: clip(b.kind, 20), name: clip(b.name, 80), phone: clip(b.phone, 30),
+    email: clip(b.email, 120), issue: clip(b.issue, 1000), conversation_id: s.conversation_id } });
+  if (error) {
+    await sb.rpc("bestly_raise", { p_key: `agent.line.${AGENT_SLUG}`, p_kind: "problem", p_severity: "warning",
+      p_title: "Leo: I couldn't save a guest's ticket", p_body: error.message.slice(0, 300), p_area: "agents" }).then(() => {}, () => {});
+    return { out: { ok: false, broken: true, error: "could not save", say: "Didn't work: I couldn't save that message. Ask them to message the host in the Turo app." }, status: 500 };
+  }
+  return { out: (data ?? { ok: true }) as Any };
+}
+
+async function tool(name: string, b: Any): Promise<Response> {
+  const s = await session(b, name);
+  if (s instanceof Response) return s;
+  const ch = s.channel ?? "page", demo = s.token.startsWith("demo:");
+  let out: Any, status = 200;
+  try { ({ out, status = 200 } = await dispatch(name, b, s)); }
+  catch (e) {
+    console.error(e);
+    out = { ok: false, broken: true, error: "tool crashed", say: "Didn't work: that didn't go through. Offer to take a message for the host." }; status = 500;
+  }
+  const broken = !!out.broken;
+  const shaped = shape(name, out);
+  delete shaped.broken;
+  await logTool(name, ch, demo, shaped.ok !== false, status >= 500 || broken ? "error" : shaped.ok === false ? "refused" : "ok");
+  return json(shaped, status);
 }
 
 Deno.serve(async (req) => {
