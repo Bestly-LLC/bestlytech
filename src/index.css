@@ -147,6 +147,12 @@
   html {
     scroll-behavior: smooth;
   }
+  /* Anyone who asked their system for less motion gets jumps, not glides (the /agent buttons scroll a long way). */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
 
   h1, h2, h3, h4 {
     letter-spacing: -0.03em;

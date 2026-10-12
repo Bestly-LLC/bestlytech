@@ -26,6 +26,8 @@ export function MayaCallPanel({
   events,
   t,
   started,
+  playing,
+  buffering,
   ended,
   onNext,
   onTalk,
@@ -36,6 +38,8 @@ export function MayaCallPanel({
   events: FiredEvent[];
   t: number;
   started: boolean;
+  playing: boolean;
+  buffering: boolean;
   ended: boolean;
   onNext: () => void;
   onTalk: () => void;
@@ -49,7 +53,7 @@ export function MayaCallPanel({
 
   const knownAt = callerKnownAt(events);
   const known = knownAt != null && t >= knownAt;
-  const ringing = started && !ended && t < (timeline.lines[0]?.start ?? 0) + 0.9;
+  const ringing = started && playing && !ended && t < (timeline.lines[0]?.start ?? 0) + 0.9;
 
   const toolsShown = scenario.lines.reduce((n, _l, i) => {
     const tt = toolTime(scenario, timeline, i);
@@ -73,9 +77,13 @@ export function MayaCallPanel({
     ? { cls: "is-idle", text: "Ready" }
     : ended
       ? { cls: "is-ended", text: `Call ended, ${formatClock(timeline.duration)}` }
-      : ringing
-        ? { cls: "is-ring", text: "Ringing" }
-        : { cls: "is-live", text: `On a call, ${formatClock(t)}` };
+      : !playing
+        ? { cls: "is-idle", text: `Paused, ${formatClock(t)}` }
+        : buffering
+          ? { cls: "is-ring", text: t < 1 ? "Connecting" : "Buffering" }
+          : ringing
+          ? { cls: "is-ring", text: "Ringing" }
+          : { cls: "is-live", text: `On a call, ${formatClock(t)}` };
 
   return (
     <section className="ad-maya" aria-label={`Maya on a call with ${scenario.caller.name}`}>

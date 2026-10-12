@@ -187,7 +187,7 @@
 .ad-maya-id span { display: block; font-size: 13px; line-height: 1.3; color: var(--ad-soft); }
 .ad-maya-id .ad-badge {
   display: inline-block;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.5;
   margin-left: 6px;
   padding: 1px 8px;
@@ -358,7 +358,7 @@
   .ad-caption-who { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ad-periwinkle); }
   .ad-caption p { margin: 0; font-size: 15px; line-height: 1.4; color: #f1f2ff; }
   .ad-caption-idle { color: var(--ad-soft) !important; }
-  .ad-dock .ad-transport { gap: 6px 8px; background: rgba(22, 26, 69, 0.97); box-shadow: 0 -10px 28px -10px rgba(10, 12, 40, 0.8); }
+  .ad-dock .ad-transport { gap: 8px; background: rgba(22, 26, 69, 0.97); box-shadow: 0 -10px 28px -10px rgba(10, 12, 40, 0.8); }
   .ad-dock .ad-time { min-width: 0; }
   .ad-dock .ad-sound { padding: 0 12px; }
   /* The site's round scroll-to-top button would sit on the dock, so it steps aside with the Maya launcher. */
@@ -654,7 +654,7 @@
   gap: 4px;
   padding: 1px 8px 1px 6px;
   border-radius: 9999px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1.5;
@@ -818,8 +818,8 @@
 .tone-a { background: #e2f4f3; box-shadow: inset 3px 0 0 #0e9594; }
 .tone-b { background: #e6edff; box-shadow: inset 3px 0 0 #3b6fe0; }
 .tone-c { background: #efe8ff; box-shadow: inset 3px 0 0 #7b5bd6; }
-.cal-block.is-lunch { background: repeating-linear-gradient(135deg, #f3f3f6 0 6px, #ececf0 6px 12px); box-shadow: none; color: var(--ink3); }
-.cal-block.is-lunch b { color: var(--ink3); font-weight: 500; }
+.cal-block.is-lunch { background: repeating-linear-gradient(135deg, #f3f3f6 0 6px, #ececf0 6px 12px); box-shadow: none; color: #5b5b61; }
+.cal-block.is-lunch b { color: #5b5b61; font-weight: 500; }
 .cal-slot { border: 1.5px dashed color-mix(in srgb, var(--acc) 60%, white); background: #f6fcfc; transition: background 0.4s ease, border-color 0.4s ease; }
 .cal-slot b { color: color-mix(in srgb, var(--acc) 80%, black); }
 .cal-slot.is-found { background: #e6f7f7; border-color: var(--acc); }
@@ -841,7 +841,7 @@
   .cal-body { grid-template-columns: 40px minmax(0, 1fr); padding-top: 8px; }
   .cal-colhead { padding: 0 3px; }
   .cal-colhead .ap-sub { display: none; }
-  .cal-hour { padding-right: 5px; font-size: 10px; }
+  .cal-hour { padding-right: 5px; font-size: 11px; }
   .cal-block { left: 2px; right: 2px; padding: 1px 4px; font-size: 11px; }
   .cal-block.is-short span { display: none; }
   .cal-side { flex: none; width: auto; gap: 6px; padding: 8px; border-left: 0; border-bottom: var(--hair, 1px) solid var(--line); min-height: 150px; }
@@ -938,10 +938,10 @@
 .rs-tbl.is-busy { background: #e5e9ff; border-color: #b6bfff; }
 .ad-fx.rs-corner { position: absolute; overflow: visible; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; border-style: dashed; border-color: var(--line2); text-align: center; line-height: 1.2; transition: background 0.4s ease, border-color 0.4s ease; }
 .rs-corner b { font-size: 11px; }
-.rs-corner span { font-size: 10.5px; color: var(--ink2); }
+.rs-corner span { font-size: 11px; color: var(--ink2); }
 .rs-corner.is-held { border-color: var(--acc); background: color-mix(in srgb, var(--acc) 8%, white); }
 .rs-corner.is-booked { border-style: solid; border-color: #1e8e4e; background: #d6f2e0; }
-.rs-bar { position: absolute; left: 56%; top: 82%; width: 40%; height: 13%; display: grid; place-items: center; border-radius: 5px; background: #ececf0; font-size: 10px; color: var(--ink3); }
+.rs-bar { position: absolute; left: 56%; top: 82%; width: 40%; height: 13%; display: grid; place-items: center; border-radius: 5px; background: #ececf0; font-size: 11px; color: #5b5b61; }
 .rs-wait { margin-top: 12px; padding: 8px 10px; border-radius: 10px; background: #fff; border: var(--hair, 1px) solid var(--line); }
 .rs-wait div { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; font-size: 12px; }
 .rs-wait .rs-sec-h { margin-bottom: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink3); }
