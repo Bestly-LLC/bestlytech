@@ -9,7 +9,7 @@
 //                          openers, voicemail, data collection), imports the number as a SIP trunk. Safe to re-run.
 //   {action:"test_call"}   admin button -> one real call to rg_settings.test_phone with a real lead's script,
 //                          logged as is_test (never touches the lead or the opener scoreboard).
-//   {action:"line_types"}  admin button -> Telnyx number lookup (carrier type) for unverified numbers;
+//   {action:"line_types", stale_only?:true}  admin button -> Telnyx number lookup (carrier type) for unverified numbers and lines checked 80+ days ago;
 //                          mobile numbers are marked and never dialed.
 //   ?hook=elevenlabs       post-call webhook -> verifies the HMAC signature, maps the agent's data-collection
 //                          fields to an outcome, writes through rg_log_call() (with the A/B fields).
@@ -288,12 +288,17 @@ async function testCall(): Promise<Response> {
 }
 
 // ---------- line types (Telnyx number lookup) ----------
-async function lineTypes(): Promise<Response> {
+async function lineTypes(staleOnly = false): Promise<Response> {
   const tk = await vault("telnyx_api_key");
   if (!tk) return Response.json({ ok: false, skipped: "telnyx_api_key missing from Vault" }, { status: 412 });
   const started = Date.now();
+  // Call Guard (2026-10-12): a line type older than 90 days is stale and the dialer will not call it (numbers get ported to cell
+  // phones), so landline/voip leads are looked up again at 80 days. staleOnly = just those, never the unverified backlog.
+  const staleBefore = new Date(Date.now() - 80 * 86400_000).toISOString();
   const { data: rows } = await db.from("rg_leads").select("id, phone").not("phone", "is", null)
-    .eq("line_type", "unverified").order("priority", { ascending: false }).limit(400);
+    .or(staleOnly ? `and(line_type.in.(landline,voip),line_type_checked_at.lt.${staleBefore})`
+                  : `line_type.eq.unverified,and(line_type.in.(landline,voip),line_type_checked_at.lt.${staleBefore})`)
+    .order("priority", { ascending: false }).limit(400);
   const queue = [...(rows ?? [])] as { id: string; phone: string }[];
   const tally: Record<string, number> = {};
   // Telnyx carrier types -> ours. Only landline/voip get dialed; anything that may be a mobile is never called.
@@ -1425,6 +1430,6 @@ Deno.serve(async (req) => {
   if (body.action === "followup") return followup(String(body.id ?? ""));
   if (body.action === "callback") return callback(String(body.id ?? ""), String(body.purpose ?? ""));
   if (body.action === "health") return health();
-  if (body.action === "line_types") return lineTypes();
+  if (body.action === "line_types") return lineTypes(body.stale_only === true);
   return Response.json({ ok: false, error: "unknown action" }, { status: 400 });
 });

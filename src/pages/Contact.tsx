@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Button } from "@/components/ui/button";
+import { CallConsentNote } from "@/components/CallConsentNote";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -402,6 +403,8 @@ export default function Contact() {
                     disabled={isSubmitting}
                   />
                 </div>
+
+                <CallConsentNote />
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
                   <Button type="submit" disabled={isSubmitting} className="min-h-[44px] w-full sm:w-auto">

@@ -23,6 +23,7 @@ import { onOpenCall, onOpenCoach } from "@/components/admin/roofguard/coachBus";
 import { AvaTopBar } from "@/components/admin/roofguard/AvaDialer";
 import { AvaSettingsSheet } from "@/components/admin/roofguard/AvaSettings";
 import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
+import { CallSafetyCard } from "@/components/admin/CallSafetyCard";
 
 type Tab = "calls" | "scorecard" | "leads" | "setup";
 const TABS: { id: Tab; label: string }[] = [{ id: "calls", label: "Calls" }, { id: "scorecard", label: "Scorecard" }, { id: "leads", label: "Leads" }, { id: "setup", label: "Setup" }];
@@ -552,7 +553,7 @@ export default function RoofGuard() {
         <AvaCalls callingOn={callingOn} onOpenSetup={() => setTab("setup")} />
       </>}
       {tab === "scorecard" && <div className="space-y-4"><AvaScorecard admin /><CoachSection source="roofguard" anchorId="coach" /></div>}
-      {tab === "setup" && <div className="space-y-5"><CallingCard /><VoicePicker source="roofguard" openSignal={studio} /></div>}
+      {tab === "setup" && <div className="space-y-5"><CallingCard /><CallSafetyCard seller="roofguard" who="Reese" /><VoicePicker source="roofguard" openSignal={studio} /></div>}
 
       {tab === "leads" && <>
       {err && <div className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load: {err}</div>}
