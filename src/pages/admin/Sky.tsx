@@ -528,7 +528,7 @@ export default function Sky() {
             // on top of Home (or within 150 ft of it): sit beside the Home label instead
             const nearHome = homeShown && (feetBetween(HOME, [car.lat, car.lon]) <= 150 || Math.hypot(cx - X(homeMi.x), cy - Y(homeMi.y)) < 44 * u);
             if (nearHome) {
-              const m = (mapUp * Math.PI) / 180, off = 46 * u;
+              const m = (mapUp * Math.PI) / 180, off = 66 * u;
               cx = X(homeMi.x) + off * Math.cos(m); cy = Y(homeMi.y) - off * Math.sin(m);
             }
             const inside = fresh && (nearHome || Math.hypot(cm.x, cm.y) <= radius * 1.04);
