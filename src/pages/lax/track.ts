@@ -15,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
  * it. Before this, the host filter was three client-side checks and Jared's own phone passed all of
  * them: on 23 Sep he opened two links he had just sent and both logged as the guest.
  */
-function deviceId(): string | undefined {
+export function deviceId(): string | undefined {
   try {
     let id = localStorage.getItem("bestly-did");
     if (!id) {
@@ -40,7 +40,7 @@ export function isHostDevice(): boolean {
   return false;
 }
 
-function device(): string {
+export function device(): string {
   const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
   const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/i.test(ua) ? "Android" : /Macintosh/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : "Other";
   const br = /CriOS|Chrome/.test(ua) && !/Edg/.test(ua) ? "Chrome" : /Safari/.test(ua) ? "Safari" : /Firefox|FxiOS/.test(ua) ? "Firefox" : /Edg/.test(ua) ? "Edge" : "Browser";

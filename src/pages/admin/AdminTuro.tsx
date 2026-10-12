@@ -14,6 +14,7 @@ import { Link } from "react-router-dom";
 import { GuestRow, useGuestRows } from "./LaxGuests";
 import { CarHealth, SuperchargeAudit } from "./CarOps";
 import { PlugPuller } from "./PlugPuller";
+import { CardScans } from "@/components/admin/turo/CardScans";
 import { ReadyWidget } from "@/components/admin/turo/ReadyWidget";
 import { CarProtectLog, TollCheck } from "@/components/admin/turo/CarProtect";
 import { toast } from "sonner";
@@ -147,6 +148,7 @@ function TuroOverview() {
       </div>
       <div className="grid scroll-mt-24 items-start gap-4 lg:grid-cols-2" id="plug-puller-row">
         <PlugPuller />
+        <CardScans />
       </div>
 
       {/* Status + controls */}
