@@ -34,6 +34,9 @@
 //   phone_unknown  nobody matched: file_ticket and notify_host (files a callback ticket) only.
 //   page_unknown   a real trip link whose trip is gone (link-down page, 2026-10-11): same scope as phone_unknown,
 //                  10 sessions per link and 60 in all per hour. Made-up tokens still get no session.
+//   phone + purpose early_return   Leo's own outbound check-in call (leo_early_return, 2026-10-12): early_return_answer, notify_host, file_ticket, trip_status
+//                  (thin) only. Service-key ops early_return_go / early_return_settle / early_return_test place and settle those calls; ?op=sms_in is the
+//                  Telnyx inbound-text webhook (URL token + ed25519 signature; refuses until telnyx_public_key is saved).
 //   phone_test     Jared's own cell on the demo trip and pretend car: every tool.
 // Every failed result carries ok:false and a say line starting "Not sent:" or "Didn't work:". Every call is counted in leo_tool_log (no personal
 // data) for the leo-health watchdog (pg_cron every 10 min, raises signed Leo alerts).
@@ -52,7 +55,7 @@ let req_ua = "";
 const NO_TRIP = { ok: false, say: "Didn't work: I can't see a trip on this chat. If the guest is on the phone, offer to take a message for the host (file_ticket). If they are on the trip page, ask them to open the trip link from their Turo message and talk to me from there.",
   error: "No trip is linked to this chat." };
 
-type Session = { key: string; token: string; conversation_id: string | null; expires_at: string; channel: string };
+type Session = { key: string; token: string; conversation_id: string | null; expires_at: string; channel: string; purpose?: string | null };
 type Any = Record<string, unknown>;
 
 async function xiKey(): Promise<string | null> {
@@ -124,7 +127,7 @@ async function session(b: Any, name = "?"): Promise<Session | Response> {
   const conv = clip(b.conversation_id, 80);
   if (!/^tv_[0-9a-f]{48}$/.test(k)) { await logTool(name, "unknown", false, false, "no_trip"); return json(NO_TRIP); }
   if (!/^conv_[A-Za-z0-9]+$/.test(conv)) { await logTool(name, "unknown", false, false, "session"); return json({ ok: false, say: "Didn't work: I lost the connection to this call's details. Offer to take a message for the host.", error: "no conversation" }, 401); }
-  const { data: s } = await sb.from("trip_voice_sessions").select("key, token, conversation_id, expires_at, channel").eq("key", k).maybeSingle();
+  const { data: s } = await sb.from("trip_voice_sessions").select("key, token, conversation_id, expires_at, channel, purpose").eq("key", k).maybeSingle();
   if (!s || Date.parse(s.expires_at) < Date.now()) {
     await logTool(name, s?.channel ?? "unknown", String(s?.token ?? "").startsWith("demo:"), false, s ? "expired" : "no_trip");
     return json({ ok: false, error: "This chat timed out.", say: s?.channel?.startsWith("phone")
@@ -157,7 +160,13 @@ const UNKNOWN_TOOLS = new Set(["file_ticket", "notify_host"]);
 const PHONE_REFUSE = "Didn't work: I can't do that over the phone. Your trip page link, the one in your Turo message, does that. Or I can have your host get back to you. Want me to take a message?";
 const LINK_DOWN_REFUSE = "Didn't work: this trip link no longer works, so I can't see the trip or the car from here. They can sign in again at bestly.tech/turo-key (home pickup) or bestly.tech/turo-lax (LAX) with their phone number and last name. Or I can take a message for the host: ask for their name and best number.";
 const UNKNOWN_REFUSE ="Didn't work: I can't look up trips or run anything on this call, but I can take a message for the host. What's your name and the best number to reach you?";
-function scopeRefusal(channel: string, name: string): Any | null {
+// Early-return check-in calls (channel 'phone' + purpose 'early_return', placed by Leo): the answer tool, the host message, tickets and the thin status. Nothing else.
+const ER_TOOLS = new Set(["early_return_answer", "notify_host", "file_ticket", "trip_status"]);
+const ER_REFUSE = "Didn't work: I can't do that on this call. I only checked whether you're finished with the car. Your host can help with anything else, want me to take a message?";
+function scopeRefusal(channel: string, name: string, purpose?: string | null): Any | null {
+  const er = channel === "phone" && purpose === "early_return";
+  if (name === "early_return_answer" && !er) return { ok: false, scope: true, error: "not available here", say: "Didn't work: that isn't available on this call." };
+  if (er) return ER_TOOLS.has(name) ? null : { ok: false, scope: true, error: "not available on a check-in call", say: ER_REFUSE };
   if (channel === "phone" && !PHONE_TOOLS.has(name)) return { ok: false, scope: true, error: "not available on a phone call", say: PHONE_REFUSE };
   if (channel === "phone_unknown" && !UNKNOWN_TOOLS.has(name)) return { ok: false, scope: true, error: "not available for an unmatched caller", say: UNKNOWN_REFUSE };
   if (channel === "page_unknown" && !UNKNOWN_TOOLS.has(name)) return { ok: false, scope: true, error: "not available on a link that no longer works", say: LINK_DOWN_REFUSE };
@@ -767,6 +776,15 @@ async function selftest(): Promise<Any> {
     const r = await run("selftest-not-a-real-trip-token", "resend_key", {}, "phone") as Any;
     if (r?.ok !== false) bad.push("PHONE SCOPE run()");
   } catch (_e) { bad.push("PHONE SCOPE check error"); }
+  // Early-return purpose: only the answer tool, host message, tickets and thin status; the answer tool exists nowhere else.
+  try {
+    const E = "early_return";
+    if (scopeRefusal("phone", "early_return_answer", E) || scopeRefusal("phone", "notify_host", E) || scopeRefusal("phone", "file_ticket", E) || scopeRefusal("phone", "trip_status", E)
+        || !scopeRefusal("phone", "car_lock", E) || !scopeRefusal("phone", "car_climate", E) || !scopeRefusal("phone", "key_fix", E) || !scopeRefusal("phone", "send_sms", E)
+        || !scopeRefusal("phone", "reminder_email", E) || !scopeRefusal("phone", "send_to_car_nav", E) || !scopeRefusal("phone", "extra_driver", E)
+        || !scopeRefusal("phone", "early_return_answer") || !scopeRefusal("phone", "early_return_answer", null) || !scopeRefusal("page", "early_return_answer", E)
+        || !scopeRefusal("phone_unknown", "early_return_answer", E) || !scopeRefusal("page_unknown", "early_return_answer", E)) bad.push("PHONE SCOPE early_return");
+  } catch (_e) { bad.push("PHONE SCOPE early_return check error"); }
   // Housekeeping (kept here, not in SQL): old logs and expired voice sessions.
   await sb.from("leo_reminder_log").delete().lt("at", new Date(Date.now() - 7 * 86400_000).toISOString()).then(() => {}, () => {});
   await sb.from("leo_tool_log").delete().lt("at", new Date(Date.now() - 7 * 86400_000).toISOString()).then(() => {}, () => {});
@@ -784,6 +802,222 @@ async function selftest(): Promise<Any> {
   const out: Any = { ok: bad.length === 0, healed, failed: bad, sms: smsOut };
   lastSelf = { at: Date.now(), out };
   return out;
+}
+
+// ---------- early-return check-in (2026-10-12) ----------
+// The detector (SQL, cron leo-early-return) decides a guest has parked the car back at Kings Rd with time left, inserts the leo_early_return row and calls
+// op early_return_go. Leo asks ONCE: "Are you finished with the car?" It never touches the key (guest keys follow the Turo reservation).
+// Call by default (ElevenLabs outbound over Leo's Telnyx SIP trunk); a text instead once texting is approved (sms_mode live AND sms_ready).
+// Ops are service-key only. early_return_test can dial exactly one number (the owner's) and never records anything.
+const ER_YES_SAY = "To end the trip early: open the trip in the Turo app, tap Change trip (or Modify), set the end time to now, and submit. Whether any money comes back is Turo's call, so don't promise any. If they get stuck, Turo's number is 415-965-4525.";
+const ER_NO_SAY = "Thanks, just wanted to be sure. Enjoy the rest of your trip.";
+const ER_UNSURE_SAY = "No problem, the trip stays as booked. If they decide they're done, they can end it in the Turo app (open the trip, tap Change trip or Modify, set the end time to now).";
+const ER_SMS_YES = "Thanks for letting me know. To end the trip early: open it in the Turo app, tap Change trip (or Modify), set the end time to now and submit. Refunds are up to Turo, so I can't promise any. Stuck? Turo is 415-965-4525.";
+const ER_SMS_NO = "Thanks, just wanted to be sure. Enjoy the rest of your trip.";
+const ER_SMS_NUDGE = "Quick check from Leo: are you finished with the car? Reply YES or NO.";
+const ER_TEST_NUMBER = "+18165007236"; // the only number early_return_test can dial: Jared's own
+const LEO_PHONE_NUMBER_ID = "phnum_6901m4mwnrfxfpasv68erkzh97af"; // Leo's (310) 622-7052 in ElevenLabs (Telnyx SIP trunk)
+const pacHour = () => Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", hour12: false }).format(new Date())) % 24;
+/** International numbers allowed (guests can be from anywhere): +CC… as given, or a US/CA 10-digit number. */
+function e164Any(v: unknown): string | null {
+  const s = String(v ?? "").trim(), d = s.replace(/\D/g, "");
+  if (!d) return null;
+  if (s.startsWith("+")) return d.length >= 8 && d.length <= 15 ? `+${d}` : null;
+  const us = e164(v); if (us) return us;
+  if (d.startsWith("00") && d.length >= 10 && d.length <= 17) return `+${d.slice(2)}`;
+  return d.length >= 11 && d.length <= 15 ? `+${d}` : null;
+}
+function erOpener(first: string): string {
+  const f = clip(first, 40);
+  return `Hi${f ? " " + f : ""}, it's Leo, Jared's trip helper. The car looks parked back at Kings Road. Are you finished with the car? Yes or no?`;
+}
+/** The exact request ElevenLabs gets for an outbound call (also what the dry run returns). */
+function erCallBody(aid: string, to: string, vars: Any): Any {
+  return { agent_id: aid, agent_phone_number_id: LEO_PHONE_NUMBER_ID, to_number: to,
+    conversation_initiation_client_data: { dynamic_variables: vars,
+      conversation_config_override: { agent: { first_message: erOpener(String(vars.guest_first_name ?? "")) } } } };
+}
+async function erPlaceCall(body: Any): Promise<{ ok: boolean; conversation_id?: string; error?: string }> {
+  const key = await xiKey();
+  if (!key) return { ok: false, error: "no voice platform key" };
+  const r = await fetch(`${XI}/convai/sip-trunk/outbound-call`, { method: "POST", signal: AbortSignal.timeout(20_000),
+    headers: { "xi-api-key": key, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({})) as Any;
+  if (!r.ok || j.success === false) return { ok: false, error: clip(`voice platform ${r.status}: ${typeof j.message === "string" ? j.message : JSON.stringify(j.detail ?? j).slice(0, 120)}`, 200) };
+  const conv = typeof j.conversation_id === "string" ? j.conversation_id : undefined;
+  return conv ? { ok: true, conversation_id: conv } : { ok: false, error: "voice platform returned no conversation id" };
+}
+
+async function earlyReturnGo(rid: number): Promise<Any> {
+  const upd = (patch: Any) => sb.from("leo_early_return").update({ ...patch, updated_at: new Date().toISOString() }).eq("reservation_id", rid);
+  const { data: st } = await sb.from("leo_early_return_state").select("enabled").eq("id", 1).maybeSingle();
+  if (!st?.enabled) return { ok: false, refused: "early-return check-in is switched off" };
+  const { data: row } = await sb.from("leo_early_return").select("reservation_id, token, status, attempts").eq("reservation_id", rid).maybeSingle();
+  if (!row) return { ok: false, error: "no early-return row" };
+  if (row.status !== "pending") return { ok: true, skipped: row.status };
+  const h = pacHour();
+  if (h < 8 || h >= 21) { await upd({ status: "skipped", error: "quiet hours" }); return { ok: true, skipped: "quiet hours" }; }
+  const { data: trip } = await sb.from("turo_trips").select("guest_phone, guest_first, ends_at").eq("reservation_id", rid).maybeSingle();
+  const { data: link } = await sb.from("lax_guest_links").select("sms_phone").eq("reservation_id", rid).maybeSingle();
+  if (!trip) { await upd({ status: "failed", error: "trip not found" }); return { ok: false, error: "trip not found" }; }
+  if (Date.parse(String(trip.ends_at)) < Date.now() + 30 * 60_000) { await upd({ status: "skipped", error: "trip nearly over" }); return { ok: true, skipped: "trip nearly over" }; }
+  const phone = e164Any(link?.sms_phone) ?? e164Any(trip.guest_phone);
+  if (!phone || phone === LEO_FROM || phone === TURO_LINE) {
+    await upd({ status: "no_phone" });
+    await sb.rpc("leo_early_return_note", { p_reservation_id: rid }).then(() => {}, () => {});
+    return { ok: true, status: "no_phone" };
+  }
+  const attempts = (row.attempts ?? 0) + 1, last4 = phone.slice(-4);
+  const first = clip(trip.guest_first, 40).toLowerCase().replace(/(^|[\s-])\S/g, (m: string) => m.toUpperCase());
+  const s = await smsSettings();
+  const blocked = (await sb.rpc("leo_sms_blocked", { p_phone: phone })).data === true;
+  if (s && s.sms_mode === "live" && s.sms_ready === true && !blocked) {
+    const r = await telnyxSend(phone, `Hi ${first || "there"}, it's Leo for your Turo trip. The car looks parked back at Kings Rd. Finished early? Reply YES or NO.`, s.sms_profile_id as string | null);
+    const log = (a: string, x: Any) => sb.from("leo_sms_log").insert({ token: row.token, reservation_id: rid, action: a, purpose: "early_return", to_last4: last4, ...x }).then(() => {}, () => {});
+    if (!r.ok) {
+      await log("failed", { telnyx_id: r.id ?? null, error_code: r.code });
+      await smsBreaker();
+      await upd({ status: "failed", channel: "sms", attempts, to_last4: last4, error: clip(`text failed (${r.code ?? "unknown"})`, 200) });
+      return { ok: false, error: `text failed (${r.code ?? "unknown"})`, say: "Didn't work: the early-return text did not send." };
+    }
+    await log("send", { telnyx_id: r.id, status: r.status });
+    await upd({ status: "asked", channel: "sms", attempts, to_last4: last4, asked_at: new Date().toISOString(), error: null });
+    return { ok: true, status: "asked", channel: "sms", to_last4: last4 };
+  }
+  const aid = await agentId();
+  if (!aid) { await upd({ status: "failed", channel: "call", attempts, to_last4: last4, error: "Leo is paused or not set up" }); return { ok: false, error: "Leo is paused" }; }
+  const { data: vars } = await sb.rpc("leo_early_return_vars", { p_reservation_id: rid });
+  if (!vars) { await upd({ status: "failed", channel: "call", attempts, to_last4: last4, error: "no trip link for this trip" }); return { ok: false, error: "no trip link" }; }
+  // Mark it asked BEFORE dialing: the call-start webhook (leo-phone-init) can fire while the dial request is still open and looks for an 'asked' call.
+  await upd({ status: "asked", channel: "call", attempts, to_last4: last4, asked_at: new Date().toISOString(), error: null });
+  const c = await erPlaceCall(erCallBody(aid, phone, vars as Any));
+  if (!c.ok) {
+    await upd({ status: "failed", channel: "call", attempts, to_last4: last4, error: c.error ?? "call failed" });
+    return { ok: false, error: c.error, say: "Didn't work: the early-return call did not go through." };
+  }
+  await upd({ conversation_id: c.conversation_id });
+  return { ok: true, status: "asked", channel: "call", to_last4: last4 };
+}
+
+const erYes = (t: string) => /^(y|yes|yeah|yea|yep|yup|ya|yess+|sure|correct|i am|we are|im done|i'm done|finished|done)\b/i.test(t.trim());
+const erNo = (t: string) => /^(n|no|nope|nah|nop|noo+|not yet|not done|not finished|still)\b/i.test(t.trim());
+
+/** Calls nobody answered in 20 min (and texts in 6 h): record what the guest said if the tool missed it, else no_answer. */
+async function earlyReturnSettle(): Promise<Any> {
+  const out: Any = { checked: 0, answered: 0, no_answer: 0, waiting: 0 };
+  const key = await xiKey();
+  const { data: calls } = await sb.from("leo_early_return").select("reservation_id, token, conversation_id, asked_at")
+    .eq("status", "asked").eq("channel", "call").lt("asked_at", new Date(Date.now() - 20 * 60_000).toISOString()).limit(20);
+  for (const c of calls ?? []) {
+    out.checked++;
+    const rid = c.reservation_id as number, age = Date.now() - Date.parse(String(c.asked_at));
+    let answer: string | null = null, voicemail = false, finished = false, userTurns = 0;
+    if (key && c.conversation_id) {
+      const r = await fetch(`${XI}/convai/conversations/${c.conversation_id}`, { headers: { "xi-api-key": key }, signal: AbortSignal.timeout(15_000) }).catch(() => null);
+      if (r?.ok) {
+        const j = await r.json().catch(() => ({})) as Any;
+        const status = String(j.status ?? "");
+        finished = status === "done" || status === "failed";
+        const tr = (Array.isArray(j.transcript) ? j.transcript : []) as Any[];
+        for (const m of tr) {
+          for (const tc of (Array.isArray(m.tool_calls) ? m.tool_calls : []) as Any[]) {
+            if (String(tc.tool_name) === "voicemail_detection") voicemail = true;
+            if (String(tc.tool_name) === "early_return_answer") {
+              let p: Any = {}; try { p = JSON.parse(String(tc.params_as_json ?? "{}")); } catch { /* keep {} */ }
+              const a = String(p.answer ?? "").toLowerCase();
+              if (["yes", "no", "unsure"].includes(a)) answer = a;
+            }
+          }
+          if (m.role === "user" && String(m.message ?? "").trim()) {
+            userTurns++;
+            if (!answer) { const t = String(m.message); if (erYes(t)) answer = "yes"; else if (erNo(t)) answer = "no"; }
+          }
+        }
+        if (!finished && age < 60 * 60_000) { out.waiting++; continue; }
+      } else if (age < 90 * 60_000) { out.waiting++; continue; }
+    }
+    if (answer || (userTurns >= 2 && !voicemail)) {
+      const a = answer ?? "unsure";
+      await sb.rpc("leo_early_return_answer", { p_token: c.token, p_answer: a, p_conversation: c.conversation_id });
+      out.answered++; continue;
+    }
+    await sb.from("leo_early_return").update({ status: "no_answer", voicemail, updated_at: new Date().toISOString() }).eq("reservation_id", rid).eq("status", "asked");
+    await sb.rpc("leo_early_return_note", { p_reservation_id: rid }).then(() => {}, () => {});
+    out.no_answer++;
+  }
+  const { data: texts } = await sb.from("leo_early_return").select("reservation_id").eq("status", "asked").eq("channel", "sms")
+    .lt("asked_at", new Date(Date.now() - 6 * 3600_000).toISOString()).limit(20);
+  for (const t of texts ?? []) {
+    out.checked++;
+    await sb.from("leo_early_return").update({ status: "no_answer", updated_at: new Date().toISOString() }).eq("reservation_id", t.reservation_id).eq("status", "asked");
+    await sb.rpc("leo_early_return_note", { p_reservation_id: t.reservation_id }).then(() => {}, () => {});
+    out.no_answer++;
+  }
+  return { ok: true, ...out };
+}
+
+/** One call to the owner's number only, with the demo trip (the answer tool records nothing). dry (default) returns the request body and places nothing. */
+async function earlyReturnTest(dry: boolean): Promise<Any> {
+  const aid = await agentId();
+  if (!aid) return { ok: false, error: "Leo is paused or not set up" };
+  if (!dry) {
+    const { count } = await sb.from("trip_voice_sessions").select("key", { count: "exact", head: true }).eq("token", "demo:demo-lax").eq("purpose", "early_return")
+      .gte("created_at", new Date(Date.now() - 3600_000).toISOString());
+    if ((count ?? 0) >= 3) return { ok: false, refused: "3 test calls an hour" };
+  }
+  const { data: vars, error } = await sb.rpc("leo_early_return_demo_vars", { p_dry: dry });
+  if (error || !vars) return { ok: false, error: clip(error?.message ?? "no demo variables", 200) };
+  const body = erCallBody(aid, ER_TEST_NUMBER, vars as Any);
+  if (dry) return { ok: true, dry: true, endpoint: `${XI}/convai/sip-trunk/outbound-call`, body };
+  const c = await erPlaceCall(body);
+  return c.ok ? { ok: true, placed: true, conversation_id: c.conversation_id } : { ok: false, error: c.error };
+}
+
+// ---------- inbound texts (YES / NO reply to the early-return text). Telnyx webhook: ?op=sms_in&t=<leo_sms_in_token> + ed25519 signature ----------
+const b64 = (s: string) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+const tEq = (a: string, b: string) => { if (a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; };
+async function smsIn(req: Request, raw: string, u: URL): Promise<Response> {
+  const sec = async (n: string) => { const { data } = await sb.rpc("leo_sms_in_secret", { p_name: n }); return typeof data === "string" && data ? data : null; };
+  const tok = await sec("leo_sms_in_token");
+  if (!tok || !tEq(u.searchParams.get("t") ?? "", tok)) return json({ ok: false, error: "unauthorized" }, 401);
+  const pub = await sec("telnyx_public_key");
+  if (!pub) return json({ ok: false, error: "inbound texts are not set up: telnyx_public_key is not saved" }, 503);
+  const sig = req.headers.get("telnyx-signature-ed25519") ?? "", ts = req.headers.get("telnyx-timestamp") ?? "";
+  try {
+    if (!sig || !ts || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return json({ ok: false, error: "bad signature" }, 401);
+    const k = await crypto.subtle.importKey("raw", b64(pub), { name: "Ed25519" }, false, ["verify"]);
+    if (!(await crypto.subtle.verify({ name: "Ed25519" }, k, b64(sig), new TextEncoder().encode(`${ts}|${raw}`)))) return json({ ok: false, error: "bad signature" }, 401);
+  } catch (_e) { return json({ ok: false, error: "bad signature" }, 401); }
+  let ev: Any = {}; try { ev = JSON.parse(raw); } catch { /* ignored below */ }
+  const d = ((ev.data ?? {}) as Any), p = ((d.payload ?? {}) as Any);
+  if (d.event_type !== "message.received" || p.direction === "outbound") return json({ ok: true, ignored: "not an inbound text" });
+  const from = String((p.from as Any)?.phone_number ?? ""), text = String(p.text ?? "");
+  const toNum = String(((p.to as Any[]) ?? [])[0]?.phone_number ?? "");
+  if (!from || (toNum && toNum !== LEO_FROM)) return json({ ok: true, ignored: "not for Leo" });
+  const norm = text.trim().toLowerCase().replace(/[^a-z\s']/g, "").replace(/\s+/g, " ").trim();
+  if (/^(stop|stopall|unsubscribe|cancel|end|quit|help|info|start|unstop|optin|optout)$/.test(norm)) return json({ ok: true, ignored: "carrier keyword" });
+  const { data: m } = await sb.rpc("leo_early_return_match_sms", { p_phone: from });
+  const match = m as Any | null;
+  if (!match?.reservation_id) return json({ ok: true, ignored: "no open check-in for this number" });
+  const reply = async (msg: string) => {
+    if ((await sb.rpc("leo_sms_blocked", { p_phone: from })).data === true) return;
+    const s = await smsSettings();
+    const r = await telnyxSend(from, msg, s?.sms_profile_id as string | null);
+    await sb.from("leo_sms_log").insert({ token: String(match.token), reservation_id: match.reservation_id, action: r.ok ? "send" : "failed", purpose: "early_return", to_last4: from.slice(-4), telnyx_id: r.id ?? null, status: r.status ?? null, error_code: r.code ?? null }).then(() => {}, () => {});
+    if (!r.ok) await smsBreaker();
+  };
+  const answer = norm.length <= 30 && erYes(norm) ? "yes" : norm.length <= 30 && erNo(norm) ? "no" : null;
+  if (answer) {
+    const { data: a } = await sb.rpc("leo_early_return_answer", { p_token: String(match.token), p_answer: answer, p_conversation: null });
+    if ((a as Any | null)?.recorded === true && !(a as Any).already) await reply(answer === "yes" ? ER_SMS_YES : ER_SMS_NO);
+    return json({ ok: true, recorded: answer });
+  }
+  if (Number(match.unclear ?? 0) < 1) {
+    await sb.from("leo_early_return").update({ unclear: 1, updated_at: new Date().toISOString() }).eq("reservation_id", match.reservation_id);
+    await reply(ER_SMS_NUDGE);
+    return json({ ok: true, nudged: true });
+  }
+  return json({ ok: true, ignored: "unclear again" });
 }
 
 const FAILED_SAY = "Didn't work: that didn't go through. Offer to take a message for the host.";
@@ -806,7 +1040,7 @@ function shape(name: string, r: Any): Any {
 /** The tool itself: returns the result and an HTTP status. Throws are caught by tool(). */
 async function dispatch(name: string, b: Any, s: Session): Promise<{ out: Any; status?: number }> {
   const t = s.token, ch = s.channel ?? "page";
-  const refuse = scopeRefusal(ch, name);
+  const refuse = scopeRefusal(ch, name, s.purpose);
   if (refuse) return { out: refuse };
   if (CAR_TOOLS.has(name)) return { out: await carTool(name, t, b) };
   if (name === "send_sms") return { out: await sendSms(t, s.conversation_id, b) };
@@ -833,6 +1067,16 @@ async function dispatch(name: string, b: Any, s: Session): Promise<{ out: Any; s
         return { out: { ok: true, result: { ok: true, note: "I left your message for the host and a callback is queued." }, ...(b.phone ? {} : { ask_for_phone: "No callback number yet: ask for one and file it with file_ticket." }) } };
       }
       return { out: { ok: true, result: await run(t, "notify_host", { summary: `Leo (${ch.startsWith("phone") ? "phone" : "voice"}): ${clip(b.summary, 280)}` }, ch) } };
+    }
+    case "early_return_answer": {
+      const a = clip(b.answer, 10).toLowerCase();
+      if (!["yes", "no", "unsure"].includes(a)) return { out: { ok: false, error: "answer must be yes, no or unsure" } };
+      const { data, error } = await sb.rpc("leo_early_return_answer", { p_token: t, p_answer: a, p_conversation: s.conversation_id });
+      if (error) return { out: { ok: false, broken: true, error: "could not record the answer", say: "Didn't work: I couldn't save that. " + (a === "yes" ? "Still give the guest the steps to end the trip in Turo." : "Still thank the guest and end the call.") }, status: 500 };
+      const d = (data ?? {}) as Any;
+      const tell = a === "yes" ? ER_YES_SAY : a === "no" ? ER_NO_SAY : ER_UNSURE_SAY;
+      if (d.ok === false) return { out: { ...d, say: `Didn't work: ${String(d.error ?? "not recorded")}. ${a === "yes" ? "Still give the guest the steps to end the trip in Turo." : "Still thank the guest and end the call."}`, tell_guest: tell } };
+      return { out: { ok: true, recorded: d.recorded === true, tell_guest: tell } };
     }
     case "reminder_email": return { out: await reminderEmail(t, s.conversation_id, b, ch) };
     case "file_ticket": return await fileTicket(s, b);
@@ -875,9 +1119,12 @@ async function tool(name: string, b: Any): Promise<Response> {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
-  const b = (await req.json().catch(() => ({}))) as Any;
+  const raw = await req.text().catch(() => "");
+  const b = (() => { try { const v = JSON.parse(raw); return v && typeof v === "object" ? v : {}; } catch { return {}; } })() as Any;
   req_ua = req.headers.get("user-agent") ?? "";
-  const t = new URL(req.url).searchParams.get("tool");
+  const qs = new URL(req.url).searchParams;
+  if (qs.get("op") === "sms_in") return smsIn(req, raw, new URL(req.url));
+  const t = qs.get("tool");
   if (t) return tool(t, b);
   if (b.op === "session") return openSession(b);
   if (b.op === "act") return screenAct(b);
@@ -892,6 +1139,14 @@ Deno.serve(async (req) => {
   if (b.op === "sms_check" || b.op === "sms_setup" || b.op === "sms_test") {
     if (!isService(req)) return json({ ok: false, error: "service key only" }, 401);
     return json(b.op === "sms_check" ? await smsCheck() : b.op === "sms_setup" ? await smsSetup() : await smsOwnerTest());
+  }
+  if (b.op === "early_return_go" || b.op === "early_return_settle" || b.op === "early_return_test") {
+    if (!isService(req)) return json({ ok: false, error: "service key only" }, 401);
+    try {
+      if (b.op === "early_return_go") { const rid = Number(b.reservation_id); return json(Number.isSafeInteger(rid) && rid > 0 ? await earlyReturnGo(rid) : { ok: false, error: "reservation_id required" }); }
+      if (b.op === "early_return_settle") return json(await earlyReturnSettle());
+      return json(await earlyReturnTest(b.dry !== false));
+    } catch (e) { return json({ ok: false, error: clip((e as Error)?.message, 200), say: "Didn't work: the early-return step crashed." }, 500); }
   }
   if (b.op === "diag") {
     // What Leo's widget hit on a real device (CSP block, widget error text). Small, capped, no personal data.

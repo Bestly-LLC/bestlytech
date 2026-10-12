@@ -28,7 +28,15 @@ const DEFAULTS = {
   minutes_to_pickup: 9999,
   controls_state: "unknown",
   greeting_offer: "none",
+  purpose: "none",
 };
+const LEO_NUMBER = "3106227052";
+const last10 = (v: unknown) => String(v ?? "").replace(/\D/g, "").slice(-10);
+/** Opening line for Leo's own outbound early-return call (never the inbound "what can I help with?"). Same words trip-voice sends with the request. */
+function earlyReturnOpener(first: unknown): string {
+  const f = String(first ?? "").replace(/\s+/g, " ").trim().slice(0, 40);
+  return `Hi${f ? " " + f : ""}, it's Leo, Jared's trip helper. The car looks parked back at Kings Road. Are you finished with the car? Yes or no?`;
+}
 
 function json(obj: unknown, status = 200) {
   return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
@@ -128,6 +136,26 @@ Deno.serve(async (req) => {
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { /* empty body */ }
   const caller = String(body.caller_id ?? body.from_number ?? "");
+  // Leo's own outbound early-return call (2026-10-12): the guest's number is the callee (or, depending on the platform, the caller field). If a placed
+  // call is waiting for it, answer with that call's variables (purpose early_return, call_mode outbound) and Leo's outbound opener, never the inbound greeting.
+  try {
+    const cands = [body.called_number, body.to_number, body.callee, body.caller_id, body.from_number].map(last10).filter((d) => d.length === 10 && d !== LEO_NUMBER);
+    for (const d of [...new Set(cands)]) {
+      const { data: pend } = await SB.rpc("leo_early_return_pending_call", { p_phone: d });
+      if (pend && typeof pend === "object") {
+        const v = pend as Record<string, unknown>;
+        return reply(v, earlyReturnOpener(v.guest_first_name));
+      }
+    }
+    // Our own number is the caller and nothing matched: this is an outbound call we placed. Never greet it as an inbound caller and never overwrite
+    // the variables the outbound request already carries.
+    if (last10(caller) === LEO_NUMBER && (last10(body.called_number ?? body.to_number) !== LEO_NUMBER)) {
+      return json({ type: "conversation_initiation_client_data", dynamic_variables: {} });
+    }
+  } catch (e) {
+    await raise("leo.phone-init", "problem", "Leo: outbound call lookup failed",
+      "The early-return call lookup errored, so the call went ahead with the variables already on the request: " + String((e as Error)?.message ?? e));
+  }
   try {
     const { data, error } = await SB.rpc("leo_phone_caller", { p_caller: caller });
     if (error) throw new Error(error.message);
