@@ -753,7 +753,7 @@ export default function LaxGuest() {
               )}
             
             </TripSheet>
-            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton leo={!!token} active={sheet === "ask"} onOpen={() => openSheet("ask")} />} hidePickup={!!token} hideTags={ended} only={tripTab(pub?.trip, ended, pub?.car_connected_at, pub?.key?.state)}
+            <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton leo={!!token} active={sheet === "ask"} onOpen={() => openSheet("ask")} />} hidePickup={!!token} hideReturn={!!token} hideTags={ended} only={tripTab(pub?.trip, ended, pub?.car_connected_at, pub?.key?.state)}
               glow={glow.has("pickup") ? "pickup" : glow.has("return") ? "return" : null} badge={glow.has("key") ? "Key ready" : undefined} />
             {demo && <DemoBar kind="lax" stage={stage} onStage={setStage} weather={weather} onWeather={(w) => { setWeather(w); clearDemoInside(); setPub(demoPub(dKind, stageRef.current) as Pub); }} />}
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug}
