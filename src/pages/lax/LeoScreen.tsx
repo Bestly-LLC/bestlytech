@@ -18,6 +18,7 @@
  * - Design: Apple HIG pass then UI UX Pro Max (house rules: 12-hour times, US units, number+unit never split, no
  *   truncation, feathered glows, 44 px targets, Reduce Motion respected).
  */
+import { leoChips } from "./leoChips";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -316,7 +317,7 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
 
   const close = async () => { await endCall(); onEnd(); };
   const status = phase === "connecting" ? "Connecting" : phase === "live" ? (voice ? (speaking ? "Leo is talking" : muted ? "Muted" : "Listening") : "Chatting") : "24/7 trip helper";
-  const chips = items.length === 1 ? suggestions(context, home) : [];
+  const chips = items.length === 1 ? leoChips(context, home) : [];
 
   // Minimized: Leo goes back to the dock where he lives (LeoBar shows the pill in its own spot) instead of a
   // pill at the top. LeoBar taps send leo:restore. Jared, 2026-10-11.
@@ -457,12 +458,6 @@ function labelFor(tool: string): string {
     case "page_action": return "Updating the page";
     default: return "Working on it";
   }
-}
-
-function suggestions(ctx: TripContext | undefined, home: boolean): string[] {
-  if (ctx?.keyState === "ready" || ctx?.keyState === "problem") return ["Help me add my key", "Turn on the A/C", "How much battery?"];
-  if (ctx?.stage === "return") return ["Find a Supercharger", "How much was charging?", "Lock the car"];
-  return ["Turn on the A/C", "How much battery?", home ? "Where is the car?" : "How do I get to the car?"];
 }
 
 function Bubble({ you, theme, children }: { you: boolean; theme: LeoTheme; children: ReactNode }) {
