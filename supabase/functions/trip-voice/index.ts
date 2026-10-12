@@ -882,6 +882,13 @@ Deno.serve(async (req) => {
   if (b.op === "session") return openSession(b);
   if (b.op === "act") return screenAct(b);
   if (b.op === "selftest") return json(await selftest());
+  if (b.op === "demo_weather") {
+    // Demo page Hot / Cold / Nice switch: the pretend car Leo reads gets the same cabin and outside temperature (demo links only).
+    const raw = clip(b.token, 20), w = clip(b.weather, 8).toLowerCase();
+    if (!/^demo-(home|lax)$/.test(raw) || !["hot", "cold", "nice"].includes(w)) return json({ ok: false, error: "demo pages only" }, 400);
+    const { data, error } = await sb.rpc("leo_demo_weather", { p_link: "d:" + raw, p_weather: w });
+    return json(error ? { ok: false, error: "couldn't set the demo weather" } : data, error ? 500 : 200);
+  }
   if (b.op === "sms_check" || b.op === "sms_setup" || b.op === "sms_test") {
     if (!isService(req)) return json({ ok: false, error: "service key only" }, 401);
     return json(b.op === "sms_check" ? await smsCheck() : b.op === "sms_setup" ? await smsSetup() : await smsOwnerTest());

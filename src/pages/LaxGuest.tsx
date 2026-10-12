@@ -40,7 +40,7 @@ import { PhoneHandoff } from "./lax/PhoneHandoff";
 import { HostPanel } from "./lax/HostPanel";
 import { UnlockStart } from "./lax/Valet";
 import { renderPassImage } from "./lax/passImage";
-import { DemoBar, STAGES, demoKind, demoPass, demoPub, isDemo, useDemoOpenLoader, useDemoStage, useDemoWeather, useRealDemoKey } from "./lax/demo";
+import { DemoBar, STAGES, demoKind, demoPass, demoPub, isDemo, syncDemoWeather, useDemoOpenLoader, useDemoStage, useDemoWeather, useRealDemoKey } from "./lax/demo";
 import { applyLeoCar, clearDemoInside, setDemoLocked, subscribeDemo, useDemoOpen } from "./lax/demoState";
 import { sharedPageAction, tellLeo, useLeoCar, useLeoPage } from "./lax/leoBridge";
 import { CHARGERS } from "./lax/places";
@@ -189,6 +189,8 @@ export default function LaxGuest() {
   useDemoOpenLoader(demo);
   const demoOpen = useDemoOpen().open;
   useEffect(() => (demo ? subscribeDemo(() => setPub(demoPub(dKind, stageRef.current) as Pub)) : undefined), [demo, dKind]);
+  // Hot / Cold / Nice also reaches Leo's pretend car, on page open and on every switch (DemoBar or Leo's demo_weather).
+  useEffect(() => { if (demo) syncDemoWeather(dKind, weather); }, [demo, dKind, weather]);
   // Errors on guests' phones go to the trip-apps health board (max 3 per visit; never from the host).
   useEffect(() => {
     let n = 0;
