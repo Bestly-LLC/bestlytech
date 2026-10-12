@@ -505,7 +505,7 @@ const e164 = (v: unknown) => { const d = String(v ?? "").replace(/\D/g, ""); con
 const smsText = (p: string, slug: string) => `Leo from Bestly: ${PURPOSE[p][0]}: bestly.tech/t/${slug}${PURPOSE[p][1]} Reply STOP to opt out.`;
 const NOT_LIVE = { ok: false, not_live: true, say: "I can't send texts yet. It's all on your trip page, and I can email it to you instead." };
 const sha256 = async (s: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");
-const smsSettings = async () => (await sb.from("leo_settings").select("sms_mode, sms_ready, sms_profile_id, sms_campaign_id").eq("id", 1).maybeSingle()).data as Any | null;
+const smsSettings = async () => (await sb.from("leo_settings").select("sms_mode, sms_ready, sms_profile_id, sms_campaign_id, sms_detail").eq("id", 1).maybeSingle()).data as Any | null;
 const txKey = async () => { const { data } = await sb.rpc("ava_secret", { p_name: "telnyx_api_key" }); return typeof data === "string" ? data : null; };
 const tx = async (path: string, init: RequestInit = {}) => { const k = await txKey(); if (!k) throw new Error("no telnyx key");
   const r = await fetch(`https://api.telnyx.com/v2${path}`, { ...init, signal: AbortSignal.timeout(10_000), headers: { authorization: `Bearer ${k}`, "content-type": "application/json" } });
@@ -615,6 +615,20 @@ async function smsCheck(): Promise<Any> {
       const pd = (pr.j.data ?? {}) as Any;
       detail.profile_enabled = pd.enabled ?? null;
       if (pd.enabled === false) why ||= "the messaging profile is switched off";
+      // Once texting is approved (mode not off), point the profile's inbound webhook at sms_in so YES/NO replies reach Leo. Telnyx has no API for the
+      // account public key (portal only), so telnyx_public_key still has to be saved by hand; until then early-return stays on the call path.
+      if (mode !== "off") {
+        try {
+          const { data: tok } = await sb.rpc("leo_sms_in_secret", { p_name: "leo_sms_in_token" });
+          if (typeof tok === "string" && tok) {
+            const want = `${Deno.env.get("SUPABASE_URL")}/functions/v1/trip-voice?op=sms_in&t=${tok}`;
+            if (pd.webhook_url !== want) {
+              const pw = await tx(`/messaging_profiles/${profile}`, { method: "PATCH", body: JSON.stringify({ webhook_url: want, webhook_api_version: "2" }) });
+              if (pw.status < 300) { detail.inbound_webhook_ok = true; healed.push("pointed inbound texts at Leo"); } else detail.inbound_webhook_ok = false;
+            } else detail.inbound_webhook_ok = true;
+          } else detail.inbound_webhook_ok = false;
+        } catch (_e) { detail.inbound_webhook_ok = false; }
+      }
     }
     // 10DLC: number must be assigned to an active campaign
     const as = await tx(`/10dlc/phone_number_campaigns/${enc}`);
@@ -871,7 +885,10 @@ async function earlyReturnGo(rid: number): Promise<Any> {
   const first = clip(trip.guest_first, 40).toLowerCase().replace(/(^|[\s-])\S/g, (m: string) => m.toUpperCase());
   const s = await smsSettings();
   const blocked = (await sb.rpc("leo_sms_blocked", { p_phone: phone })).data === true;
-  if (s && s.sms_mode === "live" && s.sms_ready === true && !blocked) {
+  // Text only when a reply can actually be read: texting live and ready, the inbound webhook points at sms_in, and the signature key is saved. Otherwise call.
+  const repliesOk = !!s && s.sms_mode === "live" && s.sms_ready === true && (s.sms_detail as Any)?.inbound_webhook_ok === true
+    && !!(await sb.rpc("leo_sms_in_secret", { p_name: "telnyx_public_key" })).data;
+  if (repliesOk && !blocked) {
     const r = await telnyxSend(phone, `Hi ${first || "there"}, it's Leo for your Turo trip. The car looks parked back at Kings Rd. Finished early? Reply YES or NO.`, s.sms_profile_id as string | null);
     const log = (a: string, x: Any) => sb.from("leo_sms_log").insert({ token: row.token, reservation_id: rid, action: a, purpose: "early_return", to_last4: last4, ...x }).then(() => {}, () => {});
     if (!r.ok) {
