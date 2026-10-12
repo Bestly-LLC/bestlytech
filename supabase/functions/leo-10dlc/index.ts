@@ -108,7 +108,7 @@ async function advance(): Promise<Any> {
     // A rejected brand is not re-posted every hour: only when the EIN on file changed since the rejection.
     const sig = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode("leo" + ein)))].slice(0, 6).map((x) => x.toString(16).padStart(2, "0")).join("");
     const prev = (s?.sms_filing ?? {}) as Any;
-    if (prev.step === "brand_rejected" && prev.ein_sig === sig) return { ok: true, step: "brand_rejected_waiting_for_new_ein" };
+    if (prev.step === "brand_rejected" && prev.ein_sig === sig && !/verification/i.test(String(prev.error ?? ""))) return { ok: true, step: "brand_rejected_waiting_for_new_ein" };
     // Spend guard: if the carrier quotes a one-time campaign cost over the cap, stop (the quote endpoint is best-effort; Telnyx's usual
     // one-time fees are brand $4 + campaign vetting $15, well under the cap).
     const cost = await tx("/10dlc/campaignBuilder/usecase/CUSTOMER_CARE/cost");
