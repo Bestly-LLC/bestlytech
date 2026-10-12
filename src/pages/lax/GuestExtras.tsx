@@ -492,7 +492,8 @@ const ago = (iso: string) => {
 
 /** Live car: shown from 1 hour before pickup until the trip ends. */
 export const DEMO_CAR: CarState = {
-  battery: 78, range: 241, inside_f: 97, // battery/range = Leo's demo car (leo_demo_car), so page and Leo agree outside_f: 84, locked: true, charging: "Disconnected",
+  // battery/range = Leo's demo car (leo_demo_car), so the page and Leo agree.
+  battery: 78, range: 241, inside_f: 97, outside_f: 84, locked: true, charging: "Disconnected",
   online: "online", observed_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(), name: "Tesla Model 3",
 };
 
