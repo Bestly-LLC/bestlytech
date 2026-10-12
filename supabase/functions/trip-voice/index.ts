@@ -81,7 +81,9 @@ async function openSession(b: Any): Promise<Response> {
   // Leo, on a limited channel (page_unknown): take a message for the host, nothing else. Made-up tokens get nothing.
   let channel = "page";
   if (!demo) {
-    const { data: diag } = await sb.rpc("lax_agent_diag", { p_token: token });
+    // A link whose trip is gone still passes lax_agent_diag, so ask the page's own check first.
+    const { data: pub } = await sb.rpc("lax_guest_public", { p_token: token });
+    const { data: diag } = (pub as Any | null)?.ok ? await sb.rpc("lax_agent_diag", { p_token: token }) : { data: null };
     if (!diag || (diag as Any).error) {
       const { data: link } = await sb.from("lax_guest_links").select("reservation_id").eq("token", token).maybeSingle();
       if (!link) return json({ ok: false, error: "This trip link isn't active." }, 404);
