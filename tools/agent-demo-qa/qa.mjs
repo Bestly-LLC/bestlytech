@@ -1026,6 +1026,86 @@ const GROUPS = {
     check("no console errors beyond the broken files", page.__errs.length === 0, page.__errs.join(" | "));
     await page.context().close();
   },
+
+  /** The apps directory: search, filters, the not-listed answer, phone collapse. */
+  async directory(browser) {
+    const page = await newPage(browser);
+    await go(page);
+    await page.evaluate(() => document.querySelector("#apps").scrollIntoView({ behavior: "instant" }));
+    await page.waitForTimeout(500);
+    const cards = () => page.locator("#apps ul[aria-label='Software Maya connects to'] > li");
+    const status = () => page.locator("#int-status").innerText();
+    const total = await cards().count();
+    check("the directory shows every group by default", total >= 16, `${total} cards`);
+    const countLine = await page.locator("#apps").innerText();
+    check("the app count line is there and is a number with a plus", /\d{2,3}\+ apps, plus thousands more through Zapier/.test(countLine), countLine.slice(0, 400));
+    check("the speed line is there", /Not on the list\? We build new connections fast, usually the same day\./.test(countLine));
+
+    await page.fill("#int-search", "ServiceTitan");
+    await page.waitForTimeout(200);
+    check("searching ServiceTitan finds it", (await cards().count()) === 1 && /ServiceTitan/.test(await cards().first().innerText()), String(await cards().count()));
+    check("the match is highlighted", (await page.locator("#apps mark").count()) >= 1);
+    check("the result is announced", /1 match in 1 group/.test(await status()), await status());
+    check("the status line is a polite live region", (await page.locator("#int-status").getAttribute("aria-live")) === "polite");
+    await page.fill("#int-search", "service titan");
+    await page.waitForTimeout(150);
+    check("a search with a space still finds ServiceTitan", /ServiceTitan/.test(await page.locator("#apps").innerText()));
+    await page.fill("#int-search", "dental");
+    await page.waitForTimeout(150);
+    check("searching a kind of business shows that group", /Dentrix/.test(await page.locator("#apps").innerText()));
+
+    await page.fill("#int-search", "zzzz");
+    await page.waitForTimeout(200);
+    const body = await page.locator("#apps").innerText();
+    check("no match shows the friendly answer", /Not listed yet, and that.s fine\./.test(body) && /We connect new software fast, usually the same day\./.test(body));
+    check("and it is announced", /Nothing found for zzzz/.test(await status()), await status());
+    check("it has the Ask Maya button", (await page.getByRole("button", { name: "Ask Maya" }).count()) === 1);
+    const tell = page.getByRole("link", { name: /Tell us what you use/ });
+    check("and the Tell us what you use link goes to the contact form", (await tell.getAttribute("href")) === "/contact?topic=agent", await tell.getAttribute("href"));
+    const sizes = await page.evaluate(() => [...document.querySelectorAll("#apps button, #apps a")].filter((e) => e.offsetWidth > 0).map((e) => [(e.textContent || e.getAttribute("aria-label") || "").trim().slice(0, 24), e.offsetHeight]).filter(([, h]) => h < 44));
+    check("every button in the directory is at least 44px tall", sizes.length === 0, j(sizes));
+    page.__quiet = true;
+    const before = await page.evaluate(() => window.__mayaOpen);
+    await page.getByRole("button", { name: "Ask Maya" }).click();
+    await page.waitForTimeout(400);
+    check("Ask Maya opens Maya", (await page.evaluate(() => window.__mayaOpen)) === before + 1);
+    page.__quiet = false;
+    await page.keyboard.press("Escape");
+    await page.fill("#int-search", "zzzz");
+    await page.focus("#int-search");
+    await page.keyboard.press("Escape");
+    check("Escape clears the search and brings the groups back", (await page.inputValue("#int-search")) === "" && (await cards().count()) === total);
+
+    // filter row
+    await page.getByRole("button", { name: "Law offices", exact: true }).click();
+    await page.waitForTimeout(150);
+    check("a filter chip shows just that group", (await cards().count()) === 1 && /Clio/.test(await cards().first().innerText()));
+    await page.getByRole("button", { name: "All", exact: true }).click();
+    check("All brings everything back", (await cards().count()) === total);
+
+    // phone: long groups start with six names and a Show all button
+    const names0 = cards().first().locator("ul li");
+    const showAll = page.getByRole("button", { name: /^Show all \d+$/ }).first();
+    if (PHONE) {
+      const visible = await names0.evaluateAll((els) => els.filter((e) => e.offsetWidth > 0).length);
+      check("on a phone a long group starts with six names", visible === 6, `${visible}`);
+      check("and a Show all 12 button", /Show all 12/.test(await showAll.innerText()), await showAll.innerText());
+      await showAll.click();
+      const after = await names0.evaluateAll((els) => els.filter((e) => e.offsetWidth > 0).length);
+      check("Show all reveals the rest", after === 12, `${after}`);
+      check("and offers Show fewer", (await page.getByRole("button", { name: "Show fewer" }).count()) >= 1);
+      const row = await page.locator("#apps [role=group]").evaluate((e) => e.scrollWidth > e.clientWidth);
+      check("the filter row scrolls sideways on a phone", row);
+    } else {
+      check("on a wide screen there is no Show all button", !(await showAll.isVisible().catch(() => false)));
+    }
+    await page.evaluate(() => document.querySelector("#apps").scrollIntoView({ behavior: "instant" }));
+    await shot(page, "directory");
+    await noOverflow(page, "directory");
+    check("no console or network errors", page.__errs.length === 0, page.__errs.join(" | "));
+    await page.context().close();
+  },
+
   /** Reduce Motion: only crossfades, no travelling cards or slides. */
   async reduced(browser) {
     const page = await newPage(browser, { reduce: true });

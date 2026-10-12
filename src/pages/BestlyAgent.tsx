@@ -1,9 +1,8 @@
 import { useRef } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowRight, CalendarDays, Check, ClipboardCheck, CreditCard, Headset, Languages, Mail, MessageCircle,
-  MessageSquareText, MessagesSquare, Mic, Phone, PhoneIncoming, Plug, Plus, ShieldCheck, UserRoundCheck,
-  Users, Wrench,
+  ArrowRight, Check, ClipboardCheck, Languages, Mail, MessageCircle, MessageSquareText, MessagesSquare, Mic,
+  Phone, PhoneIncoming, Plus, ShieldCheck, UserRoundCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SEOHead } from "@/components/SEOHead";
@@ -12,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { DemoStage, type DemoStageHandle } from "@/components/agentDemo/DemoStage";
 import { SCENARIOS } from "@/components/agentDemo/scenarios";
 import { BizLogo } from "@/components/agentDemo/appKit";
+import { IntegrationsDirectory } from "@/components/agentDemo/IntegrationsDirectory";
+import { appCountLabel } from "@/components/agentDemo/integrations";
 import { BRANDS } from "@/components/agentDemo/brand";
 import { useReducedMotion } from "@/components/agentDemo/appKit";
 
@@ -31,16 +32,6 @@ const does: { icon: LucideIcon; title: string; body: string }[] = [
   { icon: ClipboardCheck, title: "Does the work, not just the talking", body: "She books, reschedules, looks up orders and sends a technician, right inside your own software." },
   { icon: MessageSquareText, title: "Texts and emails for you", body: "Confirmations, forms and payment links go out while she is still on the call." },
   { icon: UserRoundCheck, title: "Gets you when it matters", body: "If a caller needs a person, she transfers the call or sends you an alert with the details." },
-];
-
-/** The point of the page: she is connected to the customer's own tools. Names are examples, set up per customer. */
-const apps: { icon: LucideIcon; title: string; names: string[]; body: string }[] = [
-  { icon: CalendarDays, title: "Your calendar", names: ["Google Calendar", "Outlook", "Calendly"], body: "Books, moves and cancels appointments in open times only." },
-  { icon: Users, title: "Your customer list", names: ["HubSpot", "Salesforce", "a spreadsheet"], body: "Adds new callers, finds returning ones, and writes a note about every call." },
-  { icon: Headset, title: "Your help desk", names: ["Zendesk", "Intercom", "Freshdesk"], body: "Looks up the order or account and fixes the problem, or opens a ticket for your team." },
-  { icon: CreditCard, title: "Payments", names: ["Stripe", "Square"], body: "Texts a secure payment link. Can give a refund, up to a limit you set." },
-  { icon: Wrench, title: "Your crew schedule", names: ["Jobber", "Housecall Pro"], body: "Creates the job and sends the right person to the right address." },
-  { icon: Plug, title: "Something else?", names: [], body: "If your software can connect to other apps, we can usually connect her to it too. Just ask." },
 ];
 
 const channels: { icon: LucideIcon; label: string }[] = [
@@ -68,6 +59,8 @@ const steps = [
 
 /** The questions people actually ask before they buy, answered in one or two plain sentences. */
 const faqs = [
+  { q: "Does it work with my software?", a: `Almost certainly. We already connect to ${appCountLabel()} apps, and the list above is only a start. If yours isn't there, we build the connection for you.` },
+  { q: "How fast can you connect something new?", a: "Usually the same day. We test every new connection before she uses it on a real call." },
   { q: "Is she just a chatbot?", a: "No. A chatbot only talks. Maya talks and does the work: she books, looks things up, updates records and sends messages in your own apps." },
   { q: "I already have a receptionist.", a: "Keep them. Maya covers nights, weekends, lunch breaks and busy times, so no call ever goes to voicemail." },
   { q: "We're small. Is this for us?", a: "Yes. Small businesses miss the most calls, because nobody is free to pick up. A missed call is often a customer who calls someone else." },
@@ -225,7 +218,7 @@ export default function BestlyAgent() {
       {/* 4. Works inside your apps: the thing that makes her more than a voice bot */}
       <section id="apps" className="border-b border-border bg-secondary/20">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
-          <AnimatedSection animation="fade-in" className="mb-12 max-w-3xl">
+          <AnimatedSection animation="fade-in" className="max-w-3xl">
             <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Not just a chatbot</p>
             <h2 className="font-modern [text-wrap:balance] text-3xl font-semibold tracking-[-0.025em] [word-spacing:0.04em] text-foreground sm:text-4xl">
               She works inside the apps you already use.
@@ -235,31 +228,8 @@ export default function BestlyAgent() {
               the job while the caller is still on the phone.
             </p>
           </AnimatedSection>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {apps.map((a, i) => (
-              <AnimatedSection key={a.title} animation="fade-in-up" delay={i * 60}>
-                <div className={`h-full rounded-2xl border p-6 ${a.names.length ? "border-border bg-card" : "border-dashed border-primary/40 bg-primary/[0.04]"}`}>
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                      <a.icon className="h-5 w-5" aria-hidden="true" />
-                    </span>
-                    <h3 className="font-modern text-lg font-semibold tracking-[-0.012em] [word-spacing:0.05em] text-foreground">{a.title}</h3>
-                  </div>
-                  <p className={`mt-4 ${a.names.length ? "text-muted-foreground" : "text-foreground/75"}`}>{a.body}</p>
-                  {a.names.length > 0 && (
-                    <ul className="mt-4 flex flex-wrap gap-2" aria-label={`${a.title} examples`}>
-                      {a.names.map((n) => (
-                        <li key={n} className="whitespace-nowrap rounded-full border border-border bg-background px-3 py-1 text-sm text-foreground">
-                          {n}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </AnimatedSection>
-            ))}
-          </div>
-          <AnimatedSection animation="fade-in" className="mt-8 flex max-w-2xl items-start gap-3 text-muted-foreground">
+          <IntegrationsDirectory onAskMaya={openMaya} />
+          <AnimatedSection animation="fade-in" className="mt-10 flex max-w-2xl items-start gap-3 text-muted-foreground">
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
             <p>We set up every connection for you. She only gets access to what her job needs, and nothing else.</p>
           </AnimatedSection>
