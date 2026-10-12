@@ -238,7 +238,7 @@ function PasskeyGate({ session, done }: { session: Session; done: () => void }) 
         {!passkeysSupported() && (
           <p className="mt-4 text-sm text-white/60">This browser can't do passkeys. Open bestly.tech/partner on your phone and set it up there — then this device works too.</p>
         )}
-        <button className="mt-6 w-full text-center text-sm text-white/60" onClick={() => supabase.auth.signOut()}>Sign out</button>
+        <button className="mt-6 w-full text-center text-sm text-white/60" onClick={() => supabase.auth.signOut({ scope: "local" })}>Sign out</button>
       </div>
     </Shell>
   );
