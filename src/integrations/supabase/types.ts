@@ -32,6 +32,24 @@ export type Database = {
         }
         Relationships: []
       }
+      _mood_before_tmp: {
+        Row: {
+          complaint: string | null
+          mood: string | null
+          slug: string | null
+        }
+        Insert: {
+          complaint?: string | null
+          mood?: string | null
+          slug?: string | null
+        }
+        Update: {
+          complaint?: string | null
+          mood?: string | null
+          slug?: string | null
+        }
+        Relationships: []
+      }
       activation_code_attempts: {
         Row: {
           action: string
@@ -1125,6 +1143,7 @@ export type Database = {
           slug: string
           social_brand: string | null
           talk_room: string | null
+          tz: string | null
         }
         Insert: {
           access_token?: string
@@ -1149,6 +1168,7 @@ export type Database = {
           slug: string
           social_brand?: string | null
           talk_room?: string | null
+          tz?: string | null
         }
         Update: {
           access_token?: string
@@ -1173,6 +1193,7 @@ export type Database = {
           slug?: string
           social_brand?: string | null
           talk_room?: string | null
+          tz?: string | null
         }
         Relationships: []
       }
@@ -4509,6 +4530,39 @@ export type Database = {
         }
         Relationships: []
       }
+      card_scans: {
+        Row: {
+          device: string | null
+          device_id: string | null
+          id: string
+          kind: string
+          reservation_id: number | null
+          scanned_at: string
+          signed_in_at: string | null
+          src: string
+        }
+        Insert: {
+          device?: string | null
+          device_id?: string | null
+          id?: string
+          kind?: string
+          reservation_id?: number | null
+          scanned_at?: string
+          signed_in_at?: string | null
+          src: string
+        }
+        Update: {
+          device?: string | null
+          device_id?: string | null
+          id?: string
+          kind?: string
+          reservation_id?: number | null
+          scanned_at?: string
+          signed_in_at?: string | null
+          src?: string
+        }
+        Relationships: []
+      }
       charge_stop_log: {
         Row: {
           at: string
@@ -7068,31 +7122,40 @@ export type Database = {
       contact_submissions: {
         Row: {
           category: string | null
+          conversation_id: string | null
           created_at: string | null
           email: string
           id: string
           message: string
           name: string
+          phone: string | null
+          source: string
           status: string | null
           subject: string
         }
         Insert: {
           category?: string | null
+          conversation_id?: string | null
           created_at?: string | null
           email: string
           id?: string
           message: string
           name: string
+          phone?: string | null
+          source?: string
           status?: string | null
           subject: string
         }
         Update: {
           category?: string | null
+          conversation_id?: string | null
           created_at?: string | null
           email?: string
           id?: string
           message?: string
           name?: string
+          phone?: string | null
+          source?: string
           status?: string | null
           subject?: string
         }
@@ -10032,6 +10095,21 @@ export type Database = {
         }
         Relationships: []
       }
+      hunter_jev_mail_seen: {
+        Row: {
+          mail_id: string
+          seen_at: string
+        }
+        Insert: {
+          mail_id: string
+          seen_at?: string
+        }
+        Update: {
+          mail_id?: string
+          seen_at?: string
+        }
+        Relationships: []
+      }
       hunter_lead_scores: {
         Row: {
           best_window: string
@@ -10398,6 +10476,27 @@ export type Database = {
         }
         Relationships: []
       }
+      job_finder_settings: {
+        Row: {
+          enabled: boolean
+          id: boolean
+          max_per_tier: number
+          updated_at: string
+        }
+        Insert: {
+          enabled?: boolean
+          id?: boolean
+          max_per_tier?: number
+          updated_at?: string
+        }
+        Update: {
+          enabled?: boolean
+          id?: boolean
+          max_per_tier?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       keyswitch_probes: {
         Row: {
           checked_at: string | null
@@ -10703,10 +10802,13 @@ export type Database = {
           email: string | null
           email_by: string | null
           email_changes: number
+          handed_at: string | null
+          handed_how: string | null
           host_completed_at: string | null
           late_minutes: number | null
           pickup_battery: number | null
           pickup_battery_at: string | null
+          pickup_odometer: number | null
           quiet_since: string | null
           reminder_at: string | null
           reminder_attempts: number
@@ -10715,6 +10817,8 @@ export type Database = {
           reservation_id: number
           returned_at: string | null
           settled_at: string | null
+          sms_phone: string | null
+          sms_phone_at: string | null
           token: string
         }
         Insert: {
@@ -10724,10 +10828,13 @@ export type Database = {
           email?: string | null
           email_by?: string | null
           email_changes?: number
+          handed_at?: string | null
+          handed_how?: string | null
           host_completed_at?: string | null
           late_minutes?: number | null
           pickup_battery?: number | null
           pickup_battery_at?: string | null
+          pickup_odometer?: number | null
           quiet_since?: string | null
           reminder_at?: string | null
           reminder_attempts?: number
@@ -10736,6 +10843,8 @@ export type Database = {
           reservation_id: number
           returned_at?: string | null
           settled_at?: string | null
+          sms_phone?: string | null
+          sms_phone_at?: string | null
           token?: string
         }
         Update: {
@@ -10745,10 +10854,13 @@ export type Database = {
           email?: string | null
           email_by?: string | null
           email_changes?: number
+          handed_at?: string | null
+          handed_how?: string | null
           host_completed_at?: string | null
           late_minutes?: number | null
           pickup_battery?: number | null
           pickup_battery_at?: string | null
+          pickup_odometer?: number | null
           quiet_since?: string | null
           reminder_at?: string | null
           reminder_attempts?: number
@@ -10757,6 +10869,8 @@ export type Database = {
           reservation_id?: number
           returned_at?: string | null
           settled_at?: string | null
+          sms_phone?: string | null
+          sms_phone_at?: string | null
           token?: string
         }
         Relationships: []
@@ -10896,6 +11010,288 @@ export type Database = {
           serial?: string
           slug?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      leo_client_diag: {
+        Row: {
+          at: string
+          detail: Json
+          id: number
+          kind: string
+          token: string | null
+          ua: string | null
+        }
+        Insert: {
+          at?: string
+          detail?: Json
+          id?: number
+          kind: string
+          token?: string | null
+          ua?: string | null
+        }
+        Update: {
+          at?: string
+          detail?: Json
+          id?: number
+          kind?: string
+          token?: string | null
+          ua?: string | null
+        }
+        Relationships: []
+      }
+      leo_demo_car_state: {
+        Row: {
+          link: string
+          state: Json
+          updated_at: string
+        }
+        Insert: {
+          link: string
+          state: Json
+          updated_at?: string
+        }
+        Update: {
+          link?: string
+          state?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      leo_early_return: {
+        Row: {
+          alerted: boolean
+          answered_at: string | null
+          asked_at: string | null
+          attempts: number
+          channel: string | null
+          conversation_id: string | null
+          detected_at: string
+          error: string | null
+          noted: boolean
+          reservation_id: number
+          retried_at: string | null
+          status: string
+          to_last4: string | null
+          token: string
+          unclear: number
+          updated_at: string
+          voicemail: boolean
+        }
+        Insert: {
+          alerted?: boolean
+          answered_at?: string | null
+          asked_at?: string | null
+          attempts?: number
+          channel?: string | null
+          conversation_id?: string | null
+          detected_at?: string
+          error?: string | null
+          noted?: boolean
+          reservation_id: number
+          retried_at?: string | null
+          status?: string
+          to_last4?: string | null
+          token: string
+          unclear?: number
+          updated_at?: string
+          voicemail?: boolean
+        }
+        Update: {
+          alerted?: boolean
+          answered_at?: string | null
+          asked_at?: string | null
+          attempts?: number
+          channel?: string | null
+          conversation_id?: string | null
+          detected_at?: string
+          error?: string | null
+          noted?: boolean
+          reservation_id?: number
+          retried_at?: string | null
+          status?: string
+          to_last4?: string | null
+          token?: string
+          unclear?: number
+          updated_at?: string
+          voicemail?: boolean
+        }
+        Relationships: []
+      }
+      leo_early_return_state: {
+        Row: {
+          detect_errors: number
+          enabled: boolean
+          id: number
+          last_error: string | null
+          last_ok_at: string | null
+        }
+        Insert: {
+          detect_errors?: number
+          enabled?: boolean
+          id: number
+          last_error?: string | null
+          last_ok_at?: string | null
+        }
+        Update: {
+          detect_errors?: number
+          enabled?: boolean
+          id?: number
+          last_error?: string | null
+          last_ok_at?: string | null
+        }
+        Relationships: []
+      }
+      leo_reminder_log: {
+        Row: {
+          action: string
+          at: string
+          conversation_id: string | null
+          id: number
+          token: string
+        }
+        Insert: {
+          action: string
+          at?: string
+          conversation_id?: string | null
+          id?: number
+          token: string
+        }
+        Update: {
+          action?: string
+          at?: string
+          conversation_id?: string | null
+          id?: number
+          token?: string
+        }
+        Relationships: []
+      }
+      leo_settings: {
+        Row: {
+          demo_open_until: string | null
+          id: number
+          sms_campaign_id: string | null
+          sms_checked_at: string | null
+          sms_detail: Json | null
+          sms_filing: Json | null
+          sms_mode: string
+          sms_profile_id: string | null
+          sms_ready: boolean
+          updated_at: string
+        }
+        Insert: {
+          demo_open_until?: string | null
+          id?: number
+          sms_campaign_id?: string | null
+          sms_checked_at?: string | null
+          sms_detail?: Json | null
+          sms_filing?: Json | null
+          sms_mode?: string
+          sms_profile_id?: string | null
+          sms_ready?: boolean
+          updated_at?: string
+        }
+        Update: {
+          demo_open_until?: string | null
+          id?: number
+          sms_campaign_id?: string | null
+          sms_checked_at?: string | null
+          sms_detail?: Json | null
+          sms_filing?: Json | null
+          sms_mode?: string
+          sms_profile_id?: string | null
+          sms_ready?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      leo_sms_log: {
+        Row: {
+          action: string
+          at: string
+          conversation_id: string | null
+          error_code: string | null
+          id: number
+          purpose: string | null
+          reservation_id: number | null
+          status: string | null
+          telnyx_id: string | null
+          to_last4: string | null
+          token: string
+        }
+        Insert: {
+          action: string
+          at?: string
+          conversation_id?: string | null
+          error_code?: string | null
+          id?: number
+          purpose?: string | null
+          reservation_id?: number | null
+          status?: string | null
+          telnyx_id?: string | null
+          to_last4?: string | null
+          token: string
+        }
+        Update: {
+          action?: string
+          at?: string
+          conversation_id?: string | null
+          error_code?: string | null
+          id?: number
+          purpose?: string | null
+          reservation_id?: number | null
+          status?: string | null
+          telnyx_id?: string | null
+          to_last4?: string | null
+          token?: string
+        }
+        Relationships: []
+      }
+      leo_sms_optouts: {
+        Row: {
+          at: string
+          phone_hash: string
+          source: string | null
+        }
+        Insert: {
+          at?: string
+          phone_hash: string
+          source?: string | null
+        }
+        Update: {
+          at?: string
+          phone_hash?: string
+          source?: string | null
+        }
+        Relationships: []
+      }
+      leo_tool_log: {
+        Row: {
+          at: string
+          channel: string
+          code: string
+          demo: boolean
+          id: number
+          ok: boolean
+          tool: string
+        }
+        Insert: {
+          at?: string
+          channel?: string
+          code?: string
+          demo?: boolean
+          id?: number
+          ok: boolean
+          tool: string
+        }
+        Update: {
+          at?: string
+          channel?: string
+          code?: string
+          demo?: boolean
+          id?: number
+          ok?: boolean
+          tool?: string
         }
         Relationships: []
       }
@@ -11708,6 +12104,36 @@ export type Database = {
         }
         Relationships: []
       }
+      maya_web_sessions: {
+        Row: {
+          created_at: string
+          detail: Json | null
+          id: number
+          ip_hash: string
+          kind: string
+          origin: string | null
+          page: string | null
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json | null
+          id?: number
+          ip_hash: string
+          kind?: string
+          origin?: string | null
+          page?: string | null
+        }
+        Update: {
+          created_at?: string
+          detail?: Json | null
+          id?: number
+          ip_hash?: string
+          kind?: string
+          origin?: string | null
+          page?: string | null
+        }
+        Relationships: []
+      }
       media_relay: {
         Row: {
           bucket: string
@@ -11981,6 +12407,102 @@ export type Database = {
           report_count?: number
           resolved?: boolean
           resolved_at?: string | null
+        }
+        Relationships: []
+      }
+      model_y_seen: {
+        Row: {
+          alerted_at: string | null
+          city: string | null
+          distance_mi: number | null
+          first_price: number | null
+          first_seen: string
+          fsd_evidence: string | null
+          fsd_grade: string | null
+          hw4_evidence: string | null
+          key: string
+          last_seen: string
+          miles: number | null
+          price: number | null
+          price_history: Json
+          reject_reason: string | null
+          source: string
+          state: string | null
+          trim: string | null
+          url: string
+          verdict: string
+          vin: string | null
+          year: number | null
+        }
+        Insert: {
+          alerted_at?: string | null
+          city?: string | null
+          distance_mi?: number | null
+          first_price?: number | null
+          first_seen?: string
+          fsd_evidence?: string | null
+          fsd_grade?: string | null
+          hw4_evidence?: string | null
+          key: string
+          last_seen?: string
+          miles?: number | null
+          price?: number | null
+          price_history?: Json
+          reject_reason?: string | null
+          source: string
+          state?: string | null
+          trim?: string | null
+          url: string
+          verdict?: string
+          vin?: string | null
+          year?: number | null
+        }
+        Update: {
+          alerted_at?: string | null
+          city?: string | null
+          distance_mi?: number | null
+          first_price?: number | null
+          first_seen?: string
+          fsd_evidence?: string | null
+          fsd_grade?: string | null
+          hw4_evidence?: string | null
+          key?: string
+          last_seen?: string
+          miles?: number | null
+          price?: number | null
+          price_history?: Json
+          reject_reason?: string | null
+          source?: string
+          state?: string | null
+          trim?: string | null
+          url?: string
+          verdict?: string
+          vin?: string | null
+          year?: number | null
+        }
+        Relationships: []
+      }
+      model_y_settings: {
+        Row: {
+          enabled: boolean
+          id: boolean
+          max_price: number
+          radius_mi: number
+          updated_at: string
+        }
+        Insert: {
+          enabled?: boolean
+          id?: boolean
+          max_price?: number
+          radius_mi?: number
+          updated_at?: string
+        }
+        Update: {
+          enabled?: boolean
+          id?: boolean
+          max_price?: number
+          radius_mi?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -14819,6 +15341,223 @@ export type Database = {
           key?: string
           label?: string
           script?: string
+        }
+        Relationships: []
+      }
+      rg_outreach_drafts: {
+        Row: {
+          bcc: string
+          body: string
+          cc: string | null
+          created_at: string
+          decided_at: string | null
+          decided_note: string | null
+          hook_quote: string | null
+          hook_url: string | null
+          id: string
+          kind: string
+          ledger_id: string
+          run_date: string
+          status: string
+          subject: string
+          to_email: string
+        }
+        Insert: {
+          bcc?: string
+          body: string
+          cc?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_note?: string | null
+          hook_quote?: string | null
+          hook_url?: string | null
+          id?: string
+          kind: string
+          ledger_id: string
+          run_date?: string
+          status?: string
+          subject: string
+          to_email: string
+        }
+        Update: {
+          bcc?: string
+          body?: string
+          cc?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_note?: string | null
+          hook_quote?: string | null
+          hook_url?: string | null
+          id?: string
+          kind?: string
+          ledger_id?: string
+          run_date?: string
+          status?: string
+          subject?: string
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rg_outreach_drafts_ledger_id_fkey"
+            columns: ["ledger_id"]
+            isOneToOne: false
+            referencedRelation: "rg_outreach_ledger"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rg_outreach_events: {
+        Row: {
+          kind: string
+          ledger_id: string | null
+          mail_id: string
+          seen_at: string
+        }
+        Insert: {
+          kind: string
+          ledger_id?: string | null
+          mail_id: string
+          seen_at?: string
+        }
+        Update: {
+          kind?: string
+          ledger_id?: string | null
+          mail_id?: string
+          seen_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rg_outreach_events_ledger_id_fkey"
+            columns: ["ledger_id"]
+            isOneToOne: false
+            referencedRelation: "rg_outreach_ledger"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rg_outreach_ledger: {
+        Row: {
+          call_score: number
+          called_at: string | null
+          city: string | null
+          company: string
+          contact_name: string | null
+          contact_title: string | null
+          created_at: string
+          domain: string
+          email: string | null
+          fit_note: string | null
+          hook_quote: string | null
+          hook_url: string | null
+          id: string
+          last_touch_at: string | null
+          loop_no: number
+          loop_started: string | null
+          name_key: string
+          next_due: string | null
+          note: string | null
+          phone: string | null
+          review_note: string | null
+          services: string | null
+          source: string
+          state: string | null
+          status: string
+          thread_subject: string | null
+          touches: number
+          track: string | null
+          tz: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          call_score?: number
+          called_at?: string | null
+          city?: string | null
+          company: string
+          contact_name?: string | null
+          contact_title?: string | null
+          created_at?: string
+          domain: string
+          email?: string | null
+          fit_note?: string | null
+          hook_quote?: string | null
+          hook_url?: string | null
+          id?: string
+          last_touch_at?: string | null
+          loop_no?: number
+          loop_started?: string | null
+          name_key: string
+          next_due?: string | null
+          note?: string | null
+          phone?: string | null
+          review_note?: string | null
+          services?: string | null
+          source?: string
+          state?: string | null
+          status?: string
+          thread_subject?: string | null
+          touches?: number
+          track?: string | null
+          tz?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          call_score?: number
+          called_at?: string | null
+          city?: string | null
+          company?: string
+          contact_name?: string | null
+          contact_title?: string | null
+          created_at?: string
+          domain?: string
+          email?: string | null
+          fit_note?: string | null
+          hook_quote?: string | null
+          hook_url?: string | null
+          id?: string
+          last_touch_at?: string | null
+          loop_no?: number
+          loop_started?: string | null
+          name_key?: string
+          next_due?: string | null
+          note?: string | null
+          phone?: string | null
+          review_note?: string | null
+          services?: string | null
+          source?: string
+          state?: string | null
+          status?: string
+          thread_subject?: string | null
+          touches?: number
+          track?: string | null
+          tz?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      rg_outreach_settings: {
+        Row: {
+          daily_first_touch_cap: number
+          enabled: boolean
+          id: boolean
+          pending_cap: number
+          updated_at: string
+        }
+        Insert: {
+          daily_first_touch_cap?: number
+          enabled?: boolean
+          id?: boolean
+          pending_cap?: number
+          updated_at?: string
+        }
+        Update: {
+          daily_first_touch_cap?: number
+          enabled?: boolean
+          id?: boolean
+          pending_cap?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -18806,6 +19545,90 @@ export type Database = {
         }
         Relationships: []
       }
+      studio_digest_log: {
+        Row: {
+          created_at: string
+          day: string
+          detail: string | null
+          held: number
+          id: string
+          kind: string
+          outbox_id: string | null
+          retries: number
+          sent_at: string | null
+          status: string
+          subject_id: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          detail?: string | null
+          held?: number
+          id?: string
+          kind: string
+          outbox_id?: string | null
+          retries?: number
+          sent_at?: string | null
+          status: string
+          subject_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          detail?: string | null
+          held?: number
+          id?: string
+          kind?: string
+          outbox_id?: string | null
+          retries?: number
+          sent_at?: string | null
+          status?: string
+          subject_id?: string
+        }
+        Relationships: []
+      }
+      studio_digest_settings: {
+        Row: {
+          client_default_tz: string
+          client_repeat_days: number
+          client_time: string
+          client_window_hours: number
+          enabled: boolean
+          id: boolean
+          staff_time: string
+          staff_tz: string
+          talk_from_hour: number
+          talk_to_hour: number
+          updated_at: string
+        }
+        Insert: {
+          client_default_tz?: string
+          client_repeat_days?: number
+          client_time?: string
+          client_window_hours?: number
+          enabled?: boolean
+          id?: boolean
+          staff_time?: string
+          staff_tz?: string
+          talk_from_hour?: number
+          talk_to_hour?: number
+          updated_at?: string
+        }
+        Update: {
+          client_default_tz?: string
+          client_repeat_days?: number
+          client_time?: string
+          client_window_hours?: number
+          enabled?: boolean
+          id?: boolean
+          staff_time?: string
+          staff_tz?: string
+          talk_from_hour?: number
+          talk_to_hour?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       studio_health: {
         Row: {
           at: string
@@ -18940,6 +19763,70 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      studio_note_drafts: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          item_id: string
+          note: string
+          review_id: string | null
+          sent_at: string | null
+          source: Json | null
+          status: string
+          title: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          item_id: string
+          note: string
+          review_id?: string | null
+          sent_at?: string | null
+          source?: Json | null
+          status?: string
+          title: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          item_id?: string
+          note?: string
+          review_id?: string | null
+          sent_at?: string | null
+          source?: Json | null
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_note_drafts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "approval_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_note_drafts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "approval_staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_note_drafts_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "approval_items"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       studio_overrides: {
         Row: {
@@ -21235,26 +22122,32 @@ export type Database = {
       trip_voice_sessions: {
         Row: {
           agent_slug: string
+          channel: string
           conversation_id: string | null
           created_at: string
           expires_at: string
           key: string
+          purpose: string | null
           token: string
         }
         Insert: {
           agent_slug?: string
+          channel?: string
           conversation_id?: string | null
           created_at?: string
           expires_at?: string
           key: string
+          purpose?: string | null
           token: string
         }
         Update: {
           agent_slug?: string
+          channel?: string
           conversation_id?: string | null
           created_at?: string
           expires_at?: string
           key?: string
+          purpose?: string | null
           token?: string
         }
         Relationships: []
@@ -21721,6 +22614,57 @@ export type Database = {
         }
         Relationships: []
       }
+      turo_leo_checks: {
+        Row: {
+          answer_text: string | null
+          answered_at: string | null
+          asked_at: string
+          created_at: string
+          reopened_at: string | null
+          reservation_id: number
+          status: string
+        }
+        Insert: {
+          answer_text?: string | null
+          answered_at?: string | null
+          asked_at?: string
+          created_at?: string
+          reopened_at?: string | null
+          reservation_id: number
+          status?: string
+        }
+        Update: {
+          answer_text?: string | null
+          answered_at?: string | null
+          asked_at?: string
+          created_at?: string
+          reopened_at?: string | null
+          reservation_id?: number
+          status?: string
+        }
+        Relationships: []
+      }
+      turo_leo_settings: {
+        Row: {
+          enabled: boolean
+          id: number
+          min_minutes_left: number
+          updated_at: string
+        }
+        Insert: {
+          enabled?: boolean
+          id?: number
+          min_minutes_left?: number
+          updated_at?: string
+        }
+        Update: {
+          enabled?: boolean
+          id?: number
+          min_minutes_left?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       turo_link_msgs: {
         Row: {
           attempts: number
@@ -21808,6 +22752,54 @@ export type Database = {
           n?: number | null
           observed_on?: string
           src?: string
+        }
+        Relationships: []
+      }
+      turo_out_msgs: {
+        Row: {
+          attempts: number
+          body: string
+          claimed_at: string | null
+          created_at: string
+          id: string
+          kind: string
+          last_error: string | null
+          reservation_id: number
+          sent_at: string | null
+          status: string
+          updated_at: string
+          verified: boolean | null
+          verify_snippet: string | null
+        }
+        Insert: {
+          attempts?: number
+          body: string
+          claimed_at?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          last_error?: string | null
+          reservation_id: number
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          verified?: boolean | null
+          verify_snippet?: string | null
+        }
+        Update: {
+          attempts?: number
+          body?: string
+          claimed_at?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          last_error?: string | null
+          reservation_id?: number
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          verified?: boolean | null
+          verify_snippet?: string | null
         }
         Relationships: []
       }
@@ -24910,6 +25902,7 @@ export type Database = {
       ask_words: { Args: { t: string }; Returns: string[] }
       audience_from_text: { Args: { p: string }; Returns: string }
       auto_fix_pattern_issues: { Args: never; Returns: Json }
+      autonomy_decisions_line: { Args: never; Returns: string }
       autonomy_done_phrase: { Args: { t: string }; Returns: string }
       autonomy_phrase: { Args: { t: string }; Returns: string }
       autonomy_recap: { Args: { p_send?: boolean }; Returns: string }
@@ -25385,6 +26378,21 @@ export type Database = {
       }
       car_watch_tick: { Args: never; Returns: Json }
       car_windows_open: { Args: never; Returns: boolean }
+      card_qr_watch: { Args: never; Returns: Json }
+      card_scan_link: {
+        Args: { p_scan: string; p_token: string }
+        Returns: boolean
+      }
+      card_scan_log: {
+        Args: {
+          p_device?: string
+          p_device_id?: string
+          p_kind: string
+          p_src: string
+        }
+        Returns: string
+      }
+      card_scans_admin: { Args: { p_limit?: number }; Returns: Json }
       charge_stop_notify: {
         Args: {
           p_body?: string
@@ -25836,6 +26844,7 @@ export type Database = {
         Args: { p_info?: Json; p_token: string }
         Returns: Json
       }
+      cost_cutter_admin: { Args: never; Returns: Json }
       cost_cutter_answer: {
         Args: { p_answer: string; p_question: string; p_reason?: string }
         Returns: Json
@@ -25845,6 +26854,10 @@ export type Database = {
       cost_cutter_discover: { Args: never; Returns: Json }
       cost_cutter_feedback: {
         Args: { p_finding: string; p_reason?: string; p_useful: boolean }
+        Returns: Json
+      }
+      cost_cutter_finding_set: {
+        Args: { p_id: string; p_status: string }
         Returns: Json
       }
       cost_cutter_heal: { Args: never; Returns: Json }
@@ -25863,6 +26876,10 @@ export type Database = {
       cost_cutter_scan: { Args: never; Returns: Json }
       cost_cutter_setting: {
         Args: { p_default: number; p_key: string }
+        Returns: number
+      }
+      cost_cutter_setting_set: {
+        Args: { p_key: string; p_value: number }
         Returns: number
       }
       crm_set_stage: {
@@ -25949,10 +26966,15 @@ export type Database = {
         Returns: boolean
       }
       demo_key_get: { Args: { p_pass?: string }; Returns: Json }
+      demo_key_guest_match: {
+        Args: { p_id: string; p_name: string }
+        Returns: number
+      }
       demo_key_guest_pending: { Args: never; Returns: boolean }
       demo_key_invites_watchdog: { Args: never; Returns: Json }
       demo_key_ok: { Args: { p_pass: string }; Returns: boolean }
       demo_key_orphans: { Args: never; Returns: string[] }
+      demo_key_release_guests: { Args: never; Returns: number }
       demo_key_sweep_orphans: { Args: never; Returns: number }
       demo_key_tap: { Args: { p_pass?: string }; Returns: Json }
       demo_key_tick: { Args: never; Returns: Json }
@@ -26343,6 +27365,7 @@ export type Database = {
       hunter_handoff: { Args: never; Returns: Json }
       hunter_insert_leads: { Args: { p: Json }; Returns: Json }
       hunter_jev_key_put: { Args: { p_value: string }; Returns: string }
+      hunter_jev_mail_watch: { Args: never; Returns: number }
       hunter_jev_status: { Args: never; Returns: Json }
       hunter_lead_set: {
         Args: { p_id: string; p_reason?: string; p_status: string }
@@ -26417,6 +27440,11 @@ export type Database = {
       item_feedback_hold: { Args: { p_item: string }; Returns: string }
       item_platforms: { Args: { p_item: string }; Returns: string[] }
       item_social_rows: { Args: { p_item: string }; Returns: Json }
+      job_finder_gate: { Args: never; Returns: Json }
+      job_finder_set: {
+        Args: { p_enabled?: boolean; p_max_per_tier?: number }
+        Returns: Json
+      }
       key_hold_watchdog: { Args: never; Returns: Json }
       key_lock_watchdog: { Args: never; Returns: Json }
       key_removal_ready: { Args: { p_res: number }; Returns: Json }
@@ -26625,6 +27653,7 @@ export type Database = {
         Args: { p_error?: string; p_ok: boolean; p_reservation: number }
         Returns: undefined
       }
+      lax_key_held: { Args: { p_reservation: number }; Returns: Json }
       lax_key_reconcile: { Args: { p_res: number }; Returns: string }
       lax_late_re: { Args: never; Returns: string }
       lax_learn_host_devices: { Args: never; Returns: number }
@@ -26709,7 +27738,63 @@ export type Database = {
       lax_trip_kind: { Args: { p_airport: string }; Returns: string }
       lax_trip_kind_for: { Args: { p_token: string }; Returns: string }
       lax_watchdog: { Args: never; Returns: Json }
+      leo_demo_car: {
+        Args: { p_args?: Json; p_link: string; p_name: string }
+        Returns: Json
+      }
+      leo_demo_open: { Args: never; Returns: Json }
+      leo_demo_open_set: { Args: { p_hours: number }; Returns: Json }
+      leo_demo_weather: {
+        Args: { p_link: string; p_weather: string }
+        Returns: Json
+      }
+      leo_early_return_answer: {
+        Args: { p_answer: string; p_conversation?: string; p_token: string }
+        Returns: Json
+      }
+      leo_early_return_demo_vars: { Args: { p_dry?: boolean }; Returns: Json }
+      leo_early_return_detect: { Args: { p_dry?: boolean }; Returns: Json }
+      leo_early_return_eval: {
+        Args: { p_now?: string }
+        Returns: {
+          ok: boolean
+          reservation_id: number
+          token: string
+          why: string
+        }[]
+      }
+      leo_early_return_match_sms: { Args: { p_phone: string }; Returns: Json }
+      leo_early_return_note: {
+        Args: { p_reservation_id: number }
+        Returns: undefined
+      }
+      leo_early_return_pending_call: {
+        Args: { p_phone: string }
+        Returns: Json
+      }
+      leo_early_return_vars: {
+        Args: { p_dry?: boolean; p_reservation_id: number }
+        Returns: Json
+      }
+      leo_early_return_watch: { Args: never; Returns: Json }
+      leo_er_home_m: { Args: { p_lat: number; p_lon: number }; Returns: number }
+      leo_er_m: {
+        Args: { a: number; b: number; c: number; d: number }
+        Returns: number
+      }
       leo_file_ticket: { Args: { p: Json }; Returns: Json }
+      leo_health_tick: { Args: never; Returns: Json }
+      leo_phone_caller: { Args: { p_caller: string }; Returns: Json }
+      leo_phone_init_token_ok: { Args: { p_token: string }; Returns: boolean }
+      leo_phone_secret: { Args: { p_name: string }; Returns: string }
+      leo_phone_watch_tick: { Args: never; Returns: number }
+      leo_sms_admin: { Args: never; Returns: Json }
+      leo_sms_blocked: { Args: { p_phone: string }; Returns: boolean }
+      leo_sms_ein_put: { Args: { p_ein: string }; Returns: string }
+      leo_sms_in_secret: { Args: { p_name: string }; Returns: string }
+      leo_sms_mode_set: { Args: { p_mode: string }; Returns: string }
+      leo_sms_secret: { Args: { p_name: string }; Returns: string }
+      leo_sms_tick: { Args: never; Returns: number }
       live_range: {
         Args: { _from?: string; _range?: string; _to?: string }
         Returns: {
@@ -26820,8 +27905,65 @@ export type Database = {
         Returns: string
       }
       mail_addr: { Args: { p: string }; Returns: string }
+      mail_ask_kind: {
+        Args: { p_body: string; p_subject: string; p_title: string }
+        Returns: string
+      }
       mail_body_is_empty: { Args: { p: string }; Returns: boolean }
+      mail_clean_title: { Args: { p: string }; Returns: string }
+      mail_draft_client: {
+        Args: { p_id: string; p_kind: string }
+        Returns: string
+      }
+      mail_draft_convert: {
+        Args: {
+          p_by: string
+          p_id: string
+          p_item: string
+          p_kind: string
+          p_state?: string
+          p_to: string
+        }
+        Returns: Json
+      }
+      mail_draft_refine: {
+        Args: {
+          p_id: string
+          p_item: string
+          p_kind: string
+          p_model: string
+          p_reason: string
+          p_route: string
+          p_title: string
+        }
+        Returns: Json
+      }
       mail_gap_check: { Args: never; Returns: number }
+      mail_pick_client: {
+        Args: { p_body: string; p_staff: string; p_subject: string }
+        Returns: {
+          client_id: string
+          why: string
+        }[]
+      }
+      mail_route_backlog: {
+        Args: never
+        Returns: {
+          client_id: string
+          created_at: string
+          id: string
+          kind: string
+        }[]
+      }
+      mail_route_idea: {
+        Args: { p_body: string; p_client: string; p_title: string }
+        Returns: Json
+      }
+      mail_route_mark: {
+        Args: { p_error?: string; p_id: string; p_kind: string }
+        Returns: undefined
+      }
+      mail_route_pending: { Args: { p_limit?: number }; Returns: Json }
       mail_sender_client: { Args: { p_from: string }; Returns: string }
       maint_admin: { Args: never; Returns: Json }
       maint_set: { Args: { p_action: string; p_data?: Json }; Returns: Json }
@@ -26882,6 +28024,21 @@ export type Database = {
             }
             Returns: string[]
           }
+      mercury_token_save: { Args: { p_value: string }; Returns: string }
+      mercury_token_status: { Args: never; Returns: Json }
+      mercury_token_t: { Args: { p_token: string }; Returns: string }
+      model_y_seen_list: { Args: { p_days?: number }; Returns: Json }
+      model_y_seen_prune: { Args: never; Returns: number }
+      model_y_seen_save: { Args: { p: Json }; Returns: Json }
+      model_y_set: {
+        Args: {
+          p_enabled?: boolean
+          p_max_price?: number
+          p_radius_mi?: number
+        }
+        Returns: Json
+      }
+      model_y_settings_get: { Args: never; Returns: Json }
       monitor_tick: { Args: never; Returns: Json }
       montage_claim: {
         Args: { p_worker: string }
@@ -27000,6 +28157,7 @@ export type Database = {
         Args: { o: Database["public"]["Tables"]["notify_outbox"]["Row"] }
         Returns: boolean
       }
+      notify_ledger_prune: { Args: never; Returns: number }
       notify_outbox_done: {
         Args: { p_error?: string; p_id: string; p_ok: boolean }
         Returns: undefined
@@ -27765,6 +28923,40 @@ export type Database = {
           score: number
         }[]
       }
+      rg_outreach_admin: { Args: never; Returns: Json }
+      rg_outreach_called: { Args: { p_id: string }; Returns: Json }
+      rg_outreach_draft_add: { Args: { p: Json }; Returns: string }
+      rg_outreach_draft_decide: {
+        Args: { p_action: string; p_id: string; p_note?: string }
+        Returns: Json
+      }
+      rg_outreach_event_add: {
+        Args: { p_kind: string; p_ledger_id: string; p_mail_id: string }
+        Returns: boolean
+      }
+      rg_outreach_ledger_status: {
+        Args: { p_id: string; p_note?: string; p_status: string }
+        Returns: string
+      }
+      rg_outreach_ledger_upsert: { Args: { p: Json }; Returns: string }
+      rg_outreach_mail_scan: { Args: { p_days?: number }; Returns: Json }
+      rg_outreach_mail_seen: {
+        Args: { p_domain: string; p_email?: string }
+        Returns: boolean
+      }
+      rg_outreach_review_decide: {
+        Args: { p_action: string; p_id: string }
+        Returns: Json
+      }
+      rg_outreach_set: {
+        Args: {
+          p_daily_cap?: number
+          p_enabled?: boolean
+          p_pending_cap?: number
+        }
+        Returns: Json
+      }
+      rg_outreach_state: { Args: never; Returns: Json }
       rg_pip_close: {
         Args: { p_note?: string; p_status: string }
         Returns: undefined
@@ -28699,6 +29891,52 @@ export type Database = {
         }
         Returns: Json
       }
+      studio_digest_compose_client: {
+        Args: { p_client: string }
+        Returns: Json
+      }
+      studio_digest_compose_staff: { Args: { p_staff: string }; Returns: Json }
+      studio_digest_preview: {
+        Args: { p_id: string; p_kind: string }
+        Returns: Json
+      }
+      studio_digest_row_client: {
+        Args: { o: Database["public"]["Tables"]["notify_outbox"]["Row"] }
+        Returns: string
+      }
+      studio_digest_run: {
+        Args: {
+          p_dry?: boolean
+          p_force?: boolean
+          p_id: string
+          p_kind: string
+        }
+        Returns: Json
+      }
+      studio_digest_tick: { Args: never; Returns: Json }
+      studio_digest_watch: { Args: never; Returns: Json }
+      studio_draft_drop: {
+        Args: { p_id: string; p_kind: string; p_token: string }
+        Returns: Json
+      }
+      studio_draft_move: {
+        Args: {
+          p_id: string
+          p_item?: string
+          p_kind: string
+          p_to: string
+          p_token: string
+        }
+        Returns: Json
+      }
+      studio_draft_send: {
+        Args: { p_id: string; p_kind: string; p_token: string }
+        Returns: Json
+      }
+      studio_draft_set_post: {
+        Args: { p_id: string; p_item: string; p_token: string }
+        Returns: Json
+      }
       studio_enroll_code: {
         Args: { p_hours?: number; p_staff_slug: string; p_token: string }
         Returns: Json
@@ -28839,6 +30077,10 @@ export type Database = {
         Returns: Json
       }
       studio_live_manifest: { Args: never; Returns: Json }
+      studio_mail_drafts: {
+        Args: { p_client_slug?: string; p_token: string }
+        Returns: Json
+      }
       studio_mail_key_ok: {
         Args: { p_key: string; p_name: string }
         Returns: boolean
@@ -29133,6 +30375,8 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      studio_route_tick: { Args: never; Returns: undefined }
+      studio_route_watch: { Args: never; Returns: Json }
       studio_rule_accept: {
         Args: {
           p_force?: boolean
@@ -29268,6 +30512,20 @@ export type Database = {
         Args: { p_limit?: number; p_room?: string; p_token: string }
         Returns: Json
       }
+      studio_talk_rollup: {
+        Args: { p_dry?: boolean; p_force?: boolean }
+        Returns: Json
+      }
+      studio_talk_rollup_rows: {
+        Args: never
+        Returns: {
+          client: string
+          cls: string
+          created_at: string
+          id: string
+          line: string
+        }[]
+      }
       studio_theme_from_guide: {
         Args: { p_slug: string; p_token: string }
         Returns: Json
@@ -29302,6 +30560,7 @@ export type Database = {
         Args: { p_id: string; p_kind: string; p_token: string }
         Returns: Json
       }
+      studio_try_uuid: { Args: { t: string }; Returns: string }
       studio_ui_contract_check: { Args: never; Returns: Json }
       studio_ui_contract_request: { Args: never; Returns: number }
       studio_unpromote: {
@@ -29395,6 +30654,7 @@ export type Database = {
       }
       talk_team_room: { Args: never; Returns: string }
       team_assign_jobs: { Args: { p: Json }; Returns: number }
+      team_beat_bridge: { Args: never; Returns: Json }
       team_discover: { Args: never; Returns: number }
       team_health: {
         Args: { p_at: string; p_ok: boolean; p_pulse: Json; p_status: string }
@@ -29562,6 +30822,7 @@ export type Database = {
       }
       tezlab_up: { Args: never; Returns: boolean }
       tezlab_watchdog: { Args: never; Returns: Json }
+      tmp_vault_put_macmini: { Args: { p_secret: string }; Returns: string }
       todo_call_context: { Args: { p_id: string }; Returns: Json }
       todo_check_claim: {
         Args: { p_n: number }
@@ -29701,6 +30962,7 @@ export type Database = {
       turo_email_ts: { Args: { p: string }; Returns: string }
       turo_enrich_from_mail: { Args: never; Returns: number }
       turo_guest_funnel: { Args: { p_days?: number }; Returns: Json }
+      turo_handoff_detect: { Args: never; Returns: Json }
       turo_handoff_tick: { Args: never; Returns: Json }
       turo_inbox_put: {
         Args: { p_items: Json; p_token: string }
@@ -29857,6 +31119,7 @@ export type Database = {
         Returns: Json
       }
       wall_clean_ledsign: { Args: { p: Json }; Returns: Json }
+      wall_clean_music: { Args: { p: Json }; Returns: Json }
       wall_clean_patch: { Args: { p: Json }; Returns: Json }
       wall_clean_r4admin: { Args: { p: Json }; Returns: Json }
       wall_clean_r4sky: { Args: { p: Json }; Returns: Json }
@@ -29960,6 +31223,7 @@ export type Database = {
         Args: { p_action: string; p_token: string; p_until?: number }
         Returns: Json
       }
+      wall_pi_car: { Args: { p_token: string }; Returns: Json }
       wall_pi_emojis: { Args: { p_token: string }; Returns: Json }
       wall_pi_feed_put: {
         Args: {
