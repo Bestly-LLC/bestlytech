@@ -254,7 +254,13 @@ export function PartnerHome({ session }: { session: Session }) {
       });
     }
   };
-  const signOut = () => supabase.auth.signOut();
+  // One tap never signs a partner out: the Sign out icon sits right next to the theme toggle on
+  // phones, and a stray tap used to end every session he had (scope "global"). Now it asks first,
+  // and signing out here only signs out this device. (2026-10-12, Eli kept landing on Face ID.)
+  const signOut = () => toast("Sign out of the portal?", {
+    description: "You'll need Face ID to get back in on this device.",
+    action: { label: "Sign out", onClick: () => { void supabase.auth.signOut({ scope: "local" }); } },
+  });
   const callUrl = partner?.call_url ?? "https://cloud.bestly.tech/call/sm33w3fu";
   // The next meeting on the calendar with Eli, if there is one; else his standing room.
   const joinUrl = nextMtg?.join_url ?? callUrl;
