@@ -274,6 +274,9 @@ Deno.serve(async () => {
           .eq("kind", "diag").ilike("detail->>what", "%agent-demo-audio%").gte("created_at", new Date(Date.now() - 3600_000).toISOString());
         const { count: formDiag } = await sb.from("maya_web_sessions").select("id", { count: "exact", head: true })
           .eq("kind", "diag").ilike("detail->>what", "%form-fill%").gte("created_at", new Date(Date.now() - 3600_000).toISOString());
+        const { count: lockedDiag } = await sb.from("maya_web_sessions").select("id", { count: "exact", head: true })
+          .eq("kind", "diag").ilike("detail->>what", "%audio_locked%").gte("created_at", new Date(Date.now() - 3600_000).toISOString());
+        if ((lockedDiag ?? 0) > 3) site.push(`${lockedDiag} times in the last hour a visitor's browser (Safari or iPhone) held my voice paused on bestly.tech, so they could see me but not hear me. Check the "Tap to hear Maya" button and src/lib/audioRescue.ts.`);
         if ((formDiag ?? 0) > 3) site.push(`${formDiag} times in the last hour I could not fill or send a visitor's form on bestly.tech (contact or get-started). Check those pages and the submit-contact function.`);
         if ((audioDiag ?? 0) > 0) site.push(`${audioDiag} visitor${audioDiag === 1 ? "" : "s"} could not play the Bestly Agent demo audio in the last hour, so the calls fell back to captions only. Check bestly.tech/agent-demo/ and re-run node tools/agent-demo-audio/build.mjs if a file is bad.`);
       } catch (e) {
