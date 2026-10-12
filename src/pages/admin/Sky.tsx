@@ -211,10 +211,17 @@ export default function Sky() {
   // Blue Steel: read the car's last position every 30 s (same table the Turo page reads). Heading = the way it last moved
   // (>= 50 ft between two readings); none yet = nose up. Hidden when the reading is older than 30 min.
   const [car, setCar] = useState<Car | null>(null);
+  // Cars + Car names switches live in Wall > Sky details and govern this map too (Jared 2026-10-12).
+  const [carSw, setCarSw] = useState<{ cars: boolean; names: boolean }>({ cars: true, names: true });
   const carFix = useRef<{ lat: number; lon: number; hd: number | null } | null>(null);
   useEffect(() => {
     let dead = false;
     const get = async () => {
+      try {
+        const w = await (supabase.rpc as unknown as (fn: string) => Promise<{ data: { state?: { skyCars?: boolean; skyCarLabels?: boolean } } | null }>)("wall_admin_get");
+        const st = w?.data?.state;
+        if (!dead && st) setCarSw({ cars: st.skyCars !== false, names: st.skyCarLabels !== false });
+      } catch { /* keep the last switches */ }
       try {
         const { data } = await supabase.from("turo_vehicle_state" as never)
           .select("display_name, latitude, longitude, observed_at, shift:raw->fleet_api->>shift, speed:raw->fleet_api->>speed_mph").limit(1).maybeSingle();
@@ -521,11 +528,11 @@ export default function Sky() {
           )}
 
           {/* Blue Steel (marker A): shows only while it is inside the map and its reading is under 30 min old */}
-          {car && (() => {
+          {car && carSw.cars && (() => {
             const fresh = Date.now() - car.at < CAR_STALE_MS;
             const cm = toMi(car.lat, car.lon, home);
             const label = car.shift != null && /^[DR]$/i.test(car.shift) && car.mph != null ? `${car.name} · ${Math.round(car.mph)}${NB}mph` : car.name;
-            const cs = Math.max(0.8, u * 0.62), fsz = 12 * u, tw = label.length * fsz * 0.62 + fsz * 1.6, th = fsz * 1.75;
+            const cs = Math.max(0.8, u * 0.62), fsz = 12 * u, tw = carSw.names ? label.length * fsz * 0.62 + fsz * 1.6 : 0, th = carSw.names ? fsz * 1.75 : 0;
             let cx = X(cm.x), cy = Y(cm.y);
             let inside = fresh && Math.hypot(cm.x, cm.y) <= radius * 1.04;
             if (homeShown) {
@@ -558,10 +565,10 @@ export default function Sky() {
                   <path d="M-8,-20 Q-4,-22 -2,-21.5 M8,-20 Q4,-22 2,-21.5" stroke="#EAF2FF" strokeWidth="1.2" fill="none" strokeLinecap="round" />
                   <path d="M-8,21 L-3,22 M8,21 L3,22" stroke="#E5484D" strokeWidth="1.4" fill="none" strokeLinecap="round" />
                 </g>
-                <g transform={`rotate(${-mapUp}) translate(0 ${28 * cs + th / 2})`}>
+                {carSw.names && <g transform={`rotate(${-mapUp}) translate(0 ${28 * cs + th / 2})`}>
                   <rect x={-tw / 2} y={-th / 2} width={tw} height={th} rx={th / 2} fill="#13213A" stroke="#5B8FC9" strokeWidth={0.5} />
                   <text x={0} y={fsz * 0.36} textAnchor="middle" fontSize={fsz} fontWeight={700} style={{ fill: "#DCE7F5", fontSize: fsz, fontWeight: 700, whiteSpace: "pre" }}>{label}</text>
-                </g>
+                </g>}
               </g>
             );
           })()}

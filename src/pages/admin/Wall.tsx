@@ -68,7 +68,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; airLabels?: boolean; airLabelsSmall?: boolean; airCard?: boolean; airCardHeli?: boolean; airCardPin?: boolean; leftDate?: boolean; radio?: WallRadio; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; skyCars?: boolean; skyCarLabels?: boolean; airLabels?: boolean; airLabelsSmall?: boolean; airCard?: boolean; airCardHeli?: boolean; airCardPin?: boolean; leftDate?: boolean; radio?: WallRadio; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
   alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
   heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; tripDismiss?: { id: string; at: number } | null; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   /** W1 round 3 (sky): Space Station name tag, home marker, sky radius in miles (2-25), live LAX tower audio. */
@@ -1044,10 +1044,19 @@ export default function Wall() {
                   onCheckedChange={(v) => act(v ? { atc: true, ...(s.radio?.on ? { radio: { ...s.radio, on: false, ts: Date.now() } } : {}) } : { atc: false },
                     v ? "LAX tower is playing on the Desk HomePod." : "Air traffic control off.")} />
               </Row>
-              <DisclosureRow id="sky-details" label="Sky details" summary="Plane card, labels, home, space station, stars, moon, sun, planets, key">
+              <DisclosureRow id="sky-details" label="Sky details" summary="Plane card, labels, home, cars, space station, stars, moon, sun, planets, key">
                 {s.airShow !== false && <>
                   <Row label="Home marker" detail="A small house where you are, in the middle of the sky map." htmlFor="wall-sky-home">
                     <Switch className={swHit} id="wall-sky-home" checked={s.skyHome !== false} onCheckedChange={(v) => change({ skyHome: v })} />
+                  </Row>
+                  <Row label="Cars" detail="Your Turo cars at their current spot, when they're inside the sky map. New cars show up here too." htmlFor="wall-sky-cars">
+                    <Switch className={swHit} id="wall-sky-cars" checked={s.skyCars !== false}
+                      onCheckedChange={(v) => act({ skyCars: v }, v ? "Cars on the sky map." : "Cars hidden from the sky map.")} />
+                  </Row>
+                  <Row label="Car names" htmlFor="wall-sky-car-labels" dim={s.skyCars === false}
+                    detail={s.skyCars === false ? "Turn on Cars to use this." : "The name tag under each car, like Blue Steel."}>
+                    <Switch className={swHit} id="wall-sky-car-labels" disabled={s.skyCars === false} checked={s.skyCarLabels !== false}
+                      onCheckedChange={(v) => change({ skyCarLabels: v })} />
                   </Row>
                   <Row label="Landmarks" detail="City labels, the downtown skyline, and the LAX runways on the sky map." htmlFor="wall-sky-landmarks">
                     <Switch className={swHit} id="wall-sky-landmarks" checked={s.skyLandmarks !== false} onCheckedChange={(v) => change({ skyLandmarks: v })} />
