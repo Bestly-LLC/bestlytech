@@ -68,8 +68,11 @@ end $$;
 grant execute on function public.leo_health_tick() to service_role;
 
 -- ---------- cron + team card ----------
-do $g$ begin perform cron.unschedule(jobid) from cron.job where jobname = 'leo-early-return'; end $g$;
-select cron.schedule('leo-early-return', '*/10 * * * *', $c$select public.leo_early_return_detect()$c$);
+do $g$ begin
+  if not exists (select 1 from cron.job where jobname = 'leo-early-return') then
+    perform cron.schedule('leo-early-return', '*/10 * * * *', $c$select public.leo_early_return_detect()$c$);
+  end if;
+end $g$;
 
 -- Update Leo's existing card (same slug): add the new job to his pulse and what he does.
 select public.team_onboard($j$[
