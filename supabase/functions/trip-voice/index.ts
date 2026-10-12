@@ -215,7 +215,7 @@ async function carTool(name: string, token: string, b: Any): Promise<Any> {
     if (!r?.ok) return { ok: false, say: String(r?.error ?? "That didn't work on the demo car.") };
     const c = (r.car ?? {}) as Any;
     switch (name) {
-      case "car_status": return { ok: true, demo: true, say: `Demo car: ${c.battery}% with about ${c.range_mi} miles, ${c.inside_f}°F inside, ${c.locked ? "locked" : "unlocked"}.`, card: carCard(c, true) };
+      case "car_status": return { ok: true, demo: true, say: `The demo car's battery is at ${c.battery}%, about ${c.range_mi} miles of range. It's ${c.inside_f}°F inside and the car is ${c.locked ? "locked" : "unlocked"}.`, card: carCard(c, true) };
       case "car_climate": {
         const m = String(c.climate_on ? c.climate_mode : "off");
         return { ok: true, demo: true, say: m === "off" ? "Climate is off on the demo car." : `${PRESET[m]?.label ?? "Done"} on the demo car. It turns off by itself after 20 minutes.`,
@@ -252,7 +252,7 @@ async function carTool(name: string, token: string, b: Any): Promise<Any> {
     case "car_status": {
       const c = pub.car as Any | null;
       if (!c) return { ok: false, say: closedLine };
-      return { ok: true, say: `${c.battery}% with about ${c.range_real ?? c.range} miles. It's ${c.inside_f}°F inside and ${c.locked ? "locked" : "unlocked"}.`, card: carCard(c, false) };
+      return { ok: true, say: `The battery is at ${c.battery}%, about ${c.range_real ?? c.range} miles of range. It's ${c.inside_f}°F inside and the car is ${c.locked ? "locked" : "unlocked"}.`, card: carCard(c, false) };
     }
     case "car_climate": {
       const m = climateMode(action, b.target_temp_f);
