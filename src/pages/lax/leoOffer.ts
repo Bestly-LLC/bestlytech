@@ -27,8 +27,8 @@ export function leoOffer(c: OfferCtx): { offer: LeoOffer; line: string; mtp: num
     ? r("key_status", "Your phone key shows up here after Jared checks your license. Want me to check on it?")
     : r("reminder_email", "Your phone key shows up here after Jared checks your license. Want an email when it's ready?");
   if (k === "ready") return r("key", "Your phone key is ready. Want me to pull it up?");
-  // Climate turns off after 20 min: only offer within 30 min of pickup or later, and only when controls are on.
-  if (ctlOn && !c.climateOn && mtp != null && mtp <= 30 && (mtp >= -15 || (c.insideF ?? 0) >= 78) && (mtr == null || mtr > 30))
+  // Same window as the page's climate buttons: offer cooling only while controls are on (about an hour before pickup, never days ahead).
+  if (ctlOn && !c.climateOn && mtp != null && (mtp >= -15 || (c.insideF ?? 0) >= 78) && (mtr == null || mtr > 30))
     return r("cool", (c.insideF ?? 0) >= 78 ? `It's ${Math.round(c.insideF!)}°F in the car. Want me to cool it to 68°F before you get in?` : "Want me to start the A/C so it's cool when you get in?");
   if (c.startsAt && (mtp! > 0 || c.tab === "pickup"))
     return r("pickup_guide", mtp! > 0 ? `Pickup is ${day(c.startsAt, now)} at ${t12(c.startsAt)}. Want me to show you how to find the car?` : "Want step-by-step help finding the car?");
