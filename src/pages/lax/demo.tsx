@@ -133,6 +133,10 @@ export function demoWeather(): DemoWeather {
   try { const w = sessionStorage.getItem("demo-weather"); if (w === "hot" || w === "cold" || w === "nice") return w; } catch { /* ignore */ }
   return "hot";
 }
+/** Tell Leo's pretend car (server side) the demo weather, so his car status and climate offers match the page. */
+export function syncDemoWeather(kind: "home" | "lax", w: DemoWeather) {
+  void supabase.functions.invoke("trip-voice", { body: { op: "demo_weather", token: `demo-${kind}`, weather: w } }).catch(() => { /* demo only */ });
+}
 export function useDemoWeather(): [DemoWeather, (w: DemoWeather) => void] {
   const [w, setW] = useState<DemoWeather>(demoWeather);
   return [w, (x) => { try { sessionStorage.setItem("demo-weather", x); } catch { /* ignore */ } setW(x); }];
