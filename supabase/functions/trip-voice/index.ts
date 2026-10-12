@@ -385,6 +385,8 @@ const SENDER_FN = { lax: { fn: "wallet-pass", body: { op: "remind_due" } }, home
 async function reminderEmail(token: string, conv: string | null, b: Any, channel = "page"): Promise<Any> {
   const action = clip(b.action, 12).toLowerCase();
   if (!["set", "send_now", "status"].includes(action)) return { ok: false, say: "I can save an email, send the reminder now, or check what's saved." };
+  // Caller ID can be faked and the reminder email carries the trip page link (key access): by phone an email is never added or changed.
+  if (channel === "phone" && action === "set") return { ok: false, say: "For your security I can't add an email by phone. You can add it on your trip page's Reminder email card, from the link in your Turo message." };
   const demo = token.startsWith("demo:");
   const log = (a: string) => sb.from("leo_reminder_log").insert({ token, action: a, conversation_id: conv }).then(() => {}, () => {});
 
@@ -429,8 +431,6 @@ async function reminderEmail(token: string, conv: string | null, b: Any, channel
   }
 
   if (action === "set") {
-    // Caller ID can be faked: by phone an email can only be added when none is on file, never replaced.
-    if (channel === "phone" && link.email) return { ok: false, say: "There's already an email on file for this trip. To change it, use the Reminder email card on your trip page, or message your host in the Turo app." };
     const e = cleanSpokenEmail(b.email);
     if (!EMAIL_RE.test(e) || e.length > 200) return { ok: false, say: "That email doesn't look right. Can you spell it again?" };
     if (ended) return { ok: false, say: "This trip is over, so I can't set up a reminder." };
@@ -692,6 +692,9 @@ async function selftest(): Promise<Any> {
     if (rSet.ok !== true) bad.push("reminder_email set");
     const rSt = await reminderEmail(demoTok, null, { action: "status" });
     if (rSt.ok !== true || rSt.on_file !== true) bad.push("reminder_email status");
+    // by phone, "set" must always be refused (caller ID can be spoofed).
+    const rPh = await reminderEmail(demoTok, null, { action: "set", email: "leo-selftest@example.com" }, "phone");
+    if (rPh.ok !== false) bad.push("PHONE REMINDER SET NOT REFUSED");
     return bad;
   };
   let bad: string[] = [];
