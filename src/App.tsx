@@ -292,6 +292,7 @@ const App = () => {
                   <Route path="cost-cutter" element={<CostCutter />} />
                   <Route path="skytouch" element={<SkyTouch />} />
                   <Route path="turo/lax-pass" element={<LaxPassRedirect />} />
+                  <Route path="lax" element={<LaxPassRedirect />} />
                   <Route path="turo/settings" element={<LaxPass />} />
                   <Route path="playbook" element={<AdminPlaybook />} />
                   <Route path="skills" element={<AdminSkills />} />
