@@ -383,7 +383,9 @@ const DRIVER_CHIPS = ["My key link doesn't work", "I accepted, but the car isn't
 /** The trip's stage and key state, so Leo can open with what fits (see leoGreeting in LeoWidget and leoOffer.ts). */
 export type TripContext = { stage: "pickup" | "return" | null; keyState?: string | null; keyLink?: string | null;
   first?: string | null; startsAt?: string | null; endsAt?: string | null; ended?: boolean; controlsState?: string | null;
-  insideF?: number | null; climateOn?: boolean | null; hasEmail?: boolean; linkDown?: import("./leoOffer").LinkDownReason | null };
+  insideF?: number | null; climateOn?: boolean | null; hasEmail?: boolean; linkDown?: import("./leoOffer").LinkDownReason | null;
+  /** LAX only: the lobby door QR code, so Leo can show it right in his chat. */
+  qr?: { state: "ready" | "soon" | "done"; payload?: string | null; thru?: string | null } | null };
 
 export function AskSheet({ open, onClose, token, slug, home = false, driver = false, context }: { open: boolean; onClose: () => void; token?: string; slug?: string; home?: boolean; driver?: boolean; context?: TripContext }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
