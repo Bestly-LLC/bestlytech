@@ -14,6 +14,9 @@
  * him and shows that spot's planes, traffic and weather (°F, mph); tap again to go back home. The switches only change
  * this map (saved in this browser), never the projector. Roads and traffic are TomTom tiles through the sky-area edge
  * function (key in Vault); planes away from home and the weather come from sky-area too.
+ *
+ * 2026-10-11 (Jared): Blue Steel, the Model 3, shows as a top-down car (marker A) when it is inside the map and its reading is
+ * under 30 min old. Parked = "Blue Steel"; in D or R = "Blue Steel · 34 mph". Same rule as the wall (wall.html, /api/car).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -89,6 +92,9 @@ const x2lon = (x: number, z: number) => (x / 2 ** z) * 360 - 180;
 const y2lat = (y: number, z: number) => { const n = Math.PI - (2 * Math.PI * y) / 2 ** z; return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))); };
 type Tile = { k: string; layer: "roads" | "traffic"; z: number; x: number; y: number };
 type Here = { lat: number; lon: number; acc: number | null };
+type Car = { name: string; lat: number; lon: number; at: number; shift: string | null; mph: number | null; hd: number | null };
+const CAR_STALE_MS = 30 * 60_000;
+const feetBetween = (a: [number, number], b: [number, number]) => Math.hypot((b[0] - a[0]) * 364000, (b[1] - a[1]) * 364000 * Math.cos((a[0] * Math.PI) / 180));
 type Cond = { place: string | null; weather: { temp_f: number; feels_f: number; wind_mph: number; wind_from: string; sky: string; is_day: boolean; rain_pct: number | null } | null };
 const LAYERS_KEY = "bestly.sky.layers";
 const FN = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sky-area`;
@@ -201,6 +207,35 @@ export default function Sky() {
     document.addEventListener("visibilitychange", vis);
     return () => { window.clearInterval(t); document.removeEventListener("visibilitychange", vis); };
   }, [pull]);
+
+  // Blue Steel: read the car's last position every 30 s (same table the Turo page reads). Heading = the way it last moved
+  // (>= 50 ft between two readings); none yet = nose up. Hidden when the reading is older than 30 min.
+  const [car, setCar] = useState<Car | null>(null);
+  const carFix = useRef<{ lat: number; lon: number; hd: number | null } | null>(null);
+  useEffect(() => {
+    let dead = false;
+    const get = async () => {
+      try {
+        const { data } = await supabase.from("turo_vehicle_state" as never)
+          .select("display_name, latitude, longitude, observed_at, shift:raw->fleet_api->>shift, speed:raw->fleet_api->>speed_mph").limit(1).maybeSingle();
+        const r = data as unknown as { display_name: string | null; latitude: number | null; longitude: number | null; observed_at: string | null; shift: string | null; speed: string | null } | null;
+        if (dead) return;
+        if (!r || r.latitude == null || r.longitude == null || !r.observed_at) { setCar(null); return; }
+        const lat = Number(r.latitude), lon = Number(r.longitude);
+        const fx = carFix.current;
+        if (!fx) carFix.current = { lat, lon, hd: null };
+        else if (feetBetween([fx.lat, fx.lon], [lat, lon]) >= 50) {
+          const dn = lat - fx.lat, de = (lon - fx.lon) * Math.cos((lat * Math.PI) / 180);
+          carFix.current = { lat, lon, hd: (Math.atan2(de, dn) * 180 / Math.PI + 360) % 360 };
+        }
+        const mph = r.speed != null && r.speed !== "" && Number.isFinite(Number(r.speed)) ? Number(r.speed) : null;
+        setCar({ name: r.display_name || "Blue Steel", lat, lon, at: new Date(r.observed_at).getTime(), shift: r.shift, mph, hd: carFix.current?.hd ?? null });
+      } catch { /* keep the last reading; it goes stale on its own */ }
+    };
+    void get();
+    const t = window.setInterval(() => void get(), 30_000);
+    return () => { dead = true; window.clearInterval(t); };
+  }, []);
 
   // Re-center: a new spot starts clean (no planes gliding in from the old center).
   useEffect(() => {
@@ -434,6 +469,7 @@ export default function Sky() {
             <clipPath id="sky-clip"><circle cx={500} cy={500} r={radius * S * 1.04} /></clipPath>
             <radialGradient id="sky-you" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#0A84FF" stopOpacity=".45" /><stop offset="100%" stopColor="#0A84FF" stopOpacity="0" /></radialGradient>
             <radialGradient id="sky-home" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#64D2FF" stopOpacity=".35" /><stop offset="100%" stopColor="#64D2FF" stopOpacity="0" /></radialGradient>
+            <radialGradient id="sky-car" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#5B8FC9" stopOpacity=".55" /><stop offset="55%" stopColor="#5B8FC9" stopOpacity=".18" /><stop offset="100%" stopColor="#5B8FC9" stopOpacity="0" /></radialGradient>
           </defs>
           {STARS.map((s, n) => <circle key={n} cx={s.x * 1000} cy={s.y * 1000} r={s.s} fill="#fff" opacity={s.o} />)}
           {rings.map((r) => (
@@ -483,6 +519,39 @@ export default function Sky() {
               <text x={500} y={500 + 24 * u} textAnchor="middle" fill="#fff" fontSize={11 * u} fontWeight={700} letterSpacing={1.5} transform={`rotate(${-mapUp} 500 ${500 + 24 * u})`}>YOU</text>
             </g>
           )}
+
+          {/* Blue Steel (marker A): shows only while it is inside the map and its reading is under 30 min old */}
+          {car && (() => {
+            const fresh = Date.now() - car.at < CAR_STALE_MS;
+            const cm = toMi(car.lat, car.lon, home);
+            let cx = X(cm.x), cy = Y(cm.y);
+            // on top of Home (or within 150 ft of it): sit beside the Home label instead
+            const nearHome = homeShown && (feetBetween(HOME, [car.lat, car.lon]) <= 150 || Math.hypot(cx - X(homeMi.x), cy - Y(homeMi.y)) < 44 * u);
+            if (nearHome) {
+              const m = (mapUp * Math.PI) / 180, off = 46 * u;
+              cx = X(homeMi.x) + off * Math.cos(m); cy = Y(homeMi.y) - off * Math.sin(m);
+            }
+            const inside = fresh && (nearHome || Math.hypot(cm.x, cm.y) <= radius * 1.04);
+            const drive = car.shift != null && /^[DR]$/i.test(car.shift) && car.mph != null;
+            const label = drive ? `${car.name} · ${Math.round(car.mph as number)}${NB}mph` : car.name;
+            const cs = Math.max(0.8, u * 0.62), fsz = 12 * u, tw = label.length * fsz * 0.62 + fsz * 1.6, th = fsz * 1.75;
+            return (
+              <g style={{ opacity: inside ? 1 : 0, transition: "opacity .6s ease, transform 1.5s linear", transform: `translate(${cx}px, ${cy}px)`, pointerEvents: "none" }} aria-hidden={!inside}>
+                <circle r={46 * cs} fill="url(#sky-car)" />
+                <g transform={`rotate(${car.hd ?? -mapUp}) scale(${cs})`}>
+                  <path d="M0,-23 C8,-23 11,-19 11,-12 L11,15 C11,21 7,23 0,23 C-7,23 -11,21 -11,15 L-11,-12 C-11,-19 -8,-23 0,-23Z" fill="#5B8FC9" />
+                  <path d="M0,-12 C6,-12 8,-10 8,-6 L8,9 C8,12 5,14 0,14 C-5,14 -8,12 -8,9 L-8,-6 C-8,-10 -6,-12 0,-12Z" fill="#16243C" />
+                  <ellipse cx="12.5" cy="-8" rx="2" ry="1.4" fill="#5B8FC9" /><ellipse cx="-12.5" cy="-8" rx="2" ry="1.4" fill="#5B8FC9" />
+                  <path d="M-8,-20 Q-4,-22 -2,-21.5 M8,-20 Q4,-22 2,-21.5" stroke="#EAF2FF" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+                  <path d="M-8,21 L-3,22 M8,21 L3,22" stroke="#E5484D" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+                </g>
+                <g transform={`rotate(${-mapUp}) translate(0 ${28 * cs + th / 2})`}>
+                  <rect x={-tw / 2} y={-th / 2} width={tw} height={th} rx={th / 2} fill="#13213A" stroke="#5B8FC9" strokeWidth={0.5} />
+                  <text x={0} y={fsz * 0.36} textAnchor="middle" fontSize={fsz} fontWeight={700} style={{ fill: "#DCE7F5", fontSize: fsz, fontWeight: 700, whiteSpace: "pre" }}>{label}</text>
+                </g>
+              </g>
+            );
+          })()}
 
           {/* planes — all rotated to account for mapUp so aircraft face their true direction of travel */}
           {inView.map(({ a, d, i }) => {
