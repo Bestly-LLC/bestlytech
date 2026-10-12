@@ -35,6 +35,9 @@ interface ContactRequest {
   conversation_id?: string;
 }
 
+// Call Guard (2026-10-12): the exact line shown above Send on /contact. Keep it identical to CALL_CONSENT_TEXT in src/lib/callConsent.ts.
+const CALL_CONSENT_TEXT = "By sending, you agree Bestly may call or text you about your request, including with an AI assistant. Consent isn't required to buy anything.";
+
 const MAX_LENGTHS = { name: 100, email: 255, category: 50, subject: 200, message: 5000, phone: 40, conversation_id: 80 };
 
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -114,11 +117,21 @@ serve(async (req: Request) => {
           : null,
     };
 
-    const { error: insertError } = await supabase.from("contact_submissions").insert(clean);
+    const { data: saved, error: insertError } = await supabase.from("contact_submissions").insert(clean).select("id").single();
 
     if (insertError) {
       console.error("Insert error:", insertError);
       throw new Error("Failed to save submission");
+    }
+
+    // Call Guard: a visitor who typed a phone number and pressed Send saw the consent line above the button. Keep the proof
+    // (number, exact words, when). Not for forms Maya filled in, because there the visitor did not press Send themselves.
+    // The submission is already saved, so a failure here never fails the visitor's send.
+    if (clean.phone && clean.source === "web") {
+      const { error: consentError } = await supabase.from("call_consents").insert({
+        phone: clean.phone, seller: "bestly", source: "contact_form", consent_text: CALL_CONSENT_TEXT, form_ref: `contact_submissions:${saved?.id ?? ""}`,
+      });
+      if (consentError) console.error("Consent record error:", consentError);
     }
 
     // A sales question is also one sales_lead ticket on Maya's desk (the Sales column and the hot-lead alert), made

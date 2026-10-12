@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Button } from "@/components/ui/button";
+import { CallConsentNote } from "@/components/CallConsentNote";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -686,6 +687,7 @@ export default function GetStarted() {
               </div>
 
               <div className="pt-2">
+                <CallConsentNote className="mb-3" />
                 <Button
                   type="submit"
                   size="lg"

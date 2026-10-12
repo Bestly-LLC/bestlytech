@@ -18,6 +18,9 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
 
 const ADMIN_CLICK_URL = "https://bestly.tech/admin";
 
+// Call Guard (2026-10-12): the exact line shown above the submit button on /get-started. Keep it identical to CALL_CONSENT_TEXT in src/lib/callConsent.ts.
+const CALL_CONSENT_TEXT = "By sending, you agree Bestly may call or text you about your request, including with an AI assistant. Consent isn't required to buy anything.";
+
 const USER_BAND = ["5", "25", "50", "100", "200+"] as const;
 const PAIN = ["cost", "sovereignty", "brand", "ai-privacy", "lock-in", "other"] as const;
 const URGENCY = ["renewal-30", "renewal-90", "renewal-180", "exploring"] as const;
@@ -132,6 +135,15 @@ Deno.serve(async (req) => {
   if (leadErr || !leadRow) {
     console.error("insert lead error", leadErr);
     return bad("could not save lead", 500);
+  }
+
+  // Call Guard: they typed a phone number and pressed the button under the consent line. Keep the proof (number, exact words, when).
+  // The lead is already saved, so a failure here never fails the send.
+  if (insert.contact_phone) {
+    const { error: consentErr } = await sb.from("call_consents").insert({
+      phone: insert.contact_phone, seller: "bestly", source: "get_started", consent_text: CALL_CONSENT_TEXT, form_ref: `cloud_leads:${leadRow.id}`,
+    });
+    if (consentErr) console.error("consent record error", consentErr);
   }
 
   // Read back the brief shell that the trigger created

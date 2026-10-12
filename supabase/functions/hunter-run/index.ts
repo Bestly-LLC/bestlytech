@@ -74,10 +74,13 @@ const TYPES: Record<string, { label: string; naics: string[]; base: number }> = 
   clinic: { label: "small clinic", naics: ["621111", "621210", "621310", "621320"], base: 50 },
 };
 
+// 2026-10-11: home services ran 1 to 2 of 7 a day because OSM only tagged four trades were searched. Same free source, wider list of trades.
+const HOME_CRAFTS = ["plumber", "hvac", "electrician", "roofer", "carpenter", "painter", "plasterer", "tiler", "glaziery", "gardener", "locksmith", "handyman", "floorer", "insulation", "window_construction", "garage_door"];
+
 function osmType(t: Record<string, string>): string | null {
   if (t.shop === "car_repair") return "auto_repair";
   if (t.shop === "hairdresser" || t.shop === "beauty") return "salon";
-  if (["plumber", "hvac", "electrician", "roofer"].includes(t.craft)) return "home_services";
+  if (HOME_CRAFTS.includes(t.craft)) return "home_services";
   if (["clinic", "dentist", "doctors"].includes(t.amenity)) return "clinic";
   if (["doctor", "dentist", "clinic", "chiropractor", "physiotherapist", "optometrist", "alternative"].includes(t.healthcare)) return "clinic";
   return null;
@@ -272,7 +275,7 @@ async function osmQuery(tile: number): Promise<string> {
   const [s, w] = TILES[tile % TILES.length];
   const bb = `${s.toFixed(2)},${w.toFixed(2)},${(s + STEP).toFixed(2)},${(w + STEP).toFixed(2)}`;
   // four regex-value clauses on an indexed key are far cheaper for Overpass than sixteen exact ones (those timed out with 504)
-  const sel = ['"shop"~"^(car_repair|hairdresser|beauty)$"', '"craft"~"^(plumber|hvac|electrician|roofer)$"', '"amenity"~"^(clinic|dentist|doctors)$"',
+  const sel = ['"shop"~"^(car_repair|hairdresser|beauty)$"', `"craft"~"^(${HOME_CRAFTS.join("|")})$"`, '"amenity"~"^(clinic|dentist|doctors)$"',
     '"healthcare"~"^(doctor|dentist|clinic|chiropractor|physiotherapist|optometrist)$"'];
   return `[out:json][timeout:50];(${sel.map((x) => `nwr[${x}]["name"](${bb});`).join("")});out tags center 600;`;
 }
@@ -649,7 +652,16 @@ async function opCheck(body: { limit?: number; max_lookups?: number }) {
   const { data: rows } = await db.from("maya_leads").select("id, phone, campaign_slug")
     .eq("status", "new").eq("line_type", "unverified").not("fit_checked_at", "is", null).gte("fit_score", st.min_fit)
     .not("phone", "is", null).order("fit_score", { ascending: false }).limit(n);
-  const queue = [...(rows ?? [])] as Array<{ id: string; phone: string; campaign_slug: string | null }>;
+  const queue = [...(rows ?? [])] as Array<{ id: string; phone: string; campaign_slug: string | null; recheck?: boolean }>;
+  // Call Guard (2026-10-12): a line type older than 90 days is stale and the gate will not dial it, because numbers get ported
+  // to cell phones. Re-look-up landline/voip leads at 80 days, with whatever room the daily cap has left after the new ones.
+  if (queue.length < n) {
+    const staleBefore = new Date(Date.now() - 80 * 86400_000).toISOString();
+    const { data: stale } = await db.from("maya_leads").select("id, phone, campaign_slug")
+      .in("status", ["checked", "queued"]).in("line_type", ["landline", "voip"]).not("phone", "is", null)
+      .lt("line_type_checked_at", staleBefore).order("line_type_checked_at", { ascending: true }).limit(n - queue.length);
+    for (const r of (stale ?? []) as Array<{ id: string; phone: string; campaign_slug: string | null }>) queue.push({ ...r, recheck: true });
+  }
   const stats: Record<string, Counts> = {};
   const tally: Record<string, number> = {};
   let fatal: string | null = null;
@@ -664,6 +676,15 @@ async function opCheck(body: { limit?: number; max_lookups?: number }) {
       const type = MAP[String(j.data?.carrier?.type ?? "unknown").toLowerCase()] ?? "unknown";
       tally[type] = (tally[type] ?? 0) + 1;
       const reason = type === "landline" ? null : type === "mobile" ? "mobile (email only)" : type === "voip" ? "voip (not queued)" : "line type unknown";
+      if (r.recheck) {
+        // Same lead, fresher answer. Still a landline: just stamp the new date. Anything else: out of the call queue (status checked, reason saved).
+        await db.from("maya_leads").update(type === "landline"
+          ? { line_type: type, line_type_checked_at: new Date().toISOString() }
+          : { line_type: type, line_type_checked_at: new Date().toISOString(), status: "checked", reject_reason: reason }).eq("id", r.id);
+        tally[`recheck_${type}`] = (tally[`recheck_${type}`] ?? 0) + 1;
+        (stats[r.campaign_slug ?? ""] ??= zero()).checked += 1;   // counts against the daily lookup cap
+        continue;
+      }
       await db.from("maya_leads").update({ line_type: type, line_type_checked_at: new Date().toISOString(), status: "checked", reject_reason: reason }).eq("id", r.id);
       const s = (stats[r.campaign_slug ?? ""] ??= zero());
       s.checked += 1; if (reason) s.rejected += 1;
