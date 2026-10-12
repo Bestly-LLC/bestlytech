@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-11T21:51:14.848Z",
+ "generated_at": "2026-10-12T02:03:55.429Z",
  "source": "https://www.bestly.tech",
  "pages": [
   {
@@ -347,7 +347,7 @@
     {
      "heading": "Service Status",
      "label": "Live system health",
-     "text": "Real-time system health and community statisticsAll Systems OperationalLast checked 2:50:09 PM620Total Patterns372Domains Covered17%Success Rate35Active Today207High Confidence Patterns4.7/10Avg. Confidence Score+108New Domains (7 days)Updates every 60 seconds • Community-driven data"
+     "text": "Real-time system health and community statisticsAll Systems OperationalLast checked 7:03:08 PM623Total Patterns374Domains Covered19.7%Success Rate36Active Today209High Confidence Patterns4.7/10Avg. Confidence Score+111New Domains (7 days)Updates every 60 seconds • Community-driven data"
     },
     {
      "heading": "Need Help?",
@@ -729,9 +729,9 @@
    "name": "Bestly Agent",
    "sections": [
     {
-     "heading": "An AI that answers your business phone.",
+     "heading": "An AI receptionist that answers your phone and does the work.",
      "label": "Bestly Agent",
-     "text": "It picks up every call, day or night, talks like a real person, and does the work while it talks: books the appointment, updates your software, and texts the confirmation.Watch a call Talk to Maya liveOr call Maya: (213) 641-0074MayaLedgerly · AI agentOn a callThanks for calling Ledgerly support, this is Maya. Who do I have the pleasure of helping today?Hey, it's Dan Ortiz from Ortiz Landscaping. I think you guys charged me twice this month.Found the account and the duplicate chargeA sample call"
+     "text": "She picks up every call, day or night, and sounds like a real person. Then she does the job. She books the appointment in your calendar, adds the caller to your customer list, and texts them a confirmation before they hang up.Watch a call Talk to Maya liveOr call Maya: (213) 641-0074MayaLedgerly · AI agentOn a callThanks for calling Ledgerly support, this is Maya. Who do I have the pleasure of helping today?Hey, it's Dan Ortiz from Ortiz Landscaping. I think you guys charged me twice this month."
     },
     {
      "heading": "Watch Maya take a call",
@@ -740,24 +740,102 @@
     },
     {
      "heading": "Like a great receptionist who also knows your software.",
-     "label": "What it does",
+     "label": "What she does",
      "text": ""
     },
     {
      "heading": "Answers every call",
-     "text": "Day or night. No hold music, no voicemail. Every caller talks to someone right away."
+     "text": "Day or night, weekends and holidays. Nobody waits on hold. Nobody gets voicemail."
     },
     {
-     "heading": "Does the work",
-     "text": "Books the appointment, issues the refund, sends the technician. She does it in the software you already use."
+     "heading": "Does the work, not just the talking",
+     "text": "She books, reschedules, looks up orders and sends a technician, right inside your own software."
     },
     {
      "heading": "Texts and emails for you",
-     "text": "Confirmations, forms and links go out while she is still on the phone with them."
+     "text": "Confirmations, forms and payment links go out while she is still on the call."
     },
     {
-     "heading": "Hands you the hot ones",
-     "text": "When a call needs a person, she alerts you or transfers it. Nothing important gets lost.Any industry"
+     "heading": "Gets you when it matters",
+     "text": "If a caller needs a person, she transfers the call or sends you an alert with the details.Not just a chatbot"
+    },
+    {
+     "heading": "She works inside the apps you already use.",
+     "label": "Not just a chatbot",
+     "text": "Most answering services take a message and leave the rest to you. We connect Maya to your tools, so she finishes the job while the caller is still on the phone.Not on the list? We build new connections fast, usually the same day.120+ apps, plus thousands more through Zapier.Does it work with your software?AllCalendars and bookingCustomer lists and sales (CRM)Help desksPayments and invoicesHome services and field crewsDental, medical and wellness front desksRestaurants and hospitalityReal estateP"
+    },
+    {
+     "heading": "Calendars and booking",
+     "text": "Books, moves and cancels appointments in open times only.Google CalendarOutlook and Microsoft 365Apple iCloud CalendarCalendlyCal.comAcuity SchedulingSquare AppointmentsBooksyVagaroMindbodyFreshaSimplyBook.meShow all 12"
+    },
+    {
+     "heading": "Customer lists and sales (CRM)",
+     "text": "Adds new callers, finds returning ones, and writes a note about every call.HubSpotSalesforcePipedriveZoho CRMmonday.comCloseCopperKeapGoHighLevelFreshsalesActiveCampaignAirtableShow all 12"
+    },
+    {
+     "heading": "Help desks",
+     "text": "Looks up the order or account and fixes the problem, or opens a ticket for your team.ZendeskIntercomFreshdeskHelp ScoutGorgiasServiceNowFrontJira Service ManagementZoho DeskShow all 9"
+    },
+    {
+     "heading": "Payments and invoices",
+     "text": "Texts a secure payment link, looks up an invoice, and can give a refund up to a limit you set.StripeSquarePayPalQuickBooksXeroFreshBooksWaveAuthorize.netChargebeeShow all 9"
+    },
+    {
+     "heading": "Home services and field crews",
+     "text": "Creates the job and sends the right person to the right address.JobberHousecall ProServiceTitanFieldEdgeWorkizService FusionServiceM8KickservShow all 8"
+    },
+    {
+     "heading": "Dental, medical and wellness front desks",
+     "text": "Books the visit in an open slot and texts the new-patient forms.DentrixEaglesoftOpen DentalathenahealthDrChronoJane AppSimplePracticeWeaveShow all 8"
+    },
+    {
+     "heading": "Restaurants and hospitality",
+     "text": "Finds a table, flags allergies and special occasions, and texts a confirmation.OpenTableResyTockSevenRoomsToastCloverSquare for RestaurantsYelp Guest ManagerShow all 8"
+    },
+    {
+     "heading": "Real estate",
+     "text": "Asks the right questions, adds the lead to your list, and books the showing.Follow Up BosskvCORELoftyBoomTownSierra InteractiveShowingTimeZillow Premier AgentdotloopShow all 8"
+    },
+    {
+     "heading": "Property management",
+     "text": "Takes maintenance requests, answers tenant questions, and books showings.AppFolioBuildiumYardiRent ManagerDoorLoop"
+    },
+    {
+     "heading": "Law offices",
+     "text": "Takes the first call, writes up the details, and books the consultation.ClioMyCasePracticePantherSmokeball"
+    },
+    {
+     "heading": "Auto shops",
+     "text": "Books the repair, checks on a job, and tells the customer when the car is ready.TekmetricShopmonkeyMitchell 1AutoLeap"
+    },
+    {
+     "heading": "Online stores",
+     "text": "Looks up an order, answers where a package is, and starts a return.ShopifyWooCommerceBigCommerceSquarespaceWixEtsyAmazon Seller CentralShipStationShow all 8"
+    },
+    {
+     "heading": "Phones and messaging",
+     "text": "Answers on your own number and follows up by text or WhatsApp.Your current phone numberTwilioTelnyxRingCentralVonageDialpadGrasshopperGoogle VoiceWhatsAppText messages (SMS)Show all 10"
+    },
+    {
+     "heading": "Email and team chat",
+     "text": "Sends the follow-up email and pings your team the moment a call needs a person.GmailOutlookSlackMicrosoft TeamsMailchimpKlaviyo"
+    },
+    {
+     "heading": "Files, docs and signatures",
+     "text": "Saves call notes, fills in your sheets, and sends contracts to sign.Google DriveGoogle SheetsExcelDropboxOneDriveNotionDocuSignBestly CloudShow all 8"
+    },
+    {
+     "heading": "Automations (connects thousands more)",
+     "text": "Reaches thousands more apps through these tools, or straight through your own API.ZapierMaken8nWebhooksAny app with an APIWe set up every connection for you. She only gets access to what her job needs, and nothing else.Everywhere your customers are"
+    },
+    {
+     "heading": "One agent for calls, texts, chat and email.",
+     "label": "Everywhere your customers are",
+     "text": "Customers reach you in different ways. The same agent, with the same know-how, answers all of them.Phone callsText messagesWebsite chatEmailWhatsApp"
+    },
+    {
+     "heading": "Speaks 90+ languages.",
+     "text": "A caller can start in Spanish, Korean, Chinese or Tagalog. She answers in their language, and you still get the summary in English.Any industry"
     },
     {
      "heading": "Works for any business that gets phone calls.",
@@ -765,33 +843,43 @@
      "text": "Pick one to watch that call play out above.Software supportFixes a double charge and adds a teammate to the account.Watch this call Dental officeBooks an after-hours emergency visit and texts the new-patient forms.Watch this call Home servicesCalms a burst-pipe call and sends the on-call plumber.Watch this call Real estateQualifies a buyer and books a Saturday showing.Watch this call RestaurantFinds a table, flags an allergy for the kitchen, and texts a confirmation.Watch this call YoursTell May"
     },
     {
-     "heading": "How it works",
-     "label": "Three steps",
+     "heading": "We set it all up for you.",
+     "label": "How it works",
      "text": "1"
     },
     {
-     "heading": "We learn your business",
+     "heading": "Tell us how your business works",
      "label": "1",
-     "text": "Your hours, prices, policies and the questions people always ask. She answers from that, in your voice.2"
+     "text": "Your hours, prices, rules and the questions people always ask. You decide what she can and can't do.2"
     },
     {
-     "heading": "Connect your phone and tools",
+     "heading": "We connect your phone and apps",
      "label": "2",
-     "text": "You keep your phone number. We connect your calendar, customer list or help desk so she can do the work.3"
+     "text": "You keep your phone number. We hook up your calendar, customer list and anything else she needs.3"
     },
     {
-     "heading": "Read every call",
+     "heading": "We test her before she goes live",
      "label": "3",
-     "text": "Each call comes with a short summary of what happened, and you can listen back to the recording.Live"
+     "text": "We run practice calls, tricky ones included, until she handles them the way you would.4"
+    },
+    {
+     "heading": "You see every call",
+     "label": "4",
+     "text": "Each call comes with a short summary and the recording. See how many calls she took and what she booked.Questions"
+    },
+    {
+     "heading": "What people ask us first.",
+     "label": "Questions",
+     "text": "Does it work with my software?Almost certainly. We already connect to 120+ apps, and the list above is only a start. If yours isn't there, we build the connection for you.How fast can you connect something new?Usually the same day. We test every new connection before she uses it on a real call.Is she just a chatbot?No. A chatbot only talks. Maya talks and does the work: she books, looks things up, updates records and sends messages in your own apps.I already have a receptionist.Keep them. Maya c"
     },
     {
      "heading": "Try her right now.",
      "label": "Live",
-     "text": "Maya is a Bestly Agent. Talk to her the way your customers would. Talk to MayaCall (213) 641-0074"
+     "text": "Maya is a Bestly Agent. Ask her anything, or pretend you are one of your own customers. Talk to MayaCall (213) 641-0074"
     },
     {
      "heading": "Get your own agent.",
-     "text": "Tell us about your business and your phone line. We will show you what she would do on your calls.Get your own agent"
+     "text": "Tell us about your business. We set up your agent, connect your apps and test her, and you keep your phone number. If it is not a fit, we will tell you.Get your own agent"
     }
    ]
   },
@@ -1065,7 +1153,7 @@
    "sections": [
     {
      "heading": "Marketplace Account Setup",
-     "text": "Complete this form to get your seller accounts set up professionally.ID: 1a18ffebStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review"
+     "text": "Complete this form to get your seller accounts set up professionally.ID: 1b16d27bStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review"
     },
     {
      "heading": "Before You Begin",
@@ -1083,7 +1171,7 @@
    "sections": [
     {
      "heading": "Contact Us",
-     "text": "Drop us a line. We'll get back to you within 2-3 business days.Name *Email *Category *Select a categoryApp SupportPlatform PartnersRetail / DistributionHardware / Device SupportPrivacy InquiryGeneral InquirySubject *Message *Send Message"
+     "text": "Drop us a line. We'll get back to you within 2-3 business days.Name *Email *Phone (optional)Category *Select a categorySales / Book a demoApp SupportPlatform PartnersRetail / DistributionHardware / Device SupportPrivacy InquiryGeneral InquirySubject *Message *Send Message"
     },
     {
      "heading": "Email Contacts",

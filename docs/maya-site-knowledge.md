@@ -229,7 +229,7 @@ $7.99/yrSave 33%Unlimited sitesTracking cookie cleaningSaved preferencesPriority
 Cookie Yeti shows you exactly how much time you're saving12Today87This Week1,234All TimeAnonymous, non-personal stats — never tied to you or the pages you visitLive system health
 
 ### Service Status (Live system health)
-Real-time system health and community statisticsAll Systems OperationalLast checked 2:50:09 PM620Total Patterns372Domains Covered17%Success Rate35Active Today207High Confidence Patterns4.7/10Avg. Confidence Score+108New Domains (7 days)Updates every 60 seconds • Community-driven data
+Real-time system health and community statisticsAll Systems OperationalLast checked 7:03:08 PM623Total Patterns374Domains Covered19.7%Success Rate36Active Today209High Confidence Patterns4.7/10Avg. Confidence Score+111New Domains (7 days)Updates every 60 seconds • Community-driven data
 
 ### Need Help?
 (heading only)
@@ -483,47 +483,110 @@ Tell us about your business. We will tell you what we would post and how it woul
 
 ## Bestly Agent (/agent)
 
-### An AI that answers your business phone. (Bestly Agent)
-It picks up every call, day or night, talks like a real person, and does the work while it talks: books the appointment, updates your software, and texts the confirmation.Watch a call Talk to Maya liveOr call Maya: (213) 641-0074MayaLedgerly · AI agentOn a callThanks for calling Ledgerly support, this is Maya. Who do I have the pleasure of helping today?Hey, it's Dan Ortiz from Ortiz Landscaping. I think you guys charged me twice this month.Found the account and the duplicate chargeA sample call with a made-up business.Sample calls
+### An AI receptionist that answers your phone and does the work. (Bestly Agent)
+She picks up every call, day or night, and sounds like a real person. Then she does the job. She books the appointment in your calendar, adds the caller to your customer list, and texts them a confirmation before they hang up.Watch a call Talk to Maya liveOr call Maya: (213) 641-0074MayaLedgerly · AI agentOn a callThanks for calling Ledgerly support, this is Maya. Who do I have the pleasure of helping today?Hey, it's Dan Ortiz from Ortiz Landscaping. I think you guys charged me twice this month.Found the account and the duplicate chargeA sample call with a made-up business.Sample calls
 
 ### Watch Maya take a call (Sample calls)
-Pick a kind of business and press play. On one side, the call. On the other, the software Maya updates while she talks.Software supportDental officeHome servicesReal estateRestaurant2:14 PM. A customer thinks he was charged twice.Maya AI agentLedgerlyReady(555) 014-2290CallerPress play. The call shows up here as it happens, and the software on the right changes while Maya talks.A sample Ledgerly Support window, with made-up data. It updates as the call goes on. The transcript lists everything Maya does.Ledgerly Support — InboxLedgerly SupportFileEditViewWindowBestly Agent connected2:14 PMLedgerlyInbox12CustomersBillingReportsSettingsInbox12 openMaria Alvarez1:52 PMCan't export invoices to CS
+Pick a kind of business and press play. On one side, the call. On the other, the software Maya updates while she talks.Software supportDental officeHome servicesReal estateRestaurant2:14 PM. A customer thinks he was charged twice.Maya AI agentLedgerlyReady(555) 014-2290CallerPress play. The call shows up here as it happens, and the software on the right changes while Maya talks.A sample Ledgerly Support window, with made-up data. It updates as the call goes on. The transcript lists everything Maya does.Ledgerly Support2:14 PMLedgerlyInbox12CustomersBillingReportsSettingsBestly AgentConnectedInbox12 openMaria Alvarez1:52 PMCan't export invoices to CSVTom Nguyen1:31 PMDoes the Team plan includ
 
-### Like a great receptionist who also knows your software. (What it does)
+### Like a great receptionist who also knows your software. (What she does)
 (heading only)
 
 ### Answers every call
-Day or night. No hold music, no voicemail. Every caller talks to someone right away.
+Day or night, weekends and holidays. Nobody waits on hold. Nobody gets voicemail.
 
-### Does the work
-Books the appointment, issues the refund, sends the technician. She does it in the software you already use.
+### Does the work, not just the talking
+She books, reschedules, looks up orders and sends a technician, right inside your own software.
 
 ### Texts and emails for you
-Confirmations, forms and links go out while she is still on the phone with them.
+Confirmations, forms and payment links go out while she is still on the call.
 
-### Hands you the hot ones
-When a call needs a person, she alerts you or transfers it. Nothing important gets lost.Any industry
+### Gets you when it matters
+If a caller needs a person, she transfers the call or sends you an alert with the details.Not just a chatbot
+
+### She works inside the apps you already use. (Not just a chatbot)
+Most answering services take a message and leave the rest to you. We connect Maya to your tools, so she finishes the job while the caller is still on the phone.Not on the list? We build new connections fast, usually the same day.120+ apps, plus thousands more through Zapier.Does it work with your software?AllCalendars and bookingCustomer lists and sales (CRM)Help desksPayments and invoicesHome services and field crewsDental, medical and wellness front desksRestaurants and hospitalityReal estateProperty managementLaw officesAuto shopsOnline storesPhones and messagingEmail and team chatFiles, docs and signaturesAutomations (connects thousands more)
+
+### Calendars and booking
+Books, moves and cancels appointments in open times only.Google CalendarOutlook and Microsoft 365Apple iCloud CalendarCalendlyCal.comAcuity SchedulingSquare AppointmentsBooksyVagaroMindbodyFreshaSimplyBook.meShow all 12
+
+### Customer lists and sales (CRM)
+Adds new callers, finds returning ones, and writes a note about every call.HubSpotSalesforcePipedriveZoho CRMmonday.comCloseCopperKeapGoHighLevelFreshsalesActiveCampaignAirtableShow all 12
+
+### Help desks
+Looks up the order or account and fixes the problem, or opens a ticket for your team.ZendeskIntercomFreshdeskHelp ScoutGorgiasServiceNowFrontJira Service ManagementZoho DeskShow all 9
+
+### Payments and invoices
+Texts a secure payment link, looks up an invoice, and can give a refund up to a limit you set.StripeSquarePayPalQuickBooksXeroFreshBooksWaveAuthorize.netChargebeeShow all 9
+
+### Home services and field crews
+Creates the job and sends the right person to the right address.JobberHousecall ProServiceTitanFieldEdgeWorkizService FusionServiceM8KickservShow all 8
+
+### Dental, medical and wellness front desks
+Books the visit in an open slot and texts the new-patient forms.DentrixEaglesoftOpen DentalathenahealthDrChronoJane AppSimplePracticeWeaveShow all 8
+
+### Restaurants and hospitality
+Finds a table, flags allergies and special occasions, and texts a confirmation.OpenTableResyTockSevenRoomsToastCloverSquare for RestaurantsYelp Guest ManagerShow all 8
+
+### Real estate
+Asks the right questions, adds the lead to your list, and books the showing.Follow Up BosskvCORELoftyBoomTownSierra InteractiveShowingTimeZillow Premier AgentdotloopShow all 8
+
+### Property management
+Takes maintenance requests, answers tenant questions, and books showings.AppFolioBuildiumYardiRent ManagerDoorLoop
+
+### Law offices
+Takes the first call, writes up the details, and books the consultation.ClioMyCasePracticePantherSmokeball
+
+### Auto shops
+Books the repair, checks on a job, and tells the customer when the car is ready.TekmetricShopmonkeyMitchell 1AutoLeap
+
+### Online stores
+Looks up an order, answers where a package is, and starts a return.ShopifyWooCommerceBigCommerceSquarespaceWixEtsyAmazon Seller CentralShipStationShow all 8
+
+### Phones and messaging
+Answers on your own number and follows up by text or WhatsApp.Your current phone numberTwilioTelnyxRingCentralVonageDialpadGrasshopperGoogle VoiceWhatsAppText messages (SMS)Show all 10
+
+### Email and team chat
+Sends the follow-up email and pings your team the moment a call needs a person.GmailOutlookSlackMicrosoft TeamsMailchimpKlaviyo
+
+### Files, docs and signatures
+Saves call notes, fills in your sheets, and sends contracts to sign.Google DriveGoogle SheetsExcelDropboxOneDriveNotionDocuSignBestly CloudShow all 8
+
+### Automations (connects thousands more)
+Reaches thousands more apps through these tools, or straight through your own API.ZapierMaken8nWebhooksAny app with an APIWe set up every connection for you. She only gets access to what her job needs, and nothing else.Everywhere your customers are
+
+### One agent for calls, texts, chat and email. (Everywhere your customers are)
+Customers reach you in different ways. The same agent, with the same know-how, answers all of them.Phone callsText messagesWebsite chatEmailWhatsApp
+
+### Speaks 90+ languages.
+A caller can start in Spanish, Korean, Chinese or Tagalog. She answers in their language, and you still get the summary in English.Any industry
 
 ### Works for any business that gets phone calls. (Any industry)
-Pick one to watch that call play out above.Software supportFixes a double charge and adds a teammate to the account.Watch this call Dental officeBooks an after-hours emergency visit and texts the new-patient forms.Watch this call Home servicesCalms a burst-pipe call and sends the on-call plumber.Watch this call Real estateQualifies a buyer and books a Saturday showing.Watch this call RestaurantFinds a table, flags an allergy for the kitchen, and texts a confirmation.Watch this call YoursTell Maya what you do and she’ll show you how it would work.Talk to Maya Three steps
+Pick one to watch that call play out above.Software supportFixes a double charge and adds a teammate to the account.Watch this call Dental officeBooks an after-hours emergency visit and texts the new-patient forms.Watch this call Home servicesCalms a burst-pipe call and sends the on-call plumber.Watch this call Real estateQualifies a buyer and books a Saturday showing.Watch this call RestaurantFinds a table, flags an allergy for the kitchen, and texts a confirmation.Watch this call YoursTell Maya what you do and she’ll show you how it would work.Talk to Maya How it works
 
-### How it works (Three steps)
+### We set it all up for you. (How it works)
 1
 
-### We learn your business (1)
-Your hours, prices, policies and the questions people always ask. She answers from that, in your voice.2
+### Tell us how your business works (1)
+Your hours, prices, rules and the questions people always ask. You decide what she can and can't do.2
 
-### Connect your phone and tools (2)
-You keep your phone number. We connect your calendar, customer list or help desk so she can do the work.3
+### We connect your phone and apps (2)
+You keep your phone number. We hook up your calendar, customer list and anything else she needs.3
 
-### Read every call (3)
-Each call comes with a short summary of what happened, and you can listen back to the recording.Live
+### We test her before she goes live (3)
+We run practice calls, tricky ones included, until she handles them the way you would.4
+
+### You see every call (4)
+Each call comes with a short summary and the recording. See how many calls she took and what she booked.Questions
+
+### What people ask us first. (Questions)
+Does it work with my software?Almost certainly. We already connect to 120+ apps, and the list above is only a start. If yours isn't there, we build the connection for you.How fast can you connect something new?Usually the same day. We test every new connection before she uses it on a real call.Is she just a chatbot?No. A chatbot only talks. Maya talks and does the work: she books, looks things up, updates records and sends messages in your own apps.I already have a receptionist.Keep them. Maya covers nights, weekends, lunch breaks and busy times, so no call ever goes to voicemail.We're small. Is this for us?Yes. Small businesses miss the most calls, because nobody is free to pick up. A misse
 
 ### Try her right now. (Live)
-Maya is a Bestly Agent. Talk to her the way your customers would. Talk to MayaCall (213) 641-0074
+Maya is a Bestly Agent. Ask her anything, or pretend you are one of your own customers. Talk to MayaCall (213) 641-0074
 
 ### Get your own agent.
-Tell us about your business and your phone line. We will show you what she would do on your calls.Get your own agent
+Tell us about your business. We set up your agent, connect your apps and test her, and you keep your phone number. If it is not a fit, we will tell you.Get your own agent
 
 ## NeckPilot (/neckpilot)
 
@@ -708,7 +771,7 @@ Let's discuss how Apple-native infrastructure can transform your business operat
 ## Marketplace setup service (/marketplace-setup)
 
 ### Marketplace Account Setup
-Complete this form to get your seller accounts set up professionally.ID: 1a18ffebStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review
+Complete this form to get your seller accounts set up professionally.ID: 1b16d27bStep 1 of 6 — 0% complete1Readiness2Business3Owner4Bank5Brand & Accounts6Review
 
 ### Before You Begin
 Select the platforms you'd like to set up, then review what you'll need. This form takes about 15-20 minutes.Which platforms are you setting up? *AmazonSell on Amazon Seller CentralShopifyLaunch your own Shopify storeTikTok ShopSell directly on TikTokDon't have all of these yet? No problem — you can save your progress and come back anytime.
@@ -719,7 +782,7 @@ Your Name *Who should we contact about this setup?Your Email *Your Phone *Prefer
 ## Contact page (/contact)
 
 ### Contact Us
-Drop us a line. We'll get back to you within 2-3 business days.Name *Email *Category *Select a categoryApp SupportPlatform PartnersRetail / DistributionHardware / Device SupportPrivacy InquiryGeneral InquirySubject *Message *Send Message
+Drop us a line. We'll get back to you within 2-3 business days.Name *Email *Phone (optional)Category *Select a categorySales / Book a demoApp SupportPlatform PartnersRetail / DistributionHardware / Device SupportPrivacy InquiryGeneral InquirySubject *Message *Send Message
 
 ### Email Contacts
 General Supportsupport@bestly.techPrivacy Inquiriesprivacy@bestly.tech
