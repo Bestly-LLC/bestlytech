@@ -2,18 +2,20 @@
  * /g/:token — the host's one-page confirm screen for a guest's key (opened from the Turo pick-up Live Activity).
  * Apple HIG: large title, grouped rows with clear status, one primary action at a time, 50pt targets, safe areas, light/dark.
  * The token is per trip and unguessable; it only flips the two host confirmations (license, check-in) for that trip.
+ * Below the buttons: a link to the Turo trip photos and one to the guest trip page (/t/<trip_token>), carrying the host pass (?dk=) along.
  */
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Check, ExternalLink, Loader2, ShieldCheck } from "lucide-react";
+import { Car, Check, ExternalLink, Loader2, ShieldCheck } from "lucide-react";
 
 const API = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/trip-gate";
-type S = { reservation_id: number; first: string; starts_at: string; kind: string; license_ok: boolean; checkin_ok: boolean; released: boolean };
+type S = { reservation_id: number; first: string; starts_at: string; kind: string; license_ok: boolean; checkin_ok: boolean; released: boolean; trip_token?: string | null };
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 export default function HostGate() {
   const { token = "" } = useParams();
+  const dk = new URLSearchParams(window.location.search).get("dk");
   const [s, setS] = useState<S | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState("");
@@ -64,7 +66,10 @@ export default function HostGate() {
             {!s.license_ok && <Btn d="license">License looks good</Btn>}
             {!s.checkin_ok && <Btn d="checkin">Check-in done, release key</Btn>}
           </div>
-          <a href={`https://turo.com/us/en/reservation/${s.reservation_id}`} className="mt-3 inline-flex min-h-[44px] items-center gap-1.5 px-1 text-[15px] font-medium text-[#007aff] dark:text-[#0a84ff]">Check the trip photos in Turo <ExternalLink className="h-4 w-4" /></a>
+          <div className="mt-3 flex flex-col items-start">
+            <a href={`https://turo.com/us/en/reservation/${s.reservation_id}`} className="inline-flex min-h-[44px] items-center gap-1.5 px-1 text-[15px] font-medium text-[#007aff] dark:text-[#0a84ff]">Check the trip photos in Turo <ExternalLink className="h-4 w-4" /></a>
+            {s.trip_token && <a href={`/t/${s.trip_token}${dk ? `?dk=${encodeURIComponent(dk)}` : ""}`} className="inline-flex min-h-[44px] items-center gap-1.5 px-1 text-[15px] font-medium text-[#007aff] dark:text-[#0a84ff]">Open trip page <Car className="h-4 w-4" /></a>}
+          </div>
           <div className="mt-2">{s.license_ok && <Btn d="undo_license" ghost>Undo license</Btn>}{s.checkin_ok && <Btn d="undo_checkin" ghost>Undo check-in</Btn>}</div>
         </>)}
       </main>
