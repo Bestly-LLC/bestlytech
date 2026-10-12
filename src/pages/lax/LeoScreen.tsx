@@ -31,7 +31,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TripContext } from "./AskSheet";
 import { LeoMiniPill, LeoOrb, THEME, loadLeoSdk, takeLeoMode, type LeoMini, type LeoTheme } from "./LeoWidget";
 import { leoOpening } from "./leoOffer";
-import { audioLocked, audioState, playStreamPlayers, resumeAllAudio } from "./audioRescue";
+import { audioLocked, audioState, playStreamPlayers, resumeAllAudio } from "@/lib/audioRescue";
 import { track } from "./track";
 import { MINIMIZE, askPage, emitLeoCar, useLeoDid } from "./leoBridge";
 import { lockScroll } from "./TripSheet";

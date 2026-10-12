@@ -14,10 +14,10 @@
 import { useEffect, useState } from "react";
 import { Loader2, Maximize2, MessageCircle, Phone } from "lucide-react";
 import type { TripContext } from "./AskSheet";
-import { installAudioRescue } from "./audioRescue";
+import { installAudioRescue } from "@/lib/audioRescue";
 import { leoOpening } from "./leoOffer";
 
-// Before the SDK can load: track its audio contexts so a stuck (silent) one resumes on the next tap. See audioRescue.ts.
+// Before the SDK can load: track its audio contexts so a stuck (silent) one resumes on the next tap. See src/lib/audioRescue.ts.
 installAudioRescue();
 
 /** Leo's opening line: says who he is, then offers the one thing that fits this moment of the trip (see leoOffer.ts). */

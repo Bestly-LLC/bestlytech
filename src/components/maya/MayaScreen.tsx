@@ -19,12 +19,40 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowUp, ChevronDown, Loader2, Mic, MicOff, PhoneOff, Presentation, Sparkles, X } from "lucide-react";
+import { AlertCircle, ArrowUp, ChevronDown, Loader2, Mic, MicOff, PhoneOff, Presentation, Sparkles, Volume2, X } from "lucide-react";
 import { mayaProductForPath, normalizePath } from "./siteTools";
 import { findHeading, presenterTools, spotlight } from "./presenter";
 import { getMayaSession, mayaDiag } from "./mayaSession";
 import { CALC_CHANGED } from "@/components/cloud/calcBridge";
 import { FORM_CHANGED, setMayaConversationId } from "./formBridge";
+import { audioLocked, audioState, installAudioRescue, playStreamPlayers, resumeAllAudio } from "@/lib/audioRescue";
+
+// Before the SDK can load: track its audio contexts and unlock them on the next tap. Safari refuses the SDK's
+// stream <audio>.play() if it runs before the mic is live, so Maya's voice stayed silent. See src/lib/audioRescue.ts.
+installAudioRescue();
+
+/** Browser family for the audio_locked diag (the server also stores the full user agent). */
+function uaFamily(): string {
+  const ua = navigator.userAgent;
+  const ios = /iPhone|iPad|iPod/.test(ua);
+  if (/Edg\//.test(ua)) return "edge";
+  if (/Firefox|FxiOS/.test(ua)) return "firefox";
+  if (/Chrome|CriOS/.test(ua)) return ios ? "chrome-ios" : "chrome";
+  if (/Safari/.test(ua)) return ios ? "safari-ios" : "safari-mac";
+  return "other";
+}
+
+/** What the stream player and audio contexts look like right now, as diag strings. */
+function playerDiag(): Record<string, string> {
+  const a = Array.from(document.querySelectorAll("audio")).filter((x) => x.srcObject instanceof MediaStream);
+  const st = audioState();
+  return {
+    paused: a.map((x) => String(x.paused)).join(",") || "none",
+    readyState: a.map((x) => String(x.readyState)).join(",") || "none",
+    contexts: st.contexts,
+    browser: uaFamily(),
+  };
+}
 
 type Any = Record<string, unknown>;
 type Item = { id: number; kind: "maya" | "you"; text: string } | { id: number; kind: "note"; text: string };
@@ -82,6 +110,8 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
   const [working, setWorking] = useState<string | null>(null);
   const [showing, setShowing] = useState<{ label: string; page: string } | null>(null);
   const [mini, setMini] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const lockLogged = useRef(false);
   const [text, setText] = useState("");
   const conv = useRef<Conv | null>(null);
   const starting = useRef<Promise<Conv | null> | null>(null);
@@ -110,6 +140,7 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
     if (conv.current) return conv.current;
     if (starting.current) return starting.current;
     setPhase("connecting");
+    lockLogged.current = false;
     starting.current = (async () => {
       try {
         const [{ Conversation }, s] = await Promise.all([loadMayaSdk(), getMayaSession(pathRef.current)]);
@@ -127,6 +158,7 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
           clientTools: tools,
           onConnect: () => {
             setPhase("live");
+            if (withVoice) playStreamPlayers(); // mic is live, so Safari lets her player start (see audioRescue.ts)
             try { setMayaConversationId(c.getId()); } catch { /* id not ready: the lead is just not linked to the call */ }
             if (history && items.length > 1) try { c.sendContextualUpdate(`Earlier in this chat:\n${history}`); } catch { /* ignore */ }
           },
@@ -143,6 +175,7 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
           onError: (msg: string) => mayaDiag("sdk", { msg: String(msg).slice(0, 300) }),
         } as never) as Conv;
         conv.current = c;
+        if (withVoice) playStreamPlayers(); // right after startSession: the mic is capturing now
         setVoice(withVoice);
         return c;
       } catch (e) {
@@ -168,6 +201,7 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
   }, []);
 
   const send = useCallback(async (raw?: string) => {
+    resumeAllAudio(); // inside the tap
     const t = (raw ?? text).trim();
     if (!t) return;
     setText("");
@@ -178,10 +212,24 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
   }, [text, push, start]);
 
   const toggleMic = useCallback(async () => {
+    resumeAllAudio(); // inside the tap, before any await
     if (voice) { const m = !muted; setMuted(m); try { conv.current?.setMicMuted(m); } catch { /* ignore */ } return; }
     if (conv.current) { const c = conv.current; conv.current = null; try { await c.endSession(); } catch { /* ignore */ } }
     await start(true);
   }, [voice, muted, start]);
+
+  // While a voice call is live, keep checking that Maya can be heard. If Safari paused her audio, show the tap button
+  // and log it once per call (maya-watch alerts when this happens a lot).
+  useEffect(() => {
+    if (!voice || phase !== "live") { setLocked(false); return; }
+    const id = window.setInterval(() => {
+      if (!audioLocked()) { setLocked(false); return; }
+      playStreamPlayers();
+      setLocked(true);
+      if (!lockLogged.current) { lockLogged.current = true; mayaDiag("audio_locked", { msg: "live call, Maya's audio paused", ...playerDiag() }); }
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [voice, phase]);
 
   // She hears where the visitor is when they move around on their own.
   const lastPath = useRef(pathname);
@@ -307,7 +355,7 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
           {chips.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-2" aria-label="Suggestions">
               {chips.map((c) => (
-                <button key={c} type="button" onClick={() => void send(c)}
+                <button key={c} type="button" onClick={() => { resumeAllAudio(); void send(c); }}
                   className="min-h-[44px] rounded-full bg-white/[0.08] px-4 text-[15px] font-medium ring-1 ring-white/15 transition-transform duration-100 active:scale-95 motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">{c}</button>
               ))}
             </div>
@@ -317,6 +365,13 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
       </div>
 
       <footer className="relative px-4 pb-4 pt-2">
+        {locked && (
+          <button type="button" onClick={() => { resumeAllAudio(); window.setTimeout(() => { if (!audioLocked()) setLocked(false); }, 300); }}
+            className="mb-2 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full bg-[#8E9BFF] px-5 text-[16px] font-bold text-[#0E1030] transition-transform duration-100 active:scale-[0.98] motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+            style={{ boxShadow: "0 0 36px 2px #8E9BFF66, 0 0 12px 0 #E59CFF40" }}>
+            <Volume2 className="h-5 w-5 shrink-0" aria-hidden /><span className="whitespace-nowrap">Tap to hear Maya</span>
+          </button>
+        )}
         {voice && phase === "live" && (
           <div className="mb-2 flex items-center gap-2 rounded-2xl bg-white/[0.06] p-2 pl-3 ring-1 ring-white/10">
             <span className="flex-1 text-[15px] font-medium">{speaking ? "Maya is talking" : muted ? "You're muted" : "Listening, go ahead"}</span>
