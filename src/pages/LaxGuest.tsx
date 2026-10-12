@@ -634,7 +634,7 @@ export default function LaxGuest() {
 
             </>}
 
-            <TripSheet open={sheet === "pickup"} onClose={() => openSheet(null)} kicker="Your key → plane → garage" title="Pickup at LAX">
+            <TripSheet which="pickup" open={sheet === "pickup"} onClose={() => openSheet(null)} kicker="Your key → plane → garage" title="Pickup at LAX">
               <div className="grid grid-cols-2 gap-2">
                 <Fact label="Garage"><a href={maps} className="inline-flex items-start gap-1 underline decoration-white/30 underline-offset-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0" style={{ color: PEACH }} />{garage.split(",")[0]}</a></Fact>
                 <Fact label="Level">{level} only{g.spot ? <span className="block text-white/70">Space {g.spot}</span> : null}</Fact>
@@ -703,7 +703,7 @@ export default function LaxGuest() {
               <p className="mt-6 flex items-center gap-2 text-sm text-white/60"><Sun className="h-4 w-4" style={{ color: PEACH }} /> Screen brightness up helps the QR scan on the first try.</p>
             
             </TripSheet>
-            <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Drop the car → catch your flight" title="Return: car → shuttle → LAX">
+            <TripSheet which="return" open={sheet === "return"} onClose={() => openSheet(null)} kicker="Drop the car → catch your flight" title="Return: car → shuttle → LAX">
 
               <Carousel id="lax-return" className="mt-1" labels={["Drive in", "Park", "Walk out", "Shuttle"]}>
                 <Step n={1} when="Drive in" title="Use the carshare return lane on 98th St.">

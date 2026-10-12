@@ -12,6 +12,15 @@ const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets We
 
 type Which = "pickup" | "return";
 
+/** Page scroll lock shared by every overlay (sheets, Leo full screen). Counted, so one overlay closing while another is
+ *  still up can't restore a stale value and leave the page frozen (a sheet opened over Leo used to lock the page for good). */
+let locks = 0, lockPrev = "";
+export function lockScroll(): () => void {
+  if (locks++ === 0) { lockPrev = document.body.style.overflow; document.body.style.overflow = "hidden"; }
+  let done = false;
+  return () => { if (done) return; done = true; if (--locks === 0) document.body.style.overflow = lockPrev; };
+}
+
 /** Which trip tab fits right now. Pickup until they're in the car (or 1 hour after the start),
  *  then Return until the trip ends. Nothing after the trip. */
 export function tripTab(trip: { starts_at: string; ends_at: string } | null | undefined, ended: boolean, inCarAt?: string | null, keyState?: string | null): Which | null {
@@ -105,7 +114,7 @@ export function TagBar({ open, onOpen, top, variant, hideTags, glow, badge, only
   );
 }
 
-export function TripSheet({ open, onClose, children, title, label, kicker, footer, bodyRef }: { open: boolean; onClose: () => void; children: ReactNode; title: ReactNode; label?: string; kicker: string; footer?: ReactNode; bodyRef?: React.Ref<HTMLDivElement> }) {
+export function TripSheet({ open, onClose, children, title, label, kicker, footer, bodyRef, which }: { which?: Which; open: boolean; onClose: () => void; children: ReactNode; title: ReactNode; label?: string; kicker: string; footer?: ReactNode; bodyRef?: React.Ref<HTMLDivElement> }) {
   const [drag, setDrag] = useState(0);
   const start = useRef<{ y: number; t: number } | null>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -113,12 +122,11 @@ export function TripSheet({ open, onClose, children, title, label, kicker, foote
   // lock page scroll + Escape to close + focus the sheet
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlock = lockScroll();
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     panel.current?.focus();
-    return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
+    return () => { unlock(); window.removeEventListener("keydown", onKey); };
   }, [open, onClose]);
   useEffect(() => { if (!open) setDrag(0); }, [open]);
 
@@ -138,6 +146,8 @@ export function TripSheet({ open, onClose, children, title, label, kicker, foote
         ref={panel}
         role="dialog"
         aria-modal="true"
+        data-sheet={which}
+        data-open={open ? "true" : "false"}
         aria-label={label ?? (typeof title === "string" ? title : kicker)}
         tabIndex={-1}
         className="absolute inset-x-0 bottom-0 mx-auto flex max-h-[88dvh] max-w-md flex-col rounded-t-[28px] bg-[color:var(--trip-bg,#1A1140)] shadow-2xl shadow-black/60 outline-none ring-1 ring-white/10 motion-reduce:transition-none"
