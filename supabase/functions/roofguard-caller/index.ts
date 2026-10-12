@@ -188,6 +188,15 @@ async function planCalls(leads: Next[]): Promise<Planned[]> {
   }));
 }
 
+// States whose law says an AI caller must say it's an AI up front (Jared 2026-10-11: "only if asked, otherwise only in
+// states required"). Maine 10 MRSA 1500-Y (2025) bars AI that could pass as human unless the person is told. Add a
+// two-letter code here when a lawyer confirms another state. Everywhere else Reese says so whenever she's asked.
+const AI_DISCLOSE_STATES = new Set(["ME"]);
+const aiFirst = (state: string, line: string) => AI_DISCLOSE_STATES.has((state || "").toUpperCase())
+  ? "Hi, it's Reese, an AI assistant with RoofGuard, on a recorded line." : line;
+const aiDm = (state: string, line: string) => AI_DISCLOSE_STATES.has((state || "").toUpperCase()) && line
+  ? `Quick heads-up, I'm an AI assistant with RoofGuard. ${line}` : line;
+
 // deno-lint-ignore no-explicit-any
 function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry, followup, voice_id, coach_notes, demo, facts }: Planned) {
   // so "tomorrow" and "next Tuesday" land on the right date, in the lead's own time zone
@@ -200,7 +209,7 @@ function clientData(s: any, { lead: l, opener_key, opener, hook, gk, industry, f
     lead_id: l.lead_id, company: l.company, contact_name: l.contact_name ?? "the facilities director",
     contact_title: l.contact_title ?? "", pitch_angle: l.pitch_angle, category: l.category, state: l.state,
     callback_number: s.callback_number ?? "",
-    opener_key, gk_opener: gk, dm_opener: opener, dm_hook: hook,
+    opener_key, gk_opener: aiFirst(l.state, gk), dm_opener: aiDm(l.state, opener), dm_hook: hook,
     industry_plural: industry.industry_plural ?? "facilities teams",
     industry_hook: industry.industry_hook ?? "keeping roof leaks from turning into downtime",
     coach_notes: coach_notes || NO_NOTES,
