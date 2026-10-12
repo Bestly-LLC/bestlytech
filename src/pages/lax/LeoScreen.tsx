@@ -19,11 +19,12 @@
  *   truncation, feathered glows, 44 px targets, Reduce Motion respected).
  */
 import { leoChips } from "./leoChips";
+import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertCircle, ArrowUp, Armchair, BatteryMedium, Check, ChevronDown, Flame, KeyRound, ListChecks, Loader2, Lock, LockOpen,
-  MapPin, Mic, MicOff, Navigation, PhoneOff, Power, ShieldAlert, Snowflake, Thermometer, X, Zap,
+  MapPin, Mic, MicOff, Navigation, PhoneOff, Power, QrCode, ShieldAlert, Snowflake, Thermometer, X, Zap,
   Volume2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -134,12 +135,21 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
       case "controls": await act("car_status"); push({ kind: "card", card: { type: "controls" } }); return "Showing the climate and lock buttons on screen.";
       case "charging": await act("charging_summary"); return "Showing the Supercharging total on screen.";
       case "key": push({ kind: "card", card: { type: "key", state: context?.keyState ?? null, link: context?.keyLink ?? null } }); return "Showing their key on screen.";
+      case "qr": {
+        // The lobby door QR code, right in Leo's chat (Jared, 2026-10-11): the guest at the door shouldn't have to hunt for it.
+        const q = context?.qr;
+        if (!q) return "There's no lobby door QR code on this trip. Home pickups don't need one.";
+        if (q.state === "done") return "The trip is over, so the lobby QR code isn't needed anymore.";
+        if (q.state !== "ready" || !q.payload) return "The QR code isn't ready yet. It shows up here and on the trip page before pickup.";
+        push({ kind: "card", card: { type: "qr", payload: q.payload, thru: q.thru ?? null } });
+        return "Showing the lobby door QR code in the chat. Tell them to hold the phone up to the scanner by the lobby door, brightness up.";
+      }
       case "guide": push({ kind: "card", card: { type: "page", which: "guide" } }); return "Showing a button for the pickup guide.";
       case "return": push({ kind: "card", card: { type: "page", which: "return" } }); return "Showing a button for the return checklist.";
       case "backup_unlock": push({ kind: "card", card: { type: "page", which: "unlock" } }); return "Showing a button for the trip page's backup unlock.";
     }
     return "That card isn't available.";
-  }, [act, push, context?.keyState, context?.keyLink]);
+  }, [act, push, context?.keyState, context?.keyLink, context?.qr]);
 
   // page_action: Leo drives the trip page. The page does it (leoBridge) and says what happened; Leo steps aside to his pill
   // for anything that is on the page itself, and comes back for close_sheets.
@@ -147,6 +157,7 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
     const action = String(p?.action ?? "").trim();
     const value = p?.value == null ? undefined : String(p.value).trim();
     if (!action) return "Which action? I need one, like open_pickup or show_qr.";
+    if (action === "show_qr") return showCard("qr"); // the QR shows in the chat, not on the page
     const r = await askPage(action, value, action === "next_step" ? 20000 : 3000);
     if (!r.stay) {
       if (MINIMIZE.has(action)) {
@@ -165,7 +176,7 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
       if (r.card) push({ kind: "card", card: { type: "page", which: r.card } });
     }
     return r.say;
-  }, [token, push]);
+  }, [token, push, showCard]);
 
   // The guest tapped a car button on the trip page: tell Leo so he doesn't repeat or contradict it.
   useLeoDid(({ action, result }) => {
@@ -641,7 +652,7 @@ function CardView({ card, theme, onAct, onPage, unlockable = false }: { card: Ca
       const w = String(card.which);
       const meta = w === "return" ? { t: "Return checklist", d: "Everything to do before you drop it off.", icon: <ListChecks className="h-4 w-4" aria-hidden />, h: "#return" as const }
         : w === "unlock" ? { t: "Backup unlock", d: "Only if your phone key won't work at the car. It's on your pickup steps.", icon: <ShieldAlert className="h-4 w-4" aria-hidden />, h: "#pickup" as const }
-        : { t: "Pickup guide", d: "Garage, lobby door QR code, and where the car is.", icon: <MapPin className="h-4 w-4" aria-hidden />, h: "#pickup" as const };
+        : { t: "Pickup guide", d: "The garage, the elevator, and where the car is.", icon: <MapPin className="h-4 w-4" aria-hidden />, h: "#pickup" as const };
       return (
         <Shell icon={meta.icon} title={meta.t} theme={theme}>
           <p className="mb-3 text-[15px] leading-snug" style={{ color: theme.subtle }}>{meta.d}</p>
@@ -650,6 +661,16 @@ function CardView({ card, theme, onAct, onPage, unlockable = false }: { card: Ca
         </Shell>
       );
     }
+    case "qr":
+      return (
+        <Shell icon={<QrCode className="h-4 w-4" aria-hidden />} title="Lobby door QR code" theme={theme}>
+          <div className="rounded-3xl bg-white p-5 text-center text-[#1A1140]">
+            <QRCodeSVG value={String(card.payload)} size={240} level="M" className="mx-auto h-auto w-full max-w-[240px]" />
+            {card.thru ? <p className="mt-3 text-[13px] font-medium text-[#1A1140]/70">{nw(`Good through ${String(card.thru)}`)}</p> : null}
+          </div>
+          <p className="mt-3 text-[15px] leading-snug">Hold it up to the scanner by the lobby door. Turn your screen brightness up if it doesn't read.</p>
+        </Shell>
+      );
     case "notice":
       return (
         <Shell icon={<AlertCircle className="h-4 w-4" aria-hidden />} title="Good to know" theme={theme}>

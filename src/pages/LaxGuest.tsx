@@ -759,7 +759,8 @@ export default function LaxGuest() {
             <AskSheet open={sheet === "ask"} onClose={() => openSheet(null)} token={token || undefined} slug={token ? undefined : slug}
               context={{ stage: tripTab(pub?.trip, ended, pub?.car_connected_at, key?.state ?? pub?.key?.state), keyState: key?.state ?? pub?.key?.state, keyLink: key?.link ?? pub?.key?.link ?? null,
                 first: demo ? null : pub?.trip?.first, startsAt: pub?.trip?.starts_at, endsAt: pub?.trip?.ends_at, ended, controlsState: pub?.controls_state,
-                insideF: (demoCar ? demoState : pub?.car)?.inside_f, climateOn: (demoCar ? demoState : pub?.car)?.climate_on, hasEmail: !!pub?.email }} />
+                insideF: (demoCar ? demoState : pub?.car)?.inside_f, climateOn: (demoCar ? demoState : pub?.car)?.climate_on, hasEmail: !!pub?.email,
+                qr: { state: ended || qrPhase === "done" ? "done" : pub?.ready ? "ready" : "soon", payload: pub?.ready ? pub?.payload ?? null : null, thru: thru || null } }} />
             {pub.charging && !ended && <ChargingFab charging={pub.charging} />}
             {token && !ended && <InstallToast token={token} kind="lax" />}
             {token && !ended && <PhoneHandoff token={token} keyReady={!!key && ["ready", "making"].includes(key.state)} />}
