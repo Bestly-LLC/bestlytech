@@ -18,6 +18,7 @@ import { Check, ChevronDown, Globe, Loader2 } from "lucide-react";
 import { AsYouType, getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js/min";
 import { supabase } from "@/integrations/supabase/client";
 import { COPY, pickLang, pickRegion, type Lang } from "./turo-entry/strings";
+import { device, deviceId, isHostDevice } from "./lax/track";
 
 type Kind = "home" | "lax";
 const MEM = "bestly-trip-entry";
@@ -59,6 +60,20 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
   const phoneRef = useRef<HTMLInputElement>(null);
   const card = useAnimationControls();
 
+  // In-car welcome card QR (?src=card): count the scan, then tie it to the trip once this visit gets in (Turo Watch).
+  // Jared's own phone logs as "host" so it shows in the list but never in the counts.
+  const scanRef = useRef<Promise<string | null> | null>(null);
+  useEffect(() => {
+    const src = new URLSearchParams(window.location.search).get("src");
+    if (!src || !/^[a-z0-9-]{1,24}$/.test(src)) return;
+    scanRef.current = ((supabase.rpc as any)("card_scan_log", { p_src: isHostDevice() ? "host" : src, p_kind: kind, p_device: device(), p_device_id: deviceId() }) as Promise<{ data: string | null }>) // eslint-disable-line @typescript-eslint/no-explicit-any
+      .then(({ data }) => data ?? null, () => null);
+    const u = new URL(window.location.href); u.searchParams.delete("src");
+    window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+  }, [kind]);
+  const linkScan = (token: string) => {
+    void scanRef.current?.then((id) => { if (id) void ((supabase.rpc as any)("card_scan_link", { p_scan: id, p_token: token }) as Promise<unknown>).then(() => {}, () => {}); }); // eslint-disable-line @typescript-eslint/no-explicit-any
+  };
   useEffect(() => { document.title = lang === "en" ? "Your Blue Steel trip" : `${t.title} · Blue Steel`; document.documentElement.lang = lang; }, [lang, t.title]);
 
   const dn = useMemo(() => { try { return new Intl.DisplayNames([lang === "zh-Hant" ? "zh-Hant" : lang], { type: "region" }); } catch { return null; } }, [lang]);
@@ -112,6 +127,7 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
       if (error) throw error;
       if (data?.ok && data.token) {
         if (!data.demo) { try { localStorage.setItem(MEM, JSON.stringify({ token: data.token, first: data.first || "" })); } catch { /* private mode */ } }
+        if (!data.demo) linkScan(data.token);
         setState("done");
         window.setTimeout(() => nav(`/t/${data.token}`), reduce ? 150 : 650);
         return;
@@ -123,6 +139,7 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
   const openSaved = () => {
     if (!mem || state !== "idle") return;
     setState("done");
+    linkScan(mem.token);
     window.setTimeout(() => nav(`/t/${mem.token}`), reduce ? 150 : 650);
   };
 
