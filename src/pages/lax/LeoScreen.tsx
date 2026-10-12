@@ -32,6 +32,7 @@ import { leoOpening } from "./leoOffer";
 import { audioLocked, audioState, playStreamPlayers, resumeAllAudio } from "./audioRescue";
 import { track } from "./track";
 import { MINIMIZE, askPage, emitLeoCar, useLeoDid } from "./leoBridge";
+import { lockScroll } from "./TripSheet";
 import { useDemoOpen } from "./demoState";
 
 type Any = Record<string, unknown>;
@@ -146,9 +147,24 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
     const value = p?.value == null ? undefined : String(p.value).trim();
     if (!action) return "Which action? I need one, like open_pickup or show_qr.";
     const r = await askPage(action, value, action === "next_step" ? 20000 : 3000);
-    if (!r.stay) { if (MINIMIZE.has(action)) setMini(true); else if (action === "close_sheets") setMini(false); }
+    if (!r.stay) {
+      if (MINIMIZE.has(action)) {
+        setMini(true);
+        // Leo's full-screen dialog sits above the page's sheets: if it is still up a moment later, the guest can't see what the page did.
+        await new Promise((res) => window.setTimeout(res, 250));
+        if (document.querySelector('[role="dialog"][aria-label="Leo, your trip helper"]')) {
+          setMini(true);
+          if (!token.startsWith("demo-")) diag(token, "page_action", { msg: `${action}: Leo was still full screen over the page after stepping aside` });
+        }
+      } else if (action === "close_sheets") setMini(false);
+    } else {
+      // The page said it did not happen (or never answered): log it for the diagnostics table (real guests only, not the host's demo pages)
+      // and, for the pickup / return sheets, leave a button on Leo's screen that does open them.
+      if (!token.startsWith("demo-")) diag(token, "page_action", { msg: `${action}${value ? ` ${value}` : ""}: ${r.say}`.slice(0, 300) });
+      if (r.card) push({ kind: "card", card: { type: "page", which: r.card } });
+    }
     return r.say;
-  }, []);
+  }, [token, push]);
 
   // The guest tapped a car button on the trip page: tell Leo so he doesn't repeat or contradict it.
   useLeoDid(({ action, result }) => {
@@ -284,12 +300,11 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
   }, []);
   useEffect(() => {
     if (mini) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlock = lockScroll();
     document.body.classList.add("leo-open");
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMini(true); };
     window.addEventListener("keydown", onKey);
-    return () => { document.body.style.overflow = prev; document.body.classList.remove("leo-open"); window.removeEventListener("keydown", onKey); };
+    return () => { unlock(); document.body.classList.remove("leo-open"); window.removeEventListener("keydown", onKey); };
   }, [mini]);
   // CSP blocks on a real device go to the diagnostics table.
   useEffect(() => {

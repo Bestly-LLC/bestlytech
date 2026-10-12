@@ -412,7 +412,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
         )}
         </>}
 
-        <TripSheet open={sheet === "pickup"} onClose={() => openSheet(null)} kicker="Your key → your car" label={`Pickup at ${street}`} title={<>Pickup at <a href={mapsFor(home.address)} onClick={() => track(undefined, "directions")} className="underline decoration-white/40 underline-offset-4 hover:decoration-white">{street}</a></>}>
+        <TripSheet which="pickup" open={sheet === "pickup"} onClose={() => openSheet(null)} kicker="Your key → your car" label={`Pickup at ${street}`} title={<>Pickup at <a href={mapsFor(home.address)} onClick={() => track(undefined, "directions")} className="underline decoration-white/40 underline-offset-4 hover:decoration-white">{street}</a></>}>
           {key && keySteps && (
             <>
               <p className="text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>First: your phone is the key</p>
@@ -428,7 +428,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
           </Carousel>
         </TripSheet>
 
-        <TripSheet open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
+        <TripSheet which="return" open={sheet === "return"} onClose={() => openSheet(null)} kicker="Your car → done" title={`Return at ${street}`}>
           <Carousel id="home-return" className="mt-1" labels={["Park", "Photos + lock"]}>
             <Step n={1}><Bullets items={[
               { e: "📍", tint: "rgba(255,69,58,.22)", title: "Park on N Kings Rd", sub: "Right by the building." },

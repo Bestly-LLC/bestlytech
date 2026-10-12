@@ -19,19 +19,19 @@ export const PAGE_ACTIONS: PageAction[] = ["open_pickup", "open_return", "show_q
 export const MINIMIZE: ReadonlySet<string> = new Set(["open_pickup", "open_return", "show_qr", "show_car_controls", "show_charging", "show_help", "next_step", "play_video", "open_guide_section"]);
 
 /** What the page says back: one plain sentence for Leo to say, and stay:true when nothing on the page moved. */
-export type PageResult = { say: string; stay?: boolean };
+export type PageResult = { say: string; stay?: boolean; card?: "guide" | "return" };
 export type PageReply = string | PageResult;
 export type PageHandler = (action: string, value?: string) => PageReply | Promise<PageReply> | void;
 export type LeoPageDetail = { action: string; value?: string; reply: (r: PageReply) => void };
 
 const norm = (r: PageReply): PageResult => (typeof r === "string" ? { say: r } : r);
 
-/** Leo asks the page to do something. Resolves with what the page said; "Done." if nobody answers within the timeout. */
+/** Leo asks the page to do something. Resolves with what the page said; a "couldn't confirm" (stay:true) if nobody answers within the timeout. */
 export function askPage(action: string, value?: string, timeoutMs = 3000): Promise<PageResult> {
   return new Promise((resolve) => {
     let done = false;
     const finish = (r: PageResult) => { if (done) return; done = true; window.clearTimeout(t); resolve(r); };
-    const t = window.setTimeout(() => finish({ say: "Done." }), timeoutMs);
+    const t = window.setTimeout(() => finish({ say: "The page didn't answer, so I can't confirm that happened. Tell the guest to scroll to it, or try once more.", stay: true }), timeoutMs);
     window.dispatchEvent(new CustomEvent<LeoPageDetail>("leo:page", { detail: { action, value, reply: (r) => finish(norm(r)) } }));
   });
 }
@@ -149,57 +149,104 @@ async function openGuideSection(value: string | undefined, c: SharedCtx): Promis
   return { say: `Opened the ${g.name} section in Help and guides on the page.` };
 }
 
+/** Poll until `ok()` is true, up to `ms`. The page has to SHOW the thing before Leo may say it is there. */
+async function poll(ok: () => boolean, ms = 700, step = 50): Promise<boolean> {
+  const end = Date.now() + ms;
+  for (;;) {
+    if (ok()) return true;
+    if (Date.now() >= end) return false;
+    await sleep(step);
+  }
+}
+/** Leo's own full-screen dialog (LeoScreen). While it is up it covers the whole page, so nothing "on the page" is seen. */
+const leoFull = () => !!document.querySelector('[role="dialog"][aria-label="Leo, your trip helper"]');
+/** The open pickup / return sheet (TripSheet marks itself data-sheet + data-open), or any open sheet when `which` is omitted. */
+const openSheetEl = (which?: string) => document.querySelector<HTMLElement>(`[data-sheet${which ? `="${which}"` : ""}][data-open="true"]`);
+const sheetShown = (which?: string) => { const el = openSheetEl(which); if (!el) return false; const r = el.getBoundingClientRect(); return r.height > 0 && r.top < window.innerHeight - 40; };
+/** Is any part of this element on screen right now (vertically and horizontally, e.g. a carousel card brought forward)? */
+function inView(el: HTMLElement): boolean {
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0 && r.bottom > 40 && r.top < window.innerHeight - 40 && r.right > 0 && r.left < window.innerWidth;
+}
+
+/** Open the pickup / return sheet and check it really came up and stayed up. (LeoScreen steps Leo aside after the page says yes.) */
+async function openSheetAction(which: "pickup" | "return", c: SharedCtx): Promise<PageResult> {
+  const name = which === "pickup" ? "pickup steps" : "return steps";
+  c.openSheet(which);
+  if (await poll(() => sheetShown(which), 900)) {
+    await sleep(350); // something closing it right after it opens counts as "didn't open"
+    if (sheetShown(which)) return { say: `Opened the ${name} on the page.` };
+  }
+  c.openSheet("ask"); // put things back the way they were: Leo full screen, no half-open sheet behind him
+  return { say: `I couldn't open the ${name} on the page. I put a button on the guest's screen that opens them. Tell them to tap it.`, stay: true, card: which === "pickup" ? "guide" : "return" };
+}
+
+/** Close the sheets and bring Leo back full screen; says so only when the sheet is gone. */
+async function closeSheetsAction(c: SharedCtx): Promise<PageResult> {
+  c.openSheet("ask");
+  if (await poll(() => !openSheetEl() && leoFull(), 900)) return { say: "Closed the sheet. Leo is back full screen." };
+  return { say: "I couldn't close the sheet. Tell the guest to tap the X on it.", stay: true };
+}
+
+/** Bring a section of the page on screen (sheets closed) and check it is really in view. */
+async function showOnPage(c: SharedCtx, id: string, ok: string, fail: string, bring: () => void = () => { showSection(id); }): Promise<PageResult> {
+  c.openSheet(null);
+  bring();
+  const up = await poll(() => { const el = document.getElementById(id); return !!el && !openSheetEl() && inView(el); }, 1200);
+  return up ? { say: ok } : { say: fail, stay: true };
+}
+
 const clean = (s: string) => s.replace(/\s*\n\s*/g, " ").replace(/\s+/g, " ").trim();
+
+/** The page's Next Step: do it (open the sheet, scroll to the card, run the car action) and say what really happened. */
+async function nextStepAction(c: SharedCtx): Promise<PageResult> {
+  if (!c.next) return { say: "There's no next step right now.", stay: true };
+  const t = clean(c.next.title);
+  const a = c.next.action;
+  if (a === "pickup" || a === "return") {
+    const r = await openSheetAction(a, c);
+    return r.stay ? { ...r, say: `Next step is "${t}". ${r.say}` } : { say: `Next step is "${t}". I opened the ${a === "pickup" ? "pickup" : "return"} steps.` };
+  }
+  if (a === "climate" || a === "qr") {
+    const r = await showOnPage(c, a, "", `I couldn't scroll the page to it. Tell the guest it's the Next Step card at the top of the page.`, () => { void c.doNext(a); });
+    return r.stay ? { ...r, say: `Next step is "${t}". ${r.say}` } : { say: `Next step is "${t}". I ${a === "qr" ? "brought up the QR code" : "scrolled to the car controls"}.` };
+  }
+  c.openSheet(null);
+  if (a === "send" && c.send) {
+    const run = c.send;
+    return run().then((did) => ({ say: `Next step is "${t}". I ${did}` }), (e: Error) => ({ say: `Next step is "${t}". It didn't go through: ${e?.message || "the car didn't answer"}.`, stay: true }));
+  }
+  const r = await showOnPage(c, "next-step", "", `I couldn't scroll the page to it. Tell the guest it's the Next Step card at the top of the page.`);
+  return r.stay ? { ...r, say: `Next step is "${t}". ${r.say}` } : { say: `Next step is "${t}". It's on the page${c.next.label ? ` as the "${clean(c.next.label)}" button` : ""}.` };
+}
 
 /** The page actions both trip pages do the same way. Returns undefined for actions it doesn't own (demo_*). */
 export function sharedPageAction(action: string, c: SharedCtx, value?: string): PageResult | Promise<PageResult> | undefined {
   switch (action) {
     case "play_video": return playVideoAction(value, c);
     case "open_guide_section": return openGuideSection(value, c);
-    case "open_pickup": c.openSheet("pickup"); return { say: "Opened the pickup steps on the page." };
-    case "open_return": c.openSheet("return"); return { say: "Opened the return steps on the page." };
-    case "close_sheets": c.openSheet("ask"); return { say: "Closed the sheet. Leo is back full screen." };
+    case "open_pickup": return openSheetAction("pickup", c);
+    case "open_return": return openSheetAction("return", c);
+    case "close_sheets": return closeSheetsAction(c);
     case "show_qr": {
       if (!c.qr) return { say: "There's no QR code on this trip.", stay: true };
       if (c.qr === "done") return { say: "The QR code isn't needed anymore. The trip is over.", stay: true };
-      c.openSheet(null);
-      showSection("qr");
-      return { say: c.qr === "ready" ? "Showing the QR code for the lobby door on the page." : "Showing where the QR code will appear. It isn't ready yet." };
+      return showOnPage(c, "qr", c.qr === "ready" ? "Showing the QR code for the lobby door on the page." : "Showing where the QR code will appear. It isn't ready yet.",
+        "I couldn't bring the QR code up on the page. Tell the guest it's in the QR code card on the main page.");
     }
     case "show_car_controls": {
       if (!c.hasClimate()) return { say: "The car controls aren't on the page right now. Once the phone key is connected they use the Tesla app.", stay: true };
-      c.openSheet(null);
-      showSection("climate");
-      return { say: "Showing the car card with the A/C buttons on the page." };
+      return showOnPage(c, "climate", "Showing the car card with the A/C buttons on the page.",
+        "I couldn't bring the car card up on the page. I can show the A/C buttons on the guest's screen instead (show_card controls).");
     }
     case "show_charging": {
       if (!document.getElementById("charging")) return { say: "There's no Supercharging on this trip yet.", stay: true };
-      c.openSheet(null);
-      showSection("charging");
-      return { say: "Showing the Supercharging card on the page." };
+      return showOnPage(c, "charging", "Showing the Supercharging card on the page.",
+        "I couldn't bring the Supercharging card up on the page. I can show the charging total on the guest's screen instead (show_card charging).");
     }
-    case "show_help": {
-      c.openSheet(null);
-      showSection("help");
-      return { say: "Showing Help and guides on the page." };
-    }
-    case "next_step": {
-      if (!c.next) return { say: "There's no next step right now.", stay: true };
-      const t = clean(c.next.title);
-      const a = c.next.action;
-      if (a === "pickup" || a === "return" || a === "climate" || a === "qr") {
-        if (a === "pickup" || a === "return") c.openSheet(a); else c.openSheet(null);
-        void c.doNext(a);
-        return { say: `Next step is "${t}". I ${a === "pickup" ? "opened the pickup steps" : a === "return" ? "opened the return steps" : a === "qr" ? "brought up the QR code" : "scrolled to the car controls"}.` };
-      }
-      c.openSheet(null);
-      if (a === "send" && c.send) {
-        const run = c.send;
-        return run().then((did) => ({ say: `Next step is "${t}". I ${did}` }), (e: Error) => ({ say: `Next step is "${t}". It didn't go through: ${e?.message || "the car didn't answer"}.`, stay: true }));
-      }
-      showSection("next-step");
-      return { say: `Next step is "${t}". It's on the page${c.next.label ? ` as the "${clean(c.next.label)}" button` : ""}.` };
-    }
+    case "show_help": return showOnPage(c, "help", "Showing Help and guides on the page.",
+      "I couldn't bring Help and guides up on the page. Tell the guest it's the Help and guides card lower on the main page.");
+    case "next_step": return nextStepAction(c);
   }
   return undefined;
 }
