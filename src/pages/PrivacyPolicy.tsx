@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { AnimatedSection } from "@/components/AnimatedSection";
 
 export default function PrivacyPolicy() {
-  const lastUpdated = "September 24, 2026";
+  const lastUpdated = "October 11, 2026";
 
   const sections = [
     { id: "1", title: "1. Introduction", content: (
@@ -314,7 +314,23 @@ export default function PrivacyPolicy() {
         </p>
       </>
     )},
-    { id: "16", title: "16. Changes to This Policy", content: (
+    { id: "16", title: "16. Maya, Our AI Assistant (Phone and Website)", content: (
+      <>
+        <p className="text-muted-foreground leading-relaxed mb-4">
+          Maya is an AI assistant, not a person. She answers our phone line, (213) 641-0074, and talks with visitors on
+          bestly.tech when they choose to start a conversation. She says she is an AI at the start of every call.
+        </p>
+        <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+          <li><strong className="text-foreground">Calls and conversations are recorded.</strong> We keep the audio and a written transcript so Maya can understand you, so our team can follow up, and so we can improve how she helps. On the phone she tells you at the start; on the website, starting a conversation with her means you agree to this.</li>
+          <li><strong className="text-foreground">What we collect:</strong> what you say or type, the audio of your voice, your phone number (on calls), the page you were on (on the website), and any details you give her, such as your name, email, phone or company.</li>
+          <li><strong className="text-foreground">Who processes it:</strong> our voice AI provider (ElevenLabs) turns speech into text and creates Maya's voice, and our phone carrier (Telnyx) connects calls. They handle it on our behalf. We do not sell it or use it for advertising.</li>
+          <li><strong className="text-foreground">How long we keep it:</strong> recordings and transcripts are deleted after 90 days. If you ask us to follow up, the ticket or form you sent us is kept as long as needed to help you.</li>
+          <li><strong className="text-foreground">Your choices:</strong> you can ask for a person instead, ask Maya to delete your information, or email privacy@bestly.tech. The rights in section 11 apply.</li>
+          <li><strong className="text-foreground">Sample calls:</strong> the sample calls on our Bestly Agent page are scripted with made-up businesses and people. They are not real customer calls.</li>
+        </ul>
+      </>
+    )},
+    { id: "17", title: "17. Changes to This Policy", content: (
       <p className="text-muted-foreground leading-relaxed">
         We may update this Privacy Policy from time to time. We will notify you of any material 
         changes by posting the new Privacy Policy on this page and updating the "Last Updated" 
@@ -322,7 +338,7 @@ export default function PrivacyPolicy() {
         notification). We encourage you to review this Privacy Policy periodically.
       </p>
     )},
-    { id: "17", title: "17. Contact Us", content: (
+    { id: "18", title: "18. Contact Us", content: (
       <>
         <p className="text-muted-foreground leading-relaxed mb-4">
           If you have any questions about this Privacy Policy or our data practices, please 

@@ -64,7 +64,9 @@ export function MayaIntro({ onTalk, onType, onClose }: { onTalk: () => void; onT
             </button>
           </div>
           <p className="mt-3 text-center text-[12px] leading-snug text-[#C7CBEA]">
-            Your mic is used only while you talk. Maya is an AI. Prefer a person?{" "}
+            Maya is an AI. Conversations are recorded and transcribed to help you, and starting one means you agree (
+            <a href="/privacy-policy" className="font-semibold text-white underline-offset-2 hover:underline">privacy</a>). Your mic is used only
+            while you talk. Prefer a person?{" "}
             <a href="tel:+12136410074" className="whitespace-nowrap font-semibold text-white underline-offset-2 hover:underline">(213) 641-0074</a>
           </p>
         </div>

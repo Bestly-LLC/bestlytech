@@ -239,6 +239,10 @@ export function IntegrationsDirectory({ onAskMaya }: { onAskMaya: () => void }) 
           })}
         </ul>
       )}
+      <p className="mt-8 text-sm text-muted-foreground">
+        App and company names belong to their owners. Listing them means we can connect Maya to them for you, not that they
+        endorse or partner with Bestly.
+      </p>
     </div>
   );
 }

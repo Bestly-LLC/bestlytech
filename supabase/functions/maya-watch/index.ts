@@ -12,6 +12,8 @@
 // /agent-demo/<id>.json is 200 with duration > 20 s and every .mp3 answers 200, and no visitor browser has reported
 // agent-demo-audio failures (maya_web_sessions kind='diag') in the last hour. Alert only (a static file can't be
 // healed from here); the message says what to re-run. Same alert key maya.site.
+// Disclosures (2026-10-11, Jared): her phone greeting says she's an AI and that calls are recorded (California needs
+// everyone's consent to record), and recordings + transcripts are kept 90 days. Heals both if they drift. Key maya.line.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const AGENT_ID = "agent_3701m4jbjnyef6ga4ys73xtbz37s";
@@ -62,6 +64,9 @@ Bestly Cloud is one small server in their office that replaces the apps they ren
 - On phone calls none of these tools work; never call them there.
 ${PRESENTER_END}`;
 const SITE_HOSTS = ["bestly.tech", "www.bestly.tech"];
+// Approved by Jared 2026-10-11 ("yes, but shorter"): AI + recording disclosure in the first line, every call.
+const GREETING = "Hi, this is Maya, Bestly's AI assistant. Calls are recorded. How can I help?";
+const RETENTION_DAYS = 90;
 const AGENT_DEMO_IDS = ["saas-support", "dental", "plumbing", "real-estate", "restaurant"];
 const TELNYX_CONN = "3067494961063659261";
 const NUMBER = "+12136410074";
@@ -111,6 +116,22 @@ Deno.serve(async () => {
         const what = [auth.enable_auth !== true ? "made my agent private again" : "", lacking.length ? `put ${lacking.join(" and ")} back on my allowlist` : ""].filter(Boolean).join(" and ");
         if (fix.ok) fixed.push(`I ${what}.`);
         else site.push(`My web security drifted (${what} failed), so my agent id may be usable from anywhere.`);
+      }
+
+      // Legal disclosures: the greeting and the 90-day retention (heal: put them back).
+      const first = String(aj?.conversation_config?.agent?.first_message ?? "");
+      if (first !== GREETING) {
+        const fix = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`, { method: "PATCH", headers: el,
+          body: JSON.stringify({ conversation_config: { agent: { first_message: GREETING } } }) });
+        if (fix.ok) fixed.push("Put my greeting back so callers hear I'm an AI and that calls are recorded.");
+        else problems.push("My greeting no longer says I'm an AI and that calls are recorded, and fixing it failed.");
+      }
+      const priv = aj?.platform_settings?.privacy ?? {};
+      if (priv.retention_days !== RETENTION_DAYS) {
+        const fix = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`, { method: "PATCH", headers: el,
+          body: JSON.stringify({ platform_settings: { privacy: { ...priv, retention_days: RETENTION_DAYS, apply_to_existing_conversations: true } } }) });
+        if (fix.ok) fixed.push(`Set my call recordings and transcripts to delete after ${RETENTION_DAYS} days.`);
+        else desk.push(`My recordings are kept ${priv.retention_days === -1 ? "forever" : `${priv.retention_days} days`} instead of ${RETENTION_DAYS}, and fixing it failed.`);
       }
 
       // Presenter block in her prompt (heal: replace the old tail / stale block with the current one).
