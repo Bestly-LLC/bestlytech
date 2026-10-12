@@ -151,9 +151,14 @@ const QUESTIONS = (owner: Owner) => ({
 
 /* ───────── Jev ───────── */
 
-class JevError extends Error { constructor(public status: number, msg: string) { super(msg); } }
+class JevError extends Error { constructor(public status: number, msg: string, public body = "") { super(msg); } }
 const jevMessage = (e: unknown): string => {
   if (e instanceof JevError) {
+    // Vercel AI Gateway answers 403 for a GOOD key on its free tier: Jev is a restricted model there
+    // (2026-10-12: Jared's vck_ key was fine, and Hunter told him to paste a new one).
+    if (e.status === 403 && /free tier|RestrictedModels|paid credits/i.test(e.body)) {
+      return "Jev needs paid Vercel AI Gateway credits. The key is fine; the free tier can't use Jev.";
+    }
     if (e.status === 401 || e.status === 403) return "Jev rejected the key. Paste a fresh one on the Jev card.";
     if (e.status === 402) return "Jev says the account is out of credit.";
     if (e.status === 429) return "Jev is limiting requests right now.";
@@ -175,7 +180,7 @@ async function jevScore(key: string, owner: Owner, input: Record<string, any>): 
     });
   } catch { throw new JevError(0, "timeout"); }
   const latency = Date.now() - t0;
-  if (!res.ok) { await res.text().catch(() => ""); throw new JevError(res.status, `HTTP ${res.status}`); }
+  if (!res.ok) { const t = await res.text().catch(() => ""); throw new JevError(res.status, `HTTP ${res.status}`, t.slice(0, 600)); }
   const j = await res.json();
   const a = j?.answers ?? {};
   const probs = normalizeProbs(a.outcome?.probabilities ?? (a.outcome?.choice ? { [a.outcome.choice]: 1 } : undefined));
@@ -222,8 +227,8 @@ async function askFreeAi(user: string): Promise<{ json: any; ms: number }> {
 async function freeScore(owner: Owner, input: Record<string, any>): Promise<Scored> {
   const { json, ms } = await askFreeAi(stateText(owner, input));
   const probs = normalizeProbs(json.outcome_probs);
-  const role = ROLES.includes(json.dm_role) ? json.dm_role : "unknown";
-  const win = WINDOWS.includes(json.best_window) ? json.best_window : "morning";
+  const role = (ROLES as readonly string[]).includes(json.dm_role) ? json.dm_role : "unknown";
+  const win = (WINDOWS as readonly string[]).includes(json.best_window) ? json.best_window : "morning";
   const fit = clamp01(json.p_fit);
   if (Number.isNaN(fit)) throw new Error("free AI gave no fit number");
   return { p_reach_dm: probs.decision_maker, outcome_probs: probs, dm_role: role, best_window: win, p_fit: Math.round(fit * 10000) / 10000, model: "free-ladder", latency_ms: ms, tokens_in: null };
