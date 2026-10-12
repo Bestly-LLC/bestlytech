@@ -117,7 +117,11 @@ export function JevCard() {
           </div>
           <p className="text-[13px] leading-relaxed text-white/65">
             {st.key_saved ? `Saved ${when(st.saved_at)}. ` : ""}It goes straight to the Bestly vault and is never shown again.{" "}
-            {!st.key_saved && <>Fastest: a Vercel{" "}<a href="https://vercel.com/bestly/~/ai/api-keys" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-sky-300 underline-offset-2 hover:underline">AI Gateway key<ExternalLink className="h-3 w-3" aria-hidden /></a> (starts with vck_, no waitlist). A TypeSafe key works too.</>}
+            A key from any of these works, Hunter finds the right one:{" "}
+            <a href="https://console.typesafe.ai/keys" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-sky-300 underline-offset-2 hover:underline">TypeSafe<ExternalLink className="h-3 w-3" aria-hidden /></a>,{" "}
+            <a href="https://docs.digitalocean.com/products/inference/how-to/use-system-one-api/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-sky-300 underline-offset-2 hover:underline">DigitalOcean<ExternalLink className="h-3 w-3" aria-hidden /></a>{" "}
+            or a Vercel{" "}<a href="https://vercel.com/bestly/~/ai/api-keys" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-sky-300 underline-offset-2 hover:underline">AI Gateway key<ExternalLink className="h-3 w-3" aria-hidden /></a>{" "}
+            (Vercel needs paid credits; its free tier can't run Jev).
           </p>
         </form>
 

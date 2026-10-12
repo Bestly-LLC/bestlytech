@@ -30,11 +30,21 @@ const db: any = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: {
 const PT = "America/Los_Angeles";
 const JEV_URL = "https://api.typesafe.ai/v1/systemone";
 const JEV_MODEL = "jev-latest";
-// Jev is also on Vercel AI Gateway (no waitlist), same request and reply shape. A gateway key starts with "vck_".
-// Docs: vercel.com/docs/ai-gateway/sdks-and-apis/typesafe (checked 2026-10-11).
-const GW_URL = "https://ai-gateway.vercel.sh/typesafe/v1/systemone";
-const GW_MODEL = "typesafe-ai/jev";
-const jevRoute = (key: string) => key.startsWith("vck_") ? { url: GW_URL, model: GW_MODEL } : { url: JEV_URL, model: JEV_MODEL };
+// Jev is sold in three places, same request and reply shape (checked 2026-10-12):
+//   Vercel AI Gateway  key starts "vck_"; paid gateway credits only (the free tier answers 403 RestrictedModelsError)
+//   TypeSafe direct    console.typesafe.ai/keys
+//   DigitalOcean       Serverless Inference model access key; docs.digitalocean.com/products/inference/how-to/use-system-one-api
+// A vck_ key goes to Vercel. Any other key tries TypeSafe, then DigitalOcean, and the one that answers is kept
+// for the rest of the run, so Jared can paste a key from whichever seller has credit and it just works.
+type JevRoute = { name: string; url: string; model: string };
+const ROUTES: Record<string, JevRoute> = {
+  vercel: { name: "vercel", url: "https://ai-gateway.vercel.sh/typesafe/v1/systemone", model: "typesafe-ai/jev" },
+  typesafe: { name: "typesafe", url: JEV_URL, model: JEV_MODEL },
+  digitalocean: { name: "digitalocean", url: "https://inference.do-ai.run/v1/systemone", model: "typesafe-jev-1.13.0" },
+};
+let routeThatWorked: string | null = null;
+const jevRoutes = (key: string): JevRoute[] =>
+  key.startsWith("vck_") ? [ROUTES.vercel] : routeThatWorked ? [ROUTES[routeThatWorked]] : [ROUTES.typesafe, ROUTES.digitalocean];
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type, apikey, x-client-info, x-proxy-key", "access-control-allow-methods": "POST, OPTIONS" };
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json", ...CORS } });
@@ -169,18 +179,26 @@ const jevMessage = (e: unknown): string => {
 };
 
 async function jevScore(key: string, owner: Owner, input: Record<string, any>): Promise<Scored> {
-  const t0 = Date.now();
-  const route = jevRoute(key);
-  let res: Response;
-  try {
-    res = await fetch(route.url, {
-      method: "POST", signal: AbortSignal.timeout(15_000),
-      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({ state: stateText(owner, input), model: route.model, questions: QUESTIONS(owner) }),
-    });
-  } catch { throw new JevError(0, "timeout"); }
-  const latency = Date.now() - t0;
+  const routes = jevRoutes(key);
+  let res: Response | null = null, route = routes[0], latency = 0;
+  for (let i = 0; i < routes.length; i++) {
+    route = routes[i];
+    const t0 = Date.now();
+    try {
+      res = await fetch(route.url, {
+        method: "POST", signal: AbortSignal.timeout(15_000),
+        headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+        body: JSON.stringify({ state: stateText(owner, input), model: route.model, questions: QUESTIONS(owner) }),
+      });
+    } catch { if (i < routes.length - 1) continue; throw new JevError(0, "timeout"); }
+    latency = Date.now() - t0;
+    // This seller does not know the key: try the next one before calling the key bad.
+    if ((res.status === 401 || res.status === 403 || res.status === 404) && i < routes.length - 1) { await res.text().catch(() => ""); continue; }
+    break;
+  }
+  if (!res) throw new JevError(0, "timeout");
   if (!res.ok) { const t = await res.text().catch(() => ""); throw new JevError(res.status, `HTTP ${res.status}`, t.slice(0, 600)); }
+  routeThatWorked = route.name;
   const j = await res.json();
   const a = j?.answers ?? {};
   const probs = normalizeProbs(a.outcome?.probabilities ?? (a.outcome?.choice ? { [a.outcome.choice]: 1 } : undefined));
