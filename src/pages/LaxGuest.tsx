@@ -16,6 +16,8 @@ import { AskButton, AskSheet } from "./lax/AskSheet";
 import { Collapse } from "./lax/Collapse";
 import { CarCard, ClimateAdvice, DEMO_CAR, EmailCard, TripCard, TripChanged, WeatherCard, climateNeed, type CarState, type Trip } from "./lax/GuestExtras";
 import { WalletLoader } from "./lax/WalletLoader";
+import { LinkDown } from "./lax/LinkDown";
+import type { LinkDownReason } from "./lax/leoOffer";
 import { ScrollFx } from "./lax/ScrollFx";
 import { track } from "./lax/track";
 import HomeGuest, { CarButton, type CarAction, type HomeInfo, type KeyInfo } from "./lax/HomeGuest";
@@ -44,7 +46,7 @@ import { sharedPageAction, tellLeo, useLeoCar, useLeoPage } from "./lax/leoBridg
 import { CHARGERS } from "./lax/places";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; find_hold?: boolean; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; trip_changed_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; reason?: LinkDownReason; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; find_hold?: boolean; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; trip_changed_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -257,7 +259,9 @@ export default function LaxGuest() {
     if (demo) { setPub(demoPub(dKind, stage) as Pub); return; } // weather is read inside demoPub
     const load = () => (token
       ? rpc("lax_guest_public", { p_token: token })
-      : rpc("lax_pass_public", { p_slug: slug })).then(({ data }) => {
+      : rpc("lax_pass_public", { p_slug: slug })).then(({ data, error }) => {
+        // Couldn't reach us: keep a page that already loaded; otherwise show the link-down page ("fixing").
+        if (error && !data) { setPub((prev) => (prev?.ok ? prev : { ok: false, reason: "fixing" })); return; }
         const p = (data as Pub) ?? { ok: false };
         if (token && p.kind) { try { localStorage.setItem(`tripkind:${token}`, p.kind); } catch { /* private mode */ } }
         if (token && p.ok && !viewed.current) {
@@ -472,6 +476,15 @@ export default function LaxGuest() {
     <div className="flex min-h-screen items-center justify-center" style={{ background: "#132726" }} role="status" aria-label="Loading">
       <img src="/wallet/home/loader-mcm.svg" alt="" className="h-[88px] w-[88px] animate-pulse rounded-[20px] motion-reduce:animate-none" />
     </div>
+  );
+  // Link-down page (2026-10-11): the trip link stopped working. One line on why, Leo runs the page.
+  // Preview: /t/demo-home?down=changed (or ended / unknown / fixing) shows the link-down page on the demo trip.
+  const downPreview = demo ? new URLSearchParams(window.location.search).get("down") : null;
+  if (token && demo && downPreview && ["changed", "ended", "unknown", "fixing"].includes(downPreview)) return (
+    <LinkDown token={token} kind={dKind === "lax" ? "lax" : "home"} reason={downPreview as LinkDownReason} />
+  );
+  if (token && !demo && pub && !pub.ok) return (
+    <LinkDown token={token} kind={pub.kind ?? (knownKind === "lax" ? "lax" : "home")} reason={pub.reason ?? "unknown"} />
   );
   // Home pickup (733 N Kings Rd): same page system, home look. No QR code, shuttle or garage.
   if (token && pub?.ok && pub.kind === "home") return <>

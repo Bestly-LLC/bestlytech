@@ -2,7 +2,15 @@ export type LeoOffer = "reminder_email" | "key_status" | "key_fix" | "key" | "co
   | "supercharger" | "charging_help" | "return_checklist" | "thanks" | "none";
 export type OfferCtx = { first?: string | null; startsAt?: string | null; endsAt?: string | null; ended?: boolean;
   keyState?: string | null; controlsState?: string | null; insideF?: number | null; climateOn?: boolean | null;
-  hasEmail?: boolean; tab?: "pickup" | "return" | null; canAct?: boolean; now?: number };
+  hasEmail?: boolean; tab?: "pickup" | "return" | null; canAct?: boolean; now?: number; linkDown?: LinkDownReason | null };
+/** Why a trip link stopped working (lax_guest_public reason, plus "fixing" when the page can't reach us). */
+export type LinkDownReason = "changed" | "ended" | "unknown" | "fixing";
+const LINK_DOWN_LINE: Record<LinkDownReason, string> = {
+  changed: "This trip was changed or canceled, so its link stopped working. If you rebooked, sign in below for your new page, or tell me what you need and I'll pass it to your host.",
+  ended: "This trip is over. Left something in the car or need a receipt? Tell me and I'll pass it to your host.",
+  unknown: "I can't find a trip for this link. Sign in below with your phone number, or tell me what you need and I'll pass it to your host.",
+  fixing: "Something on our side isn't loading right now. Tell me what you need and I'll pass it to your host right away.",
+};
 const TZ = "America/Los_Angeles";
 const t12 = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ });
 const day = (iso: string, now: number) => {
@@ -21,6 +29,7 @@ export function leoOffer(c: OfferCtx): { offer: LeoOffer; line: string; mtp: num
   const mtp = minutesTo(c.startsAt, now), mtr = minutesTo(c.endsAt, now);
   const ctlOn = c.controlsState === "on" && c.canAct !== false;
   const r = (offer: LeoOffer, line: string) => ({ offer, line, mtp });
+  if (c.linkDown) return r("none", LINK_DOWN_LINE[c.linkDown]);
   if (c.ended || c.controlsState === "ended") return r("thanks", "Thanks for driving Blue Steel. Hope the trip was great!");
   if (k === "problem") return r("key_fix", "Your phone key didn't go through. Want me to send a new one?");
   if (k === "soon" || k === "making") return c.hasEmail

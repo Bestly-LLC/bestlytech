@@ -36,6 +36,8 @@ export type LeoTheme = (typeof THEME)[keyof typeof THEME];
 export type LeoMode = "call" | "chat" | "open";
 let nextMode: LeoMode = "open";
 export function takeLeoMode(): LeoMode { const m = nextMode; nextMode = "open"; return m; }
+/** Set how Leo opens next (the link-down page opens him directly, without the docked bar). */
+export function setLeoMode(m: LeoMode) { nextMode = m; }
 
 /** Leo's orb: a soft conic swirl with a feathered glow. */
 export function LeoOrb({ theme, size = 40, live = false }: { theme: LeoTheme; size?: number; live?: boolean }) {

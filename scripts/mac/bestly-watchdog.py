@@ -140,7 +140,7 @@ def main():
         pass
 
 # Mac pollers paused while the database is down (2026-09-24). Every few seconds they call the database; during a
-# freeze they only add load and reconnect storms. Recording (meetingrec-agent) and turo-sender keep running.
+# freeze they only add load and reconnect storms. Recording (meetingrec-agent) keeps running.
 SHED = ["tech.bestly.partner-ai", "tech.bestly.tesla-worker", "tech.bestly.clips", "tech.bestly.meetingrec-sync",
         "tech.bestly.sentsync", "tech.bestly.mailbridge", "tech.bestly.partner-mail"]
 
@@ -166,7 +166,7 @@ def unshed(s):
 
 # Car + Turo helpers must always be loaded in launchd. 2026-09-24: tesla-worker exited during a DB outage and
 # was no longer loaded at all, so guest car buttons fell back to nothing. Re-load any that went missing.
-KEEP_AGENTS = ["tech.bestly.tesla-worker", "tech.bestly.turo-sender"]
+KEEP_AGENTS = ["tech.bestly.tesla-worker"]  # 2026-10-11: turo-sender retired
 
 
 def keep_agents():
