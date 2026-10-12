@@ -151,3 +151,6 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.leo-phone-init]
   verify_jwt = false
+
+[functions.leo-10dlc]
+  verify_jwt = false
