@@ -84,9 +84,42 @@ def run(cmd, job_id, stage, timeout, cwd=None):
 
 
 def probe(path):
-    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height",
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
+                        "format=duration:stream=codec_type,width,height,pix_fmt,color_range,color_space,color_primaries,color_transfer",
                         "-of", "json", path], capture_output=True, text=True, check=True)
     return json.loads(r.stdout)
+
+
+def is_standard(pr):
+    """True when the video stream is what Apple's decoder (Safari, the Studio app on a Mac) plays: yuv420p, limited (tv) range, bt709 tags."""
+    v = [s for s in pr["streams"] if s["codec_type"] == "video"]
+    return bool(v) and v[0].get("pix_fmt") == "yuv420p" and v[0].get("color_range") == "tv" \
+        and v[0].get("color_space") == "bt709" and v[0].get("color_primaries") == "bt709" and v[0].get("color_transfer") == "bt709"
+
+
+def normalize(path, jid=None):
+    """Make the file a standard video (H.264 High 4.1, yuv420p, tv range, bt709, AAC, faststart) and swap it in.
+    The Remotion render came out yuvj420p / full range / bt470bg with no bt709 tags (2026-10-12): Chrome plays that, Safari and the
+    Studio app on a Mac do not. Returns True when it re-encoded, False when the file was already standard."""
+    pr = probe(path)
+    if is_standard(pr):
+        return False
+    v = [s for s in pr["streams"] if s["codec_type"] == "video"][0]
+    full = v.get("color_range") == "pc" or str(v.get("pix_fmt", "")).startswith("yuvj")
+    tmp = path + ".norm.mp4"
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", path, "-c:v", "libx264", "-preset", "slow", "-crf", "19", "-profile:v", "high",
+           "-level", "4.1", "-pix_fmt", "yuv420p", "-vf", "scale=in_range=full:out_range=tv" if full else "scale=out_range=tv",
+           "-color_range", "tv", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
+           "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", tmp]
+    if jid:
+        run(cmd, jid, "checking", 1800)
+    else:
+        subprocess.run(cmd, check=True, timeout=1800)
+    if not is_standard(probe(tmp)) or abs(dur(tmp) - float(pr["format"]["duration"])) > 0.5:
+        os.remove(tmp)
+        raise RuntimeError("normalize: re-encode did not give a standard video")
+    os.replace(tmp, path)
+    return True
 
 
 def dur(path):
@@ -525,6 +558,8 @@ def check(out, total):
     a = [s for s in pr["streams"] if s["codec_type"] == "audio"]
     if not v or (v[0].get("width"), v[0].get("height")) != (1080, 1920):
         e.append(f"video is not 1080x1920 ({v[0].get('width') if v else '?'}x{v[0].get('height') if v else '?'})")
+    if v and not is_standard(pr):
+        e.append(f"video is not standard ({v[0].get('pix_fmt')}/{v[0].get('color_range')}/{v[0].get('color_space')}): Safari may not play it")
     if not a:
         e.append("no audio track")
     d = float(pr["format"]["duration"])
@@ -628,6 +663,8 @@ def process(job):
     report(jid, stage="checking", render_s=render_s,
            note=f"rendered in {render_s}s; OpenMontage review: {res.get('review_status')} {('; '.join(map(str, res.get('issues') or [])))[:300]}")
 
+    if normalize(out, jid):
+        note("re-encoded to the standard video format (yuv420p, tv range, bt709) so it plays in Safari")
     problems = check(out, total)
     if problems:
         raise RuntimeError("video failed the checks: " + "; ".join(problems))
