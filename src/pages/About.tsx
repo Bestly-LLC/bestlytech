@@ -37,7 +37,7 @@ export default function About() {
     <>
       <SEOHead
         title="About Jared Best — Founder of Bestly"
-        description="Bestly is a one-person studio in Los Angeles that builds private cloud servers for businesses, plus privacy-first apps, browser extensions, and consumer hardware. No investors. No data sales."
+        description="Bestly is a Los Angeles studio that builds AI agents for small businesses, led by Bestly Agent, an AI that answers your business phone and does the work. Plus privacy-first apps, browser extensions and private cloud. No investors. No data sales."
         path="/about"
       />
 

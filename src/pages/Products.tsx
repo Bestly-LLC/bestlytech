@@ -28,7 +28,7 @@ export default function Products() {
     <>
       <SEOHead
         title="Products — Bestly"
-        description="Every product Bestly ships. Cookie Yeti, InventoryProof, HOKU, NeckPilot, SchoolPilot, HOAscope, Confesh — plus In-House Cloud for businesses. Privacy-first, no data sales, built in Los Angeles."
+        description="Every product Bestly ships, led by Bestly Agent, our AI agent that answers your business phone and does the work. Also Cookie Yeti, InventoryProof, HOKU, NeckPilot, SchoolPilot, HOAscope, Confesh — plus In-House Cloud for businesses. Privacy-first, no data sales, built in Los Angeles."
       />
 
       <div className="relative overflow-hidden">
