@@ -30,7 +30,7 @@
 // Session channels (trip_voice_sessions.channel, enforced here in tool() and run(), never in the prompt). Caller ID can be spoofed, so:
 //   page           the guest's own trip link: every tool.
 //   phone          caller's number matched a trip: trip_status (no key detail, no car, no stops), notify_host, file_ticket, reminder_email
-//                  (set only when no email is on file). No car, key, nav or text tools: they get a plain sentence pointing at the trip page link.
+//                  (status and send_now to an email already on file; never "set"). No car, key, nav or text tools: they get a plain sentence pointing at the trip page link.
 //   phone_unknown  nobody matched: file_ticket and notify_host (files a callback ticket) only.
 //   phone_test     Jared's own cell on the demo trip and pretend car: every tool.
 // Every failed result carries ok:false and a say line starting "Not sent:" or "Didn't work:". Every call is counted in leo_tool_log (no personal
