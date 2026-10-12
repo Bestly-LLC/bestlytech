@@ -58,3 +58,11 @@ Jared, 9:12 PM: show Blue Steel (the 2020 Model 3) on the wall's sky map at its 
 
 ## Undo
 Restore `server.py.bak_car_*` and `www/wall.html.bak_car_*`, restart `bestly-wall`; `drop function public.wall_pi_car(text)`; `git revert` the Sky.tsx commit.
+
+## As built (2026-10-11, 9:55 PM)
+- Commits: 1f4607f, bf8dea5, 62839fb. Migration `20261012050000_wall_pi_car.sql` (on `security_public_rpcs`; `wall.car` owned by `wall-watchdog` in `notification_owners`).
+- Pi: `/api/car` (30 s cache), heading in `/opt/bestly/wall/car_state.json`, 3 failed fetches -> Scout `wall.car` via `_w2_report`. `wall.html`: `#airCar` in `#airScrP`, `SKYLAYERS.car`, test hook `window.__car`. Patch scripts in `/tmp/carpatch` on the Mac.
+- Near Home: real bounding-box test; car + tag move to Home's right (12 px wall / 10u admin).
+- Admin polls every 30 s (no realtime).
+- Not yet seen live: the D/R speed tag, the forced `wall.car` alert.
+- Undo: restore Pi backups `server.py.bak_car_20261011212330` and `www/wall.html.bak_car_20261011212403` (later tweaks `.bak_car2_20261011213645`, `.bak_car3_20261011213737`, `.bak_car4_20261011214930`), `sudo -n systemctl restart bestly-wall`; `drop function public.wall_pi_car(text)`; delete `wall_pi_car` from `security_public_rpcs` and `wall.car` from `notification_owners`; `git revert 62839fb bf8dea5 1f4607f`.
