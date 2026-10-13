@@ -2,7 +2,7 @@ import { SEOHead } from "@/components/SEOHead";
 import { Link } from "react-router-dom";
 import { ArrowRight, Shield, Database, Lock, Globe } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
-import { InteractiveDotGrid } from "@/components/InteractiveDotGrid";
+import { HeroScenes } from "@/components/heroScenes/HeroScenes";
 import { MagneticButton } from "@/components/wow/MagneticButton";
 import { TiltCard } from "@/components/wow/TiltCard";
 import { RevealText, RevealOnScroll } from "@/components/wow/RevealText";
@@ -30,18 +30,6 @@ import hokuBottle from "@/assets/hoku-bottle.png";
  */
 
 const HOUSE_EASE = [0.32, 0.72, 0, 1] as const;
-
-const heroLine1 = ["An", "AI", "that", "answers"];
-const heroLine2 = ["your", "business"];
-const accentWord = "phone.";
-
-const heroPills = [
-  "Answers 24/7",
-  "Works in the apps you already use",
-  "Tells callers it's an AI",
-  "Never sells your data",
-  "Built in Los Angeles",
-];
 
 const focusAreas = [
   { name: "AI agents", body: "Bestly Agent answers your business phone and does the work while it talks: books the appointment, updates your customer list, texts the confirmation. Want to hear it? Call Maya, our own agent, at (213) 641-0074.", image: glossyAi },
@@ -79,110 +67,8 @@ export default function Index() {
         image="/og-agent.png"
       />
 
-      {/* ---------- Hero ---------- */}
-      <section className="relative overflow-hidden min-h-[92vh] flex items-center wow-bg-ink wow-text-paper">
-        <InteractiveDotGrid />
-
-        <div className="relative mx-auto max-w-7xl w-full px-6 py-32 lg:px-8 lg:py-40">
-          <div className="mx-auto max-w-5xl">
-            <motion.p
-              initial={reduce ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, ease: HOUSE_EASE }}
-              className="text-xs font-medium uppercase tracking-[0.2em] wow-text-muted mb-10"
-            >
-              Bestly · AI agents for small businesses
-            </motion.p>
-
-            <h1 className="font-display font-normal tracking-[-0.04em] leading-[0.95] text-[clamp(2.5rem,7vw,6rem)]">
-              <span className="block">
-                {heroLine1.map((word, i) => (
-                  <motion.span
-                    key={`${word}-${i}`}
-                    className="inline-block mr-[0.22em]"
-                    initial={reduce ? false : { opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.55, delay: reduce ? 0 : 0.08 * i, ease: HOUSE_EASE }}
-                  >
-                    {word}
-                  </motion.span>
-                ))}
-              </span>
-              <span className="block">
-                {heroLine2.map((word, i) => (
-                  <motion.span
-                    key={`${word}-${i + heroLine1.length}`}
-                    className="inline-block mr-[0.22em]"
-                    initial={reduce ? false : { opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.55, delay: reduce ? 0 : 0.08 * (i + heroLine1.length), ease: HOUSE_EASE }}
-                  >
-                    {word}
-                  </motion.span>
-                ))}
-                <motion.span
-                  className="inline-block wow-underline-accent wow-text-paper"
-                  initial={reduce ? false : { opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.55, delay: reduce ? 0 : 0.08 * (heroLine1.length + heroLine2.length), ease: HOUSE_EASE }}
-                >
-                  {accentWord}
-                </motion.span>
-              </span>
-            </h1>
-
-            <motion.p
-              initial={reduce ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.9, ease: HOUSE_EASE }}
-              className="mt-10 max-w-2xl text-lg sm:text-xl leading-relaxed wow-text-muted"
-            >
-              Bestly Agent picks up every call, day or night, then does the work while it
-              talks: books the appointment in your calendar, updates your customer list and
-              texts the confirmation. When a call needs you, it hands it over.
-            </motion.p>
-
-            <motion.div
-              initial={reduce ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 1.05, ease: HOUSE_EASE }}
-              className="mt-12 flex flex-col sm:flex-row gap-4"
-            >
-              <MagneticButton>
-                <Link
-                  to="/agent"
-                  className="group inline-flex items-center justify-center rounded-md wow-bg-indigo px-8 py-4 text-base font-medium wow-text-paper transition-transform duration-200 wow-ease hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--wow-ink))]"
-                >
-                  See it work
-                  <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 wow-ease group-hover:translate-x-0.5" />
-                </Link>
-              </MagneticButton>
-              <MagneticButton>
-                <a
-                  href="tel:+12136410074"
-                  className="inline-flex items-center justify-center rounded-md border wow-border bg-transparent px-8 py-4 text-base font-medium wow-text-paper transition-colors duration-200 wow-ease hover:wow-bg-elev focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))]"
-                >
-                  Call Maya,&nbsp;our&nbsp;AI <span className="ml-2 whitespace-nowrap wow-text-muted">(213) 641-0074</span>
-                </a>
-              </MagneticButton>
-            </motion.div>
-
-            <motion.div
-              initial={reduce ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.7, delay: 1.25, ease: HOUSE_EASE }}
-              className="mt-14 flex flex-wrap gap-x-7 gap-y-3 text-sm wow-text-muted"
-            >
-              {heroPills.map((pill, i) => (
-                <span key={pill} className="inline-flex items-center gap-2">
-                  {i > 0 && <span aria-hidden="true" className="opacity-40">·</span>}
-                  {pill}
-                </span>
-              ))}
-            </motion.div>
-          </div>
-        </div>
-      </section>
+      {/* ---------- Hero: 30 rotating AI-agent scenes ---------- */}
+      <HeroScenes />
 
       {/* ---------- Marquee separator ---------- */}
       <div className="wow-bg-ink wow-text-paper wow-hairline">
