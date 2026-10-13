@@ -8,11 +8,14 @@
  *  - describeScreen(): what the visitor is looking at right now (page + visible headings + their words), so Maya
  *                     can talk over the slide instead of reciting the knowledge base.
  *  - presenterTools(): the client tools (navigate_site_page, open_site_modal, show_section, describe_screen,
- *                     cloud_calculator, fill_contact_form),
+ *                     cloud_calculator, fill_contact_form, agent_pricing, agent_checkout, agent_setup),
  *                     each returning one plain sentence for Maya.
  */
 import { getCalc, type CalcChange } from "@/components/cloud/calcBridge";
 import { getForm, type FormValues } from "./formBridge";
+import { getPlans } from "@/components/agentDemo/planBridge";
+import { readBackSpoken } from "@/components/agentDemo/pricingText";
+import { isPlanId } from "../../../supabase/functions/_shared/agent-plans";
 import { mayaDiag } from "./mayaSession";
 import {
   findSection, loadSiteIndex, mayaProductForPath, normalizePath, resolveSiteModal, resolveSitePage,
@@ -303,6 +306,129 @@ export function presenterTools(deps: PresenterDeps) {
       } catch (e) {
         mayaDiag("form-fill", { msg: String((e as Error)?.message ?? e).slice(0, 200) });
         return `The form didn't respond. Offer to try again, or to take it by phone at ${PHONE_LINE}.`;
+      }
+    },
+
+    // Bestly Agent pricing (docs/maya-sales-opusplan.md): drive the plan picker on /agent#pricing with the visitor's numbers
+    // and read back the exact figures the page shows. Optionally chooses a plan (which opens the checkout card).
+    agent_pricing: async (params: P) => {
+      try {
+        const num = (k: string) => {
+          const n = Number(String(params?.[k] ?? "").replace(/[^0-9.]/g, ""));
+          return String(params?.[k] ?? "").trim() && Number.isFinite(n) ? n : undefined;
+        };
+        const plan = String(params?.plan ?? "").trim().toLowerCase();
+        const moved = goTo(deps, "/agent");
+        if (moved) await sleep(450);
+        const api = await getPlans(5000);
+        if (!api) {
+          mayaDiag("form-fill", { msg: "pricing section did not load" });
+          return "The pricing section didn't load. Say the prices from your instructions and offer the contact form or a call.";
+        }
+        const callsPerDay = num("calls_per_day");
+        const avgMinutes = num("avg_minutes");
+        const minutes = num("minutes");
+        const el = api.element(plan ? "pricing" : "picker");
+        if (el) spotlightBlock(el);
+        deps.onShow?.("Bestly Agent pricing");
+        let say: string;
+        if (callsPerDay != null || avgMinutes != null || minutes != null) say = api.setUsage({ callsPerDay, avgMinutes, minutes }).say;
+        else say = api.read().say;
+        if (plan) {
+          if (isPlanId(plan)) say += ` ${api.choose(plan).say}`;
+          else say += " That is not one of the plans (lite, starter, growth), so none was chosen.";
+        }
+        return `${say} Say the best fit in plain words, one or two sentences, then ask the next thing you don't know yet (calls a day, how long a call runs, or what calls should end in). Only quote numbers that are in this result. Never invent a discount, trial or custom price; anything custom goes to the contact form for Jared.`;
+      } catch (e) {
+        mayaDiag("form-fill", { msg: String((e as Error)?.message ?? e).slice(0, 200) });
+        return "The pricing section didn't respond. Say the prices from your instructions and offer to try again.";
+      }
+    },
+
+    // Choose the plan and type the buyer's details into the checkout card. She never presses Pay: the visitor taps Pay securely.
+    agent_checkout: async (params: P) => {
+      try {
+        const str = (k: string) => {
+          const v = params?.[k];
+          return v == null ? undefined : clean(String(v));
+        };
+        const plan = String(params?.plan ?? "").trim().toLowerCase();
+        const moved = goTo(deps, "/agent");
+        if (moved) await sleep(450);
+        const api = await getPlans(5000);
+        if (!api) {
+          mayaDiag("form-fill", { msg: "checkout card did not load" });
+          return `The checkout didn't load. Offer to try again, or to take them through it by phone at ${PHONE_LINE}.`;
+        }
+        let lead = "";
+        if (plan) {
+          if (!isPlanId(plan)) return "That is not one of the plans (lite, starter, growth). Ask which plan they want.";
+          lead = api.choose(plan).say;
+          await sleep(250);
+        }
+        const el = api.element("checkout") ?? api.element("pricing");
+        if (el && el !== spottedForm) {
+          spottedForm = el;
+          spotlightBlock(el);
+        }
+        deps.onShow?.("Checkout");
+        const r = await api.fillCheckout({ name: str("name"), email: str("email"), company: str("company"), phone: str("phone") });
+        if (r.missing.includes("plan")) return "No plan is chosen yet. Ask which plan they want (lite, starter or growth), then call this again with plan set.";
+        const readBack = plan && isPlanId(plan) ? readBackSpoken(plan) : "";
+        return `${lead ? `${lead} ` : ""}${r.say} ${r.missing.length
+          ? "Ask for the missing ones one at a time."
+          : `Read it back in plain words${readBack ? `: ${readBack}` : ""}. Always say no setup fee, 30-day money back, cancel anytime. After a clear yes, tell them to tap Pay securely at the bottom of the card; you cannot tap it for them.`} Never ask for card numbers or say they have paid: only Stripe's page takes payment, and the welcome page confirms it. If a phone number was given, mention the line above the button about calls and texts.`;
+      } catch (e) {
+        mayaDiag("form-fill", { msg: String((e as Error)?.message ?? e).slice(0, 200) });
+        return `The checkout didn't respond. Offer to try again, or to take them through it by phone at ${PHONE_LINE}.`;
+      }
+    },
+
+    // The setup questions on /agent/welcome (after paying): type the answers in live; Send only after a clear yes.
+    agent_setup: async (params: P) => {
+      try {
+        if (normalizePath(deps.path()) !== "/agent/welcome") {
+          return "The setup form is on the page the buyer lands on after paying (bestly.tech/agent/welcome, from the link in their email). It isn't open here, so don't try to fill it.";
+        }
+        const str = (k: string) => {
+          const v = params?.[k];
+          return v == null ? undefined : clean(String(v));
+        };
+        const wantsSubmit = params?.submit === true || String(params?.submit ?? "").toLowerCase() === "true";
+        const values: FormValues = {};
+        for (const k of ["company", "website", "current_phone", "phone_plan", "hours", "timezone", "call_goal", "transfer_name", "transfer_phone", "apps", "voice", "agent_name"] as const) {
+          const v = str(k);
+          if (v) values[k] = v;
+        }
+        // The long answers keep their line breaks; only the ends are trimmed.
+        for (const k of ["faqs", "never"] as const) {
+          if (params?.[k] != null && String(params[k]).trim()) values[k] = String(params[k]).trim();
+        }
+        const api = await getForm(5000, "agent-setup");
+        if (!api) {
+          mayaDiag("form-fill", { msg: "setup form did not load" });
+          return `The setup form didn't load. Offer to try again, or to take the answers by phone at ${PHONE_LINE}.`;
+        }
+        const el = api.element();
+        if (el && el !== spottedForm) {
+          spottedForm = el;
+          spotlightBlock(el);
+        }
+        deps.onShow?.("Filling in your setup");
+        const r = Object.keys(values).length ? await api.fill(values) : api.read();
+        if (wantsSubmit) {
+          const s = await api.submit();
+          if (!s.ok && !/^Not sent yet/.test(s.say)) mayaDiag("form-fill", { msg: s.say.slice(0, 200), target: "agent-setup" });
+          return s.ok
+            ? `${s.say} Tell them what happens next, then offer the kickoff call button.`
+            : `${s.say} Say it plainly. If a field is missing, ask for it; if the site failed, offer to try again or ${PHONE_LINE}.`;
+        }
+        return r.missing.length
+          ? `${r.say} Ask for the missing ones one at a time, in plain words. Never say it was sent: only a submit result that says Sent means that.`
+          : `${r.say} Read it back in plain words and only call again with submit true after a clear yes. Never say it was sent until a submit result says Sent.`;
+      } catch (e) {
+        mayaDiag("form-fill", { msg: String((e as Error)?.message ?? e).slice(0, 200) });
+        return `The setup form didn't respond. Offer to try again, or to take the answers by phone at ${PHONE_LINE}.`;
       }
     },
   };

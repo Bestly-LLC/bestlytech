@@ -25,6 +25,9 @@ export const PAGE_PRODUCT: Record<string, string> = {
   "/get-started": "Bestly Cloud",
   "/studio": "Bestly Studio",
   "/agent": "Bestly Agent",
+  // Where a buyer lands after paying (token in the query, never in the path). Maya is there to help with the setup form,
+  // but she can't navigate to it: see resolveSitePage.
+  "/agent/welcome": "Bestly Agent setup",
   "/neckpilot": "NeckPilot",
   "/services": "Bestly services",
   "/apple-modernization": "Apple modernization service",
@@ -77,7 +80,7 @@ export function mayaProductForPath(pathname: string): string | null {
   return PAGE_PRODUCT[path] ?? null;
 }
 
-const pageList = () => Object.keys(PAGE_PRODUCT).filter((p) => p !== "/apps" && p !== "/in-house-cloud").join(", ");
+const pageList = () => Object.keys(PAGE_PRODUCT).filter((p) => p !== "/apps" && p !== "/in-house-cloud" && p !== "/agent/welcome").join(", ");
 
 export type NavResult = { ok: true; path: string; hash: string; name: string } | { ok: false; say: string };
 
@@ -115,6 +118,9 @@ export function resolveSitePage(raw: unknown, currentHost?: string): NavResult {
       ok: false,
       say: `${NO_PAGE_YET[path]} has no page on bestly.tech yet, so I stayed on this page. Answer from what you know, or offer a ticket.`,
     };
+  }
+  if (path === "/agent/welcome") {
+    return { ok: false, say: "The setup page is only for someone who just paid; they reach it from the link in their email or after paying. You can't open it for them." };
   }
   const name = mayaProductForPath(path) ? PAGE_PRODUCT[path] : null;
   if (!name) return { ok: false, say: `There is no page for that on bestly.tech. Pages I can open: ${pageList()}.` };
@@ -183,6 +189,8 @@ const SECTION_ALIASES: { words: string[]; path: string; heading: string; need?: 
   { words: ["faq", "questions", "concerns", "breaks", "maintains"], path: "/cloud", heading: "The four questions everybody asks" },
   { words: ["demo", "example call", "sample call", "watch a call", "listen to a call"], path: "/agent", heading: "Watch Maya take a call" },
   { words: ["how it works", "how does it work", "how agent works"], need: "agent", path: "/agent", heading: "We set it all up for you." },
+  { words: ["cost", "price", "pricing", "how much", "plans", "plan", "monthly", "subscription"], need: "agent", path: "/agent", heading: "Simple monthly plans" },
+  { words: ["which plan", "right plan", "plan picker", "minutes a month", "how many minutes"], path: "/agent", heading: "Not sure which plan" },
 ];
 
 const STOP = new Set(["the", "a", "an", "me", "show", "see", "of", "for", "to", "on", "in", "and", "your", "you", "our",

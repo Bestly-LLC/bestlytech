@@ -7,7 +7,7 @@
  *   presentation.
  * - Voice and typing in one place. Opening the panel starts nothing; a session begins on the first message or the mic.
  * - Her client tools come from presenter.ts (show_section, describe_screen, navigate_site_page, open_site_modal,
- *   cloud_calculator, fill_contact_form).
+ *   cloud_calculator, fill_contact_form, agent_pricing, agent_checkout, agent_setup).
  *   When she shows something, a "Showing" strip names it with a Show again button; on phones the sheet tucks into a
  *   pill so the page is visible, and the pill brings her back.
  * - Sessions come from maya-session (signed URL; her agent is private). Worklets are self-hosted under /maya, so the
@@ -24,6 +24,7 @@ import { mayaProductForPath, normalizePath } from "./siteTools";
 import { findHeading, presenterTools, spotlight } from "./presenter";
 import { getMayaSession, mayaDiag } from "./mayaSession";
 import { CALC_CHANGED } from "@/components/cloud/calcBridge";
+import { PLAN_CHANGED } from "@/components/agentDemo/planBridge";
 import { FORM_CHANGED, setMayaConversationId } from "./formBridge";
 
 type Any = Record<string, unknown>;
@@ -52,6 +53,8 @@ function chipsFor(path: string): string[] {
   if (p === "/about") return ["Who is Jared?", "What does Bestly make?", "How do you handle my data?"];
   if (p === "/hoku") return ["Show me the science", "When does HOKU launch?", "What makes it different?"];
   if (p === "/cookie-yeti") return ["How does Cookie Yeti work?", "Show me pricing", "Is it on Safari?"];
+  if (p === "/agent") return ["What does it cost?", "Which plan is right for me?", "Show me a demo call"];
+  if (p === "/agent/welcome") return ["Help me fill in the setup", "What happens after I send it?", "Which apps can you connect?"];
   return ["Give me a quick tour", "Who's behind Bestly?", "Show me the cloud savings calculator"];
 }
 
@@ -61,7 +64,9 @@ function labelFor(tool: string): string {
     case "navigate_site_page": case "open_site_modal": return "Opening the page";
     case "describe_screen": return "Looking at your screen";
     case "cloud_calculator": return "Running your numbers";
-    case "fill_contact_form": return "Filling in your details";
+    case "fill_contact_form": case "agent_checkout": return "Filling in your details";
+    case "agent_pricing": return "Running your numbers";
+    case "agent_setup": return "Filling in your setup";
     case "file_ticket": return "Saving that for the team";
     case "verify_start": case "verify_check": return "Checking your account";
     default: return "Working on it";
@@ -214,6 +219,16 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
     };
     window.addEventListener(CALC_CHANGED, f);
     return () => window.removeEventListener(CALC_CHANGED, f);
+  }, []);
+
+  // The visitor moved the pricing picker or chose a plan by hand: she hears the numbers the page shows.
+  useEffect(() => {
+    const f = (e: Event) => {
+      const say = String((e as CustomEvent<string>).detail ?? "");
+      try { if (say) conv.current?.sendContextualUpdate(`The visitor changed the pricing section themselves. ${say}`); } catch { /* not connected */ }
+    };
+    window.addEventListener(PLAN_CHANGED, f);
+    return () => window.removeEventListener(PLAN_CHANGED, f);
   }, []);
 
   // The visitor edited the contact form by hand (after Maya typed, or before): she hears what is on it now.

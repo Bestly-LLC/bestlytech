@@ -27,7 +27,7 @@ const toolsSrc = readFileSync("src/components/maya/siteTools.ts", "utf8");
 const block = toolsSrc.slice(toolsSrc.indexOf("export const PAGE_PRODUCT"), toolsSrc.indexOf("};", toolsSrc.indexOf("export const PAGE_PRODUCT")));
 const pages = [...block.matchAll(/"(\/[^"]*)":\s*"([^"]+)"/g)].map((m) => ({ path: m[1], name: m[2] }));
 // Same page under two paths: index it once, under the path Maya uses.
-const SKIP = new Set(["/apps", "/in-house-cloud"]);
+const SKIP = new Set(["/apps", "/in-house-cloud", "/agent/welcome"]); // welcome needs a token from the post-payment email
 
 const exe = process.env.MAYA_CHROME || undefined;
 const browser = await chromium.launch(exe ? { executablePath: exe } : {});
