@@ -73,7 +73,8 @@ const circle = (cx: number, cy: number, r: number) => `M${cx - r} ${cy} a${r} ${
 
 const FOLDER = 'M12 28 a6 6 0 0 1 6-6 H38 L46 31 H82 a6 6 0 0 1 6 6 V72 a6 6 0 0 1-6 6 H18 a6 6 0 0 1-6-6 Z';
 const LOCK = 'M32 44 H68 a8 8 0 0 1 8 8 V74 a8 8 0 0 1-8 8 H32 a8 8 0 0 1-8-8 V52 a8 8 0 0 1 8-8 Z';
-const BOX = 'M30 18 H70 a10 10 0 0 1 10 10 V72 a10 10 0 0 1-10 10 H30 a10 10 0 0 1-10-10 V28 a10 10 0 0 1 10-10 Z';
+const BOX = 'M28 22 H72 a10 10 0 0 1 10 10 V38 a10 10 0 0 1-10 10 H28 a10 10 0 0 1-10-10 V32 a10 10 0 0 1 10-10 Z';
+const BOX2 = 'M28 52 H72 a10 10 0 0 1 10 10 V68 a10 10 0 0 1-10 10 H28 a10 10 0 0 1-10-10 V62 a10 10 0 0 1 10-10 Z';
 const CAL = 'M24 24 H76 a8 8 0 0 1 8 8 V74 a8 8 0 0 1-8 8 H24 a8 8 0 0 1-8-8 V32 a8 8 0 0 1 8-8 Z';
 const BUBBLE = 'M18 26 a8 8 0 0 1 8-8 H74 a8 8 0 0 1 8 8 V56 a8 8 0 0 1-8 8 H46 L30 79 V64 H26 a8 8 0 0 1-8-8 Z';
 const TAG = 'M48 14 H80 a6 6 0 0 1 6 6 V52 L52 86 a6 6 0 0 1-8.5 0 L14 56.5 a6 6 0 0 1 0-8.5 Z';
@@ -82,7 +83,7 @@ const EYE = 'M8 50 C24 28 76 28 92 50 C76 72 24 72 8 50 Z';
 export const ICONS: Record<string, Seg[]> = {
   files: [F(FOLDER), S(FOLDER), H('M28 52 H72'), H('M28 64 H56')],
   lock: [F(LOCK), S(LOCK), S('M34 44 V34 a16 16 0 0 1 32 0 V44'), D(50, 60, 5, true), H('M50 65 V72')],
-  box: [F(BOX), S(BOX), H('M32 36 H68'), H('M32 50 H68'), D(34, 68, 4.2, true), H('M46 68 H66')],
+  box: [F(BOX), S(BOX), F(BOX2), S(BOX2), D(31, 35, 3.6, true), H('M43 35 H70'), D(31, 65, 3.6, true), H('M43 65 H70')],
   people: [F(circle(50, 34, 10)), S(circle(50, 34, 10)), S('M30 76 a20 20 0 0 1 40 0'), S(circle(24, 44, 7)), S('M10 72 a14 14 0 0 1 16-14'),
            S(circle(76, 44, 7)), S('M90 72 a14 14 0 0 0 -16-14')],
   calendar: [F(CAL), S(CAL), H('M16 42 H84'), S('M34 16 V30 M66 16 V30'), D(34, 57, 2.8), D(50, 57, 2.8), D(66, 57, 2.8), D(34, 70, 2.8), D(50, 70, 3.4, true)],
@@ -267,7 +268,7 @@ const ChipRow: React.FC<{c: Chip; t: Theme; b: Brand; delay: number}> = ({c, t, 
   const draw = spring({frame: f - delay - 4, fps, config: {damping: 200, stiffness: 45}});
   const o = Math.min(1, s);
   return (
-    <div style={{display: 'flex', alignItems: 'center', gap: 34, width: 900, height: 138, padding: '0 40px 0 30px', borderRadius: 69,
+    <div style={{display: 'flex', alignItems: 'center', gap: 34, width: 940, height: 138, padding: '0 40px 0 30px', borderRadius: 69,
                  background: `linear-gradient(90deg, ${rgba(t.accent, 0.2)} 0%, ${rgba(t.accent, 0.08)} 55%, ${rgba(t.accent, 0.02)} 100%)`,
                  boxShadow: `0 0 70px ${rgba(t.accent, 0.14)}`,
                  opacity: o, transform: `translateX(${(1 - s) * -90}px) scale(${0.94 + 0.06 * Math.min(1, s)})`}}>

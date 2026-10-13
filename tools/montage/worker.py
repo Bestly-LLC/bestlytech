@@ -587,6 +587,36 @@ def brand_for(slug):
         raise RuntimeError(f"no Montage brand style for '{slug}' yet ({e})")
 
 
+def _render(jd, job, jid):
+    """One OpenMontage render of the job's props. Returns OpenMontage's result dict; raises RuntimeError when it did not make out.mp4."""
+    out = f"{jd}/out.mp4"
+    if os.path.exists(out):
+        os.remove(out)
+    raw = run([OMPY, "/opt/bestly/montage/om_render.py", jd, job["client_slug"]], jid, "rendering", 2400)
+    res = json.loads(raw.strip().splitlines()[-1])
+    if not res.get("success") or not os.path.exists(out):
+        raise RuntimeError(f"OpenMontage render failed: {res.get('error')} {res.get('issues')}")
+    return res
+
+
+def _has_graphics(props):
+    return any(s.get("icon") for s in props["scenes"]) or bool((props.get("end") or {}).get("chips")) or \
+        bool((props.get("brand") or {}).get("ambient")) or bool(((props.get("brand") or {}).get("end") or {}).get("heroLogo"))
+
+
+def _plain(props):
+    """The same props without the 2026-10-12 graphics (what the composition drew before)."""
+    p = json.loads(json.dumps(props))
+    for s in p["scenes"]:
+        s.pop("icon", None)
+    if p.get("end"):
+        p["end"].pop("chips", None)
+    if p.get("brand"):
+        p["brand"].pop("ambient", None)
+        (p["brand"].get("end") or {}).pop("heroLogo", None)
+    return p
+
+
 def process(job):
     jid = job["id"]
     jd = f"{JOBS}/{jid}"
@@ -641,7 +671,8 @@ def process(job):
 
     clips = clips_for(job, script, jd, note) if (job.get("clips") or job.get("parent_job_id")) else {}
     props = {"theme": script["theme"],
-             "scenes": [{**{k: s[k] for k in ("kicker", "line", "start", "end")}, **({"clip": clips[i]} if i in clips else {})}
+             "scenes": [{**{k: s[k] for k in ("kicker", "line", "start", "end")}, **({"clip": clips[i]} if i in clips else {}),
+                         **({"icon": s["icon"]} if s.get("icon") else {})}
                         for i, s in enumerate(script["scenes"])],
              "end": {k: v for k, v in script["end"].items() if k != "say"},
              "audio": {"narration": "narration.wav", "music": "pad.wav", "musicVolume": 0.1}}
@@ -654,12 +685,22 @@ def process(job):
     report(jid, stage="rendering", script=script, note=f"{total:.1f}s long, {len(clips)} b-roll clip(s); rendering in OpenMontage")
 
     t0 = time.time()
-    raw = run([OMPY, "/opt/bestly/montage/om_render.py", jd, job["client_slug"]], jid, "rendering", 2400)
-    render_s = int(time.time() - t0)
-    res = json.loads(raw.strip().splitlines()[-1])
     out = f"{jd}/out.mp4"
-    if not res.get("success") or not os.path.exists(out):
-        raise RuntimeError(f"OpenMontage render failed: {res.get('error')} {res.get('issues')}")
+    try:
+        res = _render(jd, job, jid)
+    except RuntimeError as e:
+        # self-heal: the motion graphics (icons, closing-card chips, ambient glow) are extras. If the render breaks with them on, draw the same
+        # video as plain cards instead of losing the job, and tell Spark (info, no push) so the graphics get fixed.
+        if not _has_graphics(props):
+            raise
+        note(f"render with graphics failed ({str(e)[:160]}); drawing plain cards")
+        props = _plain(props)
+        json.dump(props, open(f"{jd}/props.json", "w"))
+        res = _render(jd, job, jid)
+        lib.notify("Spark: a video was drawn without its graphics", f"{job['client_slug']}: the graphics render failed ({str(e)[:240]}). "
+                   "The video was filed as plain cards; the composition in tools/montage/comp/brand needs a look.", severity="info", push=False,
+                   url="/admin/team", dedupe=f"montage.graphics-{jid}")
+    render_s = int(time.time() - t0)
     report(jid, stage="checking", render_s=render_s,
            note=f"rendered in {render_s}s; OpenMontage review: {res.get('review_status')} {('; '.join(map(str, res.get('issues') or [])))[:300]}")
 
@@ -681,7 +722,9 @@ def process(job):
         "title": script["title"], "caption": script["caption"], "media_url": media, "thumb_url": turl,
         "variants": [{"platform": "instagram", "caption": script["caption"]}],
         "provenance": {"theme": script["theme"], "provider": script["provider"], "editor_score": script["score"], "broll_clips": len(clips),
-                       "render_s": render_s, "length_s": round(total, 1), "openmontage": "9327439"},
+                       "render_s": render_s, "length_s": round(total, 1), "openmontage": "9327439",
+                       **({"recut_changed": script["recut_changed"]} if script.get("recut_changed") is not None else {}),
+                       **({"graphics": True} if _has_graphics(props) else {})},
         "note": ((f"Re-cut with the note: \"{(job.get('revise_note') or '')[:300]}\". " if job.get("parent_job_id") else "")
                  + f"Montage made this from the brief: \"{job['brief'][:300]}\". Script by free AI ({script['provider']}), "
                  f"passed {getattr(brand, 'NAME', 'HOKU')}'s claim rules and fact check (editor {script['score']:g}/10). Voice: {'ElevenLabs' if vinfo.get('provider') == 'elevenlabs' else 'Piper'}. "
@@ -725,6 +768,18 @@ def main():
         except Exception as e:  # noqa: BLE001
             err = f"{type(e).__name__}: {e}"
             print(traceback.format_exc(), flush=True)
+            if type(e).__name__ == "RecutUnchanged":      # brands._common: a re-cut that came back the same (twice); not a crash, not an alarm
+                err = f"re-cut not filed: {e}"
+                report(job["id"], status="failed", stage="failed", error=err[:2000], note=err[:400])
+                beat(True, f"re-cut {job['id']} stopped: copy would not change")
+                try:
+                    lib.notify("Spark: a re-cut was stopped, the new copy matched the old", f"{job['client_slug']}: {str(e)[:380]} "
+                               "Try the note again with a sentence on what the new opening should say.", severity="info", push=False,
+                               url="https://studio.bestly.tech", dedupe=f"montage.recut-{job['id']}")
+                except Exception as e2:  # noqa: BLE001
+                    print("recut alert failed:", e2, flush=True)
+                last_beat = time.time()
+                continue
             report(job["id"], status="failed", stage="failed", error=err[:2000], note=err[:400])
             beat(True, f"job {job['id']} failed: {err[:200]}")
             lib.notify("Montage: a video job failed", f"{job['client_slug']}: {err[:300]}", severity="warning",
