@@ -8,7 +8,7 @@
       "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
     },
     "api/hero-check.js": {
-      "maxDuration": 60,
+      "maxDuration": 90,
       "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
     }
   },
