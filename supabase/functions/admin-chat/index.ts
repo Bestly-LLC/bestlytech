@@ -448,6 +448,28 @@ const TOOLS = [
     },
   },
   {
+    name: "call_debrief",
+    description:
+      "THE way to debrief a recorded call. Returns the digest built from the WHOLE call in pieces (scout-daily): TL;DR, decisions, " +
+      "commitments (owner, task, due, the exact quote and [mm:ss]), numbers, open questions, plus the to-dos already made from it. " +
+      "name is the recording (meeting-YYYYMMDD-HHMM); leave it out for the latest call. If the digest is not ready it starts it and says so: " +
+      "then tell Jared it is being built (2-3 minutes) instead of improvising one from transcript searches. " +
+      "Use meeting_transcript find only to check ONE detail afterwards.",
+    input_schema: { type: "object", properties: { name: { type: "string" } } },
+  },
+  {
+    name: "add_todo",
+    description:
+      "Add one to-do to his list (scout_daily, kind 'call'). Use this, never db_write, for to-dos. owner = first name (Jared if it's his); " +
+      "due = YYYY-MM-DD only if one was said; meeting = the recording it came from if any; quote = the words it came from. " +
+      "Check call_debrief's existing_todos first so you never add a duplicate. No yes needed when he asked for the to-dos.",
+    input_schema: {
+      type: "object",
+      properties: { title: { type: "string" }, owner: { type: "string" }, due: { type: "string" }, meeting: { type: "string" }, quote: { type: "string" } },
+      required: ["title"],
+    },
+  },
+  {
     name: "learn",
     description:
       "Save a lesson for next time, when something failed and you found what works (or Jared taught you something about a tool, table or project). " +
@@ -500,8 +522,8 @@ const TOOLS = [
       "site, LinkedIn) added automatically - never type a signature or sign-off block yourself, just end with a short sign-off line " +
       "like 'Thanks, Jared' if it fits. Jared is bcc'd. to/cc take email addresses OR a person's name (e.g. 'Eli'): a name is looked up " +
       "in his mail; if it can't be found or matches several people, the result says so - ask him then. body is plain text " +
-      "(blank line between paragraphs, numbered steps fine). Call without confirmed first to get the exact preview, show it to him, " +
-      "and send with confirmed:true only after he said to send it (\"send it\", \"send for me\") or auto-run is on.",
+      "(blank line between paragraphs, numbered steps fine). ALWAYS call without confirmed first to get the exact preview and show it to him. " +
+      "confirmed:true is refused (even with auto-run) unless he replied yes AFTER seeing that exact preview; any change to to/subject/body needs a new preview.",
     input_schema: {
       type: "object",
       properties: {
@@ -722,7 +744,7 @@ The notetaker is a headless Chrome that joins Talk calls as "Scout (notetaker)" 
 Never edit agent.py or stop.sh this way; the Mac does not pull those.
 
 # Debriefing a call
-Read it with meeting_transcript. Then, in plain text: first the decisions (only what was actually agreed, not ideas floated), then each commitment as "Name: what, by when" (only a deadline if one was said), then open questions. Keep it tight; he can ask for more. Never invent something that was not said. If a speaker name has a ?, work out who it was from the context before you attribute anything to them.
+Call call_debrief first (v69: it is built from the whole call in pieces; transcript searches only ever saw snippets and invented items). "Who owes what" means who has to DO what, never money. Then, in plain text: first the decisions (only what was actually agreed, not ideas floated), then each commitment as "Name: what, by when" (only a deadline if one was said), then open questions. Keep it tight; he can ask for more. Never invent something that was not said. If a speaker name has a ?, work out who it was from the context before you attribute anything to them.
 
 # What you can do yourself
 - Read anything: today, incidents, run_sql, meeting_transcript.
@@ -1041,6 +1063,62 @@ async function meetingTranscript(args: Record<string, any>): Promise<Record<stri
   };
 }
 
+// ---------------------------------------------------------------- v69 (2026-10-13) call_debrief + add_todo
+// Oct 12-13 audit: debriefs were built from keyword greps (find returns 12 matches of a 72K-133K transcript), so Scout
+// invented to-dos ("test Elizabeth's account", "Midjourney drafts"), read "who owes what" as money, and hand-wrote SQL
+// into scout_daily (7 of 13 db_write calls failed). Now the digest comes from scout-daily's chunked pass over the whole call.
+const pt = (iso: string | null) => iso ? new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : null;
+async function callDebrief(args: Record<string, any>): Promise<Record<string, unknown>> {
+  let q = db.from("meeting_recordings").select("id, name, started_at, stopped_at, roster, summary, tasks_at");
+  q = args.name ? q.eq("name", String(args.name)) : q.not("stopped_at", "is", null).order("started_at", { ascending: false, nullsFirst: false });
+  const { data, error } = await q.limit(1);
+  if (error) return { ok: false, error: error.message };
+  const r = (data ?? [])[0] as any;
+  if (!r) return { ok: false, error: "no recording found", hint: "meeting_transcript {list:true} shows the recent calls." };
+  const s = r.summary ?? null;
+  const broken = !s || String(s.summary ?? "").trim() === "2 sentences";
+  const done = !broken && (s.status === "done" || (!s.status && typeof s.summary === "string"));
+  const head = { name: r.name, when: pt(r.started_at), ended: pt(r.stopped_at), people: ["Jared", ...((r.roster ?? []) as string[])] };
+  if (!done) {
+    // Kick the extractor (it resumes from saved pieces); the 20-minute sweep finishes it if this request is cut short.
+    const job = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/scout-daily`, {
+      method: "POST", headers: { "Content-Type": "application/json", apikey: SECRET_KEY, Authorization: `Bearer ${SECRET_KEY}` },
+      body: JSON.stringify({ op: "call", id: r.id, force: broken && !!s }),
+    }).then((x) => x.text()).catch(() => null);
+    const er = (globalThis as any).EdgeRuntime;
+    if (er?.waitUntil) er.waitUntil(job);
+    return { ok: false, error: "not_ready", ...head, progress: s?.status === "partial" ? `${s.chunks_done ?? 0} of ${s.chunks_total ?? "?"} pieces read` : "starting",
+      hint: "Tell Jared the debrief is being built from the whole call (2-3 minutes) and to ask again then. Do NOT build one from meeting_transcript searches." };
+  }
+  const { data: todos } = await db.from("scout_daily").select("id, title, status, action").eq("kind", "call").like("source_key", `call:${r.id}:%`).limit(60);
+  return {
+    ok: true, ...head, tldr: s.summary, decisions: s.decisions ?? [], commitments: s.commitments ?? [], numbers: s.numbers ?? [], questions: s.questions ?? [],
+    existing_todos: ((todos ?? []) as any[]).filter((t) => t.status !== "dismissed").map((t) => ({ id: t.id, title: t.title, owner: t.action?.owner ?? null, status: t.status })),
+    hint: "Debrief from this. Keep the [mm:ss] stamps. 'Who owes what' = who has to do what. The to-dos above already exist: don't add them again.",
+  };
+}
+async function addTodo(args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
+  const title = String(args.title ?? "").replace(/\s+/g, " ").trim();
+  if (title.length < 6 || title.length > 140) return { ok: false, error: "title must be 6-140 characters" };
+  if (/^(imperative|exact words|\.\.\.|todo|task)\b/i.test(title)) return { ok: false, error: "that is a placeholder, not a to-do" };
+  const owner = (String(args.owner ?? "Jared").trim().split(/\s+/)[0] || "Jared").replace(/^./, (c) => c.toUpperCase());
+  const due = /^\d{4}-\d{2}-\d{2}$/.test(String(args.due ?? "")) ? String(args.due) : null;
+  const day = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  const norm = title.toLowerCase().replace(/[^a-z0-9 ]/g, "");
+  const { data: same } = await db.from("scout_daily").select("id, title, status").eq("kind", "call").neq("status", "dismissed").gte("day", new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10)).limit(300);
+  const dup = ((same ?? []) as any[]).find((t) => String(t.title).toLowerCase().replace(/[^a-z0-9 ]/g, "") === norm);
+  if (dup) return { ok: true, already: true, id: dup.id, title: dup.title, status: dup.status };
+  const h = Array.from(new TextEncoder().encode(norm + owner)).reduce((a, c) => (a * 31 + c) >>> 0, 7).toString(36);
+  const meeting = args.meeting ? String(args.meeting).slice(0, 60) : null;
+  const { data, error } = await db.from("scout_daily").upsert({
+    day, kind: "call", title, why: `${owner}${due ? ` · due ${due}` : ""}${meeting ? ` · from ${meeting}` : " · added in Scout"}`,
+    source_key: `chat:${h}`,
+    action: { owner, due, meeting, quote: args.quote ? String(args.quote).slice(0, 200) : null, added_by: "scout", thread_id: threadId },
+  }, { onConflict: "day,kind,source_key", ignoreDuplicates: true }).select("id");
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, id: (data as any)?.[0]?.id ?? null, title, owner, due };
+}
+
 /**
  * v38 (Part C, option B): edge function code ships only with Jared's tap. After a commit touches supabase/functions/, this builds the
  * exact Mac mini job that deploys just those functions from a fresh temp clone (deleted at the end). Scout proposes it with mac_run;
@@ -1143,6 +1221,12 @@ const FREE_FACTS = `Facts about the admin you may use:
 
 /** Paid AI said "credit balance too low" in the last day and hasn't worked since (the unread bell card). */
 async function paidOutOfCredit(): Promise<boolean> {
+  // v69: also the durable mark on llm_providers.anthropic (the bell card stopped counting once he read it, and Scout
+  // went back to offering a paid run that could not happen, Oct 11-13).
+  const { data: pv } = await db.from("llm_providers").select("last_error, last_ok_at").eq("name", "anthropic").maybeSingle();
+  const err = String((pv as any)?.last_error ?? "");
+  const m = err.match(/^(\S+) out_of_credit/);
+  if (m && (!(pv as any)?.last_ok_at || Date.parse((pv as any).last_ok_at) < Date.parse(m[1]))) return true;
   const since = new Date(Date.now() - 24 * 3600_000).toISOString();
   const { data } = await db.from("admin_notifications").select("id").like("dedupe_key", "scout.credit:%")
     .is("read_at", null).gte("created_at", since).limit(1);
@@ -1242,9 +1326,10 @@ const FREE_TOOLS = new Set([
   "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn", "ask_user", "make_video",
   "send_email", "look", "report_spam",
   "search_mail", "read_email",   // v41
+  "call_debrief", "add_todo",     // v69
   "commit_files", "db_write", "mac_command", "code_job",   // v38/v42: the same hands as paid Scout (same confirmation rules, same AUTOPILOT_NEVER)
 ]);
-const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "search_code", "meeting_transcript", "look", "search_mail", "read_email"]);
+const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "search_code", "meeting_transcript", "call_debrief", "look", "search_mail", "read_email"]);
 const FREE_STEPS = 26;           // v41: a TASK gets 25 tool calls a hop (QUESTION_CALLS for a question); the 85 s budget still bounds each hop
 const FREE_BUDGET_MS = 85_000;   // freeTry (up to 30s) + this + the 20s summary must stay under the 150s platform limit
 const REFUSES = /\b(can'?t|cannot|can not|unable to|not able to|don'?t have (access|the ability))\b|\bmanually\b|\byou('ll| will)? (need|have) to\b/i;
@@ -1339,8 +1424,8 @@ const TOOL_TOPICS: [string[], RegExp][] = [
   [["pi_command"], /\b(pi|network|wi-?fi|router|internet|dns|pi-?hole|nextcloud|homebridge|home ?assistant|devices?|lan|ping|speed|coffee|spinn)\b/i],
   [["mac_run"], /\b(mac|mini|script|job|terminal|launchd|restart|install|brew|git|build|worker|agent|log|logs)\b/i],
   [["notify"], /\b(notify|push|remind|ping me|let me know|tell (me|eli))\b/i],
-  [["recorder", "meeting_transcript"], /\b(record|recording|recorder|call|meeting|debrief|transcript|notetaker|talk)\b/i],
-  [["todo_owner", "mark_done"], /\b(to-?dos?|tasks?|done|finish|mark|owner|assign|mine|eli'?s?)\b/i],
+  [["recorder", "meeting_transcript", "call_debrief", "add_todo"], /\b(record|recording|recorder|call|meeting|debrief|transcript|notetaker|talk)\b/i],
+  [["todo_owner", "mark_done", "add_todo"], /\b(to-?dos?|tasks?|done|finish|mark|owner|assign|mine|eli'?s?)\b/i],
   [["clear_alerts", "resolve_incident"], /\b(alerts?|incidents?|bell|resolve|clear|fixed|warning|notification)\b/i],
   [["learn"], /\b(learn|remember|lesson|next time)\b/i],
   [["make_video"], /\b(video|videos|clip|clips|ltx|render|animate|animation|footage|b-?roll|reel)\b/i],
@@ -1550,6 +1635,7 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
   const system = ledgerFree + "\n" + `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You run on a free model WITH real tools: do the work yourself, don't tell Jared what someone else should do.
 How to work:
 - Read before you answer or act: search_mail + read_email (any email or person), run_sql, today, incidents, read_file, meeting_transcript. Anything about a person, an email, an invoice, a task or a call is answered from what you read THIS turn: after search_mail, read_email the 2 or 3 best matches (newest first) before you answer, and give the concrete answer (names, amounts, dates) with where it came from. Never invent numbers, names, files or results. Never use placeholders like X or [Name].
+- Debrief a call (or make its to-dos): call_debrief first, then answer from it. "Who owes what" = who has to do what, not money. To-dos: add_todo, never db_write SQL.
 - run_sql is one SELECT/WITH on the public schema. If a table or column is wrong, look it up: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND table_name ILIKE '%word%'. Then retry. Never answer from a failed query.
 - Times in the data are UTC; show Pacific time, 12-hour (3:05 PM). US units.
 - You can't see pictures yourself. A file he attaches arrives as a text copy plus a ⟦scout-files: …⟧ line; for any question about a picture, video frames or PDF, call look with those paths and a specific question, and answer from what it returns. Say so if look can't open it.
@@ -2155,6 +2241,14 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
       out = await meetingTranscript(args);
       break;
     }
+    case "call_debrief": {
+      out = await callDebrief(args);
+      break;
+    }
+    case "add_todo": {
+      out = await addTodo(args, threadId);
+      break;
+    }
     case "search_mail": {
       out = await searchMail(args);
       break;
@@ -2410,6 +2504,21 @@ async function lookupAddress(name: string): Promise<{ address?: string; options?
   return ranked.length ? { options: ranked.slice(0, 5) } : {};
 }
 
+const EMAIL_YES = /\b(send|sent it|yes|yep|yeah|yup|go ahead|do it|ship it|looks good|lgtm|perfect|approved?|ok(ay)?)\b/i;
+const EMAIL_NOT = /\b(don'?t|do not|not yet|no|nope|wait|hold|change|edit|fix|instead|rather|but|add|remove|shorter|longer)\b|\?\s*$/i;
+async function emailApproved(threadId: string, key: string): Promise<{ ok: boolean; why: string }> {
+  const { data: prev } = await db.from("admin_chat_actions").select("created_at").eq("thread_id", threadId).eq("tool", "send_email")
+    .eq("result->>error", "not_sent_yet").eq("result->>draft_key", key).order("created_at", { ascending: false }).limit(1);
+  const at = (prev as any)?.[0]?.created_at;
+  if (!at) return { ok: false, why: "He has not seen this exact email yet. Show him the preview above (to, subject, body) and ask; nothing is sent until he says send." };
+  const { data: msgs } = await db.from("admin_chat_messages").select("body").eq("thread_id", threadId).eq("role", "user")
+    .gt("created_at", at).order("created_at", { ascending: false }).limit(1);
+  const yes = String((msgs as any)?.[0]?.body ?? "").trim();
+  if (!yes) return { ok: false, why: "Waiting for his answer to the preview. Show it and ask; don't send yet." };
+  if (!EMAIL_YES.test(yes) || EMAIL_NOT.test(yes)) return { ok: false, why: `His reply after the preview ("${yes.slice(0, 80)}") is not a plain yes to send. Make his changes, preview again, and ask.` };
+  return { ok: true, why: "" };
+}
+
 async function sendEmailTool(args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
   const list = (v: unknown) => (Array.isArray(v) ? v : v ? [v] : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 10);
   const subject = String(args.subject ?? "").trim();
@@ -2433,10 +2542,14 @@ async function sendEmailTool(args: Record<string, any>, threadId: string): Promi
     return { ok: false, error: "recipient_unclear", detail: problems.length ? problems : ["no recipient"], hint: "Ask Jared which address to use (ask_user), then call again with it." };
   }
   const preview = { from: "Jared Best <jared@bestly.tech>", to: to.out, cc: cc.out, subject, body, signature: "Bestly signature with the animated headshot is added below the body" };
-  if (args.confirmed !== true) {
-    return { ok: false, error: "not_sent_yet", preview, hint: "Show him this exact email (to, subject, body) and end with OPTIONS: Send it | Change something. Send with confirmed:true after his yes." };
-  }
-  const key = `scout-${threadId}-${Array.from(new TextEncoder().encode(subject + body + to.out.join())).reduce((h, c) => (h * 31 + c) >>> 0, 7)}`;
+  const key = `scout-${threadId}-${Array.from(new TextEncoder().encode(subject + body + to.out.join() + cc.out.join())).reduce((h, c) => (h * 31 + c) >>> 0, 7)}`;
+  const notYet = (hint: string) => ({ ok: false, error: "not_sent_yet", sent: false, preview, draft_key: key, hint });
+  if (args.confirmed !== true) return notYet("Show him this exact email (to, subject, body) and end with OPTIONS: Send it | Change something. Send with confirmed:true after his yes.");
+  // v69 (2026-10-13): the send gate is enforced here, not left to the model. Oct 12 a quick-reply tap ("Send Federation info")
+  // went straight out as two emails to Eli with no preview. Now: this exact draft must have been previewed in this thread,
+  // and his latest message after that preview must be a yes. Auto-run does not skip it ("don't ever send info before proofread").
+  const gate = await emailApproved(threadId, key);
+  if (!gate.ok) return notYet(gate.why);
   const sent = await sendAsJared(db, { to: to.out, cc: cc.out, subject, text: body, key });
   await db.from("email_send_log").insert({
     message_id: sent.id ?? null, template_name: "scout-send-as-jared", recipient_email: to.out.join(", "),
@@ -2803,7 +2916,9 @@ Deno.serve(async (req) => {
   }
 
   // v15/v30: paid AI only while the Paid AI switch is on. v38: and free goes first even then (freeFirst).
-  if (!paidOn || freeFirst) {
+  // v69 (2026-10-13): autopilot never spends. With the switch on it used to skip free and go straight to paid: on Oct 10-11
+  // the fix ladder burned all of the Anthropic credit (124 Sonnet calls, 0 of them his chats). It now always takes the free path.
+  if (!paidOn || freeFirst || autopilot) {
     // "keep going" alone is NOT a yes to spending.
     let paidOk = false;
     let sayId: string | null = null;   // v36: the message say() just wrote (the first hop's progress note is edited in place later)
@@ -3219,6 +3334,7 @@ Deno.serve(async (req) => {
         p_url: "https://console.anthropic.com/settings/billing", p_entity_key: "scout", p_severity: "warning",
         p_dedupe_key: `scout.credit:${new Date().toISOString().slice(0, 10)}`,
       });
+      await db.from("llm_providers").update({ last_error: `${new Date().toISOString()} out_of_credit: credit balance too low`, updated_at: new Date().toISOString() }).eq("name", "anthropic");
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
       await unlock();
       return J({ ok: false, error: "out_of_credit", thread_id: threadId, reply: why }, 200);
@@ -3234,6 +3350,7 @@ Deno.serve(async (req) => {
   routerBeat(`Paid reply, ${used.length} step${used.length === 1 ? "" : "s"}, $${spentNow.toFixed(3)}`);
   // Paid AI answered, so any "out of credit" card is stale: clear it so Scout offers paid AI again.
   await db.from("admin_notifications").update({ read_at: new Date().toISOString() }).like("dedupe_key", "scout.credit:%").is("read_at", null);
+  await db.from("llm_providers").update({ last_ok_at: new Date().toISOString() }).eq("name", "anthropic");
   if (!autopilot) reply = await adhdShape(reply, text, threadId);   // v40: ADHD format + quick replies, enforced
   await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
   await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);

@@ -1080,7 +1080,7 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
 
   const debrief = (r: RecentRecording) => {
     const who = r.roster.length ? ` with ${listNames(r.roster)}` : "";
-    send(`Debrief my call${who} (${r.name}): the decisions, who owes what, and the follow-ups.`, null, true);
+    send(`Debrief my call${who} (${r.name}): the decisions, who has to do what (with dates), and the follow-ups.`, null, true);
   };
 
   const recording = rec?.status === "recording";
