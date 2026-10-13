@@ -20,6 +20,9 @@ import puppeteer from "puppeteer-core";
 
 const SITE = "https://www.bestly.tech";
 const SCENES = 30;
+const T0 = () => Date.now();
+let t0 = T0();
+const log = (step) => console.log(JSON.stringify({ heroCheck: step, ms: Date.now() - t0 }));
 
 async function photosOk() {
   const urls = [];
@@ -41,6 +44,7 @@ async function photosOk() {
 
 async function heroOk() {
   const problems = [];
+  log("launch");
   const browser = await puppeteer.launch({
     args: await puppeteer.defaultArgs({ args: chromium.args, headless: "shell" }),
     defaultViewport: { width: 1440, height: 900 },
@@ -48,8 +52,10 @@ async function heroOk() {
     headless: "shell",
   });
   try {
+    log("launched");
     const page = await browser.newPage();
-    await page.goto(`${SITE}/?hero-check=${Date.now()}`, { waitUntil: "load", timeout: 25000 });
+    await page.goto(`${SITE}/?hero-check=${Date.now()}`, { waitUntil: "domcontentloaded", timeout: 20000 });
+    log("loaded");
     const sel = 'section[aria-roledescription="carousel"]';
     try {
       await page.waitForSelector(`${sel} span.tabular-nums`, { timeout: 12000 });
@@ -72,6 +78,7 @@ async function heroOk() {
       await new Promise((r) => setTimeout(r, 500));
       moved = (await counter()) !== first;
     }
+    log("rotation-checked");
     if (!moved) problems.push(`Hero stuck on scene ${first} for 11 seconds`);
   } finally {
     await browser.close();
@@ -81,14 +88,17 @@ async function heroOk() {
 
 export default async function handler(req, res) {
   const started = Date.now();
+  t0 = started;
   let problems = [];
   try {
-    const [hero, photos] = await Promise.all([heroOk(), photosOk()]);
+    const deadline = new Promise((_, rej) => setTimeout(() => rej(new Error("took over 45 s")), 45000));
+    const [hero, photos] = await Promise.race([Promise.all([heroOk(), photosOk()]), deadline]);
     problems = [...hero, ...(photos.length ? [`${photos.length} scene photo(s) missing: ${photos.slice(0, 5).join(", ")}`] : [])];
   } catch (e) {
     problems = [`Check could not run: ${e.message}`];
   }
   const ok = problems.length === 0;
+  log(ok ? "ok" : "fail: " + problems.join(" | "));
   res.setHeader("Cache-Control", ok ? "public, s-maxage=900, stale-while-revalidate=3600" : "public, s-maxage=120");
   res.status(ok ? 200 : 503).json({
     ok,
