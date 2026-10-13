@@ -49,26 +49,7 @@ function until(ms: number): string {
 const Card = ({ children }: { children: ReactNode }) => (
   <div className="overflow-hidden rounded-[22px]" style={{ background: C.card }}>{children}</div>
 );
-const Header = ({ children }: { children: ReactNode }) => (
-  <h2 className="px-4 pb-2 pt-6 text-[13px] font-semibold uppercase tracking-[0.02em]" style={{ color: C.sec }}>{children}</h2>
-);
 const Divider = () => <div className="ml-4 h-px" style={{ background: C.sep }} />;
-
-/** A small label above a value, for the notes in the Where card. */
-const Note = ({ label, value }: { label: string; value: string }) => (
-  <div className="px-4 py-3">
-    <div className="text-[13px]" style={{ color: C.sec }}>{label}</div>
-    <div className="whitespace-pre-line break-words text-[17px] leading-snug [text-wrap:pretty]">{value}</div>
-  </div>
-);
-
-/** One row in a card: at least 52 px tall, with a trailing icon. */
-const LinkRow = ({ href, children, icon }: { href: string; children: ReactNode; icon: ReactNode }) => (
-  <a href={href} className="flex min-h-[52px] items-center justify-between gap-3 px-4 py-2 text-[17px] active:opacity-60" style={{ color: C.label }}>
-    <span className="min-w-0 break-words">{children}</span>
-    <span className="flex-none" style={{ color: C.sec }}>{icon}</span>
-  </a>
-);
 
 export default function HostGate() {
   const { token = "" } = useParams();
@@ -145,57 +126,53 @@ export default function HostGate() {
 
   const primary = (d: string, text: string) => (
     <button type="button" disabled={busy} onClick={() => void act(d)}
-      className="flex h-[50px] w-full items-center justify-center gap-2 rounded-[14px] px-4 text-[17px] font-semibold text-white active:opacity-80 disabled:opacity-60"
+      className="inline-flex h-11 flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-4 text-[15px] font-semibold text-white active:opacity-80 disabled:opacity-60"
       style={{ background: C.blue }}>
-      {busyDo === d ? <Loader2 className="h-5 w-5 animate-spin" /> : null}{text}
+      {busyDo === d ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{text}
     </button>
   );
-  const undoBtn = (d: string, text: string) => (
+  const undoBtn = (d: string) => (
     <button type="button" disabled={busy} onClick={() => undo(d)}
-      className="-ml-2 inline-flex min-h-[44px] items-center px-2 text-[15px] font-medium active:opacity-60 disabled:opacity-60"
-      style={{ color: armed === d ? C.red : C.blue }}>
-      {armed === d ? "Tap again to undo" : text}
+      className="flex min-h-[44px] flex-none items-center justify-end px-2 text-right text-[15px] font-medium leading-tight active:opacity-60 disabled:opacity-60"
+      style={{ color: armed === d ? C.red : C.blue, maxWidth: 104 }}>
+      {armed === d ? "Tap again to undo" : "Undo"}
     </button>
   );
 
-  const step = (n: number, ok: boolean, title: string, sub: ReactNode, action?: ReactNode, undoButton?: ReactNode) => (
-    <div className="px-4 py-3.5">
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 grid h-7 w-7 flex-none place-items-center rounded-full text-black" style={{ background: ok ? C.green : C.orange }}>
-          {ok ? <Check className="h-4 w-4" strokeWidth={3} /> : <span className="text-[15px] font-bold leading-none">!</span>}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-[13px]" style={{ color: C.sec }}>Step {n}</div>
-          <div className="break-words text-[17px] font-semibold leading-snug">{title}</div>
-          <div className="break-words text-[15px] leading-snug" style={{ color: C.sec }}>{sub}</div>
-          {undoButton}
-        </div>
+  const step = (ok: boolean, title: string, sub: ReactNode, right: ReactNode) => (
+    <div className="flex min-h-[60px] items-center gap-3 px-4 py-2">
+      <span className="grid h-7 w-7 flex-none place-items-center rounded-full text-black" style={{ background: ok ? C.green : C.orange }}>
+        {ok ? <Check className="h-4 w-4" strokeWidth={3} /> : <span className="text-[15px] font-bold leading-none">!</span>}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="break-words text-[17px] font-semibold leading-snug">{title}</div>
+        <div className="break-words text-[13px] leading-snug" style={{ color: C.sec }}>{sub}</div>
       </div>
-      {action ? <div className="mt-3">{action}</div> : null}
+      {right}
     </div>
   );
 
   return (
-    <div className="min-h-screen" style={{ background: C.bg, color: C.label, paddingTop: "max(20px, env(safe-area-inset-top))", paddingBottom: "max(32px, env(safe-area-inset-bottom))", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif", WebkitTextSizeAdjust: "100%" }}>
+    <div className="flex min-h-[100dvh] flex-col" style={{ background: C.bg, color: C.label, paddingLeft: 16, paddingRight: 16, paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif", WebkitTextSizeAdjust: "100%" }}>
       {!LIVE && (
-        <div className="fixed inset-x-0 top-0 z-50 px-4 pb-2.5 text-center text-[13px] font-semibold" style={{ background: "#1C1C1EEE", color: C.orange, paddingTop: "max(10px, env(safe-area-inset-top))", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+        <div className="fixed inset-x-0 top-0 z-50 px-4 pb-2.5 text-center text-[13px] font-semibold" style={{ background: "#1C1C1EEE", color: C.orange, paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
           Preview. Buttons here don't save anything.
         </div>
       )}
-      <main className="mx-auto max-w-[520px] px-4" style={!LIVE ? { paddingTop: 44 } : undefined}>
+      <main className="mx-auto flex w-full max-w-[520px] flex-1 flex-col gap-[10px]" style={!LIVE ? { paddingTop: 36 } : undefined}>
         {s === undefined && <div className="grid place-items-center pt-32"><Loader2 className="h-6 w-6 animate-spin" style={{ color: C.sec }} /></div>}
         {s === null && (<>
-          <h1 className="mt-2 text-[34px] font-bold leading-[41px]">Link not found</h1>
+          <h1 className="mt-2 text-[28px] font-bold leading-[34px]">Link not found</h1>
           <p className="text-[15px]" style={{ color: C.sec }}>This trip link is not valid any more.</p>
         </>)}
         {s && (() => {
           const first = s.first || "Guest";
           const place = s.place ?? (s.kind === "lax" ? "lax" : "home");
           const car = s.car || "the Tesla";
-          const subtitle = place === "delivery" ? `${car} · Delivery` : place === "lax" ? "LAX" : "Home pick-up";
+          const subtitle = place === "delivery" ? `${car} · Delivery` : place === "lax" ? `${car} · LAX` : `${car} · Home pick-up`;
           const status = s.key_status ?? "";
 
-          // Key status hero.
+          // Key status.
           let color = C.orange; let Icon = KeyRound; let text: ReactNode = "Key held. It unlocks when both steps below are done."; let more: string | null = null;
           if (status === "off") { color = C.mute; text = "Auto key is off for this trip."; }
           else if (status === "removed" || s.key_removed_at) { color = C.mute; text = <>Access removed{s.key_removed_at ? <> <T>{fmtTime(s.key_removed_at)}</T></> : ""}.</>; }
@@ -210,97 +187,88 @@ export default function HostGate() {
           const where = place === "lax" ? "LAX · Park My Share garage" : place === "delivery" ? (d?.short || d?.name || d?.address || "Delivery") : (s.home_address || "Home");
           const fullAddr = place === "delivery" && d?.address && d.address !== where ? d.address : null;
           const mapsAddr = place === "delivery" ? (d?.address || d?.short || "") : place === "home" ? (s.home_address || "") : "";
-          const notes: [string, string][] = [];
+          const parts: string[] = [];
           if (place === "delivery") {
-            const add = (l: string, v?: string | null) => { if (v && v.trim()) notes.push([l, v.trim()]); };
-            add("Room", d?.info?.room); add("Parking, from the front desk", d?.info?.front_desk); add("Parking notes", d?.info?.parking);
-            add("Arrives", d?.info?.eta); add("Turo instructions", d?.turo_instructions);
+            const add = (l: string, v?: string | null) => { if (v && v.trim()) parts.push(`${l}${v.trim().replace(/\s*\n+\s*/g, " ")}`); };
+            add("Room ", d?.info?.room); add("Parking from the front desk: ", d?.info?.front_desk); add("Parking: ", d?.info?.parking);
+            add("Arrives ", d?.info?.eta); add("Turo instructions: ", d?.turo_instructions);
           }
+          const notes = place === "delivery" ? (parts.length ? parts.join(" · ") : `No room or parking notes from ${first} yet.`) : null;
 
           return (<>
-            <div className="mt-2">
-              <p className="text-[15px]" style={{ color: C.sec }}>Pick-up for</p>
-              <h1 className="break-words text-[34px] font-bold leading-[41px]">{first}</h1>
+            <div>
+              <h1 className="break-words text-[28px] font-bold leading-[34px]">{first}</h1>
               <p className="break-words text-[15px]" style={{ color: C.sec }}>{subtitle}</p>
             </div>
 
-            {(flash || err) && (
-              <div className="mt-4 rounded-[14px] px-4 py-3 text-[15px] font-semibold" style={{ background: C.card, color: err ? C.red : C.green }} role="status">{err || flash}</div>
-            )}
-
-            <div className="mt-5">
-              <div className="flex flex-col items-center rounded-[22px] px-5 pb-6 pt-10 text-center" style={{ background: C.card }}>
-                <div className="relative grid h-16 w-16 place-items-center">
-                  <span aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 h-[140px] w-[140px] -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ background: `radial-gradient(closest-side, ${color}59, ${color}26 45%, ${color}00)` }} />
-                  <span className="relative grid h-16 w-16 place-items-center rounded-full" style={{ background: `${color}26`, color }}><Icon className="h-8 w-8" /></span>
-                </div>
-                <p className="mt-5 break-words text-[20px] font-semibold leading-snug [text-wrap:balance]">{text}</p>
-                {more && <p className="mt-2 break-words text-[13px]" style={{ color: C.sec }}>{more}</p>}
-              </div>
-            </div>
-
-            <Header>When</Header>
             <Card>
-              <div className="flex min-h-[52px] flex-wrap items-center justify-between gap-x-3 px-4 py-3">
-                <span className="text-[17px]">Pick-up</span>
-                <span className="text-right">
-                  <span className="text-[17px]"><T>{fmtDate(s.starts_at)}</T> · <T>{fmtTime(s.starts_at)}</T></span>
-                  {wait > 0 && <span className="block text-[13px]" style={{ color: C.sec }}><T>{until(wait)}</T></span>}
+              <div className="flex items-center gap-3 p-[14px]">
+                <div className="relative grid h-[72px] w-[72px] flex-none place-items-center" style={{ margin: -14 }}>
+                  <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full" style={{ background: `radial-gradient(closest-side, ${color}66, ${color}26 55%, ${color}00)` }} />
+                  <span className="relative grid h-11 w-11 place-items-center rounded-full" style={{ background: `${color}2E`, color }}><Icon className="h-6 w-6" /></span>
+                </div>
+                <div className="min-w-0 flex-1" style={{ marginLeft: 2 }}>
+                  <p className="break-words text-[17px] font-semibold leading-snug">{text}</p>
+                  {more && <p className="break-words text-[13px]" style={{ color: C.sec }}>{more}</p>}
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex min-h-[44px] flex-wrap items-center justify-between gap-x-3 px-4 py-1.5">
+                <span className="flex items-center gap-2">
+                  <span className="text-[17px]">Pick-up</span>
+                  {wait > 0 && <span className="whitespace-nowrap rounded-full px-2 py-0.5 text-[13px]" style={{ background: "#EBEBF51F", color: C.sec }}>{until(wait)}</span>}
                 </span>
+                <span className="text-right text-[17px]"><T>{fmtDate(s.starts_at)}</T> · <T>{fmtTime(s.starts_at)}</T></span>
               </div>
               {s.ends_at && (<>
                 <Divider />
-                <div className="flex min-h-[52px] flex-wrap items-center justify-between gap-x-3 px-4 py-3">
+                <div className="flex min-h-[44px] flex-wrap items-center justify-between gap-x-3 px-4 py-1.5">
                   <span className="text-[17px]">Return</span>
                   <span className="text-right text-[17px]"><T>{fmtDate(s.ends_at)}</T> · <T>{fmtTime(s.ends_at)}</T></span>
                 </div>
               </>)}
             </Card>
 
-            <Header>Where</Header>
             <Card>
-              <div className="flex items-start gap-3 px-4 py-3.5">
-                <MapPin className="mt-0.5 h-5 w-5 flex-none" style={{ color: C.blue }} />
-                <div className="min-w-0 flex-1">
-                  <div className="break-words text-[20px] font-semibold leading-snug">{where}</div>
-                  {fullAddr && <div className="mt-0.5 break-words text-[15px]" style={{ color: C.sec }}>{fullAddr}</div>}
+              <div className="flex min-h-[52px] items-start gap-3 py-2.5 pl-4 pr-2">
+                <MapPin className="mt-[3px] h-5 w-5 flex-none" style={{ color: C.blue }} />
+                <div className="min-w-0 flex-1 py-px">
+                  <div className="break-words text-[17px] font-semibold leading-snug">{where}</div>
+                  {fullAddr && <div className="break-words text-[13px] leading-snug" style={{ color: C.sec }}>{fullAddr}</div>}
+                  {notes && <div className="mt-1 break-words text-[13px] leading-snug [text-wrap:pretty]" style={{ color: C.sec }}>{notes}</div>}
                 </div>
+                {mapsAddr && (
+                  <a href={`https://maps.apple.com/?q=${encodeURIComponent(mapsAddr)}`} className="-my-1 flex min-h-[44px] flex-none items-center px-2 text-[15px] font-medium active:opacity-60" style={{ color: C.blue }}>Maps</a>
+                )}
               </div>
-              {mapsAddr && (<>
-                <Divider />
-                <LinkRow href={`https://maps.apple.com/?q=${encodeURIComponent(mapsAddr)}`} icon={<ChevronRight className="h-5 w-5" />}>
-                  <span style={{ color: C.blue }}>Open in Maps</span>
-                </LinkRow>
-              </>)}
-              {place === "delivery" && (notes.length > 0
-                ? notes.map(([l, v]) => (<div key={l}><Divider /><Note label={l} value={v} /></div>))
-                : (<><Divider /><p className="px-4 py-3 text-[13px]" style={{ color: C.sec }}>No room or parking notes from {first} yet.</p></>))}
             </Card>
 
-            <Header>Before the key unlocks</Header>
+            {(flash || err) && (
+              <p className="px-1 text-[13px] font-semibold" style={{ color: err ? C.red : C.green }} role="status">{err || flash}</p>
+            )}
+
             <Card>
-              {step(1, s.license_ok, "Driver's license checked",
+              {step(s.license_ok, "Driver's license checked",
                 s.license_ok ? (s.license_at ? <>Checked at <T>{fmtTime(s.license_at)}</T></> : "Checked") : "Compare the license to the Turo profile.",
-                !s.license_ok ? primary("license", "License looks good") : undefined,
-                s.license_ok ? undoBtn("undo_license", "Undo license") : undefined)}
+                s.license_ok ? undoBtn("undo_license") : primary("license", "Looks good"))}
               <Divider />
-              {step(2, s.checkin_ok, "Check-in photos done",
+              {step(s.checkin_ok, "Check-in photos done",
                 s.checkin_ok ? (s.checkin_at ? <>Done at <T>{fmtTime(s.checkin_at)}</T></> : "Done") : "Take the Turo check-in photos of the car.",
-                !s.checkin_ok ? primary("checkin", s.license_ok ? "Photos done, release key" : "Photos done") : undefined,
-                s.checkin_ok ? undoBtn("undo_checkin", "Undo check-in") : undefined)}
+                s.checkin_ok ? undoBtn("undo_checkin") : primary("checkin", s.license_ok ? "Release key" : "Photos done"))}
             </Card>
 
-            <div className="mt-6">
-              <Card>
-                {s.trip_token && (<>
-                  <LinkRow href={`/t/${s.trip_token}${dk ? `?dk=${encodeURIComponent(dk)}` : ""}`} icon={<ChevronRight className="h-5 w-5" />}>Open {first}'s trip page</LinkRow>
-                  <Divider />
-                </>)}
-                <LinkRow href={`https://turo.com/us/en/reservation/${s.reservation_id}`} icon={<ExternalLink className="h-5 w-5" />}>Check the trip photos in Turo</LinkRow>
-              </Card>
+            <div className={`grid gap-[10px] ${s.trip_token ? "grid-cols-2" : "grid-cols-1"}`}>
+              {s.trip_token && (
+                <a href={`/t/${s.trip_token}${dk ? `?dk=${encodeURIComponent(dk)}` : ""}`} className="inline-flex h-11 items-center justify-center gap-1 whitespace-nowrap rounded-full px-3 text-[15px] font-semibold active:opacity-60" style={{ background: "#0A84FF26", color: C.blue }}>
+                  Trip page <ChevronRight className="h-4 w-4" />
+                </a>
+              )}
+              <a href={`https://turo.com/us/en/reservation/${s.reservation_id}`} className="inline-flex h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[15px] font-semibold active:opacity-60" style={{ background: "#0A84FF26", color: C.blue }}>
+                Turo photos <ExternalLink className="h-4 w-4" />
+              </a>
             </div>
-
-            <p className="px-4 pt-4 text-[13px] leading-snug" style={{ color: C.sec }}>Only you have this link. It changes these two steps for this trip only.</p>
           </>);
         })()}
       </main>
