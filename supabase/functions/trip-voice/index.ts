@@ -22,14 +22,19 @@
 // Open demo (leo_demo_open(), temporary, expires by itself): on demo-home / demo-lax only, car_lock unlock works on the
 // pretend car and the session cap is 200/hour instead of 40. Real trips never unlock.
 //
-// Tools: trip_status, key_fix, job_status, extra_driver, notify_host, file_ticket, reminder_email, and the car tools car_status,
+// Delivery trips (2026-10-13, docs/delivery-trip-opusplan.md): hotel / pod / train / custom pickups keep kind 'home' in lax_guest_public and add
+// place 'delivery'. Door 1 also returns `place` and `vars` (delivery_name, delivery_kind, delivery_missing, return_place) for the page to hand Leo
+// as dynamic variables; the delivery_info tool (get | save) stores the room / front desk / parking / train time via trip_delivery_report (via 'leo'),
+// which tells Jared signed Leo. It never touches the key or the car. On a matched-number phone call it saves but never reads values back.
+//
+// Tools: trip_status, key_fix, job_status, extra_driver, notify_host, file_ticket, reminder_email, delivery_info, and the car tools car_status,
 //        car_climate (page presets), car_lock (lock only), find_superchargers, send_to_car_nav, charging_summary,
 //        send_sms (fixed-link texts to the trip page; off until leo_settings.sms_mode is switched on and the 10DLC watchdog says ready). Real trips go through the page's own gate (lax_guest_car_command); demo trips use the
 //        pretend car (leo_demo_car). Phone calls get their trip_key from leo-phone-init instead of door 1.
 //
 // Session channels (trip_voice_sessions.channel, enforced here in tool() and run(), never in the prompt). Caller ID can be spoofed, so:
 //   page           the guest's own trip link: every tool.
-//   phone          caller's number matched a trip: trip_status (no key detail, no car, no stops), notify_host, file_ticket, reminder_email
+//   phone          caller's number matched a trip: trip_status (no key detail, no car, no stops), notify_host, file_ticket, delivery_info (save only), reminder_email
 //                  (status and send_now to an email already on file; never "set"). No car, key, nav or text tools: they get a plain sentence pointing at the trip page link.
 //   phone_unknown  nobody matched: file_ticket and notify_host (files a callback ticket) only.
 //   page_unknown   a real trip link whose trip is gone (link-down page, 2026-10-11): same scope as phone_unknown,
@@ -74,18 +79,35 @@ async function logTool(tool: string, channel: string, demo: boolean, ok: boolean
   await sb.from("leo_tool_log").insert({ tool: tool.slice(0, 40), channel, demo, ok, code }).then(() => {}, () => {});
 }
 
+// ---------- delivery trips ----------
+const DELIVERY_FIELDS = ["room", "front_desk", "parking", "eta"] as const;
+const DEMO_DELIVERY = { location_id: "best-western-sunset-plaza", kind: "hotel", short: "Best Western Sunset Plaza", ask: ["room", "front_desk"], optional: [], info: {} } as Any;
+/** The dynamic variables Leo's delivery prompt reads, from the `delivery` object of lax_guest_public. */
+function deliveryVars(d: Any | null): Any {
+  if (!d) return {};
+  const ask = Array.isArray(d.ask) ? (d.ask as unknown[]).map(String) : [];
+  return { delivery_name: String(d.short ?? ""), delivery_kind: String(d.kind ?? ""), delivery_missing: ask.join(","), return_place: String(d.short ?? "") };
+}
+const FIELD_WORD: Record<string, string> = { room: "the room number", front_desk: "what the front desk said about parking", parking: "the parking details", eta: "when the train gets in" };
+
 // ---------- door 1: the trip page asks for a session ----------
 async function openSession(b: Any): Promise<Response> {
   const raw = clip(b.token, 120);
   if (!raw) return json({ ok: false, error: "Open your trip link to talk to Leo." }, 400);
-  const demo = /^demo-(home|lax)$/.test(raw);
+  const demo = /^demo-(home|lax|delivery)$/.test(raw);
   const token = demo ? `demo:${raw}` : raw;
   // 2026-10-11 link-down pages: a real trip link whose trip is gone (changed, rebooked, canceled, long over) still gets
   // Leo, on a limited channel (page_unknown): take a message for the host, nothing else. Made-up tokens get nothing.
   let channel = "page";
+  let place: string = demo ? (raw === "demo-delivery" ? "delivery" : raw === "demo-lax" ? "lax" : "home") : "home";
+  let dvars: Any = raw === "demo-delivery" ? deliveryVars(DEMO_DELIVERY) : {};
   if (!demo) {
     // A link whose trip is gone still passes lax_agent_diag, so ask the page's own check first.
     const { data: pub } = await sb.rpc("lax_guest_public", { p_token: token });
+    if ((pub as Any | null)?.ok) {
+      place = String((pub as Any).place ?? (pub as Any).kind ?? "home");
+      if (place === "delivery") dvars = deliveryVars((pub as Any).delivery as Any | null);
+    }
     const { data: diag } = (pub as Any | null)?.ok ? await sb.rpc("lax_agent_diag", { p_token: token }) : { data: null };
     if (!diag || (diag as Any).error) {
       const { data: link } = await sb.from("lax_guest_links").select("reservation_id").eq("token", token).maybeSingle();
@@ -118,7 +140,7 @@ async function openSession(b: Any): Promise<Response> {
   const sessionKey = `tv_${hex(24)}`;
   const ins = await sb.from("trip_voice_sessions").insert({ key: sessionKey, agent_slug: AGENT_SLUG, token, channel });
   if (ins.error) { await logTool("session_open", "page", demo, false, "error"); return json({ ok: false, error: "Leo isn't available right now. Try again in a minute, or message your host in the Turo app." }, 500); }
-  return json({ ok: true, signed_url: j.signed_url, key: sessionKey });
+  return json({ ok: true, signed_url: j.signed_url, key: sessionKey, place, vars: dvars });
 }
 
 // ---------- door 2: Leo's tools ----------
@@ -155,7 +177,7 @@ async function session(b: Any, name = "?"): Promise<Session | Response> {
 }
 
 // ---------- scopes (see header): phone sessions never reach the key, the car, nav or texts ----------
-const PHONE_TOOLS = new Set(["trip_status", "notify_host", "file_ticket", "reminder_email"]);
+const PHONE_TOOLS = new Set(["trip_status", "notify_host", "file_ticket", "reminder_email", "delivery_info"]);
 const UNKNOWN_TOOLS = new Set(["file_ticket", "notify_host"]);
 const PHONE_REFUSE = "Didn't work: I can't do that over the phone. Your trip page link, the one in your Turo message, does that. Or I can have your host get back to you. Want me to take a message?";
 const LINK_DOWN_REFUSE = "Didn't work: this trip link no longer works, so I can't see the trip or the car from here. They can sign in again at bestly.tech/turo-key (home pickup) or bestly.tech/turo-lax (LAX) with their phone number and last name. Or I can take a message for the host: ask for their name and best number.";
@@ -349,6 +371,8 @@ async function carTool(name: string, token: string, b: Any): Promise<Any> {
         const kind = String(pub.kind ?? "lax");
         const preset = /garage|lax|airport|park/.test(dest) && kind === "lax" ? "nav_garage_lax" : /home|kings|return|drop/.test(dest) && kind === "home" ? "nav_home" : null;
         if (!preset) return { ok: false, say: "I can send the nearest Supercharger or the return spot to the car. For anywhere else, type it on the car's screen." };
+        // Delivery trips keep kind 'home' but the return spot is the delivery place, not N Kings Rd.
+        if (preset === "nav_home" && pub.place === "delivery") return { ok: false, say: `The return spot is ${String((pub.delivery as Any | null)?.short ?? "where I met you")}. I can't send that one to the car, so type it on the car's screen.` };
         if (ctl !== "on") return { ok: false, say: closedLine };
         const where = preset === "nav_home" ? "The return spot" : "The garage";
         return await pageCommand(token, preset, `${where} is in the car's navigation.`, { type: "nav", demo: false, destination: where }, "Leo sent it to the car's navigation");
@@ -406,6 +430,7 @@ function whenPhrase(iso: string): string {
   return `${day} at ${t12(iso)}`;
 }
 const cleanSpokenEmail = (v: unknown) => clip(v, 200).toLowerCase().replace(/\s+at\s+/g, "@").replace(/\s+dot\s+/g, ".").replace(/\s+/g, "");
+const DELIVERY_NO_REMINDER = "I don't send a reminder email for delivery trips. Everything is on your trip page, and your host will be there at pickup time.";
 const SENDER_FN = { lax: { fn: "wallet-pass", body: { op: "remind_due" } }, home: { fn: "trip-remind", body: {} } } as const;
 
 async function reminderEmail(token: string, conv: string | null, b: Any, channel = "page"): Promise<Any> {
@@ -419,6 +444,7 @@ async function reminderEmail(token: string, conv: string | null, b: Any, channel
   // ---- demo pages: pretend, nothing real is saved or sent ----
   if (demo) {
     const home = token === "demo:demo-home";
+    if (token === "demo:demo-delivery" && action !== "status") return { ok: false, demo: true, say: DELIVERY_NO_REMINDER };
     const lead = home ? "1 hour" : "4 hours";
     if (action === "set") {
       const e = cleanSpokenEmail(b.email);
@@ -440,6 +466,8 @@ async function reminderEmail(token: string, conv: string | null, b: Any, channel
   const { data: trip } = await sb.from("turo_trips").select("starts_at, ends_at, airport_code").eq("reservation_id", link.reservation_id).maybeSingle();
   if (!trip) return { ok: false, say: "I can't find this trip. Open your trip page and try again." };
   const kind: "lax" | "home" = trip.airport_code === "LAX" ? "lax" : "home";
+  // Delivery trips (hotel, pod, train, custom) get no reminder email: the home reminder names the Kings Rd pickup spot (lax_home_due skips them).
+  if (action !== "status" && (await sb.rpc("trip_place_for", { p_token: token })).data === "delivery") return { ok: false, say: DELIVERY_NO_REMINDER };
   const lead = kind === "home" ? "1 hour" : "4 hours";
   const ended = Date.parse(trip.ends_at) < Date.now();
   const started = Date.parse(trip.starts_at) < Date.now();
@@ -706,7 +734,7 @@ async function screenAct(b: Any): Promise<Response> {
   const raw = clip(b.token, 120);
   const tool = clip(b.tool, 30);
   if (!raw || !SCREEN_TOOLS.has(tool)) return json({ ok: false, say: "That isn't available." }, 400);
-  const demo = /^demo-(home|lax)$/.test(raw);
+  const demo = /^demo-(home|lax|delivery)$/.test(raw);
   const args = (b.args ?? {}) as Any;
   return json(await carTool(tool, demo ? `demo:${raw}` : raw, args));
 }
@@ -786,7 +814,8 @@ async function selftest(): Promise<Any> {
         || !scopeRefusal("phone", "send_sms") || !scopeRefusal("phone", "extra_driver") || scopeRefusal("phone", "trip_status") || scopeRefusal("phone", "file_ticket")
         || !scopeRefusal("phone_unknown", "trip_status") || !scopeRefusal("phone_unknown", "reminder_email") || scopeRefusal("phone_unknown", "notify_host")
         || !scopeRefusal("page_unknown", "car_lock") || !scopeRefusal("page_unknown", "trip_status") || !scopeRefusal("page_unknown", "key_fix")
-        || scopeRefusal("page_unknown", "notify_host") || scopeRefusal("page_unknown", "file_ticket")) bad.push("PHONE SCOPE");
+        || scopeRefusal("page_unknown", "notify_host") || scopeRefusal("page_unknown", "file_ticket")
+        || scopeRefusal("phone", "delivery_info") || !scopeRefusal("phone_unknown", "delivery_info") || !scopeRefusal("page_unknown", "delivery_info")) bad.push("PHONE SCOPE");
     const r = await run("selftest-not-a-real-trip-token", "resend_key", {}, "phone") as Any;
     if (r?.ok !== false) bad.push("PHONE SCOPE run()");
   } catch (_e) { bad.push("PHONE SCOPE check error"); }
@@ -1097,8 +1126,67 @@ async function dispatch(name: string, b: Any, s: Session): Promise<{ out: Any; s
     }
     case "reminder_email": return { out: await reminderEmail(t, s.conversation_id, b, ch) };
     case "file_ticket": return await fileTicket(s, b);
+    case "delivery_info": return await deliveryInfo(t, b, ch);
   }
   return { out: { ok: false, error: "unknown tool" }, status: 404 };
+}
+
+/** Leo's delivery_info tool: op "get" says what is known / still needed, op "save" stores room / front_desk / parking / eta and tells the host (signed Leo).
+ *  Token-bound like every tool. Never reads or writes anything about the key or the car. On a phone call (caller ID can be faked) values are never read back. */
+async function deliveryInfo(token: string, b: Any, channel: string): Promise<{ out: Any; status?: number }> {
+  const op = clip(b.op, 8).toLowerCase() || "get";
+  if (!["get", "save"].includes(op)) return { out: { ok: false, error: "op must be get or save" } };
+  const demo = token.startsWith("demo:");
+  const phone = channel.startsWith("phone") && channel !== "phone_test";
+  const raw = demo ? token.slice(5) : token;
+  if (demo && raw !== "demo-delivery") return { out: { ok: false, error: "not a delivery trip", say: "This trip isn't a delivery, so there's no delivery info to take." } };
+
+  // The current delivery object: the page's own lookup for a real trip, the pretend hotel for the demo.
+  const current = async (): Promise<Any | null> => {
+    if (demo) {
+      const { data: st } = await sb.from("lax_demo_state").select("state, updated_at").eq("link", "d:demo-delivery").maybeSingle();
+      const fresh = st && Date.parse(String(st.updated_at)) > Date.now() - 2 * 3600_000;
+      const info = ((fresh ? (st!.state as Any)?.delivery : null) ?? {}) as Any;
+      const ask = (DEMO_DELIVERY.ask as string[]).filter((k) => !clip(info[k], 200));
+      return { ...DEMO_DELIVERY, ask, info };
+    }
+    const { data: pub } = await sb.rpc("lax_guest_public", { p_token: token });
+    const p = pub as Any | null;
+    return p?.ok && p.place === "delivery" ? (p.delivery as Any) : null;
+  };
+  const describe = (d: Any) => {
+    const ask = Array.isArray(d.ask) ? (d.ask as string[]) : [];
+    const info = (d.info ?? {}) as Any;
+    const have = DELIVERY_FIELDS.filter((k) => clip(info[k], 200));
+    return { place: String(d.short ?? ""), kind: String(d.kind ?? ""), still_needed: ask, optional: Array.isArray(d.optional) ? d.optional : [],
+      have_fields: have, ...(phone ? {} : { saved: Object.fromEntries(have.map((k) => [k, clip(info[k], 200)])) }) };
+  };
+
+  if (op === "get") {
+    const d = await current();
+    if (!d) return { out: { ok: false, error: "not a delivery trip", say: "This trip isn't a delivery trip, so there's no delivery info to take here." } };
+    const x = describe(d);
+    const need = x.still_needed.map((k) => FIELD_WORD[k] ?? k);
+    return { out: { ok: true, ...x, say: need.length ? `For ${x.place} I still need ${need.join(" and ")}.` : `Jared already has everything he needs for ${x.place}.` } };
+  }
+
+  const args = { p_room: clip(b.room, 200) || null, p_front_desk: clip(b.front_desk, 200) || null, p_parking: clip(b.parking, 200) || null, p_eta: clip(b.eta, 200) || null };
+  if (!args.p_room && !args.p_front_desk && !args.p_parking && !args.p_eta) return { out: { ok: false, error: "nothing to save", say: "Didn't work: I didn't catch anything to save. Ask the guest again." } };
+  const { data, error } = await sb.rpc("trip_delivery_report", { p_token: demo ? raw : token, ...args, p_via: "leo" });
+  const r = (data ?? {}) as Any;
+  if (error || r.ok !== true) {
+    const why = String(r.reason ?? "");
+    if (!error && ["not_delivery", "unknown", "ended", "empty"].includes(why)) {
+      return { out: { ok: false, error: why, say: why === "not_delivery" ? "This trip isn't a delivery trip, so there's nothing to save." : why === "ended" ? "This trip is over, so I can't save delivery info." : "Didn't work: I couldn't find the trip to save that on." } };
+    }
+    if (!error && why === "slow_down") return { out: { ok: false, error: why, say: "Didn't work: that's a lot of saves in a row. Tell the guest I have it and the host can see what's already saved." } };
+    return { out: { ok: false, broken: true, error: "could not save", say: "Didn't work: I couldn't save that. Offer to pass a message to the host with notify_host." }, status: 500 };
+  }
+  const d = (r.delivery ?? DEMO_DELIVERY) as Any;
+  const x = describe(d);
+  const saved = (["room", "front_desk", "parking", "eta"] as const).filter((k) => args[`p_${k}` as keyof typeof args]);
+  return { out: { ok: true, saved, still_needed: x.still_needed, place: x.place,
+    say: demo ? "Saved on the demo page. On a real trip the host is told right away." : `Saved. The host has been told${x.still_needed.length ? `, and I still need ${x.still_needed.map((k) => FIELD_WORD[k] ?? k).join(" and ")}` : ""}.` } };
 }
 
 async function fileTicket(s: Session, b: Any): Promise<{ out: Any; status?: number }> {
@@ -1149,7 +1237,7 @@ Deno.serve(async (req) => {
   if (b.op === "demo_weather") {
     // Demo page Hot / Cold / Nice switch: the pretend car Leo reads gets the same cabin and outside temperature (demo links only).
     const raw = clip(b.token, 20), w = clip(b.weather, 8).toLowerCase();
-    if (!/^demo-(home|lax)$/.test(raw) || !["hot", "cold", "nice"].includes(w)) return json({ ok: false, error: "demo pages only" }, 400);
+    if (!/^demo-(home|lax|delivery)$/.test(raw) || !["hot", "cold", "nice"].includes(w)) return json({ ok: false, error: "demo pages only" }, 400);
     const { data, error } = await sb.rpc("leo_demo_weather", { p_link: "d:" + raw, p_weather: w });
     return json(error ? { ok: false, error: "couldn't set the demo weather" } : data, error ? 500 : 200);
   }

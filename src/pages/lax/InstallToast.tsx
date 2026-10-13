@@ -40,12 +40,12 @@ const setMarker = (on: boolean) => {
 };
 const snoozed = () => { try { return Date.now() - Number(localStorage.getItem(KEY) ?? 0) < 3 * 864e5; } catch { return false; } };
 
-export function InstallToast({ token, kind }: { token: string; kind: "home" | "lax" }) {
+export function InstallToast({ token, kind }: { token: string; kind: "home" | "lax" | "delivery" }) {
   const [show, setShow] = useState(false);
   const [bip, setBip] = useState<BIP | null>(null);
   const [mode, setMode] = useState<"ios" | "android" | "alerts" | null>(null);
   const [busy, setBusy] = useState(false);
-  const icon = kind === "home" ? "/wallet/home/apple-touch-icon.png" : "/wallet/lax/apple-touch-icon.png";
+  const icon = `/wallet/${kind}/apple-touch-icon.png`;
 
   useEffect(() => {
     if (!token) return;

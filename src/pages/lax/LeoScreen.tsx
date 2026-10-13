@@ -27,66 +27,30 @@ import {
   MapPin, Mic, MicOff, Navigation, PhoneOff, Power, QrCode, ShieldAlert, Snowflake, Thermometer, X, Zap,
   Volume2,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import type { TripContext } from "./AskSheet";
-import { LeoMiniPill, LeoOrb, THEME, loadLeoSdk, takeLeoMode, type LeoMini, type LeoTheme } from "./LeoWidget";
+import { LeoMiniPill, LeoOrb, THEME, takeLeoMode, type LeoMini, type LeoTheme } from "./LeoWidget";
 import { leoOpening } from "./leoOffer";
-import { audioLocked, audioState, playStreamPlayers, resumeAllAudio } from "@/lib/audioRescue";
 import { track } from "./track";
-import { MINIMIZE, askPage, emitLeoCar, useLeoDid } from "./leoBridge";
+import { MINIMIZE, askPage, emitLeoCar } from "./leoBridge";
 import { lockScroll } from "./TripSheet";
 import { useDemoOpen } from "./demoState";
-
-type Any = Record<string, unknown>;
-type Card = Any & { type: string };
-type Item =
-  | { id: number; kind: "leo" | "you"; text: string }
-  | { id: number; kind: "card"; card: Card }
-  | { id: number; kind: "note"; text: string; tone?: "error" };
-type NewItem = Item extends infer T ? (T extends Item ? Omit<T, "id"> : never) : never;
-type Conv = Awaited<ReturnType<Awaited<ReturnType<typeof loadLeoSdk>>["Conversation"]["startSession"]>>;
-type Phase = "idle" | "connecting" | "live" | "ended";
+import { diag, tv, useLeoSession, type Any, type Card } from "./useLeoSession";
 
 const nw = (s: ReactNode) => <span className="whitespace-nowrap">{s}</span>;
 const money = (n: unknown) => `$${Number(n ?? 0).toFixed(2)}`;
 const mi = (n: unknown) => (n == null ? "" : Number(n) < 10 ? Number(n).toFixed(1) : String(Math.round(Number(n))));
-let seq = 1;
 
-/** One fetch to trip-voice; reads the body on refusals too (supabase-js puts it on error.context). */
-async function tv(body: Any): Promise<Any | null> {
-  const res = await supabase.functions.invoke("trip-voice", { body });
-  let r = res.data as Any | null;
-  if (res.error && !r) { try { r = await (res.error as { context?: Response }).context?.json(); } catch { /* keep null */ } }
-  return r;
-}
-
-function diag(token: string, kind: string, detail: Record<string, string>) {
-  void supabase.functions.invoke("trip-voice", { body: { op: "diag", token, kind, detail } }).catch(() => {});
-}
-
-export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { token: string; context?: TripContext; home: boolean; pageOpen?: boolean; onEnd: () => void }) {
-  const theme = THEME[home ? "home" : "lax"];
+export function LeoScreen({ token, context, home, look, pageOpen = true, onEnd }: { token: string; context?: TripContext; home: boolean; look?: "home" | "lax" | "delivery"; pageOpen?: boolean; onEnd: () => void }) {
+  const theme = THEME[look ?? (home ? "home" : "lax")];
   const [mode] = useState(takeLeoMode);
   const opening = leoOpening({ ...context, tab: context?.stage ?? null });
   const greeting = opening.text;
-  const [items, setItems] = useState<Item[]>([{ id: seq++, kind: "leo", text: greeting }]);
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [voice, setVoice] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [working, setWorking] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [mini, setMini] = useState(false);
-  // iPhone kept Leo's audio paused (no tap reached it): show a big "Tap to hear Leo" until it plays. See audioRescue.ts.
-  const [locked, setLocked] = useState(false);
-  const lockLogged = useRef(false);
   const [text, setText] = useState("");
   // Demo pages with "open demo" on: Leo may unlock the pretend car, so the controls card gets an Unlock button.
   const demoOpen = useDemoOpen().open;
   const unlockable = token.startsWith("demo-") && demoOpen;
-  const conv = useRef<Conv | null>(null);
-  const starting = useRef<Promise<Conv | null> | null>(null);
-  const lastSent = useRef("");
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const toastTimer = useRef<number>();
@@ -94,7 +58,27 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
   const firstOpen = useRef(true);
   useEffect(() => { if (firstOpen.current) { firstOpen.current = false; return; } setMini(!pageOpen); }, [pageOpen]);
 
-  const push = useCallback((it: NewItem) => setItems((xs) => [...xs, { ...it, id: seq++ } as Item]), []);
+  // The session itself (transcript, voice, audio rescue, diagnostics) is shared with the delivery page: useLeoSession.ts.
+  const sess = useLeoSession({
+    token, greeting,
+    variables: () => ({
+      pickup_place: home ? "home" : "lax", trip_stage: context?.linkDown ? "link_down" : context?.stage ?? "unknown",
+      guest_first_name: /^Hi (\S+), I'm Leo\./.exec(opening.text)?.[1] ?? "",
+      minutes_to_pickup: opening.mtp ?? 9999, controls_state: context?.controlsState ?? "unknown", greeting_offer: opening.offer,
+    }),
+    clientTools: () => ({ show_card: async (p: Any) => showCard(String(p?.card ?? "")), page_action: async (p: Any) => pageAction(p) }),
+    onToolResponse: (res, tool) => {
+      showResult(res);
+      // A car tool: the page behind Leo should show the same car (demo: pretend car, real: refetch).
+      const ct = String(((res?.card ?? null) as Card | null)?.type ?? "");
+      if (res && typeof res === "object" && (["climate", "lock", "unlock", "car"].includes(ct) || tool.startsWith("car_"))) emitLeoCar(res);
+    },
+    onConnect: (c) => {
+      // Link-down page (2026-10-11): Leo can't see a trip here. Tell him why and what he may do.
+      if (context?.linkDown) try { c.sendContextualUpdate(`This guest is on a trip link that no longer works (reason: ${context.linkDown}). You cannot see their trip, key or car from here. Help them: if they rebooked or changed the trip, they can sign in at bestly.tech/${home ? "turo-key" : "turo-lax"} with their phone number and last name to reach their current trip page. Otherwise take a message for the host with notify_host or file_ticket (ask for their name and best number).`); } catch { /* ignore */ }
+    },
+  });
+  const { items, push, setItems, phase, voice, speaking, muted, working, locked, conv, start, send: sendLine, endCall, toggleMic } = sess;
   const flash = useCallback((t: string) => {
     setToast(t);
     window.clearTimeout(toastTimer.current);
@@ -110,7 +94,7 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
       else push({ kind: "card", card });
     }
     if (r.toast && r.ok) flash(String(r.toast));
-  }, [push, flash]);
+  }, [push, flash, setItems]);
 
   // ---- page hand-offs (show_card targets that live on the trip page itself) ----
   const toPage = useCallback((hash: "#pickup" | "#return") => {
@@ -128,7 +112,7 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
     // Let Leo know what happened on screen, so the conversation stays in step.
     try { conv.current?.sendContextualUpdate(`The guest tapped a button on Leo's screen (${tool} ${JSON.stringify(args)}). Result: ${String(r.say ?? "")}`); } catch { /* not connected */ }
     return r;
-  }, [token, flash, showResult]);
+  }, [token, flash, showResult, conv]);
 
   const showCard = useCallback(async (card: string) => {
     switch (card) {
@@ -178,130 +162,6 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
     return r.say;
   }, [token, push, showCard]);
 
-  // The guest tapped a car button on the trip page: tell Leo so he doesn't repeat or contradict it.
-  useLeoDid(({ action, result }) => {
-    try { conv.current?.sendContextualUpdate(`The guest tapped ${action} on the trip page. Result: ${result}`); } catch { /* not connected */ }
-  });
-
-  // ---- session ----
-  const start = useCallback(async (withVoice: boolean): Promise<Conv | null> => {
-    if (conv.current) return conv.current;
-    if (starting.current) return starting.current;
-    setPhase("connecting");
-    starting.current = (async () => {
-      try {
-        const [{ Conversation }, s] = await Promise.all([loadLeoSdk(), tv({ op: "session", token })]);
-        if (!s?.ok || !s.signed_url || !s.key) throw new Error(String(s?.error ?? "Leo didn't load. Try again in a minute, or message your host in the Turo app."));
-        const history = items.filter((x) => x.kind === "leo" || x.kind === "you").slice(-6)
-          .map((x) => `${x.kind === "you" ? "Guest" : "Leo"}: ${(x as { text: string }).text}`).join("\n");
-        // If the phone holds the audio paused, setup waits here for a tap: offer one after a moment.
-        const lockTimer = withVoice ? window.setTimeout(() => {
-          if (!audioLocked()) return;
-          setLocked(true);
-          if (!lockLogged.current) { lockLogged.current = true; diag(token, "audio_locked", { msg: "voice setup waiting for a tap (iOS audio)" }); }
-        }, 2500) : 0;
-        const c = await Conversation.startSession({
-          signedUrl: String(s.signed_url),
-          textOnly: !withVoice,
-          libsampleratePath: "/maya/libsamplerate.worklet.js",
-          overrides: { agent: { firstMessage: items.length > 1 ? "I'm here. Go ahead." : greeting }, conversation: { textOnly: !withVoice } },
-          dynamicVariables: { trip_key: String(s.key), call_mode: "page", caller_type: token.startsWith("demo-") ? "test_guest" : "guest",
-            pickup_place: home ? "home" : "lax", trip_stage: context?.linkDown ? "link_down" : context?.stage ?? "unknown",
-            guest_first_name: /^Hi (\S+), I'm Leo\./.exec(opening.text)?.[1] ?? "",
-            minutes_to_pickup: opening.mtp ?? 9999, controls_state: context?.controlsState ?? "unknown", greeting_offer: opening.offer },
-          clientTools: { show_card: async (p: Any) => showCard(String(p?.card ?? "")), page_action: async (p: Any) => pageAction(p) },
-          onConnect: () => {
-            setPhase("live");
-            // Link-down page (2026-10-11): Leo can't see a trip here. Tell him why and what he may do.
-            if (context?.linkDown) try { c.sendContextualUpdate(`This guest is on a trip link that no longer works (reason: ${context.linkDown}). You cannot see their trip, key or car from here. Help them: if they rebooked or changed the trip, they can sign in at bestly.tech/${home ? "turo-key" : "turo-lax"} with their phone number and last name to reach their current trip page. Otherwise take a message for the host with notify_host or file_ticket (ask for their name and best number).`); } catch { /* ignore */ }
-            if (history && items.length > 1) try { c.sendContextualUpdate(`Earlier on this screen:\n${history}`); } catch { /* ignore */ }
-          },
-          onDisconnect: () => { conv.current = null; setPhase("ended"); setVoice(false); setSpeaking(false); setWorking(null); },
-          onModeChange: ({ mode: m }: { mode: string }) => setSpeaking(m === "speaking"),
-          onMessage: ({ message, role }: { message: string; role: string }) => {
-            const t = String(message ?? "").replace(/\[[a-z ]+\]\s*/gi, "").trim();
-            if (!t) return;
-            if (role === "user") { if (t === lastSent.current) { lastSent.current = ""; return; } push({ kind: "you", text: t }); return; }
-            setItems((xs) => (xs.length && xs[xs.length - 1].kind === "leo" && (xs[xs.length - 1] as { text: string }).text === t ? xs : [...xs, { id: seq++, kind: "leo", text: t }]));
-          },
-          onAgentToolRequest: (p: Any) => setWorking(labelFor(String((p as { tool_name?: string })?.tool_name ?? ""))),
-          onAgentToolResponse: (p: Any) => {
-            setWorking(null);
-            const raw = (p as { full_tool_result?: string }).full_tool_result;
-            if (!raw) return;
-            try {
-              const j = JSON.parse(raw);
-              const res = ((j && typeof j === "object" && "card" in j) ? j : (j?.result ?? j)) as Any | null;
-              showResult(res);
-              // A car tool: the page behind Leo should show the same car (demo: pretend car, real: refetch).
-              const ct = String(((res?.card ?? null) as Card | null)?.type ?? "");
-              if (res && typeof res === "object" && (["climate", "lock", "unlock", "car"].includes(ct) || String((p as { tool_name?: string }).tool_name ?? "").startsWith("car_"))) emitLeoCar(res);
-            } catch { /* not JSON */ }
-          },
-          onError: (msg: string) => { diag(token, "sdk", { msg: String(msg).slice(0, 300) }); },
-        } as never) as Conv;
-        window.clearTimeout(lockTimer);
-        conv.current = c;
-        setVoice(withVoice);
-        if (withVoice) playStreamPlayers(); // mic is live now, so iOS lets Leo's player start (see audioRescue.ts)
-        return c;
-      } catch (e) {
-        const msg = (e as Error)?.message ?? String(e);
-        diag(token, "start", { msg: msg.slice(0, 300) });
-        push({ kind: "note", tone: "error", text: /permission|denied|notallowed/i.test(msg)
-          ? "Leo needs your microphone for a call. Allow it in your browser, or just type below."
-          : msg.length < 160 ? msg : "Leo didn't load. Try again in a minute, or message your host in the Turo app." });
-        setPhase("idle");
-        return null;
-      } finally { starting.current = null; }
-    })();
-    return starting.current;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, home, greeting, context?.stage, items, push, showCard, showResult, pageAction]);
-
-  // During a voice call, keep checking that Leo can actually be heard. If the phone paused his audio, show the tap button.
-  useEffect(() => {
-    if (!voice || phase !== "live") return;
-    let logged = false;
-    const id = window.setInterval(() => {
-      if (!audioLocked()) return;
-      playStreamPlayers();
-      setLocked(true);
-      if (!logged && !lockLogged.current) { logged = true; lockLogged.current = true; const st = audioState(); diag(token, "audio_locked", { msg: `live call, Leo's audio paused (contexts ${st.contexts}; players ${st.players})` }); }
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [voice, phase, token]);
-
-  // Clear the tap prompt as soon as the audio is actually running (the page-wide tap listener resumes it).
-  useEffect(() => {
-    if (!locked) return;
-    const id = window.setInterval(() => { if (!audioLocked()) setLocked(false); }, 400);
-    return () => window.clearInterval(id);
-  }, [locked]);
-
-  const endCall = useCallback(async () => {
-    const c = conv.current; conv.current = null;
-    try { await c?.endSession(); } catch { /* already gone */ }
-    setVoice(false); setSpeaking(false); setPhase("ended");
-  }, []);
-
-  const send = useCallback(async (raw?: string) => {
-    const t = (raw ?? text).trim();
-    if (!t) return;
-    setText("");
-    push({ kind: "you", text: t });
-    lastSent.current = t;
-    const c = conv.current ?? (await start(false));
-    try { c?.sendUserMessage(t); } catch { push({ kind: "note", tone: "error", text: "That didn't send. Try again." }); }
-  }, [text, push, start]);
-
-  const toggleMic = useCallback(async () => {
-    if (voice) { const m = !muted; setMuted(m); try { conv.current?.setMicMuted(m); } catch { /* ignore */ } return; }
-    // Typing session running: restart as a voice call (the screen keeps the conversation; Leo gets a short recap).
-    if (conv.current) { const c = conv.current; conv.current = null; try { await c.endSession(); } catch { /* ignore */ } }
-    await start(true);
-  }, [voice, muted, start]);
-
   // Open as asked: Call dials now; Message focuses the box; Open just shows Leo.
   useEffect(() => {
     track(token, "ask", { via: "leo-screen", mode });
@@ -313,7 +173,7 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
   // Page chrome: the bar steps aside, the dock hides and the page stops scrolling while Leo is full screen.
   useEffect(() => {
     window.dispatchEvent(new Event("leo:ready"));
-    return () => { window.dispatchEvent(new Event("leo:closed")); try { void conv.current?.endSession(); } catch { /* ignore */ } };
+    return () => { window.dispatchEvent(new Event("leo:closed")); };
   }, []);
   useEffect(() => {
     if (mini) return;
@@ -323,13 +183,14 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
     window.addEventListener("keydown", onKey);
     return () => { unlock(); document.body.classList.remove("leo-open"); window.removeEventListener("keydown", onKey); };
   }, [mini]);
-  // CSP blocks on a real device go to the diagnostics table.
-  useEffect(() => {
-    const f = (e: SecurityPolicyViolationEvent) => diag(token, "csp", { blocked: String(e.blockedURI), directive: e.effectiveDirective, source: `${e.sourceFile}:${e.lineNumber}` });
-    document.addEventListener("securitypolicyviolation", f);
-    return () => document.removeEventListener("securitypolicyviolation", f);
-  }, [token]);
   useEffect(() => { list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "smooth" }); }, [items, working]);
+
+  const send = useCallback((raw?: string) => {
+    const t = (raw ?? text).trim();
+    if (!t) return Promise.resolve();
+    setText("");
+    return sendLine(t);
+  }, [text, sendLine]);
 
   const close = async () => { await endCall(); onEnd(); };
   const status = phase === "connecting" ? "Connecting" : phase === "live" ? (voice ? (speaking ? "Leo is talking" : muted ? "Muted" : "Listening") : "Chatting") : "24/7 trip helper";
@@ -419,7 +280,7 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
 
       <footer className="relative mx-auto w-full max-w-md px-4 pt-2" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
         {locked && (
-          <button type="button" onClick={() => { resumeAllAudio(); window.setTimeout(() => { if (!audioLocked()) setLocked(false); }, 300); }}
+          <button type="button" onClick={sess.unlockAudio}
             className="mb-2 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold shadow-lg shadow-black/25 active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
             style={{ background: theme.accent, color: theme.onAccent }}>
             <Volume2 className="h-5 w-5" aria-hidden />Tap to hear Leo
@@ -459,21 +320,6 @@ export function LeoScreen({ token, context, home, pageOpen = true, onEnd }: { to
         <p className="mt-2 text-center text-[12px]" style={{ color: theme.subtle }}>Leo is an AI helper. For emergencies, call 911.</p>
       </footer>
     </div>, document.body);
-}
-
-function labelFor(tool: string): string {
-  switch (tool) {
-    case "car_climate": return "Sending that to the car";
-    case "car_lock": return "Locking the car";
-    case "car_status": return "Checking the car";
-    case "find_superchargers": return "Finding Superchargers";
-    case "send_to_car_nav": return "Sending it to the car";
-    case "charging_summary": return "Adding up your charging";
-    case "trip_status": return "Checking your trip";
-    case "key_fix": case "job_status": return "Working on your key";
-    case "page_action": return "Updating the page";
-    default: return "Working on it";
-  }
 }
 
 function Bubble({ you, theme, children }: { you: boolean; theme: LeoTheme; children: ReactNode }) {

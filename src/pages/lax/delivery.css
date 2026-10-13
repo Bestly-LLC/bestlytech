@@ -1,0 +1,89 @@
+/*
+ * Delivery trip page (DeliveryGuest.tsx), 2026-10-12. Light cream look from the printed "Hi, I'm Leo." card.
+ *
+ * 1. Tokens and Leo's orb (glow is a radial gradient that fades to nothing, so it never ends in an edge).
+ * 2. A light re-skin for the shared trip components. They were written for dark pages: white text, translucent-white
+ *    cards. Instead of forking each one, every white-on-dark utility they use is mapped here, once, to ink on cream
+ *    (all text >= 4.5:1 on #F6EEDD and on the darker #E9DCC2 at the bottom of the page).
+ *    Things that keep their own dark surface (the Apple Weather tile, the host strip, the install toast) sit inside
+ *    `.trip-keep` and are left alone.
+ */
+.trip-light {
+  --d-ink: #13282A; --d-body: #4A5452; --d-mute: #4F5A58; --d-label: #8F4D12; --d-dot: #E2733A; --d-star: #D99A2E;
+  --trip-accent: #E2733A; --trip-accent-2: #B8661F; --trip-bg: #F6EEDD; --trip-bar: rgba(246,238,221,.95);
+  --trip-title-font: 'Josefin Sans', Futura, 'Avenir Next', sans-serif;
+  color: var(--d-ink);
+}
+
+/* ---------- Leo's orb ---------- */
+.dl-stage { position: relative; display: grid; place-items: center; width: 100%; height: 232px; }
+.dl-glow {
+  position: absolute; left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(240,168,76,.60) 0%, rgba(240,168,76,.34) 36%, rgba(240,168,76,.12) 66%, rgba(240,168,76,0) 100%);
+  will-change: transform, opacity;
+}
+.dl-glow-idle { animation: dl-breathe 6s ease-in-out infinite; }
+.dl-glow-wait { animation: dl-breathe 1.4s ease-in-out infinite; }
+@keyframes dl-breathe { 0%, 100% { transform: scale(.96); opacity: .8; } 50% { transform: scale(1.05); opacity: 1; } }
+.dl-orb {
+  position: relative; width: 156px; height: 156px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; display: grid; place-items: center;
+  background: radial-gradient(circle at 35% 30%, #F8DDB0 0%, #EDB253 38%, #E57A3A 75%, #C9622E 100%);
+  box-shadow: inset 0 -12px 26px rgba(150,62,16,.30), inset 0 10px 22px rgba(255,244,220,.40), 0 18px 40px -18px rgba(150,62,16,.55);
+  will-change: transform; -webkit-tap-highlight-color: transparent;
+  transition: transform 140ms cubic-bezier(.2,.8,.2,1);
+}
+.dl-orb:not(:disabled):active { transform: scale(.97); }
+.dl-orb:focus-visible { outline: 3px solid #13282A; outline-offset: 6px; }
+.dl-orb[data-live="true"] { transition: none; }
+.dl-orb-hint { color: #4A2208; font: 700 15px/1.1 Inter, system-ui, sans-serif; letter-spacing: .01em; text-align: center; }
+@media (prefers-reduced-motion: reduce) {
+  .dl-glow-idle, .dl-glow-wait { animation: none; opacity: .9; }
+  .dl-orb { transition: none; }
+}
+
+/* ---------- Leo's lines under the orb ---------- */
+.dl-bubble { max-width: 88%; white-space: pre-wrap; border-radius: 22px; padding: 10px 16px; font-size: 16px; line-height: 1.45; }
+.dl-bubble-leo { align-self: flex-start; border-bottom-left-radius: 6px; background: rgba(255,255,255,.78); color: #13282A; box-shadow: 0 0 0 1px rgba(19,40,42,.10); }
+.dl-bubble-you { align-self: flex-end; border-bottom-right-radius: 6px; background: #E2733A; color: #13282A; font-weight: 500; }
+.dl-enter { animation: dl-enter 260ms cubic-bezier(.2,.8,.2,1) both; }
+@keyframes dl-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .dl-enter { animation: none; } }
+
+/* ---------- Light re-skin of the shared (dark) trip components ---------- */
+/* text */
+.trip-light .text-white:not(.trip-keep *) { color: var(--d-ink); }
+.trip-light :is(.text-white\/95, .text-white\/90, .text-white\/85, .text-white\/80):not(.trip-keep *) { color: #2C3D3E; }
+.trip-light :is(.text-white\/75, .text-white\/70, .text-white\/65, .text-white\/60):not(.trip-keep *) { color: var(--d-body); }
+.trip-light :is(.text-white\/55, .text-white\/50, .text-white\/45, .text-white\/40, .text-white\/35):not(.trip-keep *) { color: var(--d-mute); }
+.trip-light .hover\:text-white:hover:not(.trip-keep *) { color: var(--d-ink); }
+.trip-light :is(.text-emerald-300, .text-emerald-200):not(.trip-keep *) { color: #1B7A4B; }
+.trip-light :is(.text-sky-300, .text-sky-200):not(.trip-keep *) { color: #0B6FA8; }
+.trip-light :is(.text-orange-300, .text-orange-200):not(.trip-keep *) { color: #A8480F; }
+.trip-light :is(.text-amber-300, .text-amber-200, .text-amber-100):not(.trip-keep *) { color: #7A5200; }
+.trip-light :is(.text-red-300, .text-red-200, .text-red-100):not(.trip-keep *) { color: #B3261E; }
+/* the accent colour is a fine button fill but too light as small text: any inline accent text gets the darker label brown */
+.trip-light [style*="color: var(--trip-accent)"]:not(.trip-keep *) { color: var(--d-label) !important; }
+.trip-light .placeholder\:text-white\/35::placeholder, .trip-light .placeholder\:text-white\/50::placeholder { color: #6A7371; }
+/* surfaces: cards, then buttons and chips */
+.trip-light :is(.bg-white\/\[0\.04\], .bg-white\/\[0\.05\], .bg-white\/\[0\.06\], .bg-white\/\[0\.07\]):not(.trip-keep *) { background-color: rgba(255,255,255,.62); }
+.trip-light :is(.bg-white\/\[0\.08\], .bg-white\/\[0\.09\], .bg-white\/10, .bg-white\/15, .bg-white\/20, .bg-white\/40):not(.trip-keep *) { background-color: rgba(19,40,42,.07); }
+.trip-light :is(.bg-black\/15, .bg-black\/20, .bg-black\/25):not(.trip-keep *) { background-color: rgba(19,40,42,.06); }
+.trip-light .bg-white:not(.trip-keep *) { box-shadow: 0 0 0 1px rgba(19,40,42,.14); }
+/* rings and rules */
+.trip-light :is(.ring-white\/10, .ring-white\/15, .ring-white\/20, .ring-white\/25):not(.trip-keep *) { --tw-ring-color: rgba(19,40,42,.14); }
+.trip-light :is(.border-white\/10, .border-white\/15):not(.trip-keep *) { border-color: rgba(19,40,42,.14); }
+.trip-light .divide-white\/10:not(.trip-keep *) > * { border-color: rgba(19,40,42,.14); }
+.trip-light .decoration-white\/40:not(.trip-keep *), .trip-light .decoration-white\/30:not(.trip-keep *) { text-decoration-color: rgba(19,40,42,.4); }
+/* SVG drawn with white attributes (the charge gauge) */
+.trip-light svg:not(.trip-keep *) [fill="white"] { fill: var(--d-ink); }
+.trip-light svg:not(.trip-keep *) [stroke="white"] { stroke: var(--d-ink); }
+.trip-light svg:not(.trip-keep *) [fill="rgba(255,255,255,.65)"] { fill: var(--d-body); }
+.trip-light svg:not(.trip-keep *) [stroke="rgba(255,255,255,.12)"] { stroke: rgba(19,40,42,.12); }
+/* Supercharging recap glass card */
+.trip-light .trip-glass:not(.trip-keep *) { background: rgba(255,255,255,.58); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 0 0 1px rgba(19,40,42,.10), 0 16px 34px -18px rgba(143,77,18,.40); }
+.trip-light .trip-star:not(.trip-keep *) { fill: #E0A12B; color: #E0A12B; filter: drop-shadow(0 0 5px rgba(224,161,43,.45)); }
+/* focus ring: ink on cream */
+.trip-light :is(a, button, input, textarea, select):focus-visible { outline: 2px solid #13282A; outline-offset: 3px; border-radius: 14px; }
+
+/* Key card when the key is ready to add: a feathered orange halo (box-shadow only, so it never ends in an edge). */
+.trip-light .dl-ready { box-shadow: 0 0 0 1.5px rgba(226,115,58,.55), 0 0 38px -2px rgba(226,115,58,.38), 0 16px 34px -26px rgba(143,77,18,.45) !important; }

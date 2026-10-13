@@ -26,11 +26,14 @@ const WHY: Record<LinkDownReason, string> = {
 const LOOK = {
   home: { bg: "radial-gradient(120% 60% at 50% 0%, #1f4442 0%, #132726 62%)", color: "#132726", label: "Home pickup", signIn: "/turo-key" },
   lax: { bg: "radial-gradient(120% 60% at 50% 0%, #2B1A73 0%, #1A1140 62%)", color: "#1A1140", label: "LAX", signIn: "/turo-lax" },
+  delivery: { bg: "radial-gradient(120% 70% at 50% 0%, #FFF8EC 0%, #F6EEDD 55%, #E9DCC2 100%)", color: "#F6EEDD", label: "Delivery", signIn: "/turo-key?src=delivery" },
 } as const;
 
-export function LinkDown({ token, kind, reason }: { token: string; kind: "home" | "lax"; reason: LinkDownReason }) {
-  const home = kind === "home";
-  const t = THEME[kind];
+export function LinkDown({ token, kind, reason }: { token: string; kind: "home" | "lax" | "delivery"; reason: LinkDownReason }) {
+  const home = kind !== "lax";
+  const light = kind === "delivery";
+  // Delivery is a light page: ink text, darker brown for small accent text, a white card instead of the dark one.
+  const t = light ? { ...THEME.delivery, subtle: "#4A5452", accent: "#8F4D12" } : THEME[kind];
   const look = LOOK[kind];
   const [leo, setLeo] = useState(false);
   const logged = useRef(false);
@@ -45,7 +48,7 @@ export function LinkDown({ token, kind, reason }: { token: string; kind: "home" 
   const open = (m: LeoMode) => { setLeoMode(m); setLeo(true); };
 
   return (
-    <div className="trip relative min-h-dvh overflow-hidden text-white" style={{ background: look.bg, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
+    <div className={`trip relative min-h-dvh overflow-hidden ${light ? "text-[#13282A]" : "text-white"}`} style={{ background: look.bg, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
       <Helmet>
         <title>This link doesn't work right now</title>
         <meta name="robots" content="noindex, nofollow" />
@@ -64,7 +67,7 @@ export function LinkDown({ token, kind, reason }: { token: string; kind: "home" 
         <h1 className="mt-4 text-[34px] font-bold leading-[1.1] tracking-[-0.02em]">This link doesn't work right now.</h1>
         <p className="mt-3 text-[17px] leading-relaxed" style={{ color: t.subtle }}>{WHY[reason]}</p>
 
-        <section aria-label="Leo, your trip helper" className="mt-10 rounded-[28px] p-6 ring-1 ring-white/10" style={{ background: `${t.raised}E6` }}>
+        <section aria-label="Leo, your trip helper" className={`mt-10 rounded-[28px] p-6 ring-1 ${light ? "ring-[rgba(19,40,42,0.10)]" : "ring-white/10"}`} style={{ background: light ? "rgba(255,255,255,0.72)" : `${t.raised}E6` }}>
           <div className="flex items-center gap-4">
             <LeoOrb theme={t} size={64} />
             <div className="min-w-0">
@@ -72,14 +75,15 @@ export function LinkDown({ token, kind, reason }: { token: string; kind: "home" 
               <p className="text-[15px]" style={{ color: t.subtle }}>24/7 trip helper - real help</p>
             </div>
           </div>
-          <p className="mt-5 text-[16px] leading-relaxed text-white/90">Leo can help you right now, by voice or text.</p>
+          <p className={`mt-5 text-[16px] leading-relaxed ${light ? "text-[#13282A]" : "text-white/90"}`}>Leo can help you right now, by voice or text.</p>
           <button type="button" onClick={() => open("call")}
             className="mt-5 flex h-14 w-full items-center justify-center gap-2.5 rounded-2xl text-[18px] font-bold shadow-lg shadow-black/25 transition-transform duration-100 ease-out active:scale-[0.97] motion-reduce:transition-none"
-            style={{ background: t.accent, color: t.onAccent }}>
+            style={{ background: light ? "#E2733A" : t.accent, color: light ? "#13282A" : t.onAccent }}>
             <Phone className="h-5 w-5" aria-hidden /> Talk to Leo
           </button>
           <button type="button" onClick={() => open("chat")}
-            className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.08] text-[16px] font-semibold ring-1 ring-white/15 transition-transform duration-100 ease-out active:scale-[0.97] motion-reduce:transition-none">
+            style={light ? { background: "rgba(19,40,42,0.07)", boxShadow: "0 0 0 1px rgba(19,40,42,0.14)" } : { background: "rgba(255,255,255,0.08)", boxShadow: "0 0 0 1px rgba(255,255,255,0.15)" }}
+            className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-semibold transition-transform duration-100 ease-out active:scale-[0.97] motion-reduce:transition-none">
             <MessageCircle className="h-5 w-5" aria-hidden /> Message Leo instead
           </button>
         </section>
@@ -92,7 +96,7 @@ export function LinkDown({ token, kind, reason }: { token: string; kind: "home" 
         )}
       </main>
 
-      {leo && <LeoScreen token={token} home={home} context={{ stage: null, ended: reason === "ended", linkDown: reason }} onEnd={() => setLeo(false)} />}
+      {leo && <LeoScreen token={token} home={home} look={kind} context={{ stage: null, ended: reason === "ended", linkDown: reason }} onEnd={() => setLeo(false)} />}
     </div>
   );
 }
