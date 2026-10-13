@@ -29,8 +29,10 @@ export function leoGreeting(ctx: TripContext | undefined, _home: boolean): strin
 export const THEME = {
   lax: { base: "#241A57", raised: "#2E2268", subtle: "#CFC8EC", accent: "#FFB878", onAccent: "#1A1140", error: "#FF9DB3", orb: ["#FFB878", "#E4527A"] },
   home: { base: "#1B3836", raised: "#224341", subtle: "#C3D6D3", accent: "#E8A93A", onAccent: "#132726", error: "#FFAA8E", orb: ["#E8A93A", "#E36F3C"] },
+  // Delivery: the printed card's ink (#13282A) with its orange orb. The trip page itself is cream; Leo's full-screen sheet stays dark ink so every shared white-on-dark card in it keeps its contrast.
+  delivery: { base: "#13282A", raised: "#1D3638", subtle: "#D3DEDB", accent: "#EDB253", onAccent: "#13282A", error: "#FFAA8E", orb: ["#EDB253", "#E2733A"] },
 } as const;
-export type LeoTheme = (typeof THEME)[keyof typeof THEME];
+export type LeoTheme = { base: string; raised: string; subtle: string; accent: string; onAccent: string; error: string; orb: readonly [string, string] };
 
 /** How Leo should open: dial right away, open ready to type, or just open. Set by LeoBar right before it opens. */
 export type LeoMode = "call" | "chat" | "open";

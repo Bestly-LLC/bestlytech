@@ -75,9 +75,18 @@ export async function realDemoKeyAdded(): Promise<boolean> {
 }
 
 export const isDemo = (token?: string) => !!token && token.startsWith("demo-");
-export const demoKind = (token: string): "home" | "lax" => (token.startsWith("demo-lax") ? "lax" : "home");
+export type DemoKind = "home" | "lax" | "delivery";
+export const demoKind = (token: string): DemoKind => (token.startsWith("demo-lax") ? "lax" : token.startsWith("demo-delivery") ? "delivery" : "home");
 
-export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
+/** The sample delivery on /t/demo-delivery: a hotel, so the room number + front desk flow shows. */
+export const DEMO_DELIVERY = {
+  location_id: "best-western-sunset-plaza", kind: "hotel" as const, name: "Best Western Plus Sunset Plaza Hotel", short: "Best Western Sunset Plaza",
+  address: "8400 Sunset Blvd, West Hollywood, CA 90069", lat: 34.0957, lon: -118.3719, ask: ["room", "front_desk"] as ("room" | "front_desk")[],
+  info: { room: null, front_desk: null, parking: null, eta: null, reported_at: null, via: null },
+  turo_instructions: null, return_note: "Bring it back here, same place.",
+};
+
+export const STAGES: Record<DemoKind, { id: string; label: string }[]> = {
   home: [
     { id: "booked", label: "Booked (3 days out)" },
     { id: "key-soon", label: "3 hours before" },
@@ -98,6 +107,20 @@ export const STAGES: Record<"home" | "lax", { id: string; label: string }[]> = {
     { id: "on-way", label: "On the way (30 min before, key added)" },
     { id: "on-trip", label: "On the trip (2½ days left)" },
     { id: "return-2d", label: "2 days before return (car check turns on)" },
+    { id: "returning", label: "Return in 90 min" },
+    { id: "returning-ok", label: "Return in 90 min (charged)" },
+    { id: "grace", label: "Just past return time (30-min buffer)" },
+    { id: "ended", label: "Trip ended (30+ min after)" },
+  ],
+  delivery: [
+    { id: "booked", label: "Booked: Leo still needs the room number" },
+    { id: "info-done", label: "Booked: room number + front desk shared" },
+    { id: "key-soon", label: "3 hours before (Jared on the way)" },
+    { id: "held", label: "Jared arriving: check-in photos, key HELD" },
+    { id: "key-ready", label: "Photos done: key ready (tap it to add)" },
+    { id: "on-way", label: "Key added, getting in the car" },
+    { id: "on-trip", label: "On the trip (2½ days left)" },
+    { id: "return-2d", label: "2 days before return" },
     { id: "returning", label: "Return in 90 min" },
     { id: "returning-ok", label: "Return in 90 min (charged)" },
     { id: "grace", label: "Just past return time (30-min buffer)" },
@@ -136,7 +159,7 @@ export function demoWeather(): DemoWeather {
   return "hot";
 }
 /** Tell Leo's pretend car (server side) the demo weather, so his car status and climate offers match the page. */
-export function syncDemoWeather(kind: "home" | "lax", w: DemoWeather) {
+export function syncDemoWeather(kind: DemoKind, w: DemoWeather) {
   void supabase.functions.invoke("trip-voice", { body: { op: "demo_weather", token: `demo-${kind}`, weather: w } }).catch(() => { /* demo only */ });
 }
 export function useDemoWeather(): [DemoWeather, (w: DemoWeather) => void] {
@@ -144,7 +167,7 @@ export function useDemoWeather(): [DemoWeather, (w: DemoWeather) => void] {
   return [w, (x) => { try { sessionStorage.setItem("demo-weather", x); } catch { /* ignore */ } setW(x); }];
 }
 
-export function demoPub(kind: "home" | "lax", stage: string): any {
+export function demoPub(kind: DemoKind, stage: string): any {
   const now = Date.now();
   // Trip times are pinned when a stage is picked, so the minute refresh never shifts them; the page then runs in real time.
   if (anchor.stage !== stage) { anchor.stage = stage; anchor.t = now; }
@@ -159,7 +182,7 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
   const open = ds.open;
   const controlsOn = open || (stage !== "held" && ((now >= s - H && now < e) || added));
   const controls_state = open ? "on" : now >= e ? "ended" : controlsOn ? "on" : "soon";
-  let keyState = stage === "booked" || stage === "key-soon" || stage === "held" ? "soon" : stage === "key-ready" || stage === "day-of" ? (added ? "added" : "ready") : stage === "ended" ? "ended" : "added";
+  let keyState = stage === "booked" || stage === "info-done" || stage === "key-soon" || stage === "held" ? "soon" : stage === "key-ready" || stage === "day-of" ? (added ? "added" : "ready") : stage === "ended" ? "ended" : "added";
   // Host: the button is a real Tesla key ("making" for the few seconds a fresh invite takes).
   const real = keyState === "ready" && realKey ? realKey : null;
   if (real && !real.link) keyState = "making";
@@ -177,6 +200,14 @@ export function demoPub(kind: "home" | "lax", stage: string): any {
     charging: now < s ? null : demoCharging(now >= e),
     battery_health: { score: "good", pct: 80, range_full: 192 },
   };
+  if (kind === "delivery") {
+    // The server keeps kind "home" for delivery trips (so older pages keep working) and adds place + delivery.
+    return {
+      ...base, kind: "home", place: "delivery", spot: null, key,
+      delivery: { ...DEMO_DELIVERY, info: stage === "info-done" ? { ...DEMO_DELIVERY.info, room: "214", front_desk: "Self-park in the back lot, $25 a night", reported_at: iso(now - 20 * 60e3), via: "leo" } : DEMO_DELIVERY.info,
+        ask: stage === "info-done" ? [] : DEMO_DELIVERY.ask },
+    };
+  }
   if (kind === "home") {
     return {
       ...base,
@@ -223,7 +254,7 @@ export function openUntilLabel(until: string | null): string {
   return `${time} ${day}`;
 }
 
-export function useDemoStage(kind: "home" | "lax", enabled: boolean) {
+export function useDemoStage(kind: DemoKind, enabled: boolean) {
   const [stage, setStage] = useState(() => new URLSearchParams(window.location.search).get("stage") ?? STAGES[kind][0].id);
   useEffect(() => {
     if (!enabled) return;
@@ -236,7 +267,7 @@ export function useDemoStage(kind: "home" | "lax", enabled: boolean) {
 }
 
 /** Floating switcher so the host can walk the trip from booking to return. */
-export function DemoBar({ kind, stage, onStage, weather, onWeather }: { kind: "home" | "lax"; stage: string; onStage: (s: string) => void; weather?: DemoWeather; onWeather?: (w: DemoWeather) => void }) {
+export function DemoBar({ kind, stage, onStage, weather, onWeather }: { kind: DemoKind; stage: string; onStage: (s: string) => void; weather?: DemoWeather; onWeather?: (w: DemoWeather) => void }) {
   // Tucks itself away so the page (and sheets) can be seen: a faint "Demo" pill. Tap it to open, pick things,
   // and it tucks away again a few seconds after you stop (never while a menu is open).
   const [open, setOpen] = useState(true);
@@ -255,7 +286,7 @@ export function DemoBar({ kind, stage, onStage, weather, onWeather }: { kind: "h
     onBlur: () => { busy.current = false; later(2500); },
   };
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[13.25rem] z-40 flex justify-center px-3" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+    <div className={`pointer-events-none fixed inset-x-0 ${kind === "delivery" ? "bottom-3" : "bottom-[13.25rem]"} z-40 flex justify-center px-3`} style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
       {open ? (
         <div onPointerDown={poke} onKeyDown={poke}
           className="pointer-events-auto flex w-full max-w-md flex-wrap items-center gap-2 rounded-2xl bg-black/85 px-3 py-2 text-white shadow-2xl ring-1 ring-white/20 backdrop-blur transition-opacity duration-200 motion-reduce:transition-none">

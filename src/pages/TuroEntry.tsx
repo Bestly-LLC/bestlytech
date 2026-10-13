@@ -19,14 +19,18 @@ import { AsYouType, getCountries, getCountryCallingCode, parsePhoneNumberFromStr
 import { supabase } from "@/integrations/supabase/client";
 import { COPY, pickLang, pickRegion, type Lang } from "./turo-entry/strings";
 import { device, deviceId, isHostDevice } from "./lax/track";
+import "./lax/delivery.css";
 
 type Kind = "home" | "lax";
+/** /turo-key?src=delivery (the printed delivery card): same sign-in, cream look. The lookup stays kind "home". */
+const isDeliveryLink = () => { try { return new URLSearchParams(window.location.search).get("src") === "delivery"; } catch { return false; } };
 const MEM = "bestly-trip-entry";
 type Mem = { token: string; first: string };
 const readMem = (): Mem | null => { try { const m = JSON.parse(localStorage.getItem(MEM) || "null"); return m?.token ? m : null; } catch { return null; } };
 
-const SCENE: Record<Kind, { hero: string; bg: string; accent: string; ink: string; pos: string }> = {
+const SCENE: Record<Kind | "delivery", { hero: string; bg: string; accent: string; ink: string; pos: string }> = {
   home: { hero: "/wallet/home/hero-mcm-v5.svg", bg: "radial-gradient(120% 60% at 50% 0%, #1f4442 0%, #132726 62%)", accent: "#E8A93A", ink: "#1b1405", pos: "60% 70%" },
+  delivery: { hero: "", bg: "radial-gradient(120% 70% at 50% 0%, #FFF8EC 0%, #F6EEDD 55%, #E9DCC2 100%)", accent: "#E2733A", ink: "#13282A", pos: "50% 50%" },
   lax: { hero: "/wallet/lax/hero-live3.svg", bg: "radial-gradient(120% 60% at 50% 0%, #2a1d5e 0%, #1A1140 62%)", accent: "#FFB878", ink: "#2a1405", pos: "65% center" },
 };
 
@@ -45,7 +49,8 @@ function initialCountry(): CountryCode {
 export default function TuroEntry({ kind }: { kind: Kind }) {
   const nav = useNavigate();
   const reduce = useReducedMotion();
-  const scene = SCENE[kind];
+  const dl = useMemo(isDeliveryLink, []); // read before the effect below strips ?src
+  const scene = SCENE[dl ? "delivery" : kind];
   const testMode = useMemo(() => new URLSearchParams(window.location.search).get("test"), []);
   const autoLang = useMemo(() => pickLang(), []);
   const [lang, setLang] = useState<Lang>(autoLang);
@@ -154,7 +159,7 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="relative min-h-dvh overflow-x-hidden text-white" style={{ background: scene.bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif", WebkitTapHighlightColor: "transparent" }}>
+      <div className={`relative min-h-dvh overflow-x-hidden ${dl ? "trip-light" : "text-white"}`} style={{ background: scene.bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif", WebkitTapHighlightColor: "transparent" }}>
         <div className="relative">
         {/* Night scene — same art as the trip page this opens, so the hand-off feels like one place. */}
         <motion.div
@@ -164,15 +169,21 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
           animate={{ opacity: 1, scale: 1 }}
           transition={reduce ? { duration: 0.25 } : { duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
         >
-          <img src={scene.hero} alt="" className="block h-full w-full object-cover" style={{ objectPosition: scene.pos }} />
-          <div className="absolute inset-x-0 bottom-0 h-24" style={{ background: `linear-gradient(to bottom, transparent, ${kind === "home" ? "#132726" : "#1A1140"})` }} />
+          {dl ? (
+            <div aria-hidden className="absolute left-1/2 top-1/2 h-[300px] w-[300px] -translate-x-1/2 -translate-y-[58%] rounded-full" style={{ background: "radial-gradient(closest-side, rgba(240,168,76,.55) 0%, rgba(240,168,76,.30) 40%, rgba(240,168,76,.10) 70%, rgba(240,168,76,0) 100%)" }} />
+          ) : (
+            <>
+              <img src={scene.hero} alt="" className="block h-full w-full object-cover" style={{ objectPosition: scene.pos }} />
+              <div className="absolute inset-x-0 bottom-0 h-24" style={{ background: `linear-gradient(to bottom, transparent, ${kind === "home" ? "#132726" : "#1A1140"})` }} />
+            </>
+          )}
         </motion.div>
 
         {autoLang !== "en" ? (
           <motion.button
             type="button"
             onClick={() => setLang(lang === "en" ? autoLang : "en")}
-            className="absolute right-4 flex min-h-[44px] items-center gap-1.5 rounded-full bg-black/35 px-3.5 text-[15px] font-medium text-white backdrop-blur-md ring-1 ring-white/15"
+            className={`absolute right-4 flex min-h-[44px] items-center gap-1.5 rounded-full px-3.5 text-[15px] font-medium backdrop-blur-md ring-1 ${dl ? "bg-white/70 text-[#13282A] ring-[rgba(19,40,42,0.18)]" : "bg-black/35 text-white ring-white/15"}`}
             style={{ top: "max(12px, env(safe-area-inset-top))" }}
             whileTap={{ scale: 0.95 }}
             initial={{ opacity: 0 }}
@@ -192,7 +203,7 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
           height={432}
           decoding="async"
           className="pointer-events-none absolute inset-x-0 z-10 mx-auto w-[min(60vw,264px)] select-none"
-          style={{ bottom: "-3.1rem", filter: "drop-shadow(0 18px 22px rgba(0,0,0,.55))" }}
+          style={{ bottom: "-3.1rem", filter: dl ? "drop-shadow(0 18px 22px rgba(80,40,10,.35))" : "drop-shadow(0 18px 22px rgba(0,0,0,.55))" }}
           initial={reduce ? { opacity: 0 } : { opacity: 0, x: "70vw" }}
           animate={leaving && !reduce ? { opacity: 0, x: "-90vw", transition: { duration: 0.55, ease: [0.55, 0, 0.75, 0.2] } } : { opacity: 1, x: 0 }}
           transition={reduce ? { duration: 0.3 } : { type: "spring", stiffness: 70, damping: 15, mass: 1.1, delay: 0.15 }}
@@ -226,7 +237,7 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
             <motion.div {...rise(3)}>
             <motion.form onSubmit={go} noValidate animate={card}>
               {/* iOS grouped inset list */}
-              <div className="overflow-hidden rounded-[16px] bg-white/[0.08] ring-1 ring-white/10 backdrop-blur-xl">
+              <div className={`overflow-hidden rounded-[16px] ring-1 backdrop-blur-xl ${dl ? "bg-white/75 ring-[rgba(19,40,42,0.12)]" : "bg-white/[0.08] ring-white/10"}`}>
                 <label className="block px-4 pb-1 pt-3 text-[13px] font-medium text-white/60" htmlFor="te-phone">{t.phone}</label>
                 <div className="flex items-center gap-2 px-4 pb-3">
                   <div className="relative shrink-0">
@@ -287,7 +298,7 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, transition: { duration: 0.12 } }}
                     transition={SPRING}
-                    className="mt-3 rounded-[14px] bg-[#ff453a]/15 px-4 py-3 text-[15px] leading-snug text-[#ff9f97] ring-1 ring-[#ff453a]/30"
+                    className={`mt-3 rounded-[14px] px-4 py-3 text-[15px] leading-snug ring-1 ${dl ? "bg-[#B3261E]/10 text-[#8C1D18] ring-[#B3261E]/30" : "bg-[#ff453a]/15 text-[#ff9f97] ring-[#ff453a]/30"}`}
                   >
                     {err}
                   </motion.p>

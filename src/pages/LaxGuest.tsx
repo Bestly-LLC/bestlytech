@@ -20,6 +20,7 @@ import { LinkDown } from "./lax/LinkDown";
 import type { LinkDownReason } from "./lax/leoOffer";
 import { ScrollFx } from "./lax/ScrollFx";
 import { track } from "./lax/track";
+import DeliveryGuest, { type DeliveryPub } from "./lax/DeliveryGuest";
 import HomeGuest, { CarButton, type CarAction, type HomeInfo, type KeyInfo } from "./lax/HomeGuest";
 import { HomeGuide, VideoList, VideoPlayer } from "./lax/HomeGuide";
 import { ChargerLine, SendToCar, useKeyWatch } from "./lax/KeyNext";
@@ -46,7 +47,7 @@ import { sharedPageAction, tellLeo, useLeoCar, useLeoPage } from "./lax/leoBridg
 import { CHARGERS } from "./lax/places";
 
 type Guide = { garage?: string; level?: string; spot?: string; shuttle?: string; after_hours?: string; car?: string; shuttle_stop?: string };
-type Pub = { ok: boolean; reason?: LinkDownReason; kind?: "lax" | "home"; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; find_hold?: boolean; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; trip_changed_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
+type Pub = { ok: boolean; reason?: LinkDownReason; kind?: "lax" | "home"; place?: "lax" | "home" | "delivery"; delivery?: DeliveryPub["delivery"]; home?: HomeInfo | null; spot?: { lat: number; lon: number; observed_at: string } | null; find_hold?: boolean; key?: KeyInfo | null; controls?: boolean; controls_state?: string; controls_opens_at?: string | null; ready?: boolean; google?: boolean; trip?: Trip; car?: CarState | null; email?: string | null; pickup_battery?: number | null; pickup_battery_at?: string | null; range_check?: RangeCheckData; battery_health?: BatteryHealth; car_connected_at?: string | null; trip_changed_at?: string | null; charging?: Charging | null; reminder_at?: string | null; reminder_sent_at?: string | null; code_for_trip_month?: boolean; payload?: string; note?: string | null; valid_through?: string; guide?: Guide };
 
 const FN = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/wallet-pass";
 const rpc = (fn: string, args?: Record<string, unknown>) =>
@@ -265,7 +266,7 @@ export default function LaxGuest() {
         // Couldn't reach us: keep a page that already loaded; otherwise show the link-down page ("fixing").
         if (error && !data) { setPub((prev) => (prev?.ok ? prev : { ok: false, reason: "fixing" })); return; }
         const p = (data as Pub) ?? { ok: false };
-        if (token && p.kind) { try { localStorage.setItem(`tripkind:${token}`, p.kind); } catch { /* private mode */ } }
+        if (token && p.kind) { try { localStorage.setItem(`tripkind:${token}`, p.place === "delivery" ? "delivery" : p.kind); } catch { /* private mode */ } }
         if (token && p.ok && !viewed.current) {
           viewed.current = true;
           track(token, "view", { kind: p.kind });
@@ -287,9 +288,9 @@ export default function LaxGuest() {
   // Home-screen icon + tab icon match the trip's look (home = midcentury sunset, LAX = the LAX mark).
   useEffect(() => {
     if (!pub?.ok || !pub.kind) return;
-    const ico = pub.kind === "home" ? "/wallet/home/apple-touch-icon.png" : "/wallet/lax/apple-touch-icon.png";
+    const ico = pub.place === "delivery" ? "/wallet/delivery/apple-touch-icon.png" : pub.kind === "home" ? "/wallet/home/apple-touch-icon.png" : "/wallet/lax/apple-touch-icon.png";
     document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="apple-touch-icon"]').forEach((l) => { l.href = ico; });
-  }, [pub?.ok, pub?.kind]);
+  }, [pub?.ok, pub?.kind, pub?.place]);
   useEffect(() => { const f = () => { void reload(); }; window.addEventListener("trip-reload", f); return () => window.removeEventListener("trip-reload", f); });
   // Keep time-based parts fresh (buttons open 1h before pickup, key 2h before, exact spot, etc.) without a manual refresh.
   useEffect(() => {
@@ -474,6 +475,11 @@ export default function LaxGuest() {
 
   // Home pickup: while loading, show the Hollywood-hills loader if we know it's a home trip (matches trip.html's splash).
   const knownKind = (() => { try { return token ? localStorage.getItem(`tripkind:${token}`) : null; } catch { return null; } })();
+  if (token && !pub && knownKind === "delivery") return (
+    <div className="flex min-h-screen items-center justify-center" style={{ background: "#F6EEDD" }} role="status" aria-label="Loading">
+      <img src="/wallet/delivery/apple-touch-icon.png" alt="" className="h-[88px] w-[88px] animate-pulse rounded-[20px] motion-reduce:animate-none" />
+    </div>
+  );
   if (token && !pub && knownKind !== "lax") return (
     <div className="flex min-h-screen items-center justify-center" style={{ background: "#132726" }} role="status" aria-label="Loading">
       <img src="/wallet/home/loader-mcm.svg" alt="" className="h-[88px] w-[88px] animate-pulse rounded-[20px] motion-reduce:animate-none" />
@@ -483,11 +489,16 @@ export default function LaxGuest() {
   // Preview: /t/demo-home?down=changed (or ended / unknown / fixing) shows the link-down page on the demo trip.
   const downPreview = demo ? new URLSearchParams(window.location.search).get("down") : null;
   if (token && demo && downPreview && ["changed", "ended", "unknown", "fixing"].includes(downPreview)) return (
-    <LinkDown token={token} kind={dKind === "lax" ? "lax" : "home"} reason={downPreview as LinkDownReason} />
+    <LinkDown token={token} kind={dKind} reason={downPreview as LinkDownReason} />
   );
   if (token && !demo && pub && !pub.ok) return (
-    <LinkDown token={token} kind={pub.kind ?? (knownKind === "lax" ? "lax" : "home")} reason={pub.reason ?? "unknown"} />
+    <LinkDown token={token} kind={knownKind === "delivery" ? "delivery" : pub.kind ?? (knownKind === "lax" ? "lax" : "home")} reason={pub.reason ?? "unknown"} />
   );
+  // Delivery (hotel, pod, Union Station, any address): Leo-first cream page. Checked before home: delivery trips also say kind "home".
+  if (token && pub?.ok && pub.place === "delivery") return <>
+    <DeliveryGuest pub={pub as DeliveryPub} token={token} run={carCommand} demo={demoParam} demoPage={demo} reload={reload} />
+    {demo && <DemoBar kind="delivery" stage={stage} onStage={setStage} weather={weather} onWeather={(w) => { setWeather(w); clearDemoInside(); setPub(demoPub(dKind, stageRef.current) as Pub); }} />}
+  </>;
   // Home pickup (733 N Kings Rd): same page system, home look. No QR code, shuttle or garage.
   if (token && pub?.ok && pub.kind === "home") return <>
     <HomeGuest pub={pub} token={token} run={carCommand} demo={demoParam} demoPage={demo} reload={reload} />

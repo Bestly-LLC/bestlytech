@@ -4008,6 +4008,42 @@ export type Database = {
           },
         ]
       }
+      call_consents: {
+        Row: {
+          captured_at: string
+          consent_text: string
+          form_ref: string | null
+          id: string
+          phone: string
+          phone_key: string | null
+          revoked_at: string | null
+          seller: string
+          source: string
+        }
+        Insert: {
+          captured_at?: string
+          consent_text: string
+          form_ref?: string | null
+          id?: string
+          phone: string
+          phone_key?: string | null
+          revoked_at?: string | null
+          seller: string
+          source: string
+        }
+        Update: {
+          captured_at?: string
+          consent_text?: string
+          form_ref?: string | null
+          id?: string
+          phone?: string
+          phone_key?: string | null
+          revoked_at?: string | null
+          seller?: string
+          source?: string
+        }
+        Relationships: []
+      }
       car_charge_sessions: {
         Row: {
           at_home: boolean | null
@@ -7931,6 +7967,78 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_locations: {
+        Row: {
+          active: boolean
+          address: string | null
+          ask: string[]
+          created_at: string
+          fee: number | null
+          id: string
+          kind: string
+          lat: number | null
+          lon: number | null
+          match: string[]
+          name: string
+          optional: string[]
+          parking_note: string | null
+          short: string
+          sort: number
+        }
+        Insert: {
+          active?: boolean
+          address?: string | null
+          ask?: string[]
+          created_at?: string
+          fee?: number | null
+          id: string
+          kind: string
+          lat?: number | null
+          lon?: number | null
+          match?: string[]
+          name: string
+          optional?: string[]
+          parking_note?: string | null
+          short: string
+          sort?: number
+        }
+        Update: {
+          active?: boolean
+          address?: string | null
+          ask?: string[]
+          created_at?: string
+          fee?: number | null
+          id?: string
+          kind?: string
+          lat?: number | null
+          lon?: number | null
+          match?: string[]
+          name?: string
+          optional?: string[]
+          parking_note?: string | null
+          short?: string
+          sort?: number
+        }
+        Relationships: []
+      }
+      delivery_settings: {
+        Row: {
+          id: boolean
+          updated_at: string
+          web_live: boolean
+        }
+        Insert: {
+          id?: boolean
+          updated_at?: string
+          web_live?: boolean
+        }
+        Update: {
+          id?: boolean
+          updated_at?: string
+          web_live?: boolean
+        }
+        Relationships: []
+      }
       demo_key: {
         Row: {
           baseline: Json | null
@@ -10002,6 +10110,54 @@ export type Database = {
         }
         Relationships: []
       }
+      hunter_apollo_enrich: {
+        Row: {
+          found: Json | null
+          lead_id: string
+          owner: string
+          status: string
+          tried_at: string
+        }
+        Insert: {
+          found?: Json | null
+          lead_id: string
+          owner: string
+          status: string
+          tried_at?: string
+        }
+        Update: {
+          found?: Json | null
+          lead_id?: string
+          owner?: string
+          status?: string
+          tried_at?: string
+        }
+        Relationships: []
+      }
+      hunter_apollo_state: {
+        Row: {
+          owner: string
+          saved_at: string | null
+          test_note: string | null
+          test_ok: boolean | null
+          tested_at: string | null
+        }
+        Insert: {
+          owner: string
+          saved_at?: string | null
+          test_note?: string | null
+          test_ok?: boolean | null
+          tested_at?: string | null
+        }
+        Update: {
+          owner?: string
+          saved_at?: string | null
+          test_note?: string | null
+          test_ok?: boolean | null
+          tested_at?: string | null
+        }
+        Relationships: []
+      }
       hunter_call_outcomes: {
         Row: {
           actual_outcome: string
@@ -10247,6 +10403,8 @@ export type Database = {
       }
       hunter_settings: {
         Row: {
+          apollo_cap_maya: number
+          apollo_cap_reese: number
           enabled: boolean
           id: boolean
           min_fit: number
@@ -10256,6 +10414,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          apollo_cap_maya?: number
+          apollo_cap_reese?: number
           enabled?: boolean
           id?: boolean
           min_fit?: number
@@ -10265,6 +10425,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          apollo_cap_maya?: number
+          apollo_cap_reese?: number
           enabled?: boolean
           id?: boolean
           min_fit?: number
@@ -19515,6 +19677,66 @@ export type Database = {
         }
         Relationships: []
       }
+      studio_design_ledger: {
+        Row: {
+          backfilled: boolean
+          client_slug: string
+          component: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          family: string | null
+          fingerprint: string
+          first_used_at: string | null
+          id: string
+          iso_week: string
+          item_codes: string[]
+          palette: string | null
+          params: Json
+          preview_path: string | null
+          status: string
+          week_start: string | null
+        }
+        Insert: {
+          backfilled?: boolean
+          client_slug: string
+          component: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          family?: string | null
+          fingerprint: string
+          first_used_at?: string | null
+          id?: string
+          iso_week: string
+          item_codes?: string[]
+          palette?: string | null
+          params?: Json
+          preview_path?: string | null
+          status?: string
+          week_start?: string | null
+        }
+        Update: {
+          backfilled?: boolean
+          client_slug?: string
+          component?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          family?: string | null
+          fingerprint?: string
+          first_used_at?: string | null
+          id?: string
+          iso_week?: string
+          item_codes?: string[]
+          palette?: string | null
+          params?: Json
+          preview_path?: string | null
+          status?: string
+          week_start?: string | null
+        }
+        Relationships: []
+      }
       studio_design_rationale: {
         Row: {
           active: boolean
@@ -19542,6 +19764,54 @@ export type Database = {
           source?: string | null
           topic?: string
           why?: string
+        }
+        Relationships: []
+      }
+      studio_design_settings: {
+        Row: {
+          client_slug: string
+          key: string
+          note: string | null
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          client_slug?: string
+          key: string
+          note?: string | null
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          client_slug?: string
+          key?: string
+          note?: string | null
+          updated_at?: string
+          value?: number
+        }
+        Relationships: []
+      }
+      studio_design_sheets: {
+        Row: {
+          client_slug: string
+          created_at: string
+          designs: number
+          iso_week: string
+          path: string
+        }
+        Insert: {
+          client_slug: string
+          created_at?: string
+          designs?: number
+          iso_week: string
+          path: string
+        }
+        Update: {
+          client_slug?: string
+          created_at?: string
+          designs?: number
+          iso_week?: string
+          path?: string
         }
         Relationships: []
       }
@@ -19763,6 +20033,119 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      studio_media_faults: {
+        Row: {
+          at: string
+          code: string | null
+          id: number
+          item: string | null
+          ua: string | null
+          url: string | null
+          who: string | null
+        }
+        Insert: {
+          at?: string
+          code?: string | null
+          id?: number
+          item?: string | null
+          ua?: string | null
+          url?: string | null
+          who?: string | null
+        }
+        Update: {
+          at?: string
+          code?: string | null
+          id?: number
+          item?: string | null
+          ua?: string | null
+          url?: string | null
+          who?: string | null
+        }
+        Relationships: []
+      }
+      studio_music_tracks: {
+        Row: {
+          active: boolean
+          bpm: number | null
+          brand_slug: string | null
+          created_at: string
+          duration_s: number
+          id: string
+          license: string
+          loudness_lufs: number | null
+          mood: string
+          name: string
+          prompt: string | null
+          source: string
+          storage_path: string
+        }
+        Insert: {
+          active?: boolean
+          bpm?: number | null
+          brand_slug?: string | null
+          created_at?: string
+          duration_s: number
+          id?: string
+          license: string
+          loudness_lufs?: number | null
+          mood: string
+          name: string
+          prompt?: string | null
+          source: string
+          storage_path: string
+        }
+        Update: {
+          active?: boolean
+          bpm?: number | null
+          brand_slug?: string | null
+          created_at?: string
+          duration_s?: number
+          id?: string
+          license?: string
+          loudness_lufs?: number | null
+          mood?: string
+          name?: string
+          prompt?: string | null
+          source?: string
+          storage_path?: string
+        }
+        Relationships: []
+      }
+      studio_music_uses: {
+        Row: {
+          brand_slug: string
+          id: number
+          job_id: string | null
+          mood: string | null
+          track_id: string
+          used_at: string
+        }
+        Insert: {
+          brand_slug: string
+          id?: never
+          job_id?: string | null
+          mood?: string | null
+          track_id: string
+          used_at?: string
+        }
+        Update: {
+          brand_slug?: string
+          id?: never
+          job_id?: string | null
+          mood?: string | null
+          track_id?: string
+          used_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_music_uses_track_id_fkey"
+            columns: ["track_id"]
+            isOneToOne: false
+            referencedRelation: "studio_music_tracks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       studio_note_drafts: {
         Row: {
@@ -21960,6 +22343,51 @@ export type Database = {
           reservation_id?: number
           user_agent?: string | null
           version?: string
+        }
+        Relationships: []
+      }
+      trip_delivery_info: {
+        Row: {
+          created_at: string
+          eta: string | null
+          front_desk: string | null
+          guest_phone: string | null
+          parking: string | null
+          reported_at: string | null
+          reservation_id: number
+          room: string | null
+          saves_hour: number
+          saves_hour_start: string | null
+          updated_at: string
+          via: string | null
+        }
+        Insert: {
+          created_at?: string
+          eta?: string | null
+          front_desk?: string | null
+          guest_phone?: string | null
+          parking?: string | null
+          reported_at?: string | null
+          reservation_id: number
+          room?: string | null
+          saves_hour?: number
+          saves_hour_start?: string | null
+          updated_at?: string
+          via?: string | null
+        }
+        Update: {
+          created_at?: string
+          eta?: string | null
+          front_desk?: string | null
+          guest_phone?: string | null
+          parking?: string | null
+          reported_at?: string | null
+          reservation_id?: number
+          room?: string | null
+          saves_hour?: number
+          saves_hour_start?: string | null
+          updated_at?: string
+          via?: string | null
         }
         Relationships: []
       }
@@ -26263,6 +26691,52 @@ export type Database = {
         Args: { p_back?: number; p_fwd?: number; p_key: string }
         Returns: Json
       }
+      call_gate: {
+        Args: {
+          p_checked_at: string
+          p_line_type: string
+          p_phone: string
+          p_phone_source: string
+          p_seller: string
+          p_timezone: string
+        }
+        Returns: string
+      }
+      call_gate_at: {
+        Args: {
+          p_checked_at: string
+          p_line_type: string
+          p_now: string
+          p_phone: string
+          p_phone_source: string
+          p_seller: string
+          p_timezone: string
+        }
+        Returns: string
+      }
+      call_gate_lead: {
+        Args: {
+          p_checked_at: string
+          p_line_type: string
+          p_phone: string
+          p_phone_source: string
+          p_seller: string
+        }
+        Returns: string
+      }
+      call_is_dnc: {
+        Args: { p_phone: string; p_seller: string }
+        Returns: boolean
+      }
+      call_line_ok: {
+        Args: {
+          p_checked_at: string
+          p_line_type: string
+          p_phone_source: string
+        }
+        Returns: string
+      }
+      call_phone_key: { Args: { p_phone: string }; Returns: string }
       car_battery_health_public: { Args: never; Returns: Json }
       car_battery_health_store: { Args: { p_health: Json }; Returns: undefined }
       car_border_zone: {
@@ -27353,6 +27827,15 @@ export type Database = {
       }
       hr_context: { Args: never; Returns: Json }
       hr_save: { Args: { p_hires: Json }; Returns: number }
+      hunter_apollo_caps_set: {
+        Args: { p_maya?: number; p_reese?: number }
+        Returns: undefined
+      }
+      hunter_apollo_key_put: {
+        Args: { p_owner: string; p_value: string }
+        Returns: string
+      }
+      hunter_apollo_status: { Args: never; Returns: Json }
       hunter_campaign_set: {
         Args: {
           p_daily_target?: number
@@ -28092,8 +28575,28 @@ export type Database = {
       }
       montage_enqueue: { Args: { p: Json }; Returns: Json }
       montage_file: { Args: { p: Json; p_id: string }; Returns: Json }
+      montage_music_approve: {
+        Args: { p_by?: string; p_max_credits: number; p_usd: number }
+        Returns: Json
+      }
+      montage_music_pick: {
+        Args: { p_brand: string; p_job?: string; p_mood: string }
+        Returns: Json
+      }
+      montage_music_ready: { Args: { p_brand: string }; Returns: number }
+      montage_music_register: { Args: { p: Json }; Returns: string }
+      montage_music_status: { Args: never; Returns: Json }
       montage_post: { Args: { body: string; p_id: string }; Returns: undefined }
       montage_quote: { Args: { p: Json }; Returns: Json }
+      montage_recut_broll: {
+        Args: {
+          p_approved_usd: number
+          p_by?: string
+          p_item: string
+          p_note: string
+        }
+        Returns: Json
+      }
       montage_report: { Args: { p: Json; p_id: string }; Returns: undefined }
       montage_start: { Args: { p: Json }; Returns: Json }
       montage_status: {
@@ -29891,6 +30394,82 @@ export type Database = {
         }
         Returns: Json
       }
+      studio_design_fingerprint: {
+        Args: { p_component: string; p_params: Json }
+        Returns: string
+      }
+      studio_design_gate: {
+        Args: {
+          p_client: string
+          p_corner_fp: string
+          p_tag_fp: string
+          p_week: string
+        }
+        Returns: Json
+      }
+      studio_design_is_fresh: {
+        Args: {
+          p_client: string
+          p_component: string
+          p_family?: string
+          p_fingerprint: string
+          p_palette?: string
+          p_week?: string
+        }
+        Returns: boolean
+      }
+      studio_design_iso_week: { Args: { p_ts?: string }; Returns: string }
+      studio_design_record: {
+        Args: {
+          p_client: string
+          p_component: string
+          p_family: string
+          p_fingerprint: string
+          p_palette: string
+          p_params: Json
+          p_preview_path?: string
+          p_week: string
+        }
+        Returns: string
+      }
+      studio_design_setting: {
+        Args: { p_client: string; p_default: number; p_key: string }
+        Returns: number
+      }
+      studio_design_sign_upload: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: number
+      }
+      studio_design_stale_reason: {
+        Args: {
+          p_client: string
+          p_component: string
+          p_family?: string
+          p_fp: string
+          p_palette?: string
+          p_week?: string
+        }
+        Returns: string
+      }
+      studio_design_use: {
+        Args: {
+          p_client: string
+          p_corner_fp: string
+          p_item_code: string
+          p_tag_fp: string
+          p_week: string
+        }
+        Returns: Json
+      }
+      studio_design_watch: {
+        Args: { p_client?: string; p_week?: string }
+        Returns: Json
+      }
+      studio_design_week_check: {
+        Args: { p_client: string; p_week?: string }
+        Returns: Json
+      }
+      studio_design_week_start: { Args: { p_week: string }; Returns: string }
       studio_digest_compose_client: {
         Args: { p_client: string }
         Returns: Json
@@ -30100,6 +30679,17 @@ export type Database = {
         }
         Returns: Json
       }
+      studio_media_fault: {
+        Args: {
+          p_code: string
+          p_item: string
+          p_token: string
+          p_ua: string
+          p_url: string
+        }
+        Returns: Json
+      }
+      studio_media_fault_tidy: { Args: never; Returns: undefined }
       studio_media_watch: { Args: never; Returns: Json }
       studio_member_note_call: {
         Args: {
@@ -30891,6 +31481,35 @@ export type Database = {
       trip_charges_health: { Args: never; Returns: undefined }
       trip_charges_refresh: { Args: { p_reservation: number }; Returns: Json }
       trip_charges_tick: { Args: never; Returns: Json }
+      trip_delivery_build: {
+        Args: {
+          d: Database["public"]["Tables"]["delivery_locations"]["Row"]
+          p_addr: string
+          p_info: Json
+          p_instr: string
+          p_lat: number
+          p_lon: number
+          p_name: string
+        }
+        Returns: Json
+      }
+      trip_delivery_json: { Args: { p_reservation: number }; Returns: Json }
+      trip_delivery_location: {
+        Args: { p_reservation: number }
+        Returns: string
+      }
+      trip_delivery_report: {
+        Args: {
+          p_eta?: string
+          p_front_desk?: string
+          p_parking?: string
+          p_room?: string
+          p_token: string
+          p_via?: string
+        }
+        Returns: Json
+      }
+      trip_delivery_vars: { Args: { p_reservation: number }; Returns: Json }
       trip_dist_m: {
         Args: { lat1: number; lat2: number; lon1: number; lon2: number }
         Returns: number
@@ -30936,6 +31555,8 @@ export type Database = {
         Args: { p_detail: string; p_status: string }
         Returns: undefined
       }
+      trip_place: { Args: { p_reservation: number }; Returns: string }
+      trip_place_for: { Args: { p_token: string }; Returns: string }
       trip_push_link: { Args: { p_token: string }; Returns: number }
       trip_range_check_for: { Args: { p_res: number }; Returns: Json }
       trip_receipt_data: {
@@ -31358,6 +31979,13 @@ export type Database = {
       web_events_prune: { Args: never; Returns: undefined }
       web_events_rollup: { Args: never; Returns: undefined }
       window_signal_note: { Args: never; Returns: string }
+      zz_lgal_orig: { Args: never; Returns: Json }
+      zz_lgp_orig: { Args: { p_token: string }; Returns: Json }
+      zz_lhd_orig: { Args: never; Returns: Json }
+      zz_patch_fn: {
+        Args: { p_new: string; p_old: string; p_sig: unknown }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "partner"

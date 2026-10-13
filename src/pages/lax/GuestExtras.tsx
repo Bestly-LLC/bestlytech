@@ -109,7 +109,7 @@ function linear(s: number, e: number, now: number) {
 
 /** More than a day before pickup: a week-style strip (today → pickup day) instead of a flat track.
  *  Today is ringed, the pickup day is filled with the car under it. Long waits fold the middle days. */
-function DayStrip({ startsAt, now, C }: { startsAt: number; now: number; C: { hot: string; text: string; sub: string; track: string } }) {
+function DayStrip({ startsAt, now, C }: { startsAt: number; now: number; C: { hot: string; text: string; sub: string; track: string; onHot?: string } }) {
   const key = (ms: number) => new Date(ms).toLocaleDateString("en-CA", { timeZone: LA });
   const days: number[] = [];
   for (let t = now, i = 0; i < 90; i++, t += 864e5) { days.push(t); if (key(t) === key(startsAt)) break; }
@@ -127,7 +127,7 @@ function DayStrip({ startsAt, now, C }: { startsAt: number; now: number; C: { ho
               <span className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: pick ? C.hot : C.sub }}>
                 {today ? "Today" : new Date(d).toLocaleDateString("en-US", { weekday: "short", timeZone: LA })}</span>
               <span className="mt-1 grid h-9 w-9 place-items-center rounded-full text-[15px] font-bold tabular-nums"
-                style={pick ? { background: C.hot, color: "#0b0b0d", boxShadow: `0 0 16px -2px ${C.hot}` }
+                style={pick ? { background: C.hot, color: C.onHot ?? "#0b0b0d", boxShadow: `0 0 16px -2px ${C.hot}` }
                   : today ? { background: "#0000", color: C.text, boxShadow: `inset 0 0 0 2px ${C.text}` }
                   : { background: C.track, color: C.text }}>
                 {new Date(d).toLocaleDateString("en-US", { day: "numeric", timeZone: LA })}
@@ -171,7 +171,7 @@ function DoneBadge({ s, e, C, home, recap, endsAt }: { s: number; e: number; C: 
 
 /** "Your Turo trip" as a Live Activity: pickup → return, one time track, a big countdown. Ticks every 30s.
  *  theme "lax" = iOS Live Activity (black glass, green); "home" = midcentury (teal, mustard, orange). */
-export function TripCard({ trip, theme = "lax", recap }: { trip: Trip; theme?: "lax" | "home"; battery?: number | null; keyState?: TripKeyState; insideF?: number | null; recap?: { charging?: number | null; stops?: number | null } }) {
+export function TripCard({ trip, theme = "lax", recap, where }: { trip: Trip; theme?: "lax" | "home" | "delivery"; where?: string; battery?: number | null; keyState?: TripKeyState; insideF?: number | null; recap?: { charging?: number | null; stops?: number | null } }) {
   const [now, setNow] = useState(Date.now());
   const s = +new Date(trip.starts_at), e = +new Date(trip.ends_at);
   // Tick every 30s, every second in the last 2 minutes before pickup/return, and exactly at each boundary,
@@ -187,13 +187,17 @@ export function TripCard({ trip, theme = "lax", recap }: { trip: Trip; theme?: "
   const before = now < s, during = now >= s && now < e + 30 * 60e3, late = during && now >= e;
   const pos = position(s, e, now);
   const home = theme === "home";
-  const C = home
-    ? { bg: "linear-gradient(160deg,#1c3a38,#132726)", ring: "rgba(232,169,58,0.28)", hot: "#E8A93A", accent: "#E36F3C", track: "rgba(244,234,213,0.18)", sub: "rgba(244,234,213,0.62)", text: "#F4EAD5", font: "'Josefin Sans', Futura, 'Avenir Next', sans-serif" }
-    : { bg: "rgba(10,10,12,0.92)", ring: "rgba(255,255,255,0.08)", hot: "#30D158", accent: "#30D158", track: "rgba(255,255,255,0.22)", sub: "rgba(255,255,255,0.55)", text: "#fff", font: "-apple-system, 'SF Pro Display', Inter, system-ui, sans-serif" };
+  const delivery = theme === "delivery";
+  // delivery = the printed card's cream + orange on a light glass card (text >= 4.5:1: ink on cream, hot #B24E18 on #FFFDF7).
+  const C = delivery
+    ? { bg: "linear-gradient(160deg,#FFFDF7,#F4E8CE)", ring: "rgba(19,40,42,0.10)", hot: "#B24E18", accent: "#E2733A", track: "rgba(19,40,42,0.14)", sub: "rgba(19,40,42,0.70)", text: "#13282A", font: "'Josefin Sans', Futura, 'Avenir Next', sans-serif", shadow: "0 18px 38px -22px rgba(143,77,18,.45)", mini: "rgba(255,250,240,0.94)", onHot: "#FFFFFF" }
+    : home
+    ? { bg: "linear-gradient(160deg,#1c3a38,#132726)", ring: "rgba(232,169,58,0.28)", hot: "#E8A93A", accent: "#E36F3C", track: "rgba(244,234,213,0.18)", sub: "rgba(244,234,213,0.62)", text: "#F4EAD5", font: "'Josefin Sans', Futura, 'Avenir Next', sans-serif", shadow: "0 20px 44px -20px rgba(0,0,0,.7)", mini: "rgba(19,39,38,0.94)", onHot: "#0b0b0d" }
+    : { bg: "rgba(10,10,12,0.92)", ring: "rgba(255,255,255,0.08)", hot: "#30D158", accent: "#30D158", track: "rgba(255,255,255,0.22)", sub: "rgba(255,255,255,0.55)", text: "#fff", font: "-apple-system, 'SF Pro Display', Inter, system-ui, sans-serif", shadow: "0 20px 44px -20px rgba(0,0,0,.7)", mini: "rgba(10,10,12,0.9)", onHot: "#0b0b0d" };
   const big = before ? short(s - now) : late ? "Now" : during ? short(e - now) : "Done";
   const label = before ? "until pickup" : late ? "return time · lock it and you're done" : during ? "left on your trip" : "trip complete · thanks!";
   const soon = during && e - now < 2 * 3600e3;
-  const numColor = soon ? "#FF9F0A" : C.hot;
+  const numColor = soon ? (delivery ? "#A8480F" : "#FF9F0A") : C.hot;
   // Scrolled past the card -> it squishes into a slim bar pinned to the top (like a Live Activity in the island).
   const cardRef = useRef<HTMLElement>(null);
   const [pinned, setPinned] = useState(false);
@@ -208,7 +212,7 @@ export function TripCard({ trip, theme = "lax", recap }: { trip: Trip; theme?: "
       <button type="button" tabIndex={pinned ? 0 : -1} onClick={() => cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
         aria-label={`Your Turo trip: ${big} ${label}. Tap to show details.`}
         className={`w-full max-w-md rounded-[30px] px-5 py-3.5 text-left backdrop-blur-xl transition-[transform,opacity] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none ${pinned ? "pointer-events-auto translate-y-0 scale-100 opacity-100" : "-translate-y-[140%] scale-95 opacity-0"}`}
-        style={{ background: home ? "rgba(19,39,38,0.94)" : "rgba(10,10,12,0.9)", boxShadow: `0 10px 30px -12px rgba(0,0,0,.7), inset 0 0 0 1px ${C.ring}`, fontFamily: C.font, color: C.text }}>
+        style={{ background: C.mini, boxShadow: `${delivery ? "0 10px 26px -14px rgba(143,77,18,.5)" : "0 10px 30px -12px rgba(0,0,0,.7)"}, inset 0 0 0 1px ${C.ring}`, fontFamily: C.font, color: C.text }}>
         <span className="flex items-center gap-3.5">
           <Car className="h-7 w-7 shrink-0" style={{ color: C.hot }} aria-hidden />
           <span className="min-w-0 flex-1">
@@ -236,10 +240,10 @@ export function TripCard({ trip, theme = "lax", recap }: { trip: Trip; theme?: "
   return (
     <>{mini}
     <section ref={cardRef} aria-label={`Your Turo trip: ${big} ${label}`} className="relative overflow-hidden rounded-[30px] px-4 pb-4 pt-3.5"
-      style={{ background: C.bg, boxShadow: `0 20px 44px -20px rgba(0,0,0,.7), inset 0 0 0 1px ${C.ring}`, fontFamily: C.font, color: C.text }}>
+      style={{ background: C.bg, boxShadow: `${C.shadow}, inset 0 0 0 1px ${C.ring}`, fontFamily: C.font, color: C.text }}>
       <div className="flex items-center justify-between text-[12px]" style={{ color: C.sub }}>
         <span className="flex items-center gap-1.5 font-semibold uppercase tracking-[0.12em]"><Car className="h-3.5 w-3.5" style={{ color: C.hot }} />Your Turo trip</span>
-        <span className="tabular-nums">{home ? "Home pickup" : "LAX"}</span>
+        <span className="tabular-nums">{delivery ? where ?? "Delivery" : home ? "Home pickup" : "LAX"}</span>
       </div>
       <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-end gap-2">
         <div>
@@ -272,7 +276,7 @@ export function TripCard({ trip, theme = "lax", recap }: { trip: Trip; theme?: "
       <svg viewBox="0 0 320 48" className="mt-2 block h-auto w-full overflow-visible" aria-hidden>
         <path ref={trackRef} d={TRACK} fill="none" stroke={C.track} strokeWidth="3" strokeLinecap="round" />
         {dot && pos > 0.004 && <path d={TRACK} fill="none" stroke={C.accent} strokeWidth="3.5" strokeLinecap="butt" strokeDasharray={`${Math.min(1, pos) * dot.L} ${dot.L + 20}`}
-          style={{ transition: "stroke-dasharray 900ms cubic-bezier(.2,.8,.2,1)", filter: home ? undefined : "drop-shadow(0 0 4px rgba(48,209,88,.55))" }} />}
+          style={{ transition: "stroke-dasharray 900ms cubic-bezier(.2,.8,.2,1)", filter: home || delivery ? undefined : "drop-shadow(0 0 4px rgba(48,209,88,.55))" }} />}
         {dot && pos > 0.004 && <circle cx={4} cy={44} r={1.75} fill={C.accent} />}
         {dot && (pos > 0 && pos < 1) && (home
           ? <polygon transform={`translate(${dot.x} ${dot.y})`} fill={C.hot} points="0,-7 1.6,-1.6 7,0 1.6,1.6 0,7 -1.6,1.6 -7,0 -1.6,-1.6" />

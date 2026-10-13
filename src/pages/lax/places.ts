@@ -41,3 +41,19 @@ export const laxPlace = (garage: string, level: string): Place => ({
 
 /** Opens the Turo app when it's installed (turo.com universal link), otherwise the Trips page on turo.com. */
 export const TURO_TRIPS = "https://turo.com/us/en/trips";
+
+/**
+ * Delivery trips (hotels, pods, Union Station, any address): Jared drives the car to the guest, so there is no spot to find
+ * and no garage. lax_guest_public adds `place: "delivery"` and this object (kind stays "home" so older pages keep working).
+ */
+export type DeliveryKey = "room" | "front_desk" | "parking" | "eta";
+export type DeliveryInfo = { room?: string | null; front_desk?: string | null; parking?: string | null; eta?: string | null; reported_at?: string | null; via?: "leo" | "page" | null };
+export type Delivery = {
+  location_id?: string; kind: "hotel" | "pod" | "train" | "custom"; name: string; short: string; address: string;
+  lat?: number | null; lon?: number | null; ask?: DeliveryKey[] | null; info?: DeliveryInfo | null; turo_instructions?: string | null; return_note?: string | null;
+};
+export const deliveryPlace = (d: Pick<Delivery, "short">): Place => ({
+  parked: `Jared brings it to ${d.short}.`,
+  returnTo: `Back to ${d.short}, same spot as pickup. Changes go through the Turo app.`,
+  returnSoon: `Bring it back to ${d.short}, same spot as pickup.`,
+});
