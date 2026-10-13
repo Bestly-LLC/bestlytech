@@ -94,6 +94,12 @@ type Tile = { k: string; layer: "roads" | "traffic"; z: number; x: number; y: nu
 type Here = { lat: number; lon: number; acc: number | null };
 type Car = { name: string; lat: number; lon: number; at: number; shift: string | null; mph: number | null; hd: number | null };
 const CAR_STALE_MS = 30 * 60_000;
+// The garage spot (same point the Turo return Live Activity uses). HOME above is a rounded pin ~840 ft away, so
+// "parked at home" is measured from here. Within 400 ft: the car tucks inside the house icon, no tag, no halo;
+// blends back to the normal marker by 550 ft (Jared 2026-10-13, same as the wall).
+const PARK: [number, number] = [34.084241, -118.371793];
+/** Smallest signed difference between two bearings, in degrees (-180..180). */
+const angGap = (a: number, b: number) => ((((a - b) % 360) + 540) % 360) - 180;
 const feetBetween = (a: [number, number], b: [number, number]) => Math.hypot((b[0] - a[0]) * 364000, (b[1] - a[1]) * 364000 * Math.cos((a[0] * Math.PI) / 180));
 type Cond = { place: string | null; weather: { temp_f: number; feels_f: number; wind_mph: number; wind_from: string; sky: string; is_day: boolean; rain_pct: number | null } | null };
 const LAYERS_KEY = "bestly.sky.layers";
@@ -145,6 +151,11 @@ export default function Sky() {
   const [, setFrame] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const disp = useRef<Map<string, Disp>>(new Map());
+  // Heading self-check (Jared 2026-10-13): each plane's real direction of travel, measured from its own positions
+  // (>= 0.15 mi apart). Used when the feed has no track, and to catch a nose that disagrees with where it actually moves.
+  const moved = useRef<Map<string, { lat: number; lon: number; brg: number | null }>>(new Map());
+  const [trustMotion, setTrustMotion] = useState(false);
+  const hdgBad = useRef(0);
   const lastT = useRef(performance.now());
   const busy = useRef(false);
   /** On-screen size of the sky box: text and planes keep the same on-screen size on a phone and a big screen. */
@@ -214,6 +225,7 @@ export default function Sky() {
   // Cars + Car names switches live in Wall > Sky details and govern this map too (Jared 2026-10-12).
   const [carSw, setCarSw] = useState<{ cars: boolean; names: boolean }>({ cars: true, names: true });
   const carFix = useRef<{ lat: number; lon: number; hd: number | null } | null>(null);
+  const carOk = useRef<boolean | null>(null);
   useEffect(() => {
     let dead = false;
     const get = async () => {
@@ -227,7 +239,14 @@ export default function Sky() {
           .select("display_name, latitude, longitude, observed_at, shift:raw->fleet_api->>shift, speed:raw->fleet_api->>speed_mph").limit(1).maybeSingle();
         const r = data as unknown as { display_name: string | null; latitude: number | null; longitude: number | null; observed_at: string | null; shift: string | null; speed: string | null } | null;
         if (dead) return;
-        if (!r || r.latitude == null || r.longitude == null || !r.observed_at) { setCar(null); return; }
+        // Watchdog (Jared 2026-10-13): no position, or one older than 30 min, means the map is hiding Blue Steel. Tell
+        // Scout (the server watchdog asks the car for a fresh reading); a good reading clears it.
+        const carRep = (ok: boolean, detail: string) => { if (carOk.current === ok) return; carOk.current = ok;
+          void (supabase.rpc as unknown as (fn: string, a: object) => Promise<unknown>)("admin_report", { p_where: "sky.blue-steel", p_detail: detail, p_ok: ok }).then(() => {}, () => {}); };
+        if (!r || r.latitude == null || r.longitude == null || !r.observed_at) { setCar(null); carRep(false, "The admin Sky map has no position for Blue Steel (turo_vehicle_state has no latitude/longitude)."); return; }
+        const ageMin = (Date.now() - new Date(r.observed_at).getTime()) / 60_000;
+        if (ageMin > 30) carRep(false, `Blue Steel's last position on the admin Sky map is ${Math.round(ageMin)} min old, so the map hides the car.`);
+        else carRep(true, "Blue Steel's position is current again.");
         const lat = Number(r.latitude), lon = Number(r.longitude);
         const fx = carFix.current;
         if (!fx) carFix.current = { lat, lon, hd: null };
@@ -340,11 +359,44 @@ export default function Sky() {
   lastT.current = performance.now();
 
   const planes = useMemo(() => (feed?.list ?? []).filter((a) => typeof a.lat === "number" && typeof a.lon === "number"), [feed]);
+  useEffect(() => {
+    const mv = moved.current, keep = new Set<string>();
+    let n = 0, bad = 0;
+    for (const a of planes) {
+      keep.add(a.hex);
+      const o = mv.get(a.hex);
+      if (!o) { mv.set(a.hex, { lat: a.lat, lon: a.lon, brg: null }); continue; }
+      const dn = (a.lat - o.lat) * 69, de = (a.lon - o.lon) * 69 * Math.cos((a.lat * Math.PI) / 180);
+      if (Math.hypot(dn, de) < 0.15) continue;
+      const brg = (Math.atan2(de, dn) * 180 / Math.PI + 360) % 360;
+      mv.set(a.hex, { lat: a.lat, lon: a.lon, brg });
+      if (a.track != null && (a.gs ?? 0) > 40) { n++; if (Math.abs(angGap(a.track, brg)) > 60) bad++; }
+    }
+    for (const k of mv.keys()) if (!keep.has(k)) mv.delete(k);
+    if (n < 3) return;
+    // Self-heal: if most planes' reported track disagrees with how they actually move, point noses by motion instead,
+    // and tell Scout. Two clean checks in a row clear it.
+    if (bad / n > 0.6) {
+      hdgBad.current = Math.min(3, hdgBad.current + 1);
+      if (hdgBad.current >= 2 && !trustMotion) {
+        setTrustMotion(true);
+        void (supabase.rpc as unknown as (fn: string, a: object) => Promise<unknown>)("admin_report", { p_where: "sky.plane-heading",
+          p_detail: `On the admin Sky map, ${bad} of ${n} planes were pointing a different way than they were actually flying. The map switched to pointing them by their real movement. Check the track field from the plane feed (wall_admin_air / wall-sky).` }).then(() => {}, () => {});
+      }
+    } else if (bad / n < 0.25) {
+      hdgBad.current = Math.max(0, hdgBad.current - 1);
+      if (hdgBad.current === 0 && trustMotion) {
+        setTrustMotion(false);
+        void (supabase.rpc as unknown as (fn: string, a: object) => Promise<unknown>)("admin_report", { p_where: "sky.plane-heading", p_detail: "Plane headings match their movement again.", p_ok: true }).then(() => {}, () => {});
+      }
+    }
+  }, [planes, trustMotion]);
   const seen = new Set<string>();
   const drawn = planes.map((a) => {
     const age = Math.min(20, Math.max(0, (now - (feed?.at ?? now)) / 1000));
     const p = toMi(a.lat, a.lon, home);
-    const hdg = a.track ?? 0;
+    const mb = moved.current.get(a.hex)?.brg ?? null;
+    const hdg = (trustMotion ? mb ?? a.track : a.track ?? mb) ?? disp.current.get(a.hex)?.hdg ?? 0;
     const miPerS = ((a.gs ?? 0) * 1.15078) / 3600;
     const tx = p.x + Math.sin((hdg * Math.PI) / 180) * miPerS * age;
     const ty = p.y + Math.cos((hdg * Math.PI) / 180) * miPerS * age;
@@ -555,17 +607,29 @@ export default function Sky() {
                 inside = fresh;
               }
             }
+            const hw = homeShown ? Math.max(0, Math.min(1, (550 - feetBetween(PARK, [car.lat, car.lon])) / 150)) : 0;
+            const hs0 = Math.max(1, u * 0.75);
+            let sc = cs, rot = car.hd ?? -mapUp;
+            if (hw > 0) {
+              // Parked at home: glide into the house icon (it turns with the map, so the car lines up with it: rotate 0).
+              const hx = X(homeMi.x), hy = Y(homeMi.y) + 1.5 * hs0;
+              cx += hw * (hx - cx); cy += hw * (hy - cy);
+              sc = cs + hw * (0.36 * hs0 - cs);
+              if (hw >= 0.5) rot = 0;
+              inside = fresh;
+            }
+            const inHouse = hw >= 0.5, showTag = carSw.names && !inHouse;
             return (
               <g style={{ opacity: inside ? 1 : 0, transition: "opacity .6s ease, transform 1.5s linear", transform: `translate(${cx}px, ${cy}px)`, pointerEvents: "none" }} aria-hidden={!inside}>
-                <circle r={46 * cs} fill="url(#sky-car)" />
-                <g transform={`rotate(${car.hd ?? -mapUp}) scale(${cs})`}>
-                  <path d="M0,-23 C8,-23 11,-19 11,-12 L11,15 C11,21 7,23 0,23 C-7,23 -11,21 -11,15 L-11,-12 C-11,-19 -8,-23 0,-23Z" fill="#5B8FC9" />
-                  <path d="M0,-12 C6,-12 8,-10 8,-6 L8,9 C8,12 5,14 0,14 C-5,14 -8,12 -8,9 L-8,-6 C-8,-10 -6,-12 0,-12Z" fill="#16243C" />
-                  <ellipse cx="12.5" cy="-8" rx="2" ry="1.4" fill="#5B8FC9" /><ellipse cx="-12.5" cy="-8" rx="2" ry="1.4" fill="#5B8FC9" />
+                <circle r={46 * cs} fill="url(#sky-car)" style={{ opacity: 1 - hw, transition: "opacity .6s ease" }} />
+                <g transform={`rotate(${rot}) scale(${sc})`}>
+                  <path d="M0,-23 C8,-23 11,-19 11,-12 L11,15 C11,21 7,23 0,23 C-7,23 -11,21 -11,15 L-11,-12 C-11,-19 -8,-23 0,-23Z" fill={inHouse ? "#02030a" : "#5B8FC9"} />
+                  <path d="M0,-12 C6,-12 8,-10 8,-6 L8,9 C8,12 5,14 0,14 C-5,14 -8,12 -8,9 L-8,-6 C-8,-10 -6,-12 0,-12Z" fill={inHouse ? "#2A6E93" : "#16243C"} />
+                  {!inHouse && <><ellipse cx="12.5" cy="-8" rx="2" ry="1.4" fill="#5B8FC9" /><ellipse cx="-12.5" cy="-8" rx="2" ry="1.4" fill="#5B8FC9" /></>}
                   <path d="M-8,-20 Q-4,-22 -2,-21.5 M8,-20 Q4,-22 2,-21.5" stroke="#EAF2FF" strokeWidth="1.2" fill="none" strokeLinecap="round" />
                   <path d="M-8,21 L-3,22 M8,21 L3,22" stroke="#E5484D" strokeWidth="1.4" fill="none" strokeLinecap="round" />
                 </g>
-                {carSw.names && <g transform={`rotate(${-mapUp}) translate(0 ${28 * cs + th / 2})`}>
+                {showTag && <g transform={`rotate(${-mapUp}) translate(0 ${28 * cs + th / 2})`}>
                   <rect x={-tw / 2} y={-th / 2} width={tw} height={th} rx={th / 2} fill="#13213A" stroke="#5B8FC9" strokeWidth={0.5} />
                   <text x={0} y={fsz * 0.36} textAnchor="middle" fontSize={fsz} fontWeight={700} style={{ fill: "#DCE7F5", fontSize: fsz, fontWeight: 700, whiteSpace: "pre" }}>{label}</text>
                 </g>}
@@ -580,8 +644,9 @@ export default function Sky() {
             const low = a.alt == null ? 0.5 : Math.min(1, Math.max(0, 1 - a.alt / 14000));
             const sc = (0.9 + low * 0.9) * Math.max(1, u * 0.7);
             const isF = a.hex === focusHex;
-            // heading relative to the rotated map so the aircraft points where it is going on screen
-            const screenHdg = (d.hdg + mapUp) % 360;
+            // Drawn inside the map's rotate(mapUp) group, so the plain compass heading already points the right way on
+            // screen (adding mapUp here again double-rotated every plane; fixed 2026-10-13).
+            const screenHdg = d.hdg;
             return (
               <g key={a.hex} onClick={() => setPick(a.hex)} style={{ cursor: "pointer" }}>
                 {isF && (
