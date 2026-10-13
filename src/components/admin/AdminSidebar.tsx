@@ -140,6 +140,19 @@ export const ADMIN_NAV_SECTIONS = [
 const COUNT_MIN_INTERVAL_MS = 15_000;
 const COUNT_POLL_MS = 60_000;
 
+/* Sync health (2026-10-13): a refused read/write used to be swallowed, so each browser quietly kept its own order and it
+   looked like sync "got reverted". Now a refusal goes to Scout (admin.nav.sync, System Monitor) once per page load, and the
+   next good round trip clears it. admin_nav_sync_watch (hourly) re-grants the table if its permission ever goes missing. */
+let navSyncState: "ok" | "bad" | null = null;
+function reportNavSync(error: { message?: string } | null | undefined) {
+  const next = error ? "bad" : "ok";
+  if (navSyncState === next) return;
+  navSyncState = next;
+  void (supabase.rpc as unknown as (fn: string, a: object) => Promise<unknown>)("admin_report", error
+    ? { p_where: "nav.sync", p_detail: `The sidebar couldn't save or load its order from admin_nav_prefs (${error.message ?? "refused"}), so this browser is using its own order.` }
+    : { p_where: "nav.sync", p_detail: "Sidebar order syncs between browsers again.", p_ok: true }).then(() => {}, () => {});
+}
+
 /* Section order: dragged by the grip next to each section label. Saved to Supabase (admin_nav_prefs) so every browser
    and device shows the same order; localStorage is only a fast first paint. */
 const ORDER_KEY = "bestly-admin-nav-order";
@@ -308,13 +321,14 @@ export function AdminSidebar() {
         if (!uid || !alive) return;
         userIdRef.current = uid;
         const { data, error } = await supabase.from("admin_nav_prefs" as never).select("section_order").eq("user_id", uid).maybeSingle();
+        reportNavSync(error);
         if (error || !alive) return;
         const row = data as { section_order?: unknown } | null;
         if (row) applyRemote(row.section_order);
         else {
           // First run: carry this browser's existing order up so it becomes everyone's.
           const local = readOrder();
-          if (local.length) await supabase.from("admin_nav_prefs" as never).upsert({ user_id: uid, section_order: local } as never);
+          if (local.length) reportNavSync((await supabase.from("admin_nav_prefs" as never).upsert({ user_id: uid, section_order: local } as never)).error);
         }
       } catch { /* offline: keep what we have */ }
     };
@@ -376,7 +390,7 @@ export function AdminSidebar() {
         const uid = userIdRef.current ?? (await supabase.auth.getUser()).data.user?.id;
         if (!uid) return;
         userIdRef.current = uid;
-        await supabase.from("admin_nav_prefs" as never).upsert({ user_id: uid, section_order: next, updated_at: new Date().toISOString() } as never); } catch { /* retried on the next move */ }
+        reportNavSync((await supabase.from("admin_nav_prefs" as never).upsert({ user_id: uid, section_order: next, updated_at: new Date().toISOString() } as never)).error); } catch { /* retried on the next move */ }
     }, 500);
   };
   const move = (label: string, delta: number) => {
