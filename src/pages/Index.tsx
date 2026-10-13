@@ -31,22 +31,23 @@ import hokuBottle from "@/assets/hoku-bottle.png";
 
 const HOUSE_EASE = [0.32, 0.72, 0, 1] as const;
 
-const heroLine1 = ["Stop", "renting", "your"];
-const heroLine2 = ["business", "from"];
-const accentWord = "big tech.";
+const heroLine1 = ["An", "AI", "that", "answers"];
+const heroLine2 = ["your", "business"];
+const accentWord = "phone.";
 
 const heroPills = [
-  "Private cloud for your office",
-  "Apps that don't sell your data",
-  "Extensions that block surveillance",
+  "Answers 24/7",
+  "Works in the apps you already use",
+  "Tells callers it's an AI",
+  "Never sells your data",
   "Built in Los Angeles",
 ];
 
 const focusAreas = [
+  { name: "AI agents", body: "Bestly Agent answers your business phone and does the work while it talks: books the appointment, updates your customer list, texts the confirmation. Want to hear it? Call Maya, our own agent, at (213) 641-0074.", image: glossyAi },
   { name: "In-House Cloud", body: "One server in your office replaces Google Workspace, Slack, Zoom, Dropbox, DocuSign, 1Password, and your AI tool. Wears your logo. Stays in your building.", image: glossyEcosystem },
   { name: "Browser extensions", body: "Cookie Yeti dismisses cookie banners instantly and blocks 200,000+ malicious banner domains. More extensions on the way.", image: glossyExtension },
   { name: "Consumer apps", body: "InventoryProof builds an insurance-ready home inventory in minutes. NeckPilot fixes your posture using AirPods. Apps that solve real problems without harvesting your data.", image: glossyApps },
-  { name: "AI tools", body: "AI that runs on your hardware. No prompts shipped to OpenAI. No training on your data. Same models, your machine.", image: glossyAi },
   { name: "Physical products", body: "HOKU skincare. Real things you can hold and own. No subscriptions, no telemetry phoning home.", image: glossyPhysical },
   { name: "Connected hardware", body: "Software and hardware designed to work together — at your office, in your home, on your wrist.", image: glossyConsumer },
 ];
@@ -64,7 +65,7 @@ const trustPrinciples = [
   { name: "Open about it", body: "GDPR and CCPA compliant. Source code available on request for the open parts. Plain-English policies, no dark patterns.", icon: Globe },
 ];
 
-const marqueeWords = ["Private cloud", "AI", "Extensions", "Hardware", "Apps", "Privacy", "No data sales", "Built in LA"];
+const marqueeWords = ["AI agents", "Answers every call", "Private cloud", "Extensions", "Hardware", "Apps", "Privacy", "No data sales", "Built in LA"];
 
 export default function Index() {
   const reduce = useReducedMotion();
@@ -90,7 +91,7 @@ export default function Index() {
               transition={{ duration: 0.5, ease: HOUSE_EASE }}
               className="text-xs font-medium uppercase tracking-[0.2em] wow-text-muted mb-10"
             >
-              Bestly · Privacy-first tech, built in Los Angeles
+              Bestly · AI agents for small businesses
             </motion.p>
 
             <h1 className="font-display font-normal tracking-[-0.04em] leading-[0.95] text-[clamp(2.5rem,7vw,6rem)]">
@@ -136,11 +137,9 @@ export default function Index() {
               transition={{ duration: 0.6, delay: 0.9, ease: HOUSE_EASE }}
               className="mt-10 max-w-2xl text-lg sm:text-xl leading-relaxed wow-text-muted"
             >
-              Google, Microsoft, Adobe, Zoom, Slack &mdash; they charge per seat, harvest your
-              data, and raise prices every year. Bestly builds the alternatives: a private
-              cloud for your office, browser extensions that block surveillance, and apps
-              that don&rsquo;t sell your data. One company, one promise: collect less, ask first,
-              never sell.
+              Bestly Agent picks up every call, day or night, then does the work while it
+              talks: books the appointment in your calendar, updates your customer list and
+              texts the confirmation. When a call needs you, it hands it over.
             </motion.p>
 
             <motion.div
@@ -151,20 +150,20 @@ export default function Index() {
             >
               <MagneticButton>
                 <Link
-                  to="/products"
+                  to="/agent"
                   className="group inline-flex items-center justify-center rounded-md wow-bg-indigo px-8 py-4 text-base font-medium wow-text-paper transition-transform duration-200 wow-ease hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--wow-ink))]"
                 >
-                  See the products
+                  See it work
                   <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 wow-ease group-hover:translate-x-0.5" />
                 </Link>
               </MagneticButton>
               <MagneticButton>
-                <Link
-                  to="/services"
+                <a
+                  href="tel:+12136410074"
                   className="inline-flex items-center justify-center rounded-md border wow-border bg-transparent px-8 py-4 text-base font-medium wow-text-paper transition-colors duration-200 wow-ease hover:wow-bg-elev focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))]"
                 >
-                  Talk to Jared
-                </Link>
+                  Call Maya,&nbsp;our&nbsp;AI <span className="ml-2 whitespace-nowrap wow-text-muted">(213) 641-0074</span>
+                </a>
               </MagneticButton>
             </motion.div>
 
