@@ -132,7 +132,7 @@ def dur(path):
 
 
 EL_API = "https://api.elevenlabs.io"
-EL_USD_PER_CREDIT = 22 / 131000      # Creator plan: $22 for 131,000 credits
+EL_USD_PER_CREDIT = 99 / 600008      # Pro plan: $99 for 600,008 credits (the live plan; music_library.py reads it from the subscription)
 HOLD_RECHECK_MIN = 30                # a held job is looked at again every 30 minutes
 HOLD_GIVE_UP_DAYS = 7                # after 7 days held the job fails (+ alert)
 _el_key = {}
@@ -468,7 +468,7 @@ def hold(job, h):
                      "once the brand has a track. Spark can quote the starter library (ElevenLabs Music) for a yes; nothing else is affected.")
         return f"held {jid} (music): {h.reason[:120]}"
     if h.kind == "low":
-        why = (f"{h.reason}. Plan credits (Creator, $22 a month) are what Montage and Ava's calls share, and Montage will not go past the plan. "
+        why = (f"{h.reason}. Plan credits (Pro, $99 a month) are what Montage and Ava's calls share, and Montage will not go past the plan. "
                "Video voiceovers wait and restart on their own when the credits reset; nothing else is affected.")
     elif h.kind == "switch":
         why = f"{h.reason}. The video resumes by itself once the switch is on."
@@ -568,8 +568,19 @@ def clips_for(job, script, jd, note):
     order = job.get("clips")
     src_job = job["id"]
     if not order and job.get("parent_job_id"):
-        rows = lib.get("studio_video_jobs", f"select=clips&id=eq.{job['parent_job_id']}") or []
-        order, src_job = (rows[0].get("clips") if rows else None), job["parent_job_id"]
+        # a re-cut of a re-cut still uses the footage ordered on an earlier cut: walk up the chain to the first job that has clips
+        # (fixed 2026-10-12: BC05's 3rd cut came back with no b-roll because its parent was itself a re-cut with clips=null)
+        pid = job["parent_job_id"]
+        for _ in range(12):
+            rows = lib.get("studio_video_jobs", f"select=clips,parent_job_id&id=eq.{pid}") or []
+            if not rows:
+                break
+            if rows[0].get("clips"):
+                order, src_job = rows[0]["clips"], pid
+                break
+            pid = rows[0].get("parent_job_id")
+            if not pid:
+                break
     if not order:
         return {}
     rows = {r["id"]: r for r in (lib.get("ltx_jobs", f"select=id,code,status,path,width,height&montage_job_id=eq.{src_job}") or [])}
