@@ -53,8 +53,9 @@ Write only what is true and verifiable; if unsure, say less. American English sp
 "caption": 25 to 70 words of prose for the post, two or three short paragraphs. {name} appears only in the LAST paragraph,
 once, answering the idea the video told. No hashtags, emoji, questions or "link in bio".
 "title": 3 to 8 words naming the video for the team (not shown to viewers).
+"mood": the music bed that fits this video, exactly ONE of: calm, upbeat, confident, warm, playful.
 Reply with ONE JSON object only:
-{{"title": "...", "topic": "<1 to 4 words, lowercase>", "scenes": [{{"kicker": "...", "line": "...", "say": "..."{icon_key}{shot_key}}}], "caption": "..."}}"""
+{{"title": "...", "topic": "<1 to 4 words, lowercase>", "mood": "...", "scenes": [{{"kicker": "...", "line": "...", "say": "..."{icon_key}{shot_key}}}], "caption": "..."}}"""
 
 SHOT_RULE = """
 - "shot": 15 to 45 words describing the moving footage behind this card, for an AI video model: a real place,
@@ -118,6 +119,7 @@ END_NOTE = re.compile(r"\b(end[- ]?card|end[- ]?screen|closing[- ]?card|closing 
 # "keep the current copy": the note wants the words untouched (it may still ask for b-roll or a new end card)
 KEEP_NOTE = re.compile(r"\b(keep|leave|preserve)\b[^.]{0,30}\b(copy|script|lines?|words|wording|text|narration)\b", re.I)
 SAME_LIMIT = 0.70
+MOODS = ("calm", "upbeat", "confident", "warm", "playful")      # music beds (studio_music_tracks.mood); the writer picks one, the brand's CFG["mood"] is the fallback
 
 
 class RecutUnchanged(RuntimeError):
@@ -476,6 +478,8 @@ def write(job, log, cfg):
         for new_sc, old_sc in zip(p["scenes"], keep["scenes"]):
             new_sc.update({k: old_sc.get(k, "") for k in ("kicker", "line", "say") + (("icon",) if icons else ())})
         p["caption"], p["title"], p["topic"] = keep["caption"], keep["title"], keep["topic"]
+        if parent.get("mood") in MOODS:
+            p["mood"] = parent["mood"]
         log("keep-the-copy re-cut: scene words and caption restored from the current script; kept the new shots and end card")
     out = finish(cfg, p, theme, prov, score, broll)
     _carry_end(out, parent, note)
@@ -527,5 +531,7 @@ def finish(cfg, p, theme, prov, score, broll=False):
         end["chips"] = [{"icon": c["icon"], "text": glue(_cap(tidy({"title": c["text"]})["title"].strip().rstrip(".")))} for c in prop["chips"]]
         end["say"] = f"{end['title']}. {sub} {cfg['end_cta_say']}"
         end["proposed"] = True
-    return {"title": p.get("title") or scenes[0]["line"], "topic": p.get("topic"), "theme": theme, "scenes": scenes,
+    mood = str(p.get("mood") or "").strip().lower()
+    mood = mood if mood in MOODS else (cfg.get("mood") if cfg.get("mood") in MOODS else "calm")
+    return {"title": p.get("title") or scenes[0]["line"], "topic": p.get("topic"), "mood": mood, "theme": theme, "scenes": scenes,
             "end": end, "caption": p["caption"].strip() + (("\n\n" + tail) if tail else ""), "provider": prov, "score": score}

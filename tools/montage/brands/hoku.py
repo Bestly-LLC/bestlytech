@@ -20,6 +20,7 @@ from jobs import brand_maker as bm  # noqa: E402
 from jobs import hoku_maker as hm  # noqa: E402
 
 COMPOSITION = "HokuShort"
+MOOD = "warm"      # music bed when the script has no mood (music.py); HOKU writes its own script, so this is its mood
 THEMES = ["paper", "forest", "sage", "gold", "brown"]
 END = {"title": "A face mist in a sealed can.", "cta": "Join the waitlist. Link in bio.",
        "say": "HOKU. A face mist in a sealed can. Join the waitlist."}

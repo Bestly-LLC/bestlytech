@@ -21,6 +21,7 @@ COMPOSITION, COMP_DIR = "BrandShort", "brand"
 THEMES = ["night"]
 CFG = {
     "slug": "bestly-studio", "name": NAME, "claim": "bestly-studio", "about": bs.PRODUCT_STUDIO, "lessons_brand": None,
+    "mood": "upbeat",   # music bed fallback when the writer gives none (music.py)
     "themes": THEMES, "tail": "bestly.tech/studio", "name_patterns": [r"\bbestly\b"],
     "shot_brand": ("A small business at work, seen from behind or in close-up: a workshop bench, a shop counter, a studio desk, "
                    "a shelf with one small box with a softly glowing light, cables tidied. Never a readable screen or label."),

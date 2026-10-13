@@ -19,6 +19,7 @@ GROUNDS = {"navy": (("#0D1424", "#16213E"), "#6F9BFF"), "green": (("#061F16", "#
 THEMES = list(GROUNDS)
 CFG = {
     "slug": "inventoryproof", "name": NAME, "claim": _B["claim"], "about": _B["about"], "lessons_brand": "inventoryproof",
+    "mood": "calm",   # music bed fallback when the writer gives none (music.py)
     "themes": THEMES, "tail": _B["hashtags"], "name_patterns": [r"inventory\s*proof", r"\bproofy\b"],
     "shot_brand": ("Real homes and things people own: a hand opening a drawer, a shelf of books, a closet, a kitchen counter, "
                    "a box being taped shut, a living room at golden hour. Never a legible receipt, document or label."),

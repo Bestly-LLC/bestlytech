@@ -7,6 +7,9 @@ from studio_video_jobs (montage_claim) and makes the video:
              answer 20 of docs/elevenlabs-studio-opusplan.md): when ElevenLabs is unavailable, below the 30% reserve or fails,
              the job goes `held`, Spark tells Jared once a day, and this worker re-checks every 30 min and resumes by itself
              (7 days held -> failed + alert). Piper only runs when montage_settings voice.provider = 'piper' (manual switch).
+  music      a real music bed from the library (music.py, rule of 2026-10-12: every video ships with music): picked by brand + mood, never the
+             track used last for the brand, fitted with soft fades and lowered under the narration. No track for the brand = the job is `held`
+             before any voice is bought, Spark alerts once a day per brand (montage.music), never filed silent.
   rendering  OpenMontage VideoCompose, atelier mode, our hand-authored brand composition (om_render.py)
   checking   OpenMontage's post-render review + our own ffprobe / loudness / size checks
   filing     MP4 + thumbnail to storage, then montage_file puts it in Studio > Drafts > To review
@@ -30,6 +33,7 @@ import urllib.request
 sys.path.insert(0, "/opt/bestly/cron")
 sys.path.insert(0, "/opt/bestly/montage")
 import lib  # noqa: E402
+import music  # noqa: E402
 
 OM = "/mnt/ssd/apps/openmontage"
 OMPY = f"{OM}/.venv/bin/python"
@@ -142,6 +146,34 @@ class VoiceHeld(Exception):
     def __init__(self, reason, kind="down", cost=0.0, credits=0.0, voice=None):
         super().__init__(reason)
         self.reason, self.kind, self.cost, self.credits, self.voice = reason, kind, cost, credits, voice or {}
+
+
+class MusicHeld(VoiceHeld):
+    """The brand has no music track (or the picked file is unreadable), so the video waits instead of being filed with no music
+    (Jared 2026-10-12). Held like a voice hold: re-checked every 30 minutes, stopped after 7 days; Spark's alert is montage.music (info, once a day per brand)."""
+
+    def __init__(self, reason, brand=""):
+        super().__init__(reason, "music")
+        self.brand = brand
+
+
+def _music_alert(brand, why):
+    day = time.strftime("%Y-%m-%d")
+    try:
+        lib.notify(f"Spark: a {brand} video is on hold, no music track yet", why[:600], severity="info", push=False,
+                   url="/admin/team", dedupe=f"montage.music-{brand}-{day}")
+    except Exception as e:  # noqa: BLE001  (an alert must never break the loop)
+        print("music alert failed:", e, flush=True)
+
+
+def _music_gate(brand, brand_slug):
+    """Before anything is bought: the brand must have at least one usable track, or the job is held."""
+    try:
+        n = music.ready(brand_slug)
+    except music.NoMusic as e:
+        raise MusicHeld(f"no music: {e}", brand_slug)
+    if n < 1:
+        raise MusicHeld(f"no music track for {brand_slug} yet (the music library has nothing this brand can use)", brand_slug)
 
 
 def _el_secret():
@@ -332,7 +364,7 @@ def _level(path, target=-16.0):
 
 def voice(brand, script, jd, job_id, client_slug=None):
     """Read every scene with ElevenLabs (Piper only when montage_settings voice.provider = 'piper'; otherwise a problem raises
-    VoiceHeld and the job is held), lay the scenes out to fit the voice, build narration.wav + a quiet pad.
+    VoiceHeld and the job is held), lay the scenes out to fit the voice, build narration.wav (the music bed is built after, by music.py).
     Returns (total_seconds, info); info["line"] is the voice line for the job log."""
     pub = f"{jd}/public"
     lines = [s["say"] for s in script["scenes"]] + [script["end"]["say"]]
@@ -346,10 +378,12 @@ def voice(brand, script, jd, job_id, client_slug=None):
     for s, (_, d) in zip(script["scenes"], wavs):
         s["start"], s["end"] = round(t, 3), round(t + max(d + lead + 0.6, 2.8), 3)
         s["voice_at"] = t + lead
+        s["voice_end"] = round(t + lead + d, 3)
         t = s["end"]
     d_end = wavs[-1][1]
     script["end"]["start"], script["end"]["end"] = round(t, 3), round(t + max(d_end + lead + 1.6, 4.2), 3)
     script["end"]["voice_at"] = t + lead
+    script["end"]["voice_end"] = round(t + lead + d_end, 3)
     total = script["end"]["end"]
     ats = [s["voice_at"] for s in script["scenes"]] + [script["end"]["voice_at"]]
     cmd = ["ffmpeg", "-y", "-v", "error"]
@@ -360,13 +394,6 @@ def voice(brand, script, jd, job_id, client_slug=None):
     cmd += ["-filter_complex", ";".join(parts) + f";{mix}amix=inputs={len(ats)}:normalize=0,apad=whole_dur={total:.3f},atrim=0:{total:.3f}[out]",
             "-map", "[out]", "-ac", "2", f"{pub}/narration.wav"]
     subprocess.run(cmd, check=True)
-    # Soft A-major pad, low-passed, faded; sits ~-20 dB under the voice. Free and local (no music keys yet).
-    root = random.choice([110.0, 123.47, 98.0])
-    pad = "+".join(f"{a}*sin(2*PI*{root * m}*t)*(0.6+0.4*sin(2*PI*{lfo}*t+{ph}))"
-                   for a, m, lfo, ph in [(0.05, 2, 0.09, 0), (0.04, 2.52, 0.13, 1), (0.04, 3, 0.07, 2), (0.03, 1, 0.05, 3)])
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"aevalsrc='{pad}':s=44100:d={total + 0.5:.2f}",
-                    "-af", f"lowpass=f=900,aecho=0.8:0.6:180:0.25,afade=t=in:d=2,afade=t=out:st={max(total - 2.5, 0):.2f}:d=2.5",
-                    "-ac", "2", f"{pub}/pad.wav"], check=True)
     if info["provider"] == "elevenlabs":
         _level(f"{pub}/narration.wav")
     json.dump({k: info.get(k) for k in ("provider", "line", "chars", "credits", "cost", "voice_id", "voice_name", "model")},
@@ -403,13 +430,19 @@ def hold(job, h):
             spent["cost_usd"] = round(cur + h.cost, 4)
         except Exception as e:  # noqa: BLE001
             print("cost lookup failed:", e, flush=True)
-    audio_log(job, "held", h.voice, held_reason=h.reason, credits=h.credits, cost=h.cost)
+    is_music = h.kind == "music"
+    if is_music and job.get("script"):          # the script already carries the voice timings; keep it so the resume does not re-buy the voice
+        spent["script"] = job["script"]
+    if not is_music:
+        audio_log(job, "held", h.voice, held_reason=h.reason, credits=h.credits, cost=h.cost)
     if since and now - since > HOLD_GIVE_UP_DAYS * 86400:
-        err = f"held {HOLD_GIVE_UP_DAYS} days without a voice, stopped: {h.reason}"
+        err = f"held {HOLD_GIVE_UP_DAYS} days without {'a music track' if is_music else 'a voice'}, stopped: {h.reason}"
         report(jid, status="failed", stage="failed", error=err[:2000], note=err[:400], **spent)
-        audio_log(job, "failed", h.voice, held_reason=err)
-        lib.notify("Spark: a video was stopped after a week on hold", f"{job['client_slug']}: {err[:420]} Ask Spark to make it again once the voice works.",
-                   severity="warning", push=False, url="/admin/team", dedupe=f"montage.voice-giveup-{jid}")
+        if not is_music:
+            audio_log(job, "failed", h.voice, held_reason=err)
+        lib.notify("Spark: a video was stopped after a week on hold", f"{job['client_slug']}: {err[:420]} Ask Spark to make it again once "
+                   f"{'the music library has a track for this brand' if is_music else 'the voice works'}.",
+                   severity="warning", push=False, url="/admin/team", dedupe=f"montage.{'music' if is_music else 'voice'}-giveup-{jid}")
         return f"job {jid} failed after {HOLD_GIVE_UP_DAYS} days held"
     check_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now + HOLD_RECHECK_MIN * 60))
     first = since is None
@@ -420,11 +453,20 @@ def hold(job, h):
     report(jid, **p)
     if first:
         try:
-            lib.rpc("montage_post", p_id=jid, body=f"I am holding this video: {h.reason}. I did not switch to a cheaper voice. I check again every "
-                    f"{HOLD_RECHECK_MIN} minutes and finish it on my own as soon as the voice works (I stop after {HOLD_GIVE_UP_DAYS} days).")
+            if is_music:
+                lib.rpc("montage_post", p_id=jid, body=f"I am holding this video: {h.reason}. Every video ships with real music, so I will not file it without. "
+                        f"I check again every {HOLD_RECHECK_MIN} minutes and finish it on my own as soon as the library has a track (I stop after {HOLD_GIVE_UP_DAYS} days).")
+            else:
+                lib.rpc("montage_post", p_id=jid, body=f"I am holding this video: {h.reason}. I did not switch to a cheaper voice. I check again every "
+                        f"{HOLD_RECHECK_MIN} minutes and finish it on my own as soon as the voice works (I stop after {HOLD_GIVE_UP_DAYS} days).")
         except Exception as e:  # noqa: BLE001
             print("hold post failed:", e, flush=True)
     why = h.reason
+    if is_music:
+        brand = getattr(h, "brand", "") or job["client_slug"]
+        _music_alert(brand, f"{h.reason}. Every Montage video ships with a real music bed (Jared, 2026-10-12), so this video waits and finishes by itself "
+                     "once the brand has a track. Spark can quote the starter library (ElevenLabs Music) for a yes; nothing else is affected.")
+        return f"held {jid} (music): {h.reason[:120]}"
     if h.kind == "low":
         why = (f"{h.reason}. Plan credits (Creator, $22 a month) are what Montage and Ava's calls share, and Montage will not go past the plan. "
                "Video voiceovers wait and restart on their own when the credits reset; nothing else is affected.")
@@ -551,9 +593,10 @@ def clips_for(job, script, jd, note):
     return out
 
 
-def check(out, total):
-    """Our own gate on top of OpenMontage's review. Returns a list of problems."""
-    e = []
+def check(out, total, script=None, minfo=None):
+    """Our own gate on top of OpenMontage's review. Returns a list of problems. A video with no music bed, a near-silent bed, or a finished mix
+    that is silent in the gaps between narration lines FAILS (rule of 2026-10-12: every video ships with a real music bed)."""
+    e = music.bed_problems(out, script or {"scenes": [], "end": {}}, minfo)
     pr = probe(out)
     v = [s for s in pr["streams"] if s["codec_type"] == "video"]
     a = [s for s in pr["streams"] if s["codec_type"] == "audio"]
@@ -649,13 +692,14 @@ def process(job):
     if resumed:
         script = job["script"]
         vinfo = {}
-        if os.path.exists(f"{jd}/public/narration.wav") and os.path.exists(f"{jd}/public/pad.wav"):
+        if os.path.exists(f"{jd}/public/narration.wav") and script["end"].get("end"):
             total = script["end"]["end"]
             try:
                 vinfo = json.load(open(f"{jd}/voice.json"))
             except (OSError, ValueError):
                 pass
         else:  # held for its voice, or voice files lost (reboot, cleanup): read the same script again, never re-order clips
+            _music_gate(brand, job["client_slug"])      # before the voice is bought: no track for the brand = held again
             total, vinfo = voice(brand, script, jd, jid, job["client_slug"])
             _voice_report(jid, vinfo)
             audio_log(job, "done", vinfo)
@@ -672,6 +716,7 @@ def process(job):
         script = brand.write(job, note)
         job["script"] = script
         report(jid, stage="voicing", script=script, note=f"script ok via {script['provider']} (editor {script['score']:g}/10)")
+        _music_gate(brand, job["client_slug"])          # before the voice is bought: no track for the brand = held, nothing spent
         total, vinfo = voice(brand, script, jd, jid, job["client_slug"])
         _voice_report(jid, vinfo)
         audio_log(job, "done", vinfo)
@@ -690,13 +735,28 @@ def process(job):
                     "I pick the video back up when they land.")
             return f"parked {jid}: waiting on {len(shots)} LTX clips"
 
+    mood = music.mood_for(script, brand)
+    minfo = music.stored(jd)
+    if not minfo:
+        report(jid, stage="music", note=f"picking a {mood} music bed for {job['client_slug']}")
+        try:
+            minfo = music.build(job["client_slug"], mood, script, total, jd, jid)
+        except music.NoMusic as e:
+            raise MusicHeld(f"no music: {e}", job["client_slug"])
+        note(f"music: '{minfo['name']}' ({minfo['mood']}{', looped' if minfo.get('looped') else ''}), ducked {minfo['duck_db']:g} dB under the voice")
+    if job.get("held_since") and (job.get("held_reason") or "").startswith("no music"):
+        note("a music track is available now; picking the video up")
+        try:
+            lib.rpc("montage_post", p_id=jid, body="The music library has a track for this brand now, so I am finishing this video.")
+        except Exception as e:  # noqa: BLE001
+            print("music resume post failed:", e, flush=True)
     clips = clips_for(job, script, jd, note) if (job.get("clips") or job.get("parent_job_id")) else {}
     props = {"theme": script["theme"],
              "scenes": [{**{k: s[k] for k in ("kicker", "line", "start", "end")}, **({"clip": clips[i]} if i in clips else {}),
                          **({"icon": s["icon"]} if s.get("icon") else {})}
                         for i, s in enumerate(script["scenes"])],
              "end": {k: v for k, v in script["end"].items() if k != "say"},
-             "audio": {"narration": "narration.wav", "music": "pad.wav", "musicVolume": 0.1}}
+             "audio": {"narration": "narration.wav", "music": "music.wav", "musicVolume": 1.0}}   # music.wav is already ducked under the voice (music.py)
     if getattr(brand, "BRAND", None):        # shared composition (comp/brand): palettes, fonts, logo, closing art ride in the props
         props["brand"] = brand.BRAND
     json.dump(props, open(f"{jd}/props.json", "w"))
@@ -727,7 +787,7 @@ def process(job):
 
     if normalize(out, jid):
         note("re-encoded to the standard video format (yuv420p, tv range, bt709) so it plays in Safari")
-    problems = check(out, total)
+    problems = check(out, total, script, minfo)
     if problems:
         raise RuntimeError("video failed the checks: " + "; ".join(problems))
     thumb = f"{jd}/thumb.jpg"
@@ -742,7 +802,7 @@ def process(job):
     r = lib.rpc("montage_file", p_id=jid, p={
         "title": script["title"], "caption": script["caption"], "media_url": media, "thumb_url": turl,
         "variants": [{"platform": "instagram", "caption": script["caption"]}],
-        "provenance": {"theme": script["theme"], "provider": script["provider"], "editor_score": script["score"], "broll_clips": len(clips),
+        "provenance": {"music": {k: minfo.get(k) for k in ("track_id", "name", "mood", "looped", "duck_db")}, "theme": script["theme"], "provider": script["provider"], "editor_score": script["score"], "broll_clips": len(clips),
                        "render_s": render_s, "length_s": round(total, 1), "openmontage": "9327439",
                        **({"recut_changed": script["recut_changed"]} if script.get("recut_changed") is not None else {}),
                        **({"graphics": True} if _has_graphics(props) else {})},
