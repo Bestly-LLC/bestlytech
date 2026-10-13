@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Bestly Studio</title>
+<style>
+:root{--ink:#1A1712;--bone:#EFEAE1;--brass:#A8824B;--mute:#6E6557;--bad:#9A2F22}
+html,body{margin:0;background:var(--bone);color:var(--ink)}
+body{font:17px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:12vh 20px 56px}
+.eb{font:600 12px/1 Inter,-apple-system,sans-serif;letter-spacing:.28em;text-transform:uppercase;color:var(--brass)}
+h1{font:400 36px/1.12 Georgia,serif;margin:14px 0 18px}p{margin:0 0 14px}.mute{color:var(--mute);font-size:15px}
+</style></head><body><main><div class="eb">Bestly Studio</div><div id="o"><h1>One moment.</h1></div></main>
+<script>
+// Short connect links: bestly.tech/c/xxxxxxxx. Finds out which account the link is for and moves on.
+const API = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/studio-social";
+const code = (location.pathname.match(/^\/c\/([a-z0-9]+)\/?$/i) || [])[1] || "";
+const say = (t, b) => { document.getElementById("o").innerHTML = "<h1>" + t + "</h1>" + (b || ""); };
+(async () => {
+  if (!code) return say("Nothing to connect.", '<p class="mute">Open the link your Bestly contact sent you.</p>');
+  const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "resolve", k: code }) })
+    .then(r => r.json()).catch(() => ({ ok: false, error: "unreachable" }));
+  const plat = ["instagram", "tiktok", "facebook"].includes(r.platform) ? r.platform : null;
+  if (plat) return location.replace("/connect/" + plat + ".html?k=" + encodeURIComponent(code));
+  say("This link isn't valid.", '<p class="mute">Ask your Bestly contact for a new one.</p>');
+})();
+</script></body></html>
