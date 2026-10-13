@@ -306,13 +306,14 @@ export default function LaxPass() {
       <div className="min-w-0 space-y-8 lg:row-span-2 2xl:row-span-1">
       <Section title="Guest pages" id="guest-pages">
         <div className={cn(card, "flex flex-col gap-3")}>
-          <div>
+          <div className="min-w-0">
             <p className={cn("text-[15px] font-semibold", label)}>Preview the guest pages</p>
-            <p className={cn("text-[13px]", secondary)}>Demo trips with a stage switcher. Nothing touches real guests or the car. The key is real for you only (below).</p>
+            <p className={cn("text-[13px] whitespace-normal break-words [text-wrap:pretty]", secondary)}>Demo trips with a stage switcher. Nothing touches real guests or the car. The key is real for you only (below).</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <a href="/t/demo-home?stage=key-ready" target="_blank" rel="noreferrer" className={cn(btnTinted, "h-auto px-4")}>Home pickup</a>
             <a href="/t/demo-lax?stage=day-of" target="_blank" rel="noreferrer" className={cn(btnTinted, "h-auto px-4")}>LAX</a>
+            <a href="/t/demo-delivery?stage=key-ready" target="_blank" rel="noreferrer" className={cn(btnTinted, "h-auto px-4")}>Delivery</a>
           </div>
         </div>
         <DemoKeyCard />
