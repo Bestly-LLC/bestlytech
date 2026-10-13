@@ -307,7 +307,7 @@ const DATA_COLLECTION = {
 };
 
 const UNKNOWN = { bridge_rules: "", jared_stories: "", caller_name: "a caller Ava doesn't know yet", caller_notes: "", caller_trusted: "no", voice_rules: "", forward_rules: "", call_voice: "ava", forwarded: "no", forwarded_from: "", greeting:
-  "Hey, Jared's phone. What's up?" };
+  "Hey, Jared's phone. What's up?", caller_is_jared: "no" };
 
 /** Turn incoming calls on for an ElevenLabs phone number and confirm it with a GET. Tries the documented inbound trunk
  *  config first, then the explicit flag. Returns true when the record reports supports_inbound = true. */
@@ -1145,6 +1145,9 @@ async function logDebug(row: { kind: "init" | "post"; keys: unknown; fields: Rec
 /** The first line on every incoming and forwarded call. Short on purpose; the recording notice comes after the caller's first reply (see PROMPT). */
 const IN_GREETING = (first: string | null) => `Hey${first ? ` ${first}` : ""}, Jared's phone. What's up?`;
 const FWD_GREETING = IN_GREETING;
+/** Owner mode (docs/ava-owner-mode-opusplan.md): Jared calling from his own number. No intro, no recording notice dance, no PIN: the workflow's caller_is_jared edge skips the greeting node and she just listens. */
+const OWNER_GREETING = "Hey, what's up?";
+const JARED_NUMBERS = new Set([JARED_CELL, "+14242349256"]);
 /** Voice-mode rules on a forwarded call: she is the assistant, never him. */
 const VOICE_RULES_FWD = "VOICE MODE: you are speaking in Jared's own voice, answering his phone as his assistant. Never say \"this is Jared\" or \"I'm Jared\", and never speak as if you are him, even if asked \"Is this Jared?\" (say \"This is his assistant.\"). If anyone sincerely asks whether you are a person, a robot or an AI, say plainly that you're Jared's AI assistant. Never commit to anything for him: no money, plans, appointments or promises. Say you'll pass it on. Your second line must say you are his assistant and give the recording notice (\"I'm his assistant, he can't grab the phone. Heads up, calls here get recorded.\"). If anyone calls you Jared, correct them right away.";
 
@@ -1179,8 +1182,10 @@ async function initHook(req: Request): Promise<Response> {
     caller_trusted: trusted, caller_name: c.name, caller_notes: callerNotes(c),
     greeting: IN_GREETING(String(c.name).replace(/\{\{|\}\}/g, "").trim().split(/\s+/)[0] || null),
   } : { ...UNKNOWN, caller_trusted: trusted };
+  // Jared on one of his own two numbers (never a forwarded call: that branch returned above): owner mode, and the short greeting
+  const owner = !!caller && (JARED_NUMBERS.has(caller) || caller === st?.jared_cell) ? { caller_is_jared: "yes", greeting: OWNER_GREETING } : {};
   return Response.json({ type: "conversation_initiation_client_data",
-    dynamic_variables: { ...UNKNOWN, ...vars, call_context: "Someone called Jared's line. Take a message.", ...base } });
+    dynamic_variables: { ...UNKNOWN, ...vars, call_context: "Someone called Jared's line. Take a message.", ...base, ...owner } });
 }
 
 // ---------- evidence: the private, permanent copy of a spam call's recording ----------
