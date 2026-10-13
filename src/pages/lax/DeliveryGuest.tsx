@@ -30,6 +30,8 @@ import { track } from "./track";
 import { askPage, emitLeoCar } from "./leoBridge";
 import { tv, useLeoSession, type Any, type LeoApi } from "./useLeoSession";
 import { AskChips, LeoHero } from "./DeliveryLeo";
+import { LeoDock } from "./LeoDock";
+import { leoNudgeItems, type NudgeKey, type NudgeSection } from "./leoNudges";
 import type { CarAction, HomePub, KeyInfo } from "./HomeGuest";
 
 export type DeliveryPub = HomePub & { place?: "lax" | "home" | "delivery"; delivery?: Delivery | null };
@@ -482,8 +484,40 @@ export default function DeliveryGuest({ pub, token, run, demoPage, reload }: { p
   const lat = d.lat ?? 34.0838, lon = d.lon ?? -118.3708;
   const city = useMemo(() => cityOf(d.address, d.short), [d.address, d.short]);
 
+  // ---- mini Leo: is the big orb on screen, and which section is the guest reading? ----
+  const [heroVisible, setHeroVisible] = useState(true);
+  useEffect(() => {
+    const el = document.getElementById("leo-stage");
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setHeroVisible(e.isIntersecting), { threshold: 0.12 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const [section, setSection] = useState<NudgeSection | null>(null);
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const els = (["delivery", "how", "key", "car", "charging", "return"] as NudgeSection[]).map((id) => document.getElementById(id)).filter((e): e is HTMLElement => !!e);
+    // The "reading band" is the upper-middle of the screen. The section covering most of it is the one in view.
+    const pick = () => {
+      const H = window.innerHeight, top = H * 0.2, bot = H * 0.55;
+      let best: NudgeSection | null = null, bestOv = 24;
+      for (const el of els) { const r = el.getBoundingClientRect(), ov = Math.min(r.bottom, bot) - Math.max(r.top, top); if (ov > bestOv) { bestOv = ov; best = el.id as NudgeSection; } }
+      setSection(best);
+    };
+    const io = new IntersectionObserver(pick, { rootMargin: "-20% 0px -45% 0px", threshold: [0, 0.1, 0.3, 0.6, 1] });
+    els.forEach((e) => io.observe(e));
+    pick();
+    return () => io.disconnect();
+  }, [ended, keyBlock, carConnected, !!trip]); // eslint-disable-line react-hooks/exhaustive-deps
+  const nudgeKey: NudgeKey | null = key ? (key.state === "soon" && key.hold ? "held" : key.state as NudgeKey) : null;
+  const nudges = leoNudgeItems({
+    now, startsAt: trip?.starts_at, endsAt: trip?.ends_at, ended, kind: d.kind, missing: pending, key: nudgeKey,
+    cabinF: car?.inside_f ?? null, outsideF: (demoPage ? car?.outside_f : outsideF ?? car?.outside_f) ?? null, batteryPct: car?.battery ?? null, rangeMi: car?.range ?? null,
+    controlsOn: live || demoCar, section,
+  });
+
   return (
-    <div className="trip trip-light min-h-dvh" style={{ background: "radial-gradient(120% 70% at 50% 0%, #FFF8EC 0%, #F6EEDD 55%, #E9DCC2 100%)", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
+    <div className="trip trip-light dl-page min-h-dvh" style={{ background: "radial-gradient(120% 70% at 50% 0%, #FFF8EC 0%, #F6EEDD 55%, #E9DCC2 100%)", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
       <Helmet>
         <title>Your Turo Tesla, delivered</title>
         <meta name="robots" content="noindex, nofollow" />
@@ -514,7 +548,7 @@ export default function DeliveryGuest({ pub, token, run, demoPage, reload }: { p
           <AskChips where={d.short} onAsk={askLeo} />
           <DeliveryCard d={d} info={info} token={token} demo={isDemo} onSaved={tellLeoTyped} askLeo={() => { scrollTo("leo"); if (sess.phase !== "live") void sess.start(true); }} />
           <HowItWorks step={step} d={d} startsAt={trip?.starts_at} />
-          {trip && <div className="mt-5"><TripCard trip={trip} theme="delivery" where={d.short} recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /><TripChanged at={pub.trip_changed_at} /></div>}
+          {trip && <div id="charging" className="mt-5 scroll-mt-4"><TripCard trip={trip} theme="delivery" where={d.short} recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /><TripChanged at={pub.trip_changed_at} /></div>}
           {!keyFirst && keyBlock && key && <KeyBlock k={key} token={token} d={d} hasApp={hasApp} onHasApp={markHasApp} onAdded={() => reload?.()} />}
 
           {!carConnected && (
@@ -534,6 +568,7 @@ export default function DeliveryGuest({ pub, token, run, demoPage, reload }: { p
         <Footer />
         {!ended && <div className="trip-keep"><InstallToast token={token} kind="delivery" /></div>}
       </main>
+      <LeoDock sess={sess} token={token} heroVisible={heroVisible} nudges={nudges} section={section} />
     </div>
   );
 }

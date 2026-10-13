@@ -127,6 +127,11 @@ export function useLeoSession(opts: LeoSessionOpts) {
           if (!lockLogged.current) { lockLogged.current = true; diag(token, "audio_locked", { msg: "voice setup waiting for a tap (iOS audio)" }); }
         }, 2500) : 0;
         const greeting = o.current.greeting;
+        // The SDK calls onConnect BEFORE startSession() resolves, so the conversation doesn't exist yet at that moment.
+        // Referencing `c` there is a TDZ error ("Cannot access 'H' before initialization" once minified), which made every
+        // Leo session fail on the production build. onConnect waits for this promise instead.
+        let gotConv: (c: Conv) => void = () => {};
+        const convReady = new Promise<Conv>((res) => { gotConv = res; });
         const c = await Conversation.startSession({
           signedUrl: String(s.signed_url),
           textOnly: !withVoice,
@@ -136,8 +141,10 @@ export function useLeoSession(opts: LeoSessionOpts) {
           clientTools: o.current.clientTools(api),
           onConnect: () => {
             setPhase("live");
-            o.current.onConnect?.(c, api);
-            if (history && startItems.length > 1) try { c.sendContextualUpdate(`Earlier on this screen:\n${history}`); } catch { /* ignore */ }
+            void convReady.then((live) => {
+              try { o.current.onConnect?.(live, api); } catch { /* a screen's hook must never break the session */ }
+              if (history && startItems.length > 1) try { live.sendContextualUpdate(`Earlier on this screen:\n${history}`); } catch { /* ignore */ }
+            });
           },
           onDisconnect: () => { conv.current = null; setPhase("ended"); setVoice(false); setSpeaking(false); setWorking(null); },
           onModeChange: ({ mode: m }: { mode: string }) => setSpeaking(m === "speaking"),
@@ -162,6 +169,7 @@ export function useLeoSession(opts: LeoSessionOpts) {
         } as never) as Conv;
         window.clearTimeout(lockTimer);
         conv.current = c;
+        gotConv(c);
         setVoice(withVoice);
         if (withVoice) playStreamPlayers(); // mic is live now, so iOS lets Leo's player start (see audioRescue.ts)
         return c;
