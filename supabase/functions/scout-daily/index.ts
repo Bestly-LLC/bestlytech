@@ -456,7 +456,10 @@ function mergeParts(parts: Part[]) {
   const commitments: any[] = [], decisions: any[] = [], numbers: any[] = [], topics: string[] = [], questions: string[] = [];
   for (const p of parts) {
     for (const c of p.commitments ?? []) {
-      const hit = commitments.find((e) => ownerKey(e.owner) === ownerKey(c.owner) && jaccard(e.task, c.task) >= 0.6);
+      // Same owner and either clearly the same words, or the same idea restated within 3 minutes (Oct 13: "Investigate the Tesla
+      // hardware upgrade idea" [58:45] and "See what can be done with the Tesla hardware upgrade idea" [58:47] both became to-dos).
+      const hit = commitments.find((e) => ownerKey(e.owner) === ownerKey(c.owner)
+        && (jaccard(e.task, c.task) >= 0.6 || (jaccard(e.task, c.task) >= 0.35 && Math.abs(tsSec(e.ts) - tsSec(c.ts)) <= 180)));
       if (!hit) { commitments.push({ ...c }); continue; }
       if (tsSec(c.ts) < tsSec(hit.ts)) hit.ts = c.ts;
       if (!hit.due && c.due) hit.due = c.due;
@@ -472,7 +475,8 @@ function mergeParts(parts: Part[]) {
   const byTs = (a: any, b: any) => tsSec(a.ts) - tsSec(b.ts);
   return {
     topics: topics.slice(0, 12), questions: questions.slice(0, 10),
-    decisions: decisions.sort(byTs).slice(0, 20), numbers: numbers.sort(byTs).slice(0, 20), commitments: commitments.sort(byTs).slice(0, 20),
+    // 60, not 20: sorted by time then cut, a 20 cap silently dropped everything said after ~minute 73 of a 93-minute call (Oct 13).
+    decisions: decisions.sort(byTs).slice(0, 40), numbers: numbers.sort(byTs).slice(0, 40), commitments: commitments.sort(byTs).slice(0, 60),
   };
 }
 
@@ -620,8 +624,11 @@ async function call(id: string, force = false, until = Date.now() + CALL_BUDGET_
   let deckErr = "";
   try { d = commitments.length ? await deck() : null; } catch (e) { deckErr = (e as Error).message; }
 
-  const { data: have } = await db.from("scout_daily").select("source_key").eq("kind", "call").like("source_key", `call:${r.id}:%`);
+  const { data: have } = await db.from("scout_daily").select("source_key, title, action").eq("kind", "call").like("source_key", `call:${r.id}:%`);
   const haveKeys = new Set((have ?? []).map((x: any) => x.source_key));
+  // A re-run (or rows made earlier by hand) must not duplicate a to-do already on file for this call, whatever its key or status.
+  const haveTodos = ((have ?? []) as any[]).map((x) => ({ owner: x.action?.owner ?? "Jared", title: String(x.title ?? "") }));
+  const alreadyOnFile = (owner: string, task: string) => haveTodos.some((h) => ownerKey(h.owner) === ownerKey(owner) && jaccard(h.title, task) >= 0.5);
   const day = la().day;
   let mine = 0;
   for (let i = 0; i < commitments.length; i++) {
@@ -630,7 +637,8 @@ async function call(id: string, force = false, until = Date.now() + CALL_BUDGET_
     const due = c.due ?? null;
     if (owner.toLowerCase() === "jared") mine++;
     // v-next: keys are call:<id>:c<i> so they never collide with older rows for the same call (Oct 12: Scout hand-wrote call:<id>:1..3).
-    if (haveKeys.has(`call:${r.id}:c${i}`)) continue; // a crashed earlier pass already made this card
+    const key = `call:${r.id}:c${Array.from(new TextEncoder().encode(ownerKey(owner) + "|" + norm(c.task))).reduce((h, x) => (h * 31 + x) >>> 0, 7).toString(36)}`;
+    if (haveKeys.has(key) || alreadyOnFile(owner, String(c.task))) continue; // already made (crashed pass, re-run, or an older row)
     let card: { id: number; url: string } | null = null;
     if (d) {
       try { card = await d.addCard(`${owner}: ${c.task}`, `From the call ${r.name}.\n\n${summaryText}`, due); }
@@ -638,7 +646,7 @@ async function call(id: string, force = false, until = Date.now() + CALL_BUDGET_
     }
     await db.from("scout_daily").upsert({
       day, kind: "call", title: String(c.task).slice(0, 140), why: `${owner}${due ? ` · due ${due}` : ""} · from ${r.name}`,
-      source_key: `call:${r.id}:c${i}`, url: card?.url ?? null,
+      source_key: key, url: card?.url ?? null,
       action: { owner, due, meeting: r.name, meeting_id: r.id, deck_card: card?.id ?? null, deck_url: card?.url ?? null,
         quote: c.quote ? String(c.quote).slice(0, 200) : null },
     }, { onConflict: "day,kind,source_key", ignoreDuplicates: true });
