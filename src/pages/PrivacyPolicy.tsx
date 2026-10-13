@@ -330,6 +330,21 @@ export default function PrivacyPolicy() {
         </ul>
       </>
     )},
+    { id: "16b", title: "Bestly Studio: Connected Facebook Pages", content: (
+      <>
+        <p className="text-muted-foreground leading-relaxed mb-4">
+          Bestly Studio posts content for our clients. A client can connect their own Facebook Page by signing in with Facebook and choosing the Page. We only ask for permission to list the Pages the client manages, publish posts to the Page they chose, and read that Page's likes and comments so we can report results back to them.
+        </p>
+        <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
+          <li>We store the Page name, the Page ID and an access token for that one Page. We do not store the client's Facebook password and we do not read their personal profile, friends or messages.</li>
+          <li>We only publish content the client has approved. We never sell Facebook data or use it for advertising.</li>
+          <li>The client can disconnect at any time by removing Bestly Cloud Social Engine in Facebook Settings (Business Integrations), or by emailing privacy@bestly.tech. We then delete the stored token and Page details.</li>
+        </ul>
+        <p className="text-muted-foreground leading-relaxed">
+          Step-by-step deletion instructions are at <a href="/data-deletion.html" className="text-foreground underline">bestly.tech/data-deletion.html</a>.
+        </p>
+      </>
+    )},
     { id: "17", title: "17. Changes to This Policy", content: (
       <p className="text-muted-foreground leading-relaxed">
         We may update this Privacy Policy from time to time. We will notify you of any material 
