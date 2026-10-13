@@ -31,14 +31,23 @@ async function photosOk() {
     urls.push(`${SITE}/hero-scenes/${k}.webp`, `${SITE}/hero-scenes/${k}-m.webp`);
   }
   const bad = [];
-  await Promise.all(urls.map(async (u) => {
-    try {
-      const r = await fetch(u, { method: "HEAD", signal: AbortSignal.timeout(8000) });
-      if (r.status !== 200) bad.push(`${u.split("/").pop()} HTTP ${r.status}`);
-    } catch (e) {
-      bad.push(`${u.split("/").pop()} ${e.message}`);
+  const one = async (u) => {
+    for (let tryN = 0; tryN < 2; tryN++) {
+      try {
+        const r = await fetch(u, { headers: { Range: "bytes=0-0" }, signal: AbortSignal.timeout(6000) });
+        if (r.status === 200 || r.status === 206) return null;
+        if (tryN === 1) return `${u.split("/").pop()} HTTP ${r.status}`;
+      } catch (e) {
+        if (tryN === 1) return `${u.split("/").pop()} ${e.name === "TimeoutError" ? "timed out" : e.message}`;
+      }
     }
-  }));
+    return null;
+  };
+  // 6 at a time: 60 parallel requests to our own CDN stalled a few of them
+  for (let i = 0; i < urls.length; i += 6) {
+    const out = await Promise.all(urls.slice(i, i + 6).map(one));
+    bad.push(...out.filter(Boolean));
+  }
   log("photos-checked");
   return bad;
 }
