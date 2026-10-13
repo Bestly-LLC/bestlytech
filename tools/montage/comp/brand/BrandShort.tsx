@@ -302,7 +302,7 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b,
                              width: r * 2, height: r * 2, opacity: Math.min(1, logo) * (0.35 + 0.45 * Math.sin(f / (18 + i * 3) + i * 2) ** 2),
                              background: `radial-gradient(circle, ${rgba(t.accent, 0.85)} 0%, ${rgba(t.accent, 0.22)} 42%, ${rgba(t.accent, 0)} 72%)`}} />
       ))}
-      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: -20}}>
+      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 90}}>
         {b.end.heroLogo && b.logo.image ? (
           <Img src={staticFile(b.logo.image)} style={{height: 150, mixBlendMode: (b.logo.blend as any) || 'normal', opacity: Math.min(1, logo),
                                                       transform: `scale(${0.7 + 0.3 * logo})`, marginBottom: 34}} />
