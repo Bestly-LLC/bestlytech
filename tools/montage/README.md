@@ -27,7 +27,7 @@ Allowed per client by `montage_brand_policy.montage_ok` (read by `montage_quote`
 | `hoku` | `brands/hoku.py` | `jobs/hoku_maker.py` (ABOUT, claim_check, fact check) | `comp/hoku` (HokuShort) |
 | `inventoryproof` | `brands/inventoryproof.py` | `jobs/brand_maker.py` BRANDS['inventoryproof'], claim slug `inventoryproof` | `comp/brand` (BrandShort): Manrope, card grounds + accents, Proofy on the closing card |
 | `cookie-yeti` | `brands/cookie_yeti.py` | `jobs/brand_maker.py` BRANDS['cookieyeti'], claim slug `cookie-yeti` | `comp/brand`: Inter Tight, plum/teal card grounds, app icon on the closing card |
-| `bestly-cloud` | `brands/bestly_cloud.py` | `jobs/bestly_social.py` PRODUCT, `claim_check('bestly-cloud')` (severity `setup` = no rules yet = house rules only) | `comp/brand`: Bestly card kit colors/type, the real pill logo |
+| `bestly-cloud` | `brands/bestly_cloud.py` | `jobs/bestly_social.py` PRODUCT, `claim_check('bestly-cloud')` (severity `setup` = no rules yet = house rules only) | `comp/brand`: Bestly card kit colors/type, the real pill logo, scene icons, rich closing card |
 | `bestly-studio` | `brands/bestly_studio.py` | `jobs/bestly_social.py` PRODUCT_STUDIO, `claim_check('bestly-studio')` (rules start unapproved), `docs/studio-promo/claims.md`; text only, one posting tip per video, filed to Drafts > To review (Friday rotation of `bestly_social studio`) | `comp/brand`: same as bestly-cloud, closing card says bestly.tech/studio |
 
 Never made by Montage: Centering YOU (`centering-you`, `demo-two`: Elizabeth films her own videos) and real estate (`listings`, `re-demo`: photo-only tours, planned).
@@ -107,6 +107,29 @@ The Remotion render came out `yuvj420p` / full range / bt470bg with no bt709 tag
 `worker.normalize(out, jid)` probes the file and, when it is not standard, re-encodes it (`-crf 19 -preset slow`) and swaps it in, with a job note.
 `worker.check()` still flags any non-standard result, so a missed normalize fails the job instead of filing it. Needs no settings.
 Older videos: re-encode, upload to `video/<client>/<name>.<sha10>.mp4` (the signer `studio_ship_sign_upload` allows that write-once path), then `studio_item_set_media`.
+
+## Re-cuts and graphics (2026-10-12)
+A Changes note on a Montage item makes a re-cut job (`montage_recut` trigger, `revise_note` = the reviewer's full words). Why BC05's first re-cut came back
+identical: the old prompt said "change nothing else, word for word", the closing card is fixed in code, the comp drew only text, and nothing checked that
+anything changed. What a re-cut does now (`brands/_common.py`):
+- **The note is applied fully.** A note about the writing as a whole (copy, bland, unclear, "dumbest person", ...) rewrites every scene and the caption from
+  scratch (`MODE_BROAD`); a narrow note keeps everything it does not touch word for word (`MODE_NARROW`). House rules on every re-cut: scene 1 says plainly
+  what the product is and who it is for (without naming it), no jargon, no absolutes, nothing outside the facts.
+- **A re-cut must change.** If the note asks for copy changes and 70% or more of kickers, lines, says and caption paragraphs are unchanged, the writer retries once
+  with a stronger instruction. Still the same: `RecutUnchanged` -> job `failed` with the reason, a Spark thread post, a Spark info alert (`montage.recut-<job>`,
+  no push), the item's "Re-cutting" badge cleared. Nothing identical is filed.
+- **Closing card on request.** A note that mentions the end card / closing card / CTA lets the writer propose the card's sub line and three chips (icon + 1-5 words);
+  they pass `check_end` (lengths, no numerals/prices, `claim_check`) or the brand default stays (`CFG["end"]`). Title stays the product name.
+- **Free graphics, no b-roll money.** Brands with `CFG["icons"]` (Bestly Cloud) make the writer pick one icon per scene from `ICONS` (files, lock, box, people,
+  calendar, chat, key, check, tag, eyeslash; each different). `comp/brand/BrandShort.tsx` draws them as SVG in the brand palette: a glowing disc, a feathered
+  orbiting arc, the icon drawing itself on with a soft spring. Brand flags: `ambient` (slow feathered glows behind everything), `end.heroLogo` + `end.chips`
+  (rich closing card: big logo, product name, one plain line, three icon chips, glowing bestly.tech button). Every glow is a radial gradient to transparent.
+  Unknown icons draw nothing; brands without these props render as before. Re-cuts never order LTX b-roll.
+- **First cuts for Bestly Cloud** (`explain_first`) also open with a scene that says what the product is, and get icons plus the rich closing card.
+- **Self-healing.** If the render with graphics fails, `worker.process` strips the graphics (`_plain`) and renders plain cards instead of losing the job, and posts a
+  Spark info alert (`montage.graphics-<job>`). Both new alert prefixes belong to Spark (`notification_owners`, migration `20261012201000`). The existing
+  `montage-watch` cron and the `montage` heartbeat still cover the worker itself.
+- Backups of the files replaced on the Pi: `*.bak_recut_20261012` next to each (worker.py, brands/_common.py, brands/bestly_cloud.py, comp/brand/*, README.md).
 
 ## Watchdogs
 - cron `montage-watch` every 5 min (requeue stalled jobs 3x, then fail + push; push if work waits and the worker is quiet).
