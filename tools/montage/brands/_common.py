@@ -182,6 +182,8 @@ def check(cfg, p, broll=False):
             e.append(f"scene {i} line must end with a period")
         if not 5 <= _wc(say) <= 18:
             e.append(f"scene {i} say is {_wc(say)} words (want 5-18)")
+        if re.search(r"\b(we|we're|we'll|we've|our|ours|us)\b", f"{line} {say}", re.I):
+            e.append(f"scene {i} says we/our/us: speak to the viewer (you), never as the company")
         if i == 1 and not 1 <= _wc(s.get("kicker")) <= 3:
             e.append("scene 1 needs a kicker of 1-3 words")
         if name.search(f"{s.get('kicker') or ''} {line} {say}"):
@@ -298,6 +300,10 @@ def _parent_script(job):
         return None
     rows = lib.get("studio_video_jobs", f"select=script&id=eq.{job['parent_job_id']}") or []
     return rows[0].get("script") if rows else None
+
+
+def _cap(t):
+    return t[:1].upper() + t[1:]
 
 
 def _norm(t):
@@ -423,8 +429,9 @@ def finish(cfg, p, theme, prov, score, broll=False):
     prop = p.get("end") if isinstance(p.get("end"), dict) else None
     if prop and cfg.get("end_cta_say") and not check_end(cfg, p):          # a proposal that passed the claim rules replaces the brand default
         sub = tidy({"title": prop["sub"]})["title"].strip()
+        sub = sub if sub[-1:] in ".!" else sub + "."
         end["sub"] = glue(sub)
-        end["chips"] = [{"icon": c["icon"], "text": glue(tidy({"title": c["text"]})["title"].strip())} for c in prop["chips"]]
+        end["chips"] = [{"icon": c["icon"], "text": glue(_cap(tidy({"title": c["text"]})["title"].strip().rstrip(".")))} for c in prop["chips"]]
         end["say"] = f"{end['title']}. {sub} {cfg['end_cta_say']}"
         end["proposed"] = True
     return {"title": p.get("title") or scenes[0]["line"], "topic": p.get("topic"), "theme": theme, "scenes": scenes,
