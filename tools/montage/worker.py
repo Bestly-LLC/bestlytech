@@ -618,6 +618,21 @@ def _plain(props):
     return p
 
 
+
+def _approved_recut_broll(job, jid, shots, note):
+    """A re-cut may order b-roll only with an approved dollar amount on the job (budget_usd, set by montage_recut_broll). The whole order is
+    priced as ONE batch (ltx_quote of the summed seconds + the idle tail); if that is above the approved amount nothing is ordered."""
+    approved = float(job.get("budget_usd") or 0)
+    if approved <= 0:
+        raise RuntimeError("this re-cut asks for b-roll but no spend was approved on it (budget_usd is 0); nothing was ordered")
+    secs = sum(s["seconds"] for s in shots)
+    q = lib.rpc("ltx_quote", p_seconds=secs) or {}
+    est = float(q.get("est_usd") or 0) + float(q.get("idle_tail_usd") or 0)
+    note(f"b-roll quote for the re-cut: {len(shots)} clips, {secs} sec, est. ${est:.2f} (approved up to ${approved:.2f})")
+    if est <= 0 or est > approved:
+        raise RuntimeError(f"b-roll quote ${est:.2f} for {secs} sec is above the approved ${approved:.2f}; nothing was ordered")
+
+
 def process(job):
     jid = job["id"]
     jd = f"{JOBS}/{jid}"
@@ -660,9 +675,14 @@ def process(job):
         total, vinfo = voice(brand, script, jd, jid, job["client_slug"])
         _voice_report(jid, vinfo)
         audio_log(job, "done", vinfo)
-        if job.get("broll") and not job.get("parent_job_id") and all(s.get("shot") for s in script["scenes"]):
+        # A new job with broll=true orders clips (Spark asked after a quote and a yes). A RE-CUT orders fresh clips only when its job says
+        # broll=true, and that is set only by montage_recut_broll (it needs an approved dollar amount, stored in budget_usd). The default
+        # re-cut (trigger montage_recut) is broll=false and reuses the parent's clips, $0.
+        if job.get("broll") and all(s.get("shot") for s in script["scenes"]):
             shots = [{"scene": i, "seconds": max(3, min(10, int(s["end"] - s["start"] + 0.99))),
                       "prompt": f"{s['shot']} {brand.SHOT_STYLE}"} for i, s in enumerate(script["scenes"])]
+            if job.get("parent_job_id"):
+                _approved_recut_broll(job, jid, shots, note)
             report(jid, script=script)
             r = lib.rpc("montage_clip_request", p_id=jid, p_shots=shots) or {}
             lib.rpc("montage_post", p_id=jid, body=f"Script and voice are done (\"{script['title']}\", {total:.0f} sec). "

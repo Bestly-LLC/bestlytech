@@ -84,7 +84,7 @@ The current script is below.
 {mode}
 House rules for every re-cut (they override anything above): scene 1 says plainly what the product is and who it is for, in everyday words a
 stranger understands in five seconds (describe it by what it is, without naming {name}: only the closing card and the caption's last paragraph
-name it); no jargon; short sentences; no absolutes (total, complete, perfect, never, always, guaranteed, nobody); use only the facts above, invent nothing. Where the note asks for a change, the new script must read
+name it); no jargon; short sentences; no absolutes (total, complete, perfect, never, always, guaranteed, nobody); use only the facts above, invent nothing. Where the note asks for new wording, the new script must read
 clearly different from the current one.{end_ask}
 Reply with the whole script in the same JSON shape.
 Current script:
@@ -92,11 +92,20 @@ Current script:
 MODE_BROAD = ("The note criticizes the writing itself, so do not patch it. Throw the current wording away and rewrite EVERY scene (kicker, line, say) "
               "and the caption from scratch: same facts, same length limits, same number of scenes (4 or 5), same JSON shape. Do not reuse any "
               "current line, say or caption sentence.")
+MODE_KEEP = ("The note says to KEEP the current copy: return every kicker, line, say, icon and the whole caption word for word, same number of scenes. "
+             "Change only what the note asks for besides the words (the shot for each scene when b-roll is wanted, and the closing card).")
+SHOT_ASK = (' B-roll is being added: every scene needs a NEW "shot" (15 to 45 words of moving footage, as the shot rules above say), '
+            'even though the scene lines stay as they are.')
 MODE_NARROW = ("Apply the note and change only what it asks for: keep the number of scenes and every kicker, line, say, icon and shot the note "
                "does not touch, word for word.")
 END_ASK = (' The note mentions the closing card, so also add an "end" object to the JSON: {{"sub": "one plain sentence of 6 to 14 words saying what '
-           '{name} is and does, for a stranger", "chips": [{{"icon": "<icon word>", "text": "1 to 5 words, at most 25 letters"}}, '
-           '...exactly three chips, each a different plain benefit taken from the facts]}}. No absolutes (total, complete, never, always). The closing card title stays "{name}".')
+           '{name} is and does, for a stranger", "chips": [{{"icon": "<icon word>", "text": "2 to 4 words, at most 24 letters"}}, '
+           '...exactly three chips, each a different plain benefit taken from the facts]}}. Write each chip so a small-business owner who is not technical '
+           'gets it in one second: a concrete thing they get, in everyday words (examples: "Files, calendar, chat" / "No per-person fees" / "A box you own"). '
+           'No jargon (hardware, server, appliance, platform), no vague words (single, simple, powerful, secure), no absolutes (total, complete, never, always). '
+           'Each chip\'s icon must match what the chip says: files = files or documents; calendar = scheduling; chat = messages; key = passwords; '
+           'tag = fees or pricing; box = a box you own; people = support, staff or accounts; check = handled for you; lock = private. '
+           'The closing card title stays "{name}".')
 STRONGER = ("Not good enough: {pct}% of your lines are still the same as the current script, and the reviewer asked for a different one. Start from a "
             "blank page. Write every kicker, line and say in new words, with a new opening and a new caption (different sentences, not the old ones "
             "rearranged). Scene 1 must say plainly what the product is and who it is for. Reply with the JSON only.")
@@ -105,7 +114,9 @@ _BROAD = (r"copy|writing|wording|script|hook|headline|bland|boring|generic|vague
           r"understand\w*|dumb\w*|sucks?|bad|weak|rewrite|rewrit\w*|exciting|clearest|what you do|what it does")
 BROAD_NOTE = re.compile(rf"\b({_BROAD})\b", re.I)
 COPY_NOTE = re.compile(rf"\b({_BROAD}|words?|text|lines?|captions?|messag\w*|clear\w*|simpl\w*|explain\w*|say|said|tone|voice)\b", re.I)
-END_NOTE = re.compile(r"\b(end card|end screen|closing card|closing screen|outro|last card|final card|ending card|end slate|cta|call to action)\b", re.I)
+END_NOTE = re.compile(r"\b(end[- ]?card|end[- ]?screen|closing[- ]?card|closing screen|outro|last card|final card|ending card|end slate|chips?|cta|call to action)\b", re.I)
+# "keep the current copy": the note wants the words untouched (it may still ask for b-roll or a new end card)
+KEEP_NOTE = re.compile(r"\b(keep|leave|preserve)\b[^.]{0,30}\b(copy|script|lines?|words|wording|text|narration)\b", re.I)
 SAME_LIMIT = 0.70
 
 
@@ -236,6 +247,47 @@ def check(cfg, p, broll=False):
     return _claims(cfg, pieces)
 
 
+# --- end-card chips (2026-10-12): plain, concrete, and the icon must say the same thing as the words --------------------------------------
+# Each rule: (what the chip is about, words that show it, the icons that mean it). A chip must match at least one rule (else it is vague) and its
+# icon must be one of the icons of the rules it matches. The old BC05 chips ("Single account", "You own hardware" with an eye-slash) fail both ways.
+CHIP_TOPICS = [
+    ("fees", r"fees?|pric\w*|costs?|pay|paying|bills?|subscriptions?|seats?|per[- ](?:person|user|seat)|cheaper", {"tag"}),
+    ("files", r"files?|folders?|documents?|docs|storage|photos?", {"files"}),
+    ("calendar", r"calendars?|schedul\w*|appointments?|meetings?|bookings?", {"calendar"}),
+    ("chat", r"chat|messag\w*|texts?|talk", {"chat"}),
+    ("passwords", r"passwords?|vault|logins?", {"key", "lock"}),
+    ("own", r"own|owns|owned|yours|ownership|on-?site|office|in-?house", {"box"}),
+    ("people", r"support|help|staff|team|people|person|users?|accounts?|experts?|runs?|managed", {"people"}),
+    ("handled", r"backups?|updates?|monitor\w*|handled|looked|protected", {"check"}),
+    ("private", r"private|privacy|secret|snoop\w*|watch\w*|track\w*", {"lock", "eyeslash"}),
+]
+CHIP_VAGUE = re.compile(r"\b(single|hardware|servers?|appliance|platform|solution|seamless|powerful|robust|easy|easier|simple|smart|best|better|great|"
+                        r"modern|all-in-one|everything|infrastructure|ecosystem|self-hosted|encrypt\w*|secure|unlimited|fast\w*|speed|free|cheap\w*|"
+                        r"hipaa|soc|compliance|ai|alerts?|restore|guarantee\w*)\b", re.I)
+
+
+def chip_problems(cfg, c):
+    """Why one end-card chip {icon, text} is not allowed ([] when fine): 2-4 plain words, a concrete topic, an icon that matches the topic."""
+    c = c if isinstance(c, dict) else {}
+    t = (c.get("text") or "").strip()
+    icon = c.get("icon")
+    e = []
+    if icon not in (cfg.get("icons") or []):
+        e.append(f"icon '{icon}' must be exactly one of: {', '.join(cfg.get('icons') or [])}")
+    if not 2 <= _wc(t) <= 4 or len(t) > 24:
+        e.append(f"text '{t}' must be 2-4 words and at most 24 letters")
+    if CHIP_VAGUE.search(t):
+        e.append(f"text '{t}' is vague or jargon ('{CHIP_VAGUE.search(t).group(0)}'): name a concrete thing the owner gets")
+    topics = [(n, ic) for n, rx, ic in CHIP_TOPICS if re.search(rf"\b({rx})\b", t, re.I)]
+    if not topics:
+        e.append(f"text '{t}' names nothing concrete (files, calendar, chat, passwords, fees, owning the box, support, backups, privacy)")
+    elif icon in (cfg.get("icons") or []):
+        ok = set().union(*(ic for _, ic in topics))
+        if icon not in ok:
+            e.append(f"icon '{icon}' does not match '{t}' (it is about {', '.join(n for n, _ in topics)}): use {' or '.join(sorted(ok))}")
+    return e
+
+
 def check_end(cfg, p):
     """Errors (all start with 'end card') for the closing-card sub line + chips the writer proposed on a re-cut. [] when fine or none proposed."""
     end = p.get("end")
@@ -252,15 +304,13 @@ def check_end(cfg, p):
         return e + ["end card needs 3 chips (a list of {icon, text})"]
     texts = []
     for i, c in enumerate(chips, 1):
-        c = c if isinstance(c, dict) else {}
-        t = (c.get("text") or "").strip()
-        texts.append(t)
-        if c.get("icon") not in (cfg.get("icons") or []):
-            e.append(f"end card chip {i} needs an icon that is exactly one of: {', '.join(cfg.get('icons') or [])}")
-        if not 1 <= _wc(t) <= 5 or len(t) > 25:
-            e.append(f"end card chip {i} text '{t}' must be 1-5 words and at most 25 letters")
+        texts.append(((c or {}).get("text") or "").strip() if isinstance(c, dict) else "")
+        e += [f"end card chip {i}: {x}" for x in chip_problems(cfg, c)]
     if len(set(x.lower() for x in texts)) != len(texts):
         e.append("end card chips must say different things")
+    ic = [c.get("icon") for c in chips if isinstance(c, dict)]
+    if len(set(ic)) != len(ic):
+        e.append("end card chips need a different icon each")
     blob = " ".join([sub] + texts)
     if "?" in blob or "#" in blob or EMOJI.search(blob) or re.search(r"\d", blob):
         e.append("end card text: no questions, hashtags, emoji or numerals")
@@ -272,6 +322,16 @@ def check_end(cfg, p):
         return e
     return [f"end card: {x}" if not x.startswith("end card") else x
             for x in _claims(cfg, [("end card sub", sub)] + [(f"end card chip {i}", t) for i, t in enumerate(texts, 1)])]
+
+
+def default_chip_problems(cfg):
+    """The brand's own default chips must pass the same validator (a bad default is a code bug: the job stops with a clear reason)."""
+    chips = (cfg.get("end") or {}).get("chips") or []
+    out = [f"default chip {i} ({c.get('text')}): {x}" for i, c in enumerate(chips, 1) for x in chip_problems(cfg, c)]
+    ic = [c.get("icon") for c in chips]
+    if len(set(ic)) != len(ic):
+        out.append("default chips need a different icon each")
+    return out
 
 
 def review(cfg, p, deadline):
@@ -388,8 +448,12 @@ def write(job, log, cfg):
                         icon_key=', "icon": "..."' if icons else "",
                         shot_rule=SHOT_RULE.format(shot_brand=cfg["shot_brand"]) if broll else "",
                         shot_key=', "shot": "..."' if broll else "")
+    bad_default = default_chip_problems(cfg)
+    if bad_default:
+        raise RuntimeError("the brand's default end-card chips are not allowed: " + "; ".join(bad_default)[:400])
     note = _clean_note(job.get("revise_note"))
-    wants_copy = bool(parent) and bool(COPY_NOTE.search(note))
+    keep_copy = bool(parent) and bool(KEEP_NOTE.search(note))
+    wants_copy = bool(parent) and bool(COPY_NOTE.search(note)) and not keep_copy
     if parent:
         tail = cfg.get("tail") or ""
         cap = parent.get("caption") or ""
@@ -399,12 +463,20 @@ def write(job, log, cfg):
                            for sc in parent.get("scenes", [])]}
         end_ask = END_ASK.format(name=cfg["name"]) if (icons and cfg.get("end_cta_say") and END_NOTE.search(note)) else ""
         system += REVISE.format(note=note, name=cfg["name"], end_ask=end_ask, script=json.dumps(keep, indent=1, ensure_ascii=False),
-                                mode=MODE_BROAD if BROAD_NOTE.search(note) else MODE_NARROW)
+                                mode=(MODE_KEEP if keep_copy else MODE_BROAD if BROAD_NOTE.search(note) else MODE_NARROW)
+                                     + (SHOT_ASK if broll and not any(sc.get("shot") for sc in parent.get("scenes", [])) else ""))
         user = "Re-cut it now."
     msgs = [{"role": "system", "content": playbook.add(system)},
             {"role": "user", "content": user or f"This is the first {cfg['name']} video."}]
     deadline = time.time() + 1200
     p, prov, score = _loop(cfg, msgs, broll, deadline, log)
+    if keep_copy:       # the note says keep the words: whatever the model returned, the words are the current ones; it only supplies shots + end card
+        if len(p["scenes"]) != len(keep["scenes"]):
+            raise RuntimeError(f"keep-the-copy re-cut came back with {len(p['scenes'])} scenes instead of {len(keep['scenes'])}")
+        for new_sc, old_sc in zip(p["scenes"], keep["scenes"]):
+            new_sc.update({k: old_sc.get(k, "") for k in ("kicker", "line", "say") + (("icon",) if icons else ())})
+        p["caption"], p["title"], p["topic"] = keep["caption"], keep["title"], keep["topic"]
+        log("keep-the-copy re-cut: scene words and caption restored from the current script; kept the new shots and end card")
     out = finish(cfg, p, theme, prov, score, broll)
     if wants_copy:
         share = same_share(parent, out, cfg.get("tail") or "")
