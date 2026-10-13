@@ -1,6 +1,7 @@
 /**
  * In-car welcome card: how many guests scan the QR on the card left with the free water, and who got into their trip
- * from it. Data: card_scans via card_scans_admin (migration 20261012050000). Scans come from /turo-key?src=card.
+ * from it. Data: card_scans via card_scans_admin (migration 20261012050000). Scans come from /turo-key?src=card
+ * (Home + LAX cards) and /turo-key?src=delivery (the cream card left on delivered cars).
  * Jared's own test scans show as "Your test" in the list and never count. Watchdog: Card QR Watch (tool of Leo).
  */
 import { useCallback, useEffect, useState } from "react";
@@ -56,7 +57,7 @@ export function CardScans() {
                           <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", host ? "bg-white/30" : r.signed_in_at ? "bg-[#30D158]" : "bg-[#FFD60A]")} aria-hidden />
                           <span className="min-w-0 flex-1 text-[15px] text-white">{who}
                             {r.device && <span className="text-white/50"> · {r.device}</span>}
-                            {r.kind === "lax" && <span className="text-white/50"> · LAX</span>}</span>
+                            {r.src === "delivery" ? <span className="text-white/50"> · Delivery</span> : r.kind === "lax" && <span className="text-white/50"> · LAX</span>}</span>
                           <span className="shrink-0 whitespace-nowrap text-[13px] tabular-nums text-white/50">{at12(r.scanned_at)}</span>
                         </li>
                       );
