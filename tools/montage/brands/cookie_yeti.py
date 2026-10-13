@@ -16,6 +16,7 @@ GROUNDS = {"plum": ("#250F37", "#3A1F5C"), "wine": ("#300D19", "#4A1A2C"), "fore
 THEMES = list(GROUNDS)
 CFG = {
     "slug": "cookie-yeti", "name": NAME, "claim": _B["claim"], "about": _B["about"], "lessons_brand": "cookieyeti",
+    "mood": "playful",   # music bed fallback when the writer gives none (music.py)
     "themes": THEMES, "tail": _B["hashtags"], "name_patterns": [r"cookie\s*yeti", r"\byeti\b"],
     "shot_brand": ("Real-world stand-ins only: a quiet desk and a closed laptop, a hand closing a door, a window at dusk, "
                    "fog over a hillside, a mailbox. Never a browser, banner, cookie, button or anything on a screen."),

@@ -19,6 +19,7 @@ THEMES = ["night"]
 ICONS = ["files", "lock", "box", "people", "calendar", "chat", "key", "check", "tag", "eyeslash"]
 CFG = {
     "slug": "bestly-cloud", "name": NAME, "claim": "bestly-cloud", "about": bs.PRODUCT, "lessons_brand": None,
+    "mood": "confident",   # music bed fallback when the writer gives none (music.py)
     "themes": THEMES, "tail": "", "name_patterns": [r"\bbestly\b"], "icons": ICONS, "explain_first": True, "no_absolutes": True,
     "shot_brand": ("A small business at work, seen from behind or in close-up: a workshop bench, a shop counter, a studio desk, "
                    "a shelf with one small box with a softly glowing light, cables tidied. Never a readable screen or label."),
