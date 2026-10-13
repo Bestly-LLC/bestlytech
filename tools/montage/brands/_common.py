@@ -140,6 +140,10 @@ def tidy(p):
     return p
 
 
+ABSOLUTE = re.compile(r"\b(never|nobody|no one|none|always|completely|fully|totally|entirely|strictly|guaranteed?|perfect(?:ly)?|unlimited|"
+                      r"any ?time|every single|hidden|only you)\b", re.I)
+
+
 def _wc(t):
     return len((t or "").split())
 
@@ -221,6 +225,9 @@ def check(cfg, p, broll=False):
         e.append("no statistics, percentages or prices")
     if BAIT.search(blob):
         e.append("no engagement-bait phrases: " + BAIT.search(blob).group(0))
+    if cfg.get("no_absolutes") and ABSOLUTE.search(blob):
+        e.append(f"no absolutes: you wrote '{ABSOLUTE.search(blob).group(0)}' (never / nobody / always / fully / completely / any time...): say the plain, "
+                 "smaller, true thing instead")
     if re.search(r"https?://|www\.|\.com\b|\.tech\b", blob, re.I):
         e.append("no links")
     if e:
@@ -259,6 +266,8 @@ def check_end(cfg, p):
         e.append("end card text: no questions, hashtags, emoji or numerals")
     if STATS.search(blob) or PRICE.search(blob) or BAIT.search(blob) or re.search(r"https?://|www\.|\.com\b|\.tech\b", blob, re.I):
         e.append("end card text: no statistics, prices, bait phrases or links")
+    if cfg.get("no_absolutes") and ABSOLUTE.search(blob):
+        e.append(f"end card text: no absolutes, you wrote '{ABSOLUTE.search(blob).group(0)}'")
     if e:
         return e
     return [f"end card: {x}" if not x.startswith("end card") else x
