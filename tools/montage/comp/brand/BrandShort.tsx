@@ -9,6 +9,10 @@
 // 2026-10-13 (Bestly Agent ad): optional `accent2` in a theme (second glow color), `brand.hlNumbers` (prices and counts in the
 // accent color), `brand.end.orb` (Maya's orb as the closing-card hero), a scene `card` (a phone call card: ringing, missed or
 // answered, with a fictional caller's portrait and a made-up business logo), and the icons phone, missedcall, apps, globe.
+// 2026-10-13 (unique content, docs/studio-unique-content-opusplan.md): every video gets its own LOOK from the worker (variety.py).
+// Scene templates (stack, center, split, stat, steps), three icon styles (orbit, badge, rings), three closing-card layouts (list, claim, qa),
+// an accent override per video (props.look), a subtle series tag ("Tip 3 of 8") and a "Next:" tease + follow line on the closing card.
+// Every new prop is optional: props without them draw exactly what this file drew before.
 import React, {useEffect, useState} from 'react';
 import {
   AbsoluteFill, Audio, CalculateMetadataFunction, Img, OffthreadVideo, Sequence, continueRender, delayRender,
@@ -16,9 +20,13 @@ import {
 } from 'remotion';
 
 export type CallCard = {kind: 'missed' | 'answered'; name: string; place: string; photo?: string; logo?: string};
-export type Scene = {kicker?: string; line: string; sub?: string; start: number; end: number; clip?: string; icon?: string; card?: CallCard};
+export type Layout = 'stack' | 'center' | 'split' | 'stat' | 'steps' | 'card';
+export type Scene = {kicker?: string; line: string; sub?: string; start: number; end: number; clip?: string; icon?: string; card?: CallCard;
+                     layout?: Layout; big?: string; items?: string[]};
 export type Chip = {icon: string; text: string};
-export type EndCard = {title: string; sub?: string; cta: string; start: number; end: number; chips?: Chip[]};
+export type EndCard = {title: string; sub?: string; cta: string; start: number; end: number; chips?: Chip[];
+                       layout?: 'list' | 'claim' | 'qa'; recap?: {q: string; a: string}; tease?: string; follow?: string};
+export type Look = {iconStyle?: 'orbit' | 'badge' | 'rings'; accent?: string | null; accent2?: string | null; series?: string | null};
 export type Theme = {bg: string; veil: string; ink: string; dim: string; accent: string; accent2?: string; head?: string};
 export type Brand = {
   fonts: {family: string; file: string; weight: string}[];
@@ -36,6 +44,7 @@ export type Brand = {
 };
 export type BrandProps = {
   brand: Brand;
+  look?: Look;
   theme: string;
   scenes: Scene[];
   end: EndCard | null;
@@ -112,6 +121,34 @@ export const ICONS: Record<string, Seg[]> = {
   tag: [F(TAG), S(TAG), H(circle(72, 28, 5)), H('M20 22 L80 82')],
   eyeslash: [F(EYE), S(EYE), S(circle(50, 50, 10)), H('M20 82 L80 18')],
 };
+// 2026-10-13: icons for the other brands (Feather paths, MIT, drawn in a 24x24 box and scaled into the 100x100 box) and a few custom ones.
+const F24 = (d: string) => at(F(d), 3.5, 8, 8);
+const S24 = (d: string) => at(S(d), 3.5, 8, 8);
+const H24 = (d: string) => at(H(d), 3.5, 8, 8);
+const c24 = (cx: number, cy: number, r: number) => circle(cx, cy, r);
+const CAMERA = 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z';
+const HOME = 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z';
+const SHIELD = 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z';
+const STAR = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z';
+const PENCIL = 'M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z';
+const PKG = 'M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z';
+const RECEIPT = 'M26 12 H74 V88 L66 81 L58 88 L50 81 L42 88 L34 81 L26 88 Z';
+const PLATE = rr(14, 32, 72, 36, 18);
+Object.assign(ICONS, {
+  camera: [F24(CAMERA), S24(CAMERA), H24(c24(12, 13, 4)), D(50, 55, 3, true)],
+  home: [F24(HOME), S24(HOME), H24('M9 22V12h6v10')],
+  receipt: [F(RECEIPT), S(RECEIPT), H('M36 32 H64'), H('M36 46 H64'), H('M36 60 H54')],
+  list: [F(rr(18, 16, 64, 68, 10)), S(rr(18, 16, 64, 68, 10)), D(34, 36, 3.6, true), H('M46 36 H68'), D(34, 52, 3.6, true), H('M46 52 H68'), D(34, 68, 3.6, true), H('M46 68 H60')],
+  package: [F24(PKG), S24(PKG), H24('M3.27 6.96L12 12.01l8.73-5.05'), H24('M12 22.08V12'), H24('M16.5 9.4l-9-5.19')],
+  image: [F(rr(16, 16, 68, 68, 10)), S(rr(16, 16, 68, 68, 10)), H(circle(36, 36, 6)), H('M84 62 L64 42 L22 84')],
+  shield: [F24(SHIELD), S24(SHIELD), H24('M8.5 12l2.5 2.5 4.5-5')],
+  cookie: [F(circle(50, 50, 36)), S(circle(50, 50, 36)), D(38, 40, 4.4), D(62, 36, 3.8), D(44, 62, 4.4, true), D(66, 58, 3.8), D(30, 58, 3)],
+  toggle: [F(PLATE), S(PLATE), D(68, 50, 12, true), H('M26 50 H40')],
+  clock: [F24(c24(12, 12, 10)), S24(c24(12, 12, 10)), H24('M12 6v6l4 2')],
+  video: [F24(rr(1, 5, 15, 14, 2)), S24(rr(1, 5, 15, 14, 2)), S24('M23 7l-7 5 7 5V7z'), D(26, 33, 3, true)],
+  pencil: [F24(PENCIL), S24(PENCIL), H24('M15 5l4 4')],
+  star: [F24(STAR), S24(STAR)],
+});
 export const ICON_NAMES = Object.keys(ICONS);
 
 const Icon: React.FC<{name?: string; t: Theme; draw: number; size: number}> = ({name, t, draw, size}) => {
@@ -136,8 +173,65 @@ const Icon: React.FC<{name?: string; t: Theme; draw: number; size: number}> = ({
   );
 };
 
+const LookCtx = React.createContext<Look>({});
+
+// Icon style 2 ("badge"): a soft rounded tile with a thin edge and a gentle float, a small spark at one corner. Edges fade into the glow.
+const EmblemBadge: React.FC<{name: string; t: Theme; size: number; delay?: number; dur: number}> = ({name, t, size, delay = 0, dur}) => {
+  const f = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const enter = spring({frame: f - delay, fps, config: {damping: 13, stiffness: 90, mass: 0.9}});
+  const draw = spring({frame: f - delay - 6, fps, config: {damping: 200, stiffness: 38}});
+  const out = interpolate(f, [dur - 10, dur], [1, 0], clamp);
+  const float = Math.sin(f / 26) * size * 0.025;
+  const tile = size * 0.82;
+  const a2 = t.accent2 || t.accent;
+  const sp = 0.5 + 0.5 * Math.sin(f / 11);
+  return (
+    <div style={{position: 'relative', width: size, height: size, opacity: Math.min(1, enter) * out,
+                 transform: `translateY(${float + (1 - Math.min(1, enter)) * 60}px) scale(${0.7 + 0.3 * enter}) rotate(${(1 - Math.min(1, enter)) * -8}deg)`}}>
+      <div style={{position: 'absolute', inset: -size * 0.38, background: `radial-gradient(circle, ${rgba(t.accent, 0.3)} 0%, ${rgba(t.accent, 0.1)} 38%, ${rgba(t.accent, 0)} 68%)`}} />
+      <div style={{position: 'absolute', left: (size - tile) / 2, top: (size - tile) / 2, width: tile, height: tile, borderRadius: tile * 0.3,
+                   background: `linear-gradient(145deg, ${rgba(t.accent, 0.3)} 0%, ${rgba(a2, 0.1)} 100%)`,
+                   boxShadow: `inset 0 0 0 2px ${rgba(t.accent, 0.45)}, 0 0 ${size * 0.2}px ${rgba(t.accent, 0.25)}`}} />
+      <div style={{position: 'absolute', right: size * 0.02, top: size * 0.02, width: size * 0.2, height: size * 0.2,
+                   background: `radial-gradient(circle, ${rgba(a2, 0.95)} 0%, ${rgba(a2, 0.3)} 42%, ${rgba(a2, 0)} 72%)`, opacity: 0.45 + 0.5 * sp,
+                   transform: `scale(${0.8 + 0.3 * sp})`}} />
+      <div style={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+        <Icon name={name} t={t} draw={draw} size={size * 0.54} />
+      </div>
+    </div>
+  );
+};
+
+// Icon style 3 ("rings"): soft rings that spread out from a glowing core, like a ripple; the icon draws on in the middle.
+const EmblemRings: React.FC<{name: string; t: Theme; size: number; delay?: number; dur: number}> = ({name, t, size, delay = 0, dur}) => {
+  const f = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const enter = spring({frame: f - delay, fps, config: {damping: 16, stiffness: 80, mass: 0.9}});
+  const draw = spring({frame: f - delay - 5, fps, config: {damping: 200, stiffness: 38}});
+  const out = interpolate(f, [dur - 10, dur], [1, 0], clamp);
+  return (
+    <div style={{position: 'relative', width: size, height: size, opacity: Math.min(1, enter) * out, transform: `scale(${0.6 + 0.4 * enter})`}}>
+      <div style={{position: 'absolute', inset: -size * 0.45, background: `radial-gradient(circle, ${rgba(t.accent, 0.3)} 0%, ${rgba(t.accent, 0.09)} 40%, ${rgba(t.accent, 0)} 68%)`}} />
+      {[0, 1, 2].map((k) => {
+        const p = (((f - k * 24) % 72) + 72) % 72 / 72;
+        const grow = 0.62 + 0.62 * p;
+        return (
+          <div key={k} style={{position: 'absolute', inset: 0, transform: `scale(${grow})`, opacity: (1 - p) * 0.95,
+                               background: `radial-gradient(circle, ${rgba(t.accent, 0)} 55%, ${rgba(t.accent, 0.5)} 63%, ${rgba(t.accent, 0)} 72%)`}} />
+        );
+      })}
+      <div style={{position: 'absolute', inset: size * 0.16, borderRadius: '50%',
+                   background: `radial-gradient(circle at 50% 42%, ${rgba(t.accent, 0.34)} 0%, ${rgba(t.accent, 0.1)} 66%, ${rgba(t.accent, 0)} 100%)`}} />
+      <div style={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+        <Icon name={name} t={t} draw={draw} size={size * 0.56} />
+      </div>
+    </div>
+  );
+};
+
 // A glowing disc with a slow arc orbiting it and the icon drawing itself on inside. Everything fades to transparent.
-const Emblem: React.FC<{name: string; t: Theme; size: number; delay?: number; dur: number}> = ({name, t, size, delay = 0, dur}) => {
+const EmblemOrbit: React.FC<{name: string; t: Theme; size: number; delay?: number; dur: number}> = ({name, t, size, delay = 0, dur}) => {
   const f = useCurrentFrame();
   const {fps} = useVideoConfig();
   const enter = spring({frame: f - delay, fps, config: {damping: 15, stiffness: 80, mass: 0.9}});
@@ -170,6 +264,11 @@ const Emblem: React.FC<{name: string; t: Theme; size: number; delay?: number; du
       </div>
     </div>
   );
+};
+
+const Emblem: React.FC<{name: string; t: Theme; size: number; delay?: number; dur: number}> = (p) => {
+  const k = React.useContext(LookCtx).iconStyle;
+  return k === 'badge' ? <EmblemBadge {...p} /> : k === 'rings' ? <EmblemRings {...p} /> : <EmblemOrbit {...p} />;
 };
 
 // Big slow glows drifting behind everything (brand.ambient).
@@ -292,26 +391,182 @@ const CallCardView: React.FC<{c: CallCard; t: Theme; b: Brand; dur: number}> = (
 
 const lineSize = (b: Brand, text: string) => (text.length > 44 ? b.head.sizes[2] : text.length > 28 ? b.head.sizes[1] : b.head.sizes[0]);
 
-const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b, t, dur}) => {
+// The pieces every scene template is built from.
+const KickerBlock: React.FC<{s: Scene; b: Brand; t: Theme; dur: number; center?: boolean}> = ({s, b, t, dur, center}) => {
   const f = useCurrentFrame();
   const {fps} = useVideoConfig();
-  const drift = interpolate(f, [0, dur], [0, -16]);                  // slow upward drift keeps a still card alive
   const rule = spring({frame: f - 6, fps, config: {damping: 200, stiffness: 60}});
-  const size = lineSize(b, s.line);
+  if (!s.kicker) return null;
+  return (
+    <Rise delay={0} dur={dur} style={center ? {display: 'flex', flexDirection: 'column', alignItems: 'center'} : undefined}>
+      <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 34, letterSpacing: '0.16em', textTransform: 'uppercase', color: t.accent}}>
+        {s.kicker}
+      </div>
+      <div style={{height: 3, width: 150 * rule, opacity: 0.8, margin: '30px 0 46px',
+                   background: center ? `linear-gradient(90deg, ${rgba(t.accent, 0)}, ${t.accent}, ${rgba(t.accent, 0)})` : `linear-gradient(90deg, ${t.accent}, ${rgba(t.accent, 0)})`}} />
+    </Rise>
+  );
+};
+
+const LineBlock: React.FC<{s: Scene; b: Brand; t: Theme; dur: number; scale?: number; center?: boolean; delay?: number}> = ({s, b, t, dur, scale = 1, center, delay = 5}) => (
+  <Rise delay={delay} dur={dur}>
+    <div style={{fontFamily: b.head.family, fontWeight: b.head.weight, fontSize: Math.round(lineSize(b, s.line) * scale), lineHeight: 1.1, letterSpacing: b.head.spacing,
+                 color: t.head || t.ink, maxWidth: 888, overflowWrap: 'break-word', textWrap: 'balance' as any, textAlign: center ? 'center' : 'left'}}>
+      <Headline text={s.line} t={t} on={b.hlNumbers} />
+    </div>
+  </Rise>
+);
+
+const SubBlock: React.FC<{s: Scene; b: Brand; t: Theme; dur: number; center?: boolean}> = ({s, b, t, dur, center}) =>
+  s.sub ? (
+    <Rise delay={12} dur={dur}>
+      <div style={{fontFamily: b.label.family, fontSize: 44, lineHeight: 1.36, color: t.dim, marginTop: 46, maxWidth: 860, textAlign: center ? 'center' : 'left'}}>{s.sub}</div>
+    </Rise>
+  ) : null;
+
+// A small icon (no disc) that draws itself on: used inside the stat and steps templates.
+const MiniIcon: React.FC<{name?: string; t: Theme; size: number; delay?: number; dur: number}> = ({name, t, size, delay = 4, dur}) => {
+  const f = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const draw = spring({frame: f - delay, fps, config: {damping: 200, stiffness: 38}});
+  const out = interpolate(f, [dur - 10, dur], [1, 0], clamp);
+  if (!name || !ICONS[name]) return null;
+  return (
+    <div style={{position: 'relative', width: size, height: size, opacity: out}}>
+      <div style={{position: 'absolute', inset: -size * 0.5, background: `radial-gradient(circle, ${rgba(t.accent, 0.3)} 0%, ${rgba(t.accent, 0)} 66%)`}} />
+      <Icon name={name} t={t} draw={draw} size={size} />
+    </div>
+  );
+};
+
+const bigSize = (w: string) => (w.length <= 5 ? 360 : w.length <= 8 ? 280 : w.length <= 12 ? 210 : 160);
+
+const StatBig: React.FC<{text: string; t: Theme; b: Brand; dur: number}> = ({text, t, b, dur}) => {
+  const f = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const pop = spring({frame: f - 3, fps, config: {damping: 13, stiffness: 95, mass: 0.9}});
+  const out = interpolate(f, [dur - 10, dur], [1, 0], clamp);
+  return (
+    <div style={{opacity: Math.min(1, pop) * out, transform: `scale(${0.82 + 0.18 * Math.min(1.04, pop)})`, transformOrigin: 'left center',
+                 fontFamily: b.head.family, fontWeight: b.head.weight, fontSize: bigSize(text), lineHeight: 0.98, letterSpacing: b.head.spacing,
+                 color: t.accent, textShadow: `0 0 90px ${rgba(t.accent, 0.5)}`, overflowWrap: 'break-word', maxWidth: 888}}>
+      {text}
+    </div>
+  );
+};
+
+const StepRow: React.FC<{n: number; text: string; t: Theme; b: Brand; delay: number}> = ({n, text, t, b, delay}) => {
+  const f = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const s = spring({frame: f - delay, fps, config: {damping: 16, stiffness: 85, mass: 0.9}});
+  const o = Math.min(1, s);
+  return (
+    <div style={{display: 'flex', alignItems: 'center', gap: 38, opacity: o, transform: `translateX(${(1 - s) * -80}px)`}}>
+      <div style={{position: 'relative', width: 104, height: 104, flex: '0 0 104px'}}>
+        <div style={{position: 'absolute', inset: -26, background: `radial-gradient(circle, ${rgba(t.accent, 0.38)} 0%, ${rgba(t.accent, 0)} 68%)`}} />
+        <div style={{position: 'absolute', inset: 0, borderRadius: '50%', boxShadow: `inset 0 0 0 3px ${rgba(t.accent, 0.8)}`, background: rgba(t.accent, 0.14),
+                     display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: b.head.family, fontWeight: b.head.weight, fontSize: 58, color: t.accent}}>{n}</div>
+      </div>
+      <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 60, lineHeight: 1.12, color: t.ink, maxWidth: 740, textWrap: 'balance' as any}}>{text}</div>
+    </div>
+  );
+};
+
+const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b, t, dur}) => {
+  const f = useCurrentFrame();
+  const drift = interpolate(f, [0, dur], [0, -16]);                  // slow upward drift keeps a still card alive
   const hasCard = !!s.card;
   const hasIcon = !hasCard && !!(s.icon && ICONS[s.icon]);
+  const lay: Layout = hasCard ? 'card' : (s.layout as Layout) || 'stack';
   // b-roll: dissolves in and out through the card color, under a veil of it so the line always reads
   const clipIn = interpolate(f, [0, 8, dur - 8, dur], [0, 1, 1, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
   const zoom = interpolate(f, [0, dur], [1.0, 1.06]);
+  const bg = s.clip ? (
+    <AbsoluteFill style={{opacity: clipIn}}>
+      <OffthreadVideo src={staticFile(s.clip)} muted
+                      style={{width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${zoom})`}} />
+      <AbsoluteFill style={{background: `linear-gradient(180deg, ${t.veil}6B 0%, ${t.veil}C2 40%, ${t.veil}C2 62%, ${t.veil}85 100%)`}} />
+    </AbsoluteFill>
+  ) : null;
+  const emblem = hasIcon ? <Emblem name={s.icon as string} t={t} size={s.kicker ? 400 : 440} dur={dur} /> : null;
+
+  if (lay === 'center') {
+    return (
+      <AbsoluteFill>
+        {bg}
+        <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center', alignItems: 'center'}}>
+          <div style={{transform: `translateY(${drift}px)`, marginTop: hasIcon ? -30 : -100, display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+            {emblem ? <div style={{marginBottom: 54}}>{emblem}</div> : null}
+            <KickerBlock s={s} b={b} t={t} dur={dur} center />
+            <LineBlock s={s} b={b} t={t} dur={dur} center />
+            <SubBlock s={s} b={b} t={t} dur={dur} center />
+          </div>
+        </AbsoluteFill>
+      </AbsoluteFill>
+    );
+  }
+  if (lay === 'split') {
+    const hair = interpolate(spring({frame: f - 4, fps: 30, config: {damping: 200, stiffness: 50}}), [0, 1], [0, 1]);
+    return (
+      <AbsoluteFill>
+        {bg}
+        <AbsoluteFill style={{padding: '0 96px', justifyContent: 'flex-start'}}>
+          <div style={{transform: `translateY(${drift}px)`, marginTop: 330}}>
+            <KickerBlock s={s} b={b} t={t} dur={dur} />
+            <LineBlock s={s} b={b} t={t} dur={dur} />
+            <SubBlock s={s} b={b} t={t} dur={dur} />
+          </div>
+        </AbsoluteFill>
+        <div style={{position: 'absolute', left: 96, right: 96, top: 1090, height: 2, transform: `scaleX(${hair})`, transformOrigin: 'left center',
+                     background: `linear-gradient(90deg, ${rgba(t.accent, 0.7)}, ${rgba(t.accent, 0)})`}} />
+        <AbsoluteFill style={{justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 250}}>
+          {emblem || (
+            <div style={{width: 460, height: 460, opacity: 0.9,
+                         background: `radial-gradient(circle, ${rgba(t.accent, 0.3)} 0%, ${rgba(t.accent, 0.1)} 40%, ${rgba(t.accent, 0)} 68%)`,
+                         transform: `scale(${1 + 0.04 * Math.sin(f / 20)})`}} />
+          )}
+        </AbsoluteFill>
+      </AbsoluteFill>
+    );
+  }
+  if (lay === 'stat' && s.big) {
+    return (
+      <AbsoluteFill>
+        {bg}
+        <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center'}}>
+          <div style={{transform: `translateY(${drift}px)`, marginTop: -80}}>
+            {hasIcon ? <div style={{marginBottom: 56}}><MiniIcon name={s.icon} t={t} size={150} dur={dur} /></div> : null}
+            <KickerBlock s={s} b={b} t={t} dur={dur} />
+            <StatBig text={s.big} t={t} b={b} dur={dur} />
+            <div style={{height: 54}} />
+            <LineBlock s={s} b={b} t={t} dur={dur} scale={0.82} delay={14} />
+            <SubBlock s={s} b={b} t={t} dur={dur} />
+          </div>
+        </AbsoluteFill>
+      </AbsoluteFill>
+    );
+  }
+  if (lay === 'steps' && s.items && s.items.length >= 2) {
+    return (
+      <AbsoluteFill>
+        {bg}
+        <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center'}}>
+          <div style={{transform: `translateY(${drift}px)`, marginTop: -70}}>
+            {hasIcon ? <div style={{marginBottom: 50}}><MiniIcon name={s.icon} t={t} size={130} dur={dur} /></div> : null}
+            <KickerBlock s={s} b={b} t={t} dur={dur} />
+            <LineBlock s={s} b={b} t={t} dur={dur} scale={0.86} />
+            <div style={{display: 'flex', flexDirection: 'column', gap: 44, marginTop: 76}}>
+              {s.items.slice(0, 3).map((it, i) => <StepRow key={i} n={i + 1} text={it} t={t} b={b} delay={18 + i * 13} />)}
+            </div>
+          </div>
+        </AbsoluteFill>
+      </AbsoluteFill>
+    );
+  }
+  // stack (and the call card): the original template, unchanged
   return (
     <AbsoluteFill>
-      {s.clip ? (
-        <AbsoluteFill style={{opacity: clipIn}}>
-          <OffthreadVideo src={staticFile(s.clip)} muted
-                          style={{width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${zoom})`}} />
-          <AbsoluteFill style={{background: `linear-gradient(180deg, ${t.veil}6B 0%, ${t.veil}C2 40%, ${t.veil}C2 62%, ${t.veil}85 100%)`}} />
-        </AbsoluteFill>
-      ) : null}
+      {bg}
       <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center'}}>
         <div style={{transform: `translateY(${drift}px)`, marginTop: hasIcon ? -30 : hasCard ? 0 : -100}}>
           {hasCard ? (
@@ -319,30 +574,10 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
               <CallCardView c={s.card as CallCard} t={t} b={b} dur={dur} />
             </div>
           ) : null}
-          {hasIcon ? (
-            <div style={{display: 'flex', justifyContent: 'center', marginBottom: 44}}>
-              <Emblem name={s.icon as string} t={t} size={s.kicker ? 400 : 440} dur={dur} />
-            </div>
-          ) : null}
-          {s.kicker ? (
-            <Rise delay={0} dur={dur}>
-              <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 34, letterSpacing: '0.16em', textTransform: 'uppercase', color: t.accent}}>
-                {s.kicker}
-              </div>
-              <div style={{height: 3, width: 150 * rule, background: `linear-gradient(90deg, ${t.accent}, ${rgba(t.accent, 0)})`, opacity: 0.8, margin: '30px 0 46px'}} />
-            </Rise>
-          ) : null}
-          <Rise delay={5} dur={dur}>
-            <div style={{fontFamily: b.head.family, fontWeight: b.head.weight, fontSize: size, lineHeight: 1.1, letterSpacing: b.head.spacing,
-                         color: t.head || t.ink, maxWidth: 888, overflowWrap: 'break-word', textWrap: 'balance' as any}}>
-              <Headline text={s.line} t={t} on={b.hlNumbers} />
-            </div>
-          </Rise>
-          {s.sub ? (
-            <Rise delay={12} dur={dur}>
-              <div style={{fontFamily: b.label.family, fontSize: 44, lineHeight: 1.36, color: t.dim, marginTop: 46, maxWidth: 860}}>{s.sub}</div>
-            </Rise>
-          ) : null}
+          {emblem ? <div style={{display: 'flex', justifyContent: 'center', marginBottom: 44}}>{emblem}</div> : null}
+          <KickerBlock s={s} b={b} t={t} dur={dur} />
+          <LineBlock s={s} b={b} t={t} dur={dur} />
+          <SubBlock s={s} b={b} t={t} dur={dur} />
         </div>
       </AbsoluteFill>
     </AbsoluteFill>
@@ -350,18 +585,20 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
 };
 
 // Plain closing card (every brand without chips): product name, one line, mascot/icon, handle, call to action.
-const EndPlain: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b, t, dur}) => {
+const EndPlain: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number; flip?: boolean}> = ({e, b, t, dur, flip}) => {
   const f = useCurrentFrame();
   const {fps} = useVideoConfig();
   const up = spring({frame: f - 4, fps, config: {damping: 200, stiffness: 55}});
   const hold = dur + 30;                                               // no fade-out on the last card
   const img = b.end.image;
+  const picture = img ? (
+    <Img src={staticFile(img)}
+         style={{height: (b.end.imageHeight ?? 440) * (e.tease ? 0.85 : 1), borderRadius: b.end.imageRadius ?? 0, opacity: up,
+                 transform: `translateY(${(1 - up) * (flip ? -260 : 260)}px)`, [flip ? 'marginTop' : 'marginBottom']: 70}} />
+  ) : null;
   return (
-    <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center', padding: '120px 90px 0'}}>
-      {img ? (
-        <Img src={staticFile(img)}
-             style={{height: b.end.imageHeight ?? 440, borderRadius: b.end.imageRadius ?? 0, opacity: up, transform: `translateY(${(1 - up) * 260}px)`, marginBottom: 70}} />
-      ) : null}
+    <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center', padding: e.tease ? '40px 90px 160px' : '120px 90px 0'}}>
+      {flip ? null : picture}
       <Rise delay={8} dur={hold} style={{textAlign: 'center'}}>
         <div style={{fontFamily: (b.end_title || b.head).family, fontWeight: (b.end_title || b.head).weight, fontSize: 112, lineHeight: 1.1, letterSpacing: (b.end_title || b.head).spacing, color: t.head || t.ink, textWrap: 'balance' as any}}>{e.title}</div>
       </Rise>
@@ -378,34 +615,58 @@ const EndPlain: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b
       <Rise delay={28} dur={hold} style={{textAlign: 'center', marginTop: b.end.handle ? 22 : 64}}>
         <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 44, letterSpacing: '0.02em', color: t.ink}}>{e.cta}</div>
       </Rise>
+      {flip ? picture : null}
+      <EndFooter e={e} b={b} t={t} dur={dur} />
     </AbsoluteFill>
   );
 };
 
-const ChipRow: React.FC<{c: Chip; t: Theme; b: Brand; delay: number}> = ({c, t, b, delay}) => {
+// "Next: <topic>" and the follow line at the foot of every closing card that has them (the next planned topic of the series is real, from studio_series_topics).
+const EndFooter: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b, t, dur}) => {
+  const f = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const s = spring({frame: f - 44, fps, config: {damping: 18, stiffness: 80, mass: 0.9}});
+  const o = Math.min(1, s);
+  if (!e.tease && !e.follow) return null;
+  return (
+    <div style={{position: 'absolute', left: 0, right: 0, bottom: 210, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                 opacity: o, transform: `translateY(${(1 - o) * 30}px)`}}>
+      {e.tease ? (
+        <div style={{display: 'flex', alignItems: 'center', gap: 22, padding: '18px 44px', borderRadius: 999, maxWidth: 940,
+                     background: `linear-gradient(90deg, ${rgba(t.accent, 0.2)} 0%, ${rgba(t.accent, 0.07)} 100%)`, boxShadow: `0 0 60px ${rgba(t.accent, 0.12)}`}}>
+          <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 30, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.accent}}>Next</div>
+          <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 42, lineHeight: 1.15, color: t.ink}}>{e.tease}</div>
+        </div>
+      ) : null}
+      {e.follow ? <div style={{fontFamily: b.label.family, fontSize: 36, color: t.dim, letterSpacing: '0.02em'}}>{e.follow}</div> : null}
+    </div>
+  );
+};
+
+const ChipRow: React.FC<{c: Chip; t: Theme; b: Brand; delay: number; compact?: boolean}> = ({c, t, b, delay, compact}) => {
   const f = useCurrentFrame();
   const {fps} = useVideoConfig();
   const s = spring({frame: f - delay, fps, config: {damping: 16, stiffness: 85, mass: 0.9}});
   const draw = spring({frame: f - delay - 4, fps, config: {damping: 200, stiffness: 45}});
   const o = Math.min(1, s);
   return (
-    <div style={{display: 'flex', alignItems: 'center', gap: 34, width: 940, height: 138, padding: '0 40px 0 30px', borderRadius: 69,
+    <div style={{display: 'flex', alignItems: 'center', gap: compact ? 20 : 34, ...(compact ? {height: 96, padding: '0 34px 0 18px'} : {width: 940, height: 138, padding: '0 40px 0 30px'}), borderRadius: 69,
                  background: `linear-gradient(90deg, ${rgba(t.accent, 0.2)} 0%, ${rgba(t.accent, 0.08)} 55%, ${rgba(t.accent, 0.02)} 100%)`,
                  boxShadow: `0 0 70px ${rgba(t.accent, 0.14)}`,
                  opacity: o, transform: `translateX(${(1 - s) * -90}px) scale(${0.94 + 0.06 * Math.min(1, s)})`}}>
-      <div style={{position: 'relative', width: 96, height: 96, flex: '0 0 96px'}}>
+      <div style={{position: 'relative', width: compact ? 64 : 96, height: compact ? 64 : 96, flex: compact ? '0 0 64px' : '0 0 96px'}}>
         <div style={{position: 'absolute', inset: -22, background: `radial-gradient(circle, ${rgba(t.accent, 0.4)} 0%, ${rgba(t.accent, 0)} 68%)`}} />
         <div style={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-          <Icon name={c.icon} t={t} draw={draw} size={88} />
+          <Icon name={c.icon} t={t} draw={draw} size={compact ? 60 : 88} />
         </div>
       </div>
-      <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 52, lineHeight: 1.1, color: t.ink, whiteSpace: 'nowrap'}}>{c.text}</div>
+      <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: compact ? 40 : 52, lineHeight: 1.1, color: t.ink, whiteSpace: 'nowrap'}}>{c.text}</div>
     </div>
   );
 };
 
 // Rich closing card: hero logo, product name, one plain line, benefit chips with icons, glowing call to action.
-const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b, t, dur}) => {
+const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number; compact?: boolean}> = ({e, b, t, dur, compact}) => {
   const f = useCurrentFrame();
   const {fps} = useVideoConfig();
   const hold = dur + 30;
@@ -424,7 +685,7 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b,
                              width: r * 2, height: r * 2, opacity: Math.min(1, logo) * (0.35 + 0.45 * Math.sin(f / (18 + i * 3) + i * 2) ** 2),
                              background: `radial-gradient(circle, ${rgba(t.accent, 0.85)} 0%, ${rgba(t.accent, 0.22)} 42%, ${rgba(t.accent, 0)} 72%)`}} />
       ))}
-      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 90}}>
+      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: e.tease ? (compact ? 0 : -40) : compact ? 60 : 90}}>
         {b.end.orb ? (
           <div style={{marginBottom: 56, opacity: Math.min(1, logo), transform: `scale(${0.6 + 0.4 * logo})`}}><Orb size={190} t={t} /></div>
         ) : null}
@@ -433,28 +694,74 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b,
                                                       transform: `scale(${0.7 + 0.3 * logo})`, marginBottom: 34}} />
         ) : null}
         <Rise delay={8} dur={hold} style={{textAlign: 'center'}}>
-          <div style={{fontFamily: (b.end_title || b.head).family, fontWeight: (b.end_title || b.head).weight, fontSize: 128, lineHeight: 1.05, letterSpacing: (b.end_title || b.head).spacing, color: t.head || t.ink, textWrap: 'balance' as any}}>{e.title}</div>
+          <div style={{fontFamily: (b.end_title || b.head).family, fontWeight: (b.end_title || b.head).weight, fontSize: compact ? 150 : 128, lineHeight: 1.05, letterSpacing: (b.end_title || b.head).spacing, color: t.head || t.ink, textWrap: 'balance' as any}}>{e.title}</div>
         </Rise>
         {e.sub ? (
           <Rise delay={16} dur={hold} style={{textAlign: 'center', marginTop: 30}}>
-            <div style={{fontFamily: b.label.family, fontSize: 50, lineHeight: 1.28, color: t.dim, maxWidth: 860}}>{e.sub}</div>
+            <div style={{fontFamily: b.label.family, fontSize: compact ? 58 : 50, lineHeight: 1.28, color: compact ? t.ink : t.dim, maxWidth: 860}}>{e.sub}</div>
           </Rise>
         ) : null}
-        <div style={{display: 'flex', flexDirection: 'column', gap: 26, marginTop: 64, alignItems: 'center'}}>
-          {chips.slice(0, 3).map((c, i) => <ChipRow key={i} c={c} t={t} b={b} delay={28 + i * 11} />)}
+        <div style={compact ? {display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 20, marginTop: 56, maxWidth: 900}
+                            : {display: 'flex', flexDirection: 'column', gap: e.tease ? 20 : 26, marginTop: e.tease ? 48 : 64, alignItems: 'center'}}>
+          {chips.slice(0, 3).map((c, i) => <ChipRow key={i} c={c} t={t} b={b} delay={28 + i * 11} compact={compact} />)}
         </div>
-        <div style={{marginTop: 70, opacity: Math.min(1, cta), transform: `translateY(${(1 - Math.min(1, cta)) * 40}px) scale(${0.9 + 0.1 * Math.min(1, cta)})`}}>
+        <div style={{marginTop: e.tease ? 50 : 70, opacity: Math.min(1, cta), transform: `translateY(${(1 - Math.min(1, cta)) * 40}px) scale(${0.9 + 0.1 * Math.min(1, cta)})`}}>
           <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 60, letterSpacing: '0.01em', color: t.veil,
                        padding: '28px 84px', borderRadius: 999, background: `linear-gradient(135deg, ${t.accent} 0%, ${t.accent2 ? rgba(t.accent2, 0.92) : rgba(t.accent, 0.82)} 100%)`,
                        boxShadow: `0 0 ${70 + 40 * pulse}px ${rgba(t.accent, 0.38 + 0.12 * pulse)}`}}>{e.cta}</div>
         </div>
       </div>
+      <EndFooter e={e} b={b} t={t} dur={dur} />
     </AbsoluteFill>
   );
 };
 
-const EndView: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = (p) =>
-  (p.e.chips && p.e.chips.length) || p.b.end.heroLogo || p.b.end.orb ? <EndRich {...p} /> : <EndPlain {...p} />;
+// Closing card 3 ("qa"): the question this video answered and its plain answer, then the product and the call to action.
+const EndQA: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b, t, dur}) => {
+  const f = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const hold = dur + 30;
+  const logo = spring({frame: f - 2, fps, config: {damping: 15, stiffness: 70, mass: 1}});
+  const cta = spring({frame: f - 80, fps, config: {damping: 14, stiffness: 90, mass: 0.9}});
+  const bar = spring({frame: f - 30, fps, config: {damping: 200, stiffness: 50}});
+  const pulse = 0.5 + 0.5 * Math.sin(f / 14);
+  const r = e.recap as {q: string; a: string};
+  const ti = b.end_title || b.head;
+  return (
+    <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center', padding: '0 90px'}}>
+      <div style={{position: 'absolute', left: 540 - 720, top: 700 - 720, width: 1440, height: 1440, opacity: Math.min(1, logo),
+                   background: `radial-gradient(circle, ${rgba(t.accent, 0.17 + 0.04 * pulse)} 0%, ${rgba(t.accent, 0.06)} 40%, ${rgba(t.accent, 0)} 68%)`}} />
+      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: e.tease ? -90 : -20}}>
+        <Rise delay={2} dur={hold}>
+          <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 32, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.accent}}>Quick answer</div>
+        </Rise>
+        <Rise delay={7} dur={hold} style={{textAlign: 'center', marginTop: 34}}>
+          <div style={{fontFamily: b.label.family, fontSize: 56, lineHeight: 1.22, color: t.dim, maxWidth: 840, textWrap: 'balance' as any}}>{r.q}</div>
+        </Rise>
+        <Rise delay={24} dur={hold} style={{textAlign: 'center', marginTop: 44}}>
+          <div style={{fontFamily: b.head.family, fontWeight: b.head.weight, fontSize: r.a.length > 44 ? 84 : 98, lineHeight: 1.1, letterSpacing: b.head.spacing,
+                       color: t.head || t.ink, maxWidth: 880, textWrap: 'balance' as any}}>{r.a}</div>
+        </Rise>
+        <div style={{height: 3, width: 560 * bar, margin: '58px 0 52px', background: `linear-gradient(90deg, ${rgba(t.accent, 0)}, ${t.accent}, ${rgba(t.accent, 0)})`}} />
+        <Rise delay={46} dur={hold} style={{textAlign: 'center'}}>
+          <div style={{fontFamily: ti.family, fontWeight: ti.weight, fontSize: 92, lineHeight: 1.05, letterSpacing: ti.spacing, color: t.head || t.ink, textWrap: 'balance' as any}}>{e.title}</div>
+        </Rise>
+        <div style={{marginTop: 54, opacity: Math.min(1, cta), transform: `translateY(${(1 - Math.min(1, cta)) * 40}px) scale(${0.9 + 0.1 * Math.min(1, cta)})`}}>
+          <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 54, color: t.veil, padding: '24px 74px', borderRadius: 999,
+                       background: `linear-gradient(135deg, ${t.accent} 0%, ${t.accent2 ? rgba(t.accent2, 0.92) : rgba(t.accent, 0.82)} 100%)`,
+                       boxShadow: `0 0 ${60 + 30 * pulse}px ${rgba(t.accent, 0.36 + 0.1 * pulse)}`}}>{e.cta}</div>
+        </div>
+      </div>
+      <EndFooter e={e} b={b} t={t} dur={dur} />
+    </AbsoluteFill>
+  );
+};
+
+const EndView: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = (p) => {
+  if (p.e.layout === 'qa' && p.e.recap && p.e.recap.q && p.e.recap.a) return <EndQA {...p} />;
+  const claim = p.e.layout === 'claim';
+  return (p.e.chips && p.e.chips.length) || p.b.end.heroLogo || p.b.end.orb ? <EndRich {...p} compact={claim} /> : <EndPlain {...p} flip={claim} />;
+};
 
 const Logo: React.FC<{b: Brand; opacity?: number}> = ({b, opacity = 1}) => {
   const l = b.logo;
@@ -485,12 +792,15 @@ export const BrandShort: React.FC<BrandProps> = (p) => {
   const f = useCurrentFrame();
   const {fps} = useVideoConfig();
   const name = b.themes[p.theme] ? p.theme : Object.keys(b.themes)[0];
-  const t = b.themes[name];
+  const look = p.look || {};
+  const t: Theme = {...b.themes[name], ...(look.accent ? {accent: look.accent} : {}), ...(look.accent2 ? {accent2: look.accent2} : {})};
   const fr = (sec: number) => Math.round(sec * fps);
   const rich = !!(p.end && ((p.end.chips && p.end.chips.length) || b.end.heroLogo || b.end.orb));
   // the small corner logo steps aside when the closing card shows its own big one
   const logoOp = rich && b.end.heroLogo && p.end ? interpolate(f, [fr(p.end.start), fr(p.end.start) + 9], [1, 0], clamp) : 1;
+  const tagOp = p.end ? interpolate(f, [fr(p.end.start) - 6, fr(p.end.start)], [1, 0], clamp) : 1;
   return (
+    <LookCtx.Provider value={look}>
     <AbsoluteFill style={{background: t.bg}}>
       {b.ambient ? <Ambient t={t} /> : null}
       {p.scenes.map((s, i) => (
@@ -504,8 +814,13 @@ export const BrandShort: React.FC<BrandProps> = (p) => {
         </Sequence>
       ) : null}
       <Logo b={b} opacity={logoOp} />
+      {look.series ? (
+        <div style={{position: 'absolute', right: 96, top: 150, opacity: 0.82 * tagOp * interpolate(f, [4, 20], [0, 1], clamp), fontFamily: b.label.family,
+                     fontWeight: b.label.weight, fontSize: 30, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.dim}}>{look.series}</div>
+      ) : null}
       {p.audio.narration ? <Audio src={staticFile(p.audio.narration)} /> : null}
       {p.audio.music ? <Audio src={staticFile(p.audio.music)} volume={p.audio.musicVolume ?? 0.12} /> : null}
     </AbsoluteFill>
+    </LookCtx.Provider>
   );
 };

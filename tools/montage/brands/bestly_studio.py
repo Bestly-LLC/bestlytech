@@ -19,10 +19,15 @@ KIT = "/opt/bestly/social-kit"
 NAME = "Bestly Studio"
 COMPOSITION, COMP_DIR = "BrandShort", "brand"
 THEMES = ["night"]
+ICONS = ["image", "video", "phone", "calendar", "chat", "check", "pencil", "star"]
 CFG = {
     "slug": "bestly-studio", "name": NAME, "claim": "bestly-studio", "about": bs.PRODUCT_STUDIO, "lessons_brand": None,
     "mood": "upbeat",   # music bed fallback when the writer gives none (music.py)
-    "themes": THEMES, "tail": "bestly.tech/studio", "name_patterns": [r"\bbestly\b"],
+    "themes": THEMES, "tail": "bestly.tech/studio", "name_patterns": [r"\bbestly\b"], "icons": ICONS,
+    # 2026-10-12 unique content
+    "accents": ["#8b9bf0", "#f2a07b", "#6fd3c4"],
+    "explain_example": "a service that makes social media posts for small businesses and lets them approve each one on their phone",
+    "stat_hint": 'for example "One idea." or "One post."',
     "shot_brand": ("A small business at work, seen from behind or in close-up: a workshop bench, a shop counter, a studio desk, "
                    "a shelf with one small box with a softly glowing light, cables tidied. Never a readable screen or label."),
     "end": {"title": "Bestly Studio", "sub": "We make your social posts.", "cta": "bestly.tech/studio",
@@ -43,6 +48,7 @@ BRAND = {
                          "veil": "#0b0c18", "ink": "#FFFFFF", "dim": "#9ea6bc", "accent": "#8b9bf0", "head": "#FFFFFF"}},
     "logo": {"image": "pill.png", "height": 92, "blend": "lighten"},
     "end": {},
+    "ambient": True,
 }
 ASSETS = {"fonts/serif700.woff2": f"{KIT}/serif700.woff2", "fonts/serif600.woff2": f"{KIT}/serif600.woff2",
           "fonts/inter400.woff2": f"{KIT}/inter400.woff2", "fonts/inter800.woff2": f"{KIT}/inter800.woff2", "fonts/inter600.woff2": f"{KIT}/inter600.woff2",

@@ -17,10 +17,16 @@ GROUNDS = {"navy": (("#0D1424", "#16213E"), "#6F9BFF"), "green": (("#061F16", "#
            "purple": (("#1F0E2D", "#33204E"), "#CDA6FF"), "wine": (("#300B10", "#4A1A1E"), "#F2A33A"),
            "slate": (("#161E2E", "#202B40"), "#6F9BFF"), "ocean": (("#121D49", "#1C2E6E"), "#F2A33A")}
 THEMES = list(GROUNDS)
+ICONS = ["camera", "home", "receipt", "list", "package", "image", "shield", "check", "tag"]
+# 2026-10-12 unique content: approved accents per ground (the card system's blue, green, lilac, amber), all readable on that ground
+ACCENTS = {"navy": ["#6F9BFF", "#F2A33A", "#4FDC94"], "green": ["#4FDC94", "#F2A33A", "#CDA6FF"], "purple": ["#CDA6FF", "#F2A33A", "#6F9BFF"],
+           "wine": ["#F2A33A", "#CDA6FF", "#4FDC94"], "slate": ["#6F9BFF", "#F2A33A", "#4FDC94"], "ocean": ["#F2A33A", "#6F9BFF", "#CDA6FF"]}
 CFG = {
     "slug": "inventoryproof", "name": NAME, "claim": _B["claim"], "about": _B["about"], "lessons_brand": "inventoryproof",
     "mood": "calm",   # music bed fallback when the writer gives none (music.py)
-    "themes": THEMES, "tail": _B["hashtags"], "name_patterns": [r"inventory\s*proof", r"\bproofy\b"],
+    "themes": THEMES, "tail": _B["hashtags"], "name_patterns": [r"inventory\s*proof", r"\bproofy\b"], "icons": ICONS, "accents": ACCENTS,
+    "explain_example": "an iPhone app that helps you list and photograph what you own, so you can show it later",
+    "stat_hint": 'for example "One room first." or "One list."',
     "shot_brand": ("Real homes and things people own: a hand opening a drawer, a shelf of books, a closet, a kitchen counter, "
                    "a box being taped shut, a living room at golden hour. Never a legible receipt, document or label."),
     "end": {"title": "InventoryProof", "sub": "A home inventory app for iPhone.", "cta": "On the App Store.",
@@ -37,6 +43,7 @@ BRAND = {
                                     {"text": "°", "color": "#F2A33A", "size": 22, "dy": -10}],
                           "family": "Manrope", "weight": 700, "size": 52}},
     "end": {"image": "art/proofy-cheering-arms-up.png", "imageHeight": 520, "handle": "@inventoryproof"},
+    "ambient": True,
 }
 ASSETS = {**{f"fonts/Manrope-{w}.ttf": f"{KIT}/fonts/Manrope-{w}.ttf" for w in (500, 600, 700, 800)},
           "art/proofy-cheering-arms-up.png": f"{KIT}/art/proofy-cheering-arms-up.png"}

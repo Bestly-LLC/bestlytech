@@ -14,10 +14,15 @@ _B = bm.BRANDS["cookieyeti"]
 GROUNDS = {"plum": ("#250F37", "#3A1F5C"), "wine": ("#300D19", "#4A1A2C"), "forest": ("#07211B", "#12382D"),
            "indigo": ("#0D142C", "#182450"), "ink": ("#151221", "#221C33"), "teal": ("#061F26", "#0F3A46")}
 THEMES = list(GROUNDS)
+ICONS = ["cookie", "toggle", "shield", "eyeslash", "clock", "list", "check", "lock"]
 CFG = {
     "slug": "cookie-yeti", "name": NAME, "claim": _B["claim"], "about": _B["about"], "lessons_brand": "cookieyeti",
     "mood": "playful",   # music bed fallback when the writer gives none (music.py)
-    "themes": THEMES, "tail": _B["hashtags"], "name_patterns": [r"cookie\s*yeti", r"\byeti\b"],
+    "themes": THEMES, "tail": _B["hashtags"], "name_patterns": [r"cookie\s*yeti", r"\byeti\b"], "icons": ICONS,
+    # 2026-10-12 unique content: teal (the app's accent), lilac and a warm cookie gold, all readable on the plum/teal/ink grounds
+    "accents": ["#4FE0C4", "#C9A6FF", "#F4C26B"],
+    "explain_example": "a browser extension that answers cookie banners for you",
+    "stat_hint": 'for example "One banner." or "Two buttons."',
     "shot_brand": ("Real-world stand-ins only: a quiet desk and a closed laptop, a hand closing a door, a window at dusk, "
                    "fog over a hillside, a mailbox. Never a browser, banner, cookie, button or anything on a screen."),
     "end": {"title": "Cookie Yeti", "sub": "Answers cookie banners for you.", "cta": "On the App Store.",
@@ -33,6 +38,7 @@ BRAND = {
     "logo": {"wordmark": {"parts": [{"text": "Cookie Yeti"}], "family": "InterTight", "weight": 600, "size": 52,
                           "tagline": "PRIVACY · AUTOMATIC"}},
     "end": {"image": "art/cookieyeti-icon.png", "imageHeight": 420, "imageRadius": 94, "handle": "@cookie_yeti_privacy"},
+    "ambient": True,
 }
 ASSETS = {**{f"fonts/InterTight-{w}.ttf": f"{KIT}/fonts/InterTight-{w}.ttf" for w in (500, 600, 700, 800)},
           "art/cookieyeti-icon.png": f"{KIT}/art/cookieyeti-icon.png"}

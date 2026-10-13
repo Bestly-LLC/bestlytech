@@ -18,6 +18,7 @@ import sys
 sys.path.insert(0, "/opt/bestly/cron")
 sys.path.insert(0, "/opt/bestly/montage")
 from brands import _common  # noqa: E402
+import variety  # noqa: E402
 
 KIT = "/opt/bestly/social-kit"
 KIT_AGENT = "/opt/bestly/montage-kit/bestly-agent"       # fetch-assets.sh: portraits + logos from public/agent-demo (fictional people, original logos)
@@ -76,6 +77,10 @@ CFG = {
     "slug": "bestly-agent", "name": NAME, "claim": "bestly-agent", "about": ABOUT, "lessons_brand": None,
     "mood": MOOD, "themes": THEMES, "tail": "", "name_patterns": [r"\bbestly\b"], "icons": ICONS, "icon_help": ICON_HELP,
     "explain_first": True, "no_absolutes": True,
+    # 2026-10-12 unique content: accent + accent2 pairs from the bestly.tech/agent palette (periwinkle, orchid, the orb's sky blue)
+    "accents": [("#8e9bff", "#e59cff"), ("#e59cff", "#8e9bff"), ("#6cd3ff", "#e59cff")],
+    "explain_example": "an AI receptionist that answers your business phone",
+    "stat_hint": 'for example "From $49 a month." or "90+ languages."',
     "allow_numbers": True, "allow_links": "bestly.tech/agent", "extra_check": extra_check,
     "number_rule": ("Numbers: you may state ONLY these, exactly: the plan price from $49 a month, the three plans ($49 / $199 / $499 a month for 30 / 150 / 500 minutes), "
                     "30 days money back, 90+ languages, 120+ apps. In a \"say\" write every number as words (forty-nine dollars, thirty days, ninety languages) so the narrator "
@@ -102,7 +107,8 @@ CARD_ANSWERED = dict(CARD_MISSED, kind="answered")
 ADS = {
     # ~25 s. Pain, what it is, what she does, price, address.
     "missed-call": {
-        "title": "Bestly Agent ad: missed call", "topic": "missed calls", "mood": "upbeat",
+        "title": "Bestly Agent ad: missed call", "topic": "missed calls", "mood": "upbeat", "hook": "problem",
+        "question": "Who answers your phone when you are on a job?",
         "scenes": [
             {"kicker": "AI receptionist", "line": "A missed call can send a customer elsewhere.",
              "say": "Your hands are full, the phone rings, and the caller hangs up.", "icon": "missedcall", "card": CARD_MISSED},
@@ -120,7 +126,8 @@ ADS = {
     },
     # ~30 s. What it is, what she does, the apps, languages, price, address.
     "what-she-does": {
-        "title": "Bestly Agent ad: what she does", "topic": "ai receptionist", "mood": "confident",
+        "title": "Bestly Agent ad: what she does", "topic": "ai receptionist", "mood": "confident", "hook": "intro",
+        "question": "What would you hand off to Maya first?",
         "scenes": [
             {"kicker": "AI receptionist", "line": "Meet Maya. She answers your business phone.",
              "say": "Meet Maya, an AI receptionist who answers your business phone.", "icon": "phone", "card": CARD_ANSWERED},
@@ -165,7 +172,7 @@ SHOT_STYLE = ("Vertical 9:16 documentary b-roll, soft natural light, dark moody 
               "no text, no logos, no people facing the camera, any phone or laptop only a dark silhouette.")
 
 
-def _fixed(tag, log):
+def _fixed(tag, log, job=None):
     ad = copy.deepcopy(ADS[tag])
     p = {"title": ad["title"], "topic": ad["topic"], "mood": ad["mood"], "caption": ad["caption"], "end": {"sub": ad["end"]["sub"], "chips": ad["end"]["chips"]},
          "scenes": [{k: sc.get(k, "") for k in ("kicker", "line", "say", "icon")} for sc in ad["scenes"]]}
@@ -179,6 +186,28 @@ def _fixed(tag, log):
     out["end"]["say"] = ad["end"]["say"]
     out["ad"] = tag
     log(f"scripted ad '{tag}': {len(out['scenes'])} scenes passed the rules, claim rules and number guard")
+    if job is not None:       # 2026-10-12 unique content: the hand-written words stay, the look + series + tease + comment question are added
+        job = dict(job)
+        forced = variety.parse_look(job.get("brief"), job.get("revise_note"))
+        parent = _common._parent_script(job)
+        series = variety.series_for(CFG, job, parent, log)
+        tease = variety.tease_for(CFG, series, lambda pieces: _common._claims(CFG, pieces), log)
+        tried = []
+        for roll in range(3):
+            plan = variety.make_plan(CFG, job, THEMES[0], None, forced if roll == 0 else {}, tried)
+            plan["hook"] = ad["hook"]
+            ok, why, opening, fp = variety.gate(CFG, job, plan, out, opening_check=False)
+            if ok:
+                break
+            tried.append(plan["key"])
+        else:
+            raise variety.VarietyHold(f"Bestly Agent ad '{tag}': looks too close to recent videos ({why[:300]})")
+        q = {"question": ad["question"], "scenes": []}
+        qe = _common._claims(CFG, [("comment question", ad["question"])])
+        if qe:
+            raise RuntimeError("the ad's comment question failed the claim rules: " + "; ".join(qe)[:300])
+        variety.decorate(CFG, out, plan, series, tease, q, ad["caption"])
+        variety.record(CFG, job, plan, fp, opening, series)
     return out
 
 
@@ -194,7 +223,7 @@ def _carry_cards(out, job):
 def write(job, log):
     m = re.search(r"\[ad:([a-z-]+)\]", job.get("brief") or "")
     if m and m.group(1) in ADS and (not job.get("parent_job_id") or "[recut-ad]" in (job.get("revise_note") or "")):
-        return _fixed(m.group(1), log)
+        return _fixed(m.group(1), log, job)
     out = _common.write(job, log, CFG)
     _carry_cards(out, job)
     return out
