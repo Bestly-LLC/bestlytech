@@ -40,6 +40,8 @@ type Ripple = {
   duration: number;
   /** Max radius in canvas pixels */
   maxR: number;
+  /** Bursts from Maya's floating button (tinted toward her purple) */
+  maya?: boolean;
 };
 
 const SPACING = 28;
@@ -103,11 +105,38 @@ export function InteractiveDotGrid() {
         duration: 2400,
         maxR: Math.max(width, height) * 0.7,
       });
-      nextRippleAt = t + 4000 + Math.random() * 3000;
+      // When Maya's button is pulsing, the random splash lands halfway between hers (two splashes, taking turns).
+      nextRippleAt = t - lastMayaAt < 12000 ? t + 8000 : t + 4000 + Math.random() * 3000;
     }
 
+    // Maya's splash: starts at her floating button (bottom-right on desktop, bottom-center on phones) the moment the
+    // button swells. It fires on every other label change (~8 s), and the random splash is moved to land in between.
+    let lastMayaAt = -Infinity;
+    let mayaBeats = 0;
+    function onMayaPulse() {
+      if (reduce) return;
+      mayaBeats++;
+      if (mayaBeats % 2 === 0) return;
+      const pill = document.querySelector(".maya-pill");
+      if (!pill || document.documentElement.classList.contains("maya-yield")) return;
+      const pr = pill.getBoundingClientRect();
+      const cr = canvas!.getBoundingClientRect();
+      if (pr.width === 0) return;
+      const t = performance.now();
+      const ox = pr.left + pr.width / 2 - cr.left;
+      const oy = pr.top + pr.height / 2 - cr.top;
+      // Reach the far corner of the hero from wherever she sits.
+      const far = Math.max(Math.hypot(ox, oy), Math.hypot(width - ox, oy), Math.hypot(ox, height - oy), Math.hypot(width - ox, height - oy));
+      ripples.push({ ox, oy, start: t, duration: 3000, maxR: far * 0.95, maya: true });
+      lastMayaAt = t;
+      nextRippleAt = t + 4000;
+    }
+    window.addEventListener("maya:pulse", onMayaPulse);
+
+    let mayaShare = 0; // how much of the current dot's ripple light came from Maya's splash (0-1)
     function rippleIntensity(dot: Dot, t: number): number {
       let total = 0;
+      let mayaPart = 0;
       for (let i = ripples.length - 1; i >= 0; i--) {
         const r = ripples[i];
         const age = t - r.start;
@@ -121,12 +150,15 @@ export function InteractiveDotGrid() {
         const dy = dot.y - r.oy;
         const dist = Math.sqrt(dx * dx + dy * dy);
         // Thin radial pulse: peak when dot's distance ≈ ripple's current radius
-        const ringWidth = 60;
+        const ringWidth = r.maya ? 110 : 75; // Maya's splash is the bold one
         const proximity = Math.max(0, 1 - Math.abs(dist - radius) / ringWidth);
         // Decay over the ripple's lifespan
         const decay = 1 - progress;
-        total += proximity * decay;
+        const w = proximity * decay * (r.maya ? 1.7 : 1.2);
+        total += w;
+        if (r.maya) mayaPart += w;
       }
+      mayaShare = total > 0 ? mayaPart / total : 0;
       return Math.min(total, 1);
     }
 
@@ -144,6 +176,7 @@ export function InteractiveDotGrid() {
 
       // Pre-compute intensities so we can do a separate connection pass
       const intensities = new Float32Array(dots.length);
+      const mayaTint = new Float32Array(dots.length);
       for (let i = 0; i < dots.length; i++) {
         const d = dots[i];
         const dx = d.x - cursorX;
@@ -156,7 +189,8 @@ export function InteractiveDotGrid() {
         }
         const drift = reduce ? 0 : Math.sin(driftPhase + d.phase) * 0.15 + 0.15;
         const ripple = reduce ? 0 : rippleIntensity(d, t) * 0.85;
-        intensities[i] = Math.min(1, cursorBoost + drift + ripple * 0.6);
+        intensities[i] = Math.min(1, cursorBoost + drift + ripple * 0.85);
+        mayaTint[i] = ripple > 0.02 ? mayaShare * Math.min(1, ripple * 2) : 0;
       }
 
       // Draw dots
@@ -167,7 +201,7 @@ export function InteractiveDotGrid() {
         const alpha = BASE_ALPHA + (MAX_ALPHA - BASE_ALPHA) * ix;
         // hsl(var(--wow-indigo-light)) ≈ #7a8be0 → 230 64% 68%
         // We blend toward warmer indigo as intensity peaks for visual punch.
-        const hue = 230;
+        const hue = 230 + mayaTint[i] * 40; // Maya's splash leans toward her violet
         const sat = 64 - ix * 8;
         const light = 60 + ix * 20;
         ctx.fillStyle = `hsla(${hue}, ${sat}%, ${light}%, ${alpha})`;
@@ -244,6 +278,7 @@ export function InteractiveDotGrid() {
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("maya:pulse", onMayaPulse);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerleave", onPointerLeave);
       document.removeEventListener("visibilitychange", onVisibility);
