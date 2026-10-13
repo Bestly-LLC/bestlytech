@@ -67,4 +67,25 @@ music bed (borrowed from the Bestly library, ducked under her voice, swelling af
 - Topic queues need a refill every 6 to 8 videos per brand (Spark's `montage.series` alert says when).
 
 ## Result
-(filled in after the 7 tests, below)
+Built, deployed to the Pi (`bestly-montage` restarted, heartbeat fresh, backups `*.bak_unique_20261012` next to every replaced file) and tested on 7 videos, one per brand,
+all filed as internal drafts by Spark (nothing posted, nothing sent to Elizabeth). Contact sheets and mp4s: `/tmp/claude-0/sp/tests/<brand>.jpg` and `.mp4`.
+All seven: 1080x1920, H.264 High, yuv420p, tv range, bt709, 30 fps, AAC; mean volume -19.5 to -20.1 dB with the music bed audible under the voice.
+
+| Test | Item | How | Look (layout / hook / closing card / icon / accent) | Series | Music |
+|---|---|---|---|---|---|
+| Bestly Cloud | BC04 re-cut | re-cut job, note asked for a new take (8% of lines unchanged) | L3 / question / claim / rings / #8b9bf0 | Tip 1 of 8, "Quick fix" | bestly-cloud warm |
+| Bestly Agent | BA01 re-cut | hand-written ad with the variety plan | L2 / problem / qa / badge / #e59cff | Episode 1 of 8 | bestly-studio calm |
+| Bestly Studio | BS05 re-cut | re-cut job | L4 / myth / list / rings / #6fd3c4 | Tip 2 of 8, "Myth or fact" | bestly-studio upbeat |
+| Cookie Yeti | new CK04 | new job, brief of CK03 | L6 / problem / list / badge / #C9A6FF | Lesson 1 of 8, "Quick fix" | cookie-yeti upbeat |
+| HOKU | new H06 | new job, brief of H05 | L5 / bold count / claim / (no icons) / #CBA76C | Moment 1 of 8, "Can facts" | hoku warm |
+| InventoryProof | new I05 | new job, brief of I04 | L1 / problem / qa / orbit / #F2A33A | Tip 1 of 8, "Five minute fix" | inventoryproof calm |
+| Centering YOU | new CY31 | copy of CY29 (untouched) + borrowed bed + 2 callout cards | n/a (recording) | n/a | bestly-cloud warm, ducked under her voice |
+
+I04, CK03 and H05 are already approved, so those three tests are new videos from the same briefs, not re-cuts (a re-cut would have un-approved the item).
+Every video got a different layout set, a different hook style on three or more dimensions, and a different music track from the brand's last two; the six ledger rows show
+six different fingerprints. Real bugs found and fixed by the live runs: the opening gate compared the shared "what it is" sentence (now the hook sentence only), Bestly Studio's
+`phone` icon had no help text (KeyError), the closing card collided with the Next pill when the title wrapped (stack now tightens under a tease), and the huge stat word broke
+a short word like "Myth" across two lines (now sized to the column).
+
+Not exercised live: the HOLD path (`VarietyHold` -> held job -> `montage.variety` alert); it is covered by code review and the shared hold machinery (voice and music holds use
+the same code), and it fires only after three failed looks. HOKU's `qa` closing card is deliberately not offered (its end card is the can).
