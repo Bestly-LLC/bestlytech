@@ -30,6 +30,7 @@ import { AgentKnowledge } from "@/components/admin/agent/AgentKnowledge";
 import { AgentPrompt } from "@/components/admin/agent/AgentPrompt";
 import { AgentTailor } from "@/components/admin/agent/AgentTailor";
 import { CallSafetyCard } from "@/components/admin/CallSafetyCard";
+import { AgentOrdersCard } from "@/components/admin/AgentOrdersCard";
 import { boxCls, btnQuiet, money, ring, useAgent, useAgentSpend, type AgentSpend } from "@/components/admin/agent/agentApi";
 
 const cellCls = "flex min-h-[68px] w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.04] motion-reduce:transition-none";
@@ -169,6 +170,7 @@ export default function AgentDesk({ slug: slugProp }: { slug?: string }) {
       {ticketsOn ? <MayaTicketsModule messages={messagesCol} agent={{ slug: agent.slug, name: agent.name }} /> : has("calls") ? <div className="grid grid-cols-1 items-start gap-4">{messagesCol("")}</div> : null}
 
       {/* Call Guard (docs/call-guard-opusplan.md): what Maya's outbound dialer will be allowed to call. Only Maya makes outbound calls for Bestly. */}
+      {slug === "maya" && <AgentOrdersCard />}
       {slug === "maya" && <CallSafetyCard seller="bestly" who="Maya" />}
 
       {/* Setup: everything that changes how the agent works, out of the way of the daily desk. All rows start collapsed. */}
