@@ -18,11 +18,11 @@ const dueText = (d: string | null) => {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
   return { label, late: d.slice(0, 10) < today, today: d.slice(0, 10) === today };
 };
-const field = "h-11 w-full rounded-xl bg-white/[0.06] px-3 text-[15px] text-white outline-none ring-1 ring-white/10 placeholder:text-white/40 focus:ring-white/30";
+const field = "h-11 w-full rounded-xl bg-white/[0.06] px-3 text-[16px] text-white outline-none ring-1 ring-white/10 placeholder:text-white/50 focus-visible:ring-2 focus-visible:ring-white/60";
 
 export function AvaErrands() {
-  const { data, loading, missing, error, reload, hold } = usePipelineRpc<Errand[] | { errands: Errand[] }>("ava_errands_list");
-  const rows: Errand[] = Array.isArray(data) ? data : data?.errands ?? [];
+  const { data, loading, missing, error, reload, hold } = usePipelineRpc<Errand[]>("ava_errands_list");
+  const rows = data ?? [];
   const [adding, setAdding] = useState(false);
   const [f, setF] = useState({ title: "", who: "", phone: "", details: "", due: "" });
   const [busy, setBusy] = useState(false);

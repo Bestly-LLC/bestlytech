@@ -1,4 +1,4 @@
--- Pipeline page backend (docs/pipeline-opusplan.md). Admin-only RPCs; no public-key access.
+-- Pipeline page backend (applied 2026-10-12 in 4 parts: pipeline_part1..4) (docs/pipeline-opusplan.md). Admin-only RPCs; no public-key access.
 
 alter table public.voice_agents add column if not exists takes_leads boolean not null default false;
 update public.voice_agents set takes_leads = true where slug in ('maya','reese');
@@ -97,6 +97,19 @@ select * from (
 ) x;
 revoke all on public.pipeline_all from anon, authenticated;
 
+create or replace function public.pipeline_events(p_days int default 15) returns table(day date, kind text)
+language sql stable security definer set search_path = public as $$
+  with tz as (select 'America/Los_Angeles'::text z)
+  select (found_at at time zone z)::date, 'found' from pipeline_all, tz where found_at >= now() - make_interval(days => p_days)
+  union all select (qualified_at at time zone z)::date, 'qualified' from pipeline_all, tz where qualified_at >= now() - make_interval(days => p_days)
+  union all select (queued_at at time zone z)::date, 'queued' from pipeline_all, tz where queued_at >= now() - make_interval(days => p_days)
+  union all select (last_called_at at time zone z)::date, 'called' from maya_leads, tz where last_called_at >= now() - make_interval(days => p_days)
+  union all select (queued_at at time zone z)::date, 'called' from rg_calls, tz where direction = 'outbound' and not is_test and queued_at >= now() - make_interval(days => p_days)
+  union all select (updated_at at time zone z)::date, 'booked' from maya_leads, tz where status = 'booked' and updated_at >= now() - make_interval(days => p_days)
+  union all select (coalesce(ended_at, queued_at) at time zone z)::date, 'booked' from rg_calls, tz where outcome = 'booked' and not is_test and coalesce(ended_at, queued_at) >= now() - make_interval(days => p_days)
+$$;
+revoke all on function public.pipeline_events(int) from public, anon, authenticated;
+
 create or replace function public.pipeline_overview() returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -110,18 +123,6 @@ begin
   if not public.team_is_admin() then raise exception 'not allowed'; end if;
   select daily_cap into rg_cap from rg_settings where id;
 
-  -- events: one row per (day, kind)
-  create temp table if not exists _pl_ev (day date, kind text) on commit drop;
-  truncate _pl_ev;
-  insert into _pl_ev
-    select (found_at at time zone tz)::date, 'found' from pipeline_all where found_at >= now() - interval '15 days'
-    union all select (qualified_at at time zone tz)::date, 'qualified' from pipeline_all where qualified_at >= now() - interval '15 days'
-    union all select (queued_at at time zone tz)::date, 'queued' from pipeline_all where queued_at >= now() - interval '15 days'
-    union all select (last_called_at at time zone tz)::date, 'called' from maya_leads where last_called_at >= now() - interval '15 days'
-    union all select (queued_at at time zone tz)::date, 'called' from rg_calls where direction = 'outbound' and not is_test and queued_at >= now() - interval '15 days'
-    union all select (updated_at at time zone tz)::date, 'booked' from maya_leads where status = 'booked' and updated_at >= now() - interval '15 days'
-    union all select (coalesce(ended_at, queued_at) at time zone tz)::date, 'booked' from rg_calls where outcome = 'booked' and not is_test and coalesce(ended_at, queued_at) >= now() - interval '15 days';
-
   select jsonb_build_object(
       'found',     count(*) filter (where kind='found'),
       'qualified', count(*) filter (where kind='qualified'),
@@ -129,7 +130,7 @@ begin
       'called',    count(*) filter (where kind='called'),
       'booked',    count(*) filter (where kind='booked'),
       'targets',   jsonb_build_object('queued', coalesce((select sum(daily_target) from hunter_campaigns where enabled), 0)))
-    into v_today from _pl_ev where day = today_d;
+    into v_today from pipeline_events(2) e where e.day = today_d;
 
   select jsonb_build_object(
       'avg_reach', coalesce(round(avg(reach)::numeric, 3), 0),
@@ -144,11 +145,11 @@ begin
            'called',    coalesce(c.cl,0), 'booked', coalesce(c.b,0)) order by d.day), '[]'::jsonb)
     into v_funnel
     from (select generate_series(today_d - 13, today_d, interval '1 day')::date as day) d
-    left join (select day,
+    left join (select e.day,
                  count(*) filter (where kind='found') f, count(*) filter (where kind='qualified') q,
                  count(*) filter (where kind='queued') qd, count(*) filter (where kind='called') cl,
                  count(*) filter (where kind='booked') b
-               from _pl_ev group by day) c on c.day = d.day;
+               from pipeline_events(15) e group by e.day) c on c.day = d.day;
 
   select coalesce(jsonb_agg(jsonb_build_object('source', source, 'found', f, 'qualified', q) order by f desc), '[]'::jsonb)
     into v_sources
@@ -156,7 +157,7 @@ begin
                  count(*) filter (where qualified_at is not null) q
             from pipeline_all where found_at >= day_start - interval '13 days' group by 1) s;
 
-  select jsonb_build_object('ok', coalesce(h.ok, false), 'problems', coalesce(h.problems, '[]'::jsonb), 'checked_at', h.checked_at)
+  select jsonb_build_object('ok', coalesce(h.ok, false), 'problems', coalesce(to_jsonb(h.problems), '[]'::jsonb), 'checked_at', h.checked_at)
     into v_health from (select 1) one left join hunter_health h on h.source = 'hunter';
   if v_health is null then v_health := jsonb_build_object('ok', false, 'problems', '[]'::jsonb, 'checked_at', null); end if;
 

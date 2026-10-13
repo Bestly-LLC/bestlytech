@@ -24,7 +24,7 @@ function Facts({ title, data, hint }: { title: string; data: Record<string, unkn
       <dl className="grid grid-cols-2 gap-2">
         {rows.map(([k, v]) => (
           <div key={k} className="min-w-0 rounded-xl bg-white/[0.04] px-3 py-2 ring-1 ring-white/10">
-            <dt className="text-[12px] text-white/55">{human(k)}</dt>
+            <dt className="text-[12px] text-white/60">{human(k)}</dt>
             <dd className="break-words text-[14px] text-white">{/^\d{4}-\d\d-\d\dT/.test(v!) ? stamp(v) : v}</dd>
           </div>
         ))}
@@ -51,10 +51,10 @@ export function LeadSheet({ lead, agents, onClose, onChanged }: { lead: LeadRow 
     return () => { stop = true; };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const score = obj(detail?.score);
+  const score = detail?.score ?? null;
   const probs = obj(score?.outcome_probs) as Record<Outcome, number> | null;
-  const calls = obj(detail?.calls) ?? obj(detail?.call_history);
-  const apollo = obj(detail?.apollo);
+  const calls = detail?.calls ?? null;
+  const apollo = detail?.apollo?.found ?? null;
   const fit = fit100(lead?.fit);
 
   return (
@@ -81,7 +81,7 @@ export function LeadSheet({ lead, agents, onClose, onChanged }: { lead: LeadRow 
                 ["Phone line", lead.phone_present ? (lead.line_type ? human(lead.line_type) : "On file") : "No phone"],
                 ["Updated", stamp(lead.updated_at)],
               ].map(([k, v]) => (
-                <div key={k} className="rounded-xl bg-white/[0.04] px-3 py-2 ring-1 ring-white/10"><dt className="text-[12px] text-white/55">{k}</dt><dd className="whitespace-nowrap text-[15px] font-medium text-white">{v}</dd></div>
+                <div key={k} className="rounded-xl bg-white/[0.04] px-3 py-2 ring-1 ring-white/10"><dt className="text-[12px] text-white/60">{k}</dt><dd className="whitespace-nowrap text-[15px] font-medium text-white">{v}</dd></div>
               ))}
             </dl>
 
@@ -103,7 +103,7 @@ export function LeadSheet({ lead, agents, onClose, onChanged }: { lead: LeadRow 
               )}
               <Facts title="Company info" hint="From Apollo, when it found the company." data={apollo} />
               <Facts title="Calls so far" data={calls} />
-              <Facts title="Details" data={Object.fromEntries(Object.entries(detail ?? {}).filter(([k]) => !["score", "apollo", "calls", "call_history"].includes(k)))} />
+              <Facts title="Details" data={detail?.lead ?? null} />
             </>)}
           </div>
           <PullBackDialog lead={lead} open={pulling} onClose={() => setPulling(false)} onDone={() => { onChanged(); onClose(); }} />

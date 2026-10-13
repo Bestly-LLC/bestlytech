@@ -34,12 +34,12 @@ export function FlowCharts({ data }: { data: Overview }) {
         <p className="mt-1 text-[14px] text-white/60">Each bar is the leads found that day, colored by how far they got.</p>
         {total === 0 ? <Empty>No leads in the last 14 days yet.</Empty> : (
           <>
-            <div className="mt-3 h-[220px] w-full" role="img" aria-label={`Leads found per day for 14 days, ${total} in total`}>
+            <div className="mt-3 h-[220px] w-full" aria-hidden>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={rows} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                   <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.08)" />
-                  <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 11 }} tickLine={false} axisLine={false} interval={tickGap} />
-                  <YAxis allowDecimals={false} tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 11 }} tickLine={false} axisLine={false} width={44} />
+                  <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 12 }} tickLine={false} axisLine={false} interval={tickGap} />
+                  <YAxis allowDecimals={false} tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 12 }} tickLine={false} axisLine={false} width={44} />
                   <Tooltip cursor={{ fill: "rgba(255,255,255,0.05)" }} isAnimationActive={false}
                     contentStyle={{ background: "#141418", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, color: "#fff", fontSize: 13 }}
                     labelStyle={{ color: "#fff", fontWeight: 600 }} itemStyle={{ color: "rgba(255,255,255,0.85)" }} />
@@ -47,7 +47,10 @@ export function FlowCharts({ data }: { data: Overview }) {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-white/75">
+            <table className="sr-only"><caption>Leads found per day, by how far they got</caption>
+              <thead><tr><th>Day</th>{SEGS.map((x) => <th key={x.key}>{x.label}</th>)}</tr></thead>
+              <tbody>{rows.map((r) => <tr key={r.day}><th>{r.day}</th>{SEGS.map((x) => <td key={x.key}>{r[x.key]}</td>)}</tr>)}</tbody></table>
+            <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] text-white/80">
               {SEGS.map((s) => <li key={s.key} className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: s.color }} aria-hidden />{s.label}</li>)}
             </ul>
           </>

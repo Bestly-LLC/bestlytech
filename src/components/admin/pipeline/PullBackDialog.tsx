@@ -38,7 +38,7 @@ export function PullBackDialog({ lead, open, onClose, onDone }: { lead: Pick<Lea
               <span className="block text-[13px] text-white/65">{c.text}</span>
             </button>
           ))}
-          <button type="button" onClick={onClose} className="min-h-[44px] w-full rounded-xl text-[15px] text-white/70 hover:bg-white/5">Leave it where it is</button>
+          <button type="button" onClick={onClose} className="min-h-[44px] w-full rounded-xl text-[15px] text-white/75 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50">Leave it where it is</button>
         </div>
       </DialogContent>
     </Dialog>
