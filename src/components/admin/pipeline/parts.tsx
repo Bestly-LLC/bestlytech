@@ -53,7 +53,7 @@ export function Gate({ loading, missing, error, hasData, h, onRetry, children }:
   return (
     <div role="alert" className="rounded-2xl bg-amber-500/10 p-4 text-[15px] text-amber-100 ring-1 ring-amber-500/30">
       <p className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />{error ?? "Couldn't load this."}</p>
-      {onRetry && <button type="button" onClick={onRetry} className="mt-2 min-h-[44px] rounded-xl bg-white/10 px-4 font-medium text-white hover:bg-white/15">Try again</button>}
+      {onRetry && <button type="button" onClick={onRetry} className="mt-2 min-h-[44px] rounded-xl bg-white/10 px-4 font-medium text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50">Try again</button>}
     </div>
   );
 }

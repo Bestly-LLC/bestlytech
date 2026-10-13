@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { catLabel } from "@/components/admin/hunter/scoreUi";
 import { NBSP, fit100, pct, usePipelineRpc } from "./lib";
 import { Empty, Gate, Ring } from "./parts";
-import type { LeadRow, LeadStatus } from "./types";
+import type { LeadRow, LeadStatus, LeadsPage } from "./types";
 
 export const STATUS_LABEL: Record<LeadStatus, string> = { qualified: "Qualified", queued: "Queued", called: "Called", booked: "Booked", archived: "Archived", dnc: "Do not call", new: "New" };
 const STATUS_TONE: Record<LeadStatus, string> = {
@@ -13,7 +13,7 @@ const STATUS_TONE: Record<LeadStatus, string> = {
 };
 const SEGS = [["qualified", "Qualified"], ["queued", "Queued"], ["called", "Called"], ["all", "All"]] as const;
 const PAGE = 25;
-const sel = "h-11 rounded-xl bg-white/[0.06] px-3 text-[15px] text-white outline-none ring-1 ring-white/10 focus:ring-white/30";
+const sel = "h-11 rounded-xl bg-white/[0.06] px-3 text-[16px] text-white outline-none ring-1 ring-white/10 focus-visible:ring-2 focus-visible:ring-white/60";
 
 export const ownerName = (o: string) => o ? o.charAt(0).toUpperCase() + o.slice(1) : "Nobody";
 
@@ -26,11 +26,10 @@ export function LeadsList({ owners, onOpen }: { owners: Array<{ slug: string; na
   useEffect(() => { const t = setTimeout(() => setDq(q.trim()), 300); return () => clearTimeout(t); }, [q]);
   useEffect(() => setPages(1), [seg, owner, dq]);
 
-  const { data, loading, missing, error, reload } = usePipelineRpc<LeadRow[] | { leads?: LeadRow[]; rows?: LeadRow[] }>("pipeline_leads", {
-    p_status: seg, p_owner: owner === "all" ? null : owner, p_q: dq || null, p_limit: PAGE * pages + 1, p_offset: 0,
+  const { data, loading, missing, error, reload } = usePipelineRpc<LeadsPage>("pipeline_leads", {
+    p_status: seg, p_owner: owner === "all" ? null : owner, p_q: dq || null, p_limit: PAGE * pages, p_offset: 0,
   });
-  const all: LeadRow[] = Array.isArray(data) ? data : data?.leads ?? data?.rows ?? [];
-  const rows = all.slice(0, PAGE * pages), more = all.length > rows.length;
+  const rows = data?.rows ?? [], total = data?.total ?? 0, more = total > rows.length;
 
   return (
     <div className="space-y-3">
@@ -52,8 +51,9 @@ export function LeadsList({ owners, onOpen }: { owners: Array<{ slug: string; na
       </div>
 
       <Gate loading={loading} missing={missing} error={error} hasData={data != null} h={200} onRetry={() => void reload()}>
+        {rows.length > 0 && <p className="text-[13px] text-white/60"><span className="whitespace-nowrap tabular-nums">{rows.length}</span> of <span className="whitespace-nowrap tabular-nums">{total}</span> leads</p>}
         {rows.length === 0 ? <Empty>{dq ? "No leads match that search." : "No leads here yet."}</Empty> : (
-          <ul className="divide-y divide-white/10 overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/10">
+          <ul className="mt-2 divide-y divide-white/10 overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/10">
             {rows.map((l) => (
               <li key={`${l.lead_table}:${l.id}`}>
                 <button type="button" onClick={() => onOpen(l)} className="flex min-h-[64px] w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/50 sm:px-4">
@@ -73,7 +73,7 @@ export function LeadsList({ owners, onOpen }: { owners: Array<{ slug: string; na
             ))}
           </ul>
         )}
-        {more && <button type="button" onClick={() => setPages((p) => p + 1)} className="mt-2 min-h-[44px] w-full rounded-xl bg-white/10 text-[15px] font-medium text-white hover:bg-white/15">Show more leads</button>}
+        {more && <button type="button" onClick={() => setPages((p) => p + 1)} className="mt-2 min-h-[44px] w-full rounded-xl bg-white/10 text-[15px] font-medium text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50">Show <span className="whitespace-nowrap tabular-nums">{total - rows.length}</span> more</button>}
       </Gate>
     </div>
   );

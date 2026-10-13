@@ -34,7 +34,7 @@ function HealthChip({ h }: { h: Overview["health"] | undefined }) {
       <c.Icon className="h-4 w-4 shrink-0" aria-hidden />
       <span className="leading-tight">
         <span className="block whitespace-nowrap text-[15px] font-semibold">{c.text}</span>
-        {h && <span className="block text-[11px] opacity-80">Checked {stamp(h.checked_at)}</span>}
+        {h && <span className="block text-[12px] opacity-90">Checked {stamp(h.checked_at)}</span>}
       </span>
     </span>
   );

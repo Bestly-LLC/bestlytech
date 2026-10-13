@@ -42,11 +42,11 @@ function OpenLink({ a }: { a: PipelineAgent }) {
 }
 
 function AgentCard({ a }: { a: PipelineAgent }) {
+  const short = a.kind === "leads" && a.queued < a.target;
   const pct = a.target > 0 ? Math.min(100, Math.round((a.queued / a.target) * 100)) : 0;
-  const low = a.kind === "leads" && a.target > 0 && a.queued < a.target * 0.5;
   return (
     <Panel className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-x-2">
         <div className="min-w-0">
           <h3 className="text-[18px] font-semibold text-white">{a.name}</h3>
           <p className="text-[14px] text-white/60">{a.purpose}</p>
@@ -56,14 +56,18 @@ function AgentCard({ a }: { a: PipelineAgent }) {
       {a.kind === "leads" ? (
         <>
           <div>
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-[14px]">
-              <span className="text-white/80">Waiting to be called</span>
-              <span className={cn("whitespace-nowrap tabular-nums", low ? "text-orange-300" : "text-white/80")}>{a.queued}{NBSP}of{NBSP}{a.target} wanted</span>
-            </div>
-            <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-white/10" role="img" aria-label={`${a.queued} leads waiting of ${a.target} wanted`}>
-              <div className={cn("h-full rounded-full motion-safe:transition-[width] motion-safe:duration-500", low ? "bg-orange-400" : "bg-violet-400")} style={{ width: `${pct}%` }} />
-            </div>
-            {low && <p className="mt-1 text-[12px] text-orange-200">Running low. Send more leads or wait for tonight's run.</p>}
+            <p className="text-[14px] text-white/80">
+              Waiting to be called: <span className={cn("whitespace-nowrap font-semibold tabular-nums", short ? "text-orange-300" : "text-white")}>{a.queued}{NBSP}ready</span>
+              <span className="text-white/50">{" · "}</span><span className="whitespace-nowrap tabular-nums">{a.target}{NBSP}a{NBSP}day</span>
+            </p>
+            {short && (
+              <>
+                <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-white/10" role="img" aria-label={`${a.queued} leads ready, ${a.target} a day wanted`}>
+                  <div className="h-full rounded-full bg-orange-400 motion-safe:transition-[width] motion-safe:duration-500" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="mt-1 text-[13px] text-orange-200">Not enough for a full day. Send more leads or wait for tonight's run.</p>
+              </>
+            )}
           </div>
           <dl className="grid grid-cols-2 gap-2">
             <div className="rounded-xl bg-white/[0.04] px-3 py-2 ring-1 ring-white/10"><dd className="text-[22px] font-semibold tabular-nums leading-none text-white">{a.calls_today}</dd><dt className="mt-1 text-[12px] text-white/60">Calls today</dt></div>
@@ -74,12 +78,9 @@ function AgentCard({ a }: { a: PipelineAgent }) {
       ) : (
         <>
           <dl className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl bg-white/[0.04] px-3 py-2 ring-1 ring-white/10"><dd className="text-[22px] font-semibold tabular-nums leading-none text-white">{a.calls_week ?? a.calls_today}</dd><dt className="mt-1 text-[12px] text-white/60">{a.calls_week != null ? "Calls this week" : "Calls today"}</dt></div>
+            <div className="rounded-xl bg-white/[0.04] px-3 py-2 ring-1 ring-white/10"><dd className="text-[22px] font-semibold tabular-nums leading-none text-white">{a.calls_today}</dd><dt className="mt-1 text-[12px] text-white/60">Calls today</dt></div>
           </dl>
-          <div>
-            <p className="text-[14px] font-medium text-white/85">What people ask about</p>
-            {a.top_questions?.length ? <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[14px] text-white/70">{a.top_questions.map((q) => <li key={q}>{q}</li>)}</ul> : <Empty>No questions yet.</Empty>}
-          </div>
+          <OutcomeStrip o={a.outcomes} />
         </>
       )}
     </Panel>
