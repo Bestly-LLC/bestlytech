@@ -24,6 +24,7 @@ import { useLiveCalls, LIVE_ENDED_EVENT } from "@/components/admin/roofguard/Ava
 import { AvaCalendars } from "@/components/admin/roofguard/AvaCalendars";
 import { AvaCell, CellSwitch } from "@/components/admin/roofguard/AvaCell";
 import { AvaSpam } from "@/components/admin/roofguard/AvaSpam";
+import { AvaOwnerPin } from "@/components/admin/roofguard/AvaOwnerPin";
 import { VoicePicker } from "@/components/admin/roofguard/AvaVoice";
 import { CollapsibleSection } from "@/components/admin/roofguard/CollapsibleSection";
 import { AvaSettingsSheet, SettingsButton } from "@/components/admin/roofguard/AvaSettings";
@@ -232,6 +233,7 @@ export default function AvaAssistant() {
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <AvaCalendars />
         <AvaCell onOpenSettings={() => setSettingsOpen(true)} />
+        <AvaOwnerPin />
         <AvaSpam />
       </div>
 
