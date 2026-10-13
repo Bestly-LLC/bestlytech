@@ -105,3 +105,48 @@ Fix: a **single-use, narrow grant**.
 - Voice yes approves everything except money / delete / client-facing / registrar / paid-AI — those still need his tap.
 - No PIN; spoofing risk handled by the guardrail list + daily caps + Ava-signed notes.
 - Paid AI is never turned on from a call.
+
+---
+
+# Phase B: approve and undo with a passkey tap (Opus plan, 2026-10-13 1:35 PM)
+
+Jared picked **passkey tap**. Who holds authority is the key point: **the phone call never approves anything.** Ava only *requests* an approval. The approval happens on Jared's phone, in his signed-in admin session, behind Face ID (WebAuthn user verification). It is the same "Yes, do it" the Fix Ladder pane already has, reached faster. Caller-ID spoofing then gets an attacker nothing more than a push Jared ignores.
+
+## Ground truth (verified 2026-10-13)
+- Admin passkeys already exist: `src/lib/passkey.ts` plus the edge functions `webauthn-register` / `webauthn-authenticate` (Face ID / Touch ID, used by `AdminLogin`, `DeviceSignIn`, Settings).
+- Browser push already exists: `push-subscribe` / `push-notify` (Safari + Chrome popups for the admin).
+- Short guest links already route in `src/App.tsx` (`/t/:token`, `/g/:token`, `/d/:token`, `/p/:token`). Every link has to be short, per his rule.
+- `ava-admin` `/fix` (Phase A, v4) returns `needs_tap` for approve and undo. Fix Ladder `needs_yes` incidents carry `scout_ask`. The pane's "Yes, do it" sends `Yes, do it: <scout_ask>` to Scout as Jared (admin JWT), which allows writes. The undo records are in `security_autofix_log` and wherever Phase A found them.
+
+## Flow
+1. On the call, Jared says "approve the Pi fix". Ava calls `fix_issue {action:"approve", issue, confirmed:true}` after reading it back.
+2. `ava-admin` writes an `ava_approvals` row: id, short code (7 chars, as in `/t/abc1234`), kind approve|undo, issue_key, the exact action_text, conversation_id, expires_at (+10 min), status pending. It sends a **push** to Jared's subscribed devices: title "Ava: tap to approve", body = the action in plain words, link `bestly.tech/y/<code>`. It returns `{ok:true, say:"Sent to your phone. Tap it and Face ID it."}`.
+3. `/y/:code` is a new tiny page (Apple design pass). It requires admin sign-in; if he's signed out it sends him to the passkey login and returns to `/y/:code`. It shows exactly what will run, who asked (Ava, from the call at 1:42 PM), and the expiry, with two buttons: **Approve** and **No**.
+4. **Approve** runs a fresh passkey ceremony through `webauthn-authenticate`, with user verification **required**. A signed-in session alone is not enough; every approval needs its own Face ID. On success the page calls the RPC `ava_approval_decide(code, 'approve', <assertion proof>)`. The RPC is admin-guarded and checks that the assertion is fresh (under 60 s) and bound to this approval's challenge. The page then runs the approved action through the **same paths the admin already uses**:
+   - approve → the same askScout "Yes, do it: <scout_ask>" call the Fix Ladder pane makes (admin JWT, so Jared really is present).
+   - undo → the existing undo path for that record, called with the admin JWT.
+5. Ava `check`s the approval on the call (`fix_issue {action:"check"}` reads approval status, then the Scout job). She says "Got your tap. Scout's on it," and later gives the result.
+6. **No**, expiry, or a second use sets status declined, expired or used. Nothing runs.
+
+## Guardrails
+- **No change to admin-chat's autopilot rules.** No grant table and no service-path write mode. Everything that writes runs from Jared's authenticated browser.
+- One push per approval. At most 5 pending approvals at a time and 20 a day. Codes are single-use, expire in 10 minutes, and are bound to one issue_key and one action_text. If the incident changed since the request (its scout_ask is different now), the page refuses and asks Ava to re-request.
+- Push class: add a narrow, documented **`requested_now`** interrupt class to `interrupt_class()`. It applies only to `ava_approvals` pushes created during a verified live Ava call from Jared's number. Jared asked for it on the call, so it's a real person, him, waiting. No other source can use it.
+- Paid AI is never switched on by this flow; Scout follows the master switch as usual.
+- Every request and decision is logged (`ava_admin_bridge_log` plus an Ava-signed info note: "You approved X at 1:43 PM").
+- Privacy: `ava_approvals` holds no phone or email. If it ends up holding one, add `privacy_data_map` rows.
+
+## Watchdog (extend the existing :17 selftest)
+- Expire stale pending approvals.
+- Check that `/y/:code` renders (a GET of the page shell).
+- Check that push-notify is reachable.
+- Check that an expired or used code is refused by `ava_approval_decide`.
+- Repair or raise `ava.admin-bridge` as today, signed by Ava.
+
+## Ship
+- Migration `20261013220000_ava_passkey_approvals.sql`: table, RLS (admin only), the `ava_approval_decide` RPC, the `interrupt_class()` addition, and the team card pulse.
+- `ava-admin` approve/undo now create the request instead of returning `needs_tap`. `check` covers approvals.
+- Page `src/pages/AvaApprove.tsx` plus the route `/y/:code` in `src/App.tsx`. Use the Apple design skill, then UI UX Pro Max. Don't truncate text, don't split a number from its unit, and use 12-hour times.
+- The prompt block learns: "Sent to your phone, tap and Face ID it", then check.
+- Tests: create a request on a harmless incident and stop before tapping (Jared does the first real tap). Expired, used and mismatched codes must be refused. A signed-out visit must go to passkey login. tsc and build must be clean.
+- Commit and push. Write the bestly_memory row `ava/passkey-approvals-2026-10-13`.
