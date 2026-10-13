@@ -109,6 +109,7 @@ def normalize(path, jid=None):
     tmp = path + ".norm.mp4"
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", path, "-c:v", "libx264", "-preset", "slow", "-crf", "19", "-profile:v", "high",
            "-level", "4.1", "-pix_fmt", "yuv420p", "-vf", "scale=in_range=full:out_range=tv" if full else "scale=out_range=tv",
+           "-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709:fullrange=off",   # ffmpeg 7.1 on the Pi drops -color_primaries/-color_trc for libx264
            "-color_range", "tv", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
            "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", tmp]
     if jid:
