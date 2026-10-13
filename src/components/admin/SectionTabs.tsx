@@ -27,20 +27,20 @@ function TabFallback() {
  * A section page: one header, a tab bar, and the active tab's page.
  * The tab lives in the URL (?tab=) so links, back and refresh work; other query params are kept.
  */
-export function SectionTabs({ title, description, tabs }: { title: string; description: string; tabs: SectionTab[] }) {
+export function SectionTabs({ title, description, tabs, paramName = "tab", embedded }: { title: string; description: string; tabs: SectionTab[]; /** URL param that holds the active tab. */ paramName?: string; /** Drop the page header (used when another page already has one). */ embedded?: boolean }) {
   const [params, setParams] = useSearchParams();
-  const active = tabs.find((t) => t.value === params.get("tab")) ?? tabs[0];
+  const active = tabs.find((t) => t.value === params.get(paramName)) ?? tabs[0];
 
   const selectTab = (value: string) => {
     const next = new URLSearchParams(params);
-    if (value === tabs[0].value) next.delete("tab");
-    else next.set("tab", value);
+    if (value === tabs[0].value) next.delete(paramName);
+    else next.set(paramName, value);
     setParams(next);
   };
 
   return (
     <div className="space-y-6 min-w-0">
-      <PageHeader title={title} description={description} />
+      {!embedded && <PageHeader title={title} description={description} />}
 
       <Tabs value={active.value} onValueChange={selectTab} activationMode="manual">
         <div className="-mx-1 overflow-x-auto px-1 pb-1">

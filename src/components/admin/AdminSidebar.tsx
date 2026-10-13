@@ -43,13 +43,9 @@ type CountKeys =
 
 export const dashboardItem = { title: "Command Center", url: "/admin", icon: LayoutDashboard };
 
-// Work: Leads is the CRM (every funnel in one pipeline); inbound messages, waitlist, meetings and settings sit beside it.
+// Work: Pipeline is leads from found to called, with the CRM as its Inbound tab; inbound messages, waitlist, meetings and settings sit beside it.
 const workItems = [
-  {
-    title: "Leads", url: "/admin/leads", icon: Users, countKey: "leads" as CountKeys,
-    // Hunter is its own sub-area under Leads: finds, checks and queues the leads Maya calls (free, no Claude tokens).
-    nested: [{ title: "Hunter", url: "/admin/leads/hunter", icon: Crosshair, nested: [{ title: "Jev scores", url: "/admin/leads/hunter/scores", icon: Gauge }] }],
-  },
+  { title: "Pipeline", url: "/admin/pipeline", icon: Users, countKey: "leads" as CountKeys },
   { title: "Contacts", url: "/admin/contacts", icon: Mail, countKey: "contacts" as CountKeys },
   { title: "Waitlist", url: "/admin/waitlist", icon: ListChecks },
   { title: "Meetings", url: "/admin/meetings", icon: Mic },
@@ -350,10 +346,8 @@ export function AdminSidebar() {
     if (path === "/admin") return currentPath === "/admin";
     if (path === "/admin/cookie-yeti") return currentPath === "/admin/cookie-yeti";
     if (path === "/admin/home-hub") return currentPath === "/admin/home-hub";
-    // Lead detail pages (a cloud deal, a marketplace submission) belong to Leads.
-    if (path === "/admin/leads") return !currentPath.startsWith("/admin/leads/hunter") && ["/admin/leads", "/admin/cloud", "/admin/submissions", "/admin/hires"].some((p) => currentPath.startsWith(p));
-    // Hunter's overview lights up only on its own page; "Jev scores" lights up on the score screen.
-    if (path === "/admin/leads/hunter") return currentPath === "/admin/leads/hunter" || currentPath === "/admin/hunter";
+    // Lead detail pages (a cloud deal, a marketplace submission) belong to Pipeline (its Inbound tab).
+    if (path === "/admin/pipeline") return ["/admin/pipeline", "/admin/cloud", "/admin/submissions", "/admin/hires"].some((p) => currentPath.startsWith(p));
     // A deeper nav item wins: on /admin/turo/lax-pass only "Guest Trips" lights up, not "Turo Watch".
     const under = (p: string) => currentPath === p || currentPath.startsWith(p + "/");
     if (!under(path)) return false;
@@ -458,7 +452,7 @@ export function AdminSidebar() {
     const active = isActive(item.url);
     const count = item.countKey ? counts[item.countKey] ?? 0 : item.badge ?? 0;
     // A page gets a dot when something waiting points at it (the home page only for its own items).
-    const hits = Object.entries(attention).filter(([p]) => (item.url === "/admin" ? p === "/admin" : item.url === "/admin/leads" && p.startsWith("/admin/leads/hunter") ? false : p === item.url || p.startsWith(item.url + "/")));
+    const hits = Object.entries(attention).filter(([p]) => (item.url === "/admin" ? p === "/admin" : p === item.url || p.startsWith(item.url + "/")));
     const dot = hits.length
       ? { level: hits.reduce<Level>((l, [, v]) => (LEVEL_RANK[v.level] > LEVEL_RANK[l] ? v.level : l), "blue"), n: hits.reduce((n, [, v]) => n + v.n, 0), why: hits[0][1].why }
       : null;
