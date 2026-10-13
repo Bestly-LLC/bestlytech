@@ -340,6 +340,14 @@ const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
 
 const SITE = "https://bestly.tech"; // short guest links: bestly.tech/t/<7 chars>
+/** Opens a guest trip page from the admin. A plain target=_blank link to /t/... did nothing in the installed admin
+ *  web app (its scope is /admin), so open the full URL ourselves and fall back to this tab if a new one is blocked. */
+function openTrip(url: string) {
+  let w: Window | null = null;
+  // No "noopener" feature here: with it window.open always returns null and we could not tell a blocked popup apart.
+  try { w = window.open(url, "_blank"); if (w) w.opener = null; } catch { /* blocked */ }
+  if (!w) window.location.assign(url);
+}
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 
 export function GuestRow({ r, reload, compact }: { r: Row; reload: () => void; compact?: boolean }) {
@@ -387,12 +395,21 @@ export function GuestRow({ r, reload, compact }: { r: Row; reload: () => void; c
         </p>
       )}
       </>}
+      {compact && delivery && (
+        <p className="mt-1 text-sm text-white/70 bento:text-neutral-600">
+          <span className="font-medium text-[#F0A070] bento:text-[#A8480F]">Delivery · {dShort}</span>
+          {dNotes.length ? dNotes.map(([k, v]) => <span key={k}> · <span className="text-white/45 bento:text-neutral-400">{k}</span> {v}</span>)
+            : <span className="text-white/45 bento:text-neutral-400"> · waiting on {(r.delivery_ask ?? []).includes("eta") ? "the train time" : "the unit # and parking notes"} from the guest</span>}
+        </p>
+      )}
       {link ? (
         <>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <CopyButton text={msg} label="Copy message for Turo" />
             <CopyButton text={link} label="Copy link" />
-            <a href={`/t/${r.token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white bento:text-neutral-500">Open <ExternalLink className="h-3.5 w-3.5" /></a>
+            <button type="button" onClick={() => openTrip(link)}
+              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-white/15 px-3.5 text-sm text-white hover:bg-white/[0.06] bento:border-neutral-200 bento:text-neutral-800">
+              Open guest page <ExternalLink className="h-3.5 w-3.5" aria-hidden /></button>
           </div>
           {new Date(r.starts_at) <= new Date() && <ChargingAdmin res={r.reservation_id} first={r.first} />}
           <ActivityRow a={r.activity} res={r.reservation_id} home={home} />
