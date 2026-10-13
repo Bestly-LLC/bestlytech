@@ -50,6 +50,10 @@
       "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/ltx-box?v=:code"
     },
     {
+      "source": "/c/([a-z0-9]+)",
+      "destination": "/connect/go.html"
+    },
+    {
       "source": "/t/(.*)",
       "destination": "/trip.html"
     },
