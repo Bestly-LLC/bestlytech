@@ -685,7 +685,7 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number; compact?: 
                              width: r * 2, height: r * 2, opacity: Math.min(1, logo) * (0.35 + 0.45 * Math.sin(f / (18 + i * 3) + i * 2) ** 2),
                              background: `radial-gradient(circle, ${rgba(t.accent, 0.85)} 0%, ${rgba(t.accent, 0.22)} 42%, ${rgba(t.accent, 0)} 72%)`}} />
       ))}
-      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: e.tease ? (compact ? 0 : -40) : compact ? 60 : 90}}>
+      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: e.tease ? (compact ? -130 : -40) : compact ? 60 : 90}}>
         {b.end.orb ? (
           <div style={{marginBottom: 56, opacity: Math.min(1, logo), transform: `scale(${0.6 + 0.4 * logo})`}}><Orb size={190} t={t} /></div>
         ) : null}
