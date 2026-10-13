@@ -123,6 +123,8 @@
 /* ---------- Light re-skin of the shared (dark) trip components ---------- */
 /* text */
 .trip-light .text-white:not(.trip-keep *) { color: var(--d-ink); }
+/* Dark ink buttons (End call, Send) keep white text: the light skin above must never put ink on ink. */
+.trip-light [class*="bg-[#13282A]"].text-white, .trip-light [class*="bg-[#13282A]"] .text-white { color: #fff; }
 .trip-light :is(.text-white\/95, .text-white\/90, .text-white\/85, .text-white\/80):not(.trip-keep *) { color: #2C3D3E; }
 .trip-light :is(.text-white\/75, .text-white\/70, .text-white\/65, .text-white\/60):not(.trip-keep *) { color: var(--d-body); }
 .trip-light :is(.text-white\/55, .text-white\/50, .text-white\/45, .text-white\/40, .text-white\/35):not(.trip-keep *) { color: var(--d-mute); }
