@@ -655,7 +655,7 @@ def _render(jd, job, jid):
 
 
 def _has_graphics(props):
-    return any(s.get("icon") for s in props["scenes"]) or bool((props.get("end") or {}).get("chips")) or \
+    return any(s.get("icon") or s.get("card") for s in props["scenes"]) or bool((props.get("end") or {}).get("chips")) or \
         bool((props.get("brand") or {}).get("ambient")) or bool(((props.get("brand") or {}).get("end") or {}).get("heroLogo"))
 
 
@@ -664,11 +664,13 @@ def _plain(props):
     p = json.loads(json.dumps(props))
     for s in p["scenes"]:
         s.pop("icon", None)
+        s.pop("card", None)
     if p.get("end"):
         p["end"].pop("chips", None)
     if p.get("brand"):
         p["brand"].pop("ambient", None)
         (p["brand"].get("end") or {}).pop("heroLogo", None)
+        (p["brand"].get("end") or {}).pop("orb", None)
     return p
 
 
@@ -726,7 +728,8 @@ def process(job):
         report(jid, stage="writing", note="re-cutting with the change note" if job.get("parent_job_id") else "writing the script with free AI")
         script = brand.write(job, note)
         job["script"] = script
-        report(jid, stage="voicing", script=script, note=f"script ok via {script['provider']} (editor {script['score']:g}/10)")
+        report(jid, stage="voicing", script=script, note=(f"script ok ({script['provider']}, passed the claim rules)" if script["provider"] == "hand-written"
+                                                          else f"script ok via {script['provider']} (editor {script['score']:g}/10)"))
         _music_gate(brand, job["client_slug"])          # before the voice is bought: no track for the brand = held, nothing spent
         total, vinfo = voice(brand, script, jd, jid, job["client_slug"])
         _voice_report(jid, vinfo)
@@ -764,7 +767,7 @@ def process(job):
     clips = clips_for(job, script, jd, note) if (job.get("clips") or job.get("parent_job_id")) else {}
     props = {"theme": script["theme"],
              "scenes": [{**{k: s[k] for k in ("kicker", "line", "start", "end")}, **({"clip": clips[i]} if i in clips else {}),
-                         **({"icon": s["icon"]} if s.get("icon") else {})}
+                         **({"icon": s["icon"]} if s.get("icon") else {}), **({"card": s["card"]} if s.get("card") else {})}
                         for i, s in enumerate(script["scenes"])],
              "end": {k: v for k, v in script["end"].items() if k != "say"},
              "audio": {"narration": "narration.wav", "music": "music.wav", "musicVolume": 1.0}}   # music.wav is already ducked under the voice (music.py)
@@ -818,8 +821,10 @@ def process(job):
                        **({"recut_changed": script["recut_changed"]} if script.get("recut_changed") is not None else {}),
                        **({"graphics": True} if _has_graphics(props) else {})},
         "note": ((f"Re-cut with the note: \"{(job.get('revise_note') or '')[:300]}\". " if job.get("parent_job_id") else "")
-                 + f"Montage made this from the brief: \"{job['brief'][:300]}\". Script by free AI ({script['provider']}), "
-                 f"passed {getattr(brand, 'NAME', 'HOKU')}'s claim rules and fact check (editor {script['score']:g}/10). Voice: {'ElevenLabs' if vinfo.get('provider') == 'elevenlabs' else 'Piper'}. "
+                 + f"Montage made this from the brief: \"{job['brief'][:300]}\". "
+                 + (f"Script hand-written for this ad, passed {getattr(brand, 'NAME', 'HOKU')}'s claim rules and number guard. " if script["provider"] == "hand-written" else
+                    f"Script by free AI ({script['provider']}), passed {getattr(brand, 'NAME', 'HOKU')}'s claim rules and fact check (editor {script['score']:g}/10). ")
+                 + f"Voice: {'ElevenLabs' if vinfo.get('provider') == 'elevenlabs' else 'Piper'}. "
                  + (f"{len(clips)} b-roll clip(s) from the LTX box. " if clips else "")
                  + f"Rendered on the Pi in {render_s}s with OpenMontage.")})
     return f"filed #{r.get('code')} '{script['title']}' ({total:.0f}s video, rendered in {render_s}s)"

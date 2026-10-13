@@ -12,4 +12,9 @@ for w in 500 600 700 800; do
 done
 get brand/cookieyeti-icon.png cookie-yeti/art/cookieyeti-icon.png
 get proofy/proofy-cheering-arms-up.png inventoryproof/art/proofy-cheering-arms-up.png
+# Bestly Agent ad (2026-10-13): the fictional caller's portrait and the made-up business's logo, from the repo's public/agent-demo (same files bestly.tech/agent shows)
+G=https://raw.githubusercontent.com/Bestly-LLC/bestlytech/main/public/agent-demo
+mkdir -p "$K/bestly-agent"
+curl -fsS -o "$K/bestly-agent/mark-ellis.webp" "$G/people/mark-ellis.webp"
+curl -fsS -o "$K/bestly-agent/ridgeline-plumbing.svg" "$G/logos/ridgeline-plumbing.svg"
 find "$K" -type f | sort

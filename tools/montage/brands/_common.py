@@ -48,7 +48,7 @@ Write 4 or 5 scenes. Each scene has:
 All "say" together: 35 to 70 words. One idea, told in order, quietly. Useful to someone who never installs or buys anything.
 {speak_rule}
 Write for the least-informed viewer there is: everyday words, short sentences, no jargon or tech terms.
-In the caption's last paragraph say only what the facts above say {name} does; invent no feature, promise or result. No statistics, prices, percentages or numerals (write any number as a word).
+In the caption's last paragraph say only what the facts above say {name} does; invent no feature, promise or result. {number_rule}
 Write only what is true and verifiable; if unsure, say less. American English spelling.
 "caption": 25 to 70 words of prose for the post, two or three short paragraphs. {name} appears only in the LAST paragraph,
 once, answering the idea the video told. No hashtags, emoji, questions or "link in bio".
@@ -63,6 +63,7 @@ SHOT_RULE = """
   at the camera, no text, signs, logos or brands, no invented app screens, websites or user interfaces; a phone or laptop
   may only appear as a dark silhouette with a blank screen. Calm and natural, like quiet documentary b-roll."""
 
+NUMBER_RULE = "No statistics, prices, percentages or numerals (write any number as a word)."
 SPEAK_DEFAULT = 'Speak to the viewer ("you"); never say "we" and never describe what {name} does inside the scenes. Do not name {name} in any scene.'
 SPEAK_EXPLAIN = ('Speak to the viewer ("you"); never say "we". Do not name {name} in any scene, but SCENE 1 MUST say plainly what the product is and '
                  'who it is for, in everyday words (its category, for example "a private cloud for small businesses: one box that holds your '
@@ -142,7 +143,7 @@ def _clean_note(note):
 
 def glue(text):
     """Keep a number with its unit: 'two years' / '3 days' never split across lines."""
-    t = re.sub(r"(\d) +(?=[A-Za-z])", r"\1" + NBSP, text or "")
+    t = re.sub(r"(\d\+?) +(?=[A-Za-z])", r"\1" + NBSP, text or "")
     return re.sub(rf"\b({NUMWORD}) +(?=[a-z])", r"\1" + NBSP, t, flags=re.I)
 
 
@@ -241,17 +242,20 @@ def check(cfg, p, broll=False):
         e.append("no questions anywhere")
     if EMOJI.search(blob) or "#" in blob:
         e.append("no emoji or hashtags anywhere")
-    if re.search(r"\d", blob):
-        e.append("no numerals anywhere (write numbers as words; never statistics)")
-    if STATS.search(blob) or PRICE.search(blob) or re.search(r"\b\d*\s*(percent|dollars|bucks)\b", blob, re.I):
-        e.append("no statistics, percentages or prices")
+    if not cfg.get("allow_numbers"):       # Bestly Agent ads state the plan price and the language count; its claim rules + extra_check police them
+        if re.search(r"\d", blob):
+            e.append("no numerals anywhere (write numbers as words; never statistics)")
+        if STATS.search(blob) or PRICE.search(blob) or re.search(r"\b\d*\s*(percent|dollars|bucks)\b", blob, re.I):
+            e.append("no statistics, percentages or prices")
+    if cfg.get("extra_check"):
+        e += cfg["extra_check"](blob)
     if BAIT.search(blob):
         e.append("no engagement-bait phrases: " + BAIT.search(blob).group(0))
     if cfg.get("no_absolutes") and ABSOLUTE.search(blob):
         e.append(f"no absolutes: you wrote '{ABSOLUTE.search(blob).group(0)}' (never / nobody / always / fully / completely / any time...): say the plain, "
                  "smaller, true thing instead")
-    if re.search(r"https?://|www\.|\.com\b|\.tech\b", blob, re.I):
-        e.append("no links")
+    if re.search(r"https?://|www\.|\.com\b|\.tech\b", blob.replace(cfg.get("allow_links") or "\0", ""), re.I):
+        e.append("no links" + (f" (only {cfg['allow_links']} is allowed)" if cfg.get("allow_links") else ""))
     if e:
         return e
     pieces = [("caption", cap)] + [(f"scene {i}", f"{s.get('kicker') or ''}. {s['line']} {s['say']}") for i, s in enumerate(scenes, 1)]
@@ -289,7 +293,7 @@ def chip_problems(cfg, c):
         e.append(f"text '{t}' must be 2-4 words and at most 24 letters")
     if CHIP_VAGUE.search(t):
         e.append(f"text '{t}' is vague or jargon ('{CHIP_VAGUE.search(t).group(0)}'): name a concrete thing the owner gets")
-    topics = [(n, ic) for n, rx, ic in CHIP_TOPICS if re.search(rf"\b({rx})\b", t, re.I)]
+    topics = [(n, ic) for n, rx, ic in list(CHIP_TOPICS) + list(cfg.get("chip_topics") or []) if re.search(rf"\b({rx})\b", t, re.I)]
     if not topics:
         e.append(f"text '{t}' names nothing concrete (files, calendar, chat, passwords, fees, owning the box, support, backups, privacy)")
     elif icon in (cfg.get("icons") or []):
@@ -323,10 +327,13 @@ def check_end(cfg, p):
     if len(set(ic)) != len(ic):
         e.append("end card chips need a different icon each")
     blob = " ".join([sub] + texts)
-    if "?" in blob or "#" in blob or EMOJI.search(blob) or re.search(r"\d", blob):
+    if "?" in blob or "#" in blob or EMOJI.search(blob) or (re.search(r"\d", blob) and not cfg.get("allow_numbers")):
         e.append("end card text: no questions, hashtags, emoji or numerals")
-    if STATS.search(blob) or PRICE.search(blob) or BAIT.search(blob) or re.search(r"https?://|www\.|\.com\b|\.tech\b", blob, re.I):
+    if (STATS.search(blob) and not cfg.get("allow_numbers")) or (PRICE.search(blob) and not cfg.get("allow_numbers")) or BAIT.search(blob) \
+            or re.search(r"https?://|www\.|\.com\b|\.tech\b", blob.replace(cfg.get("allow_links") or "\0", ""), re.I):
         e.append("end card text: no statistics, prices, bait phrases or links")
+    if cfg.get("extra_check"):
+        e += [f"end card text: {x}" for x in cfg["extra_check"](blob)]
     if cfg.get("no_absolutes") and ABSOLUTE.search(blob):
         e.append(f"end card text: no absolutes, you wrote '{ABSOLUTE.search(blob).group(0)}'")
     if e:
@@ -455,7 +462,8 @@ def write(job, log, cfg):
     explain = bool(parent) or cfg.get("explain_first")
     system = SYS.format(name=cfg["name"], about=cfg["about"], brief=job["brief"],
                         speak_rule=(SPEAK_EXPLAIN if explain else SPEAK_DEFAULT).format(name=cfg["name"]),
-                        icon_rule=ICON_RULE.format(icon_help="; ".join(f"{k} = {ICON_HELP[k]}" for k in icons)) if icons else "",
+                        number_rule=cfg.get("number_rule") or NUMBER_RULE,
+                        icon_rule=ICON_RULE.format(icon_help="; ".join(f"{k} = {({**ICON_HELP, **(cfg.get('icon_help') or {})})[k]}" for k in icons)) if icons else "",
                         icon_key=', "icon": "..."' if icons else "",
                         shot_rule=SHOT_RULE.format(shot_brand=cfg["shot_brand"]) if broll else "",
                         shot_key=', "shot": "..."' if broll else "")
