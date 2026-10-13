@@ -24,6 +24,10 @@ async function checks(): Promise<Check[]> {
   const { data: link } = await sb.from("lax_guest_links").select("token, reservation_id, turo_trips!inner(ends_at, airport_code)").gt("turo_trips.ends_at", new Date().toISOString()).gt("reservation_id", 0).limit(1).maybeSingle();
   const { data: pass } = await sb.from("lax_pass_settings").select("slug").eq("id", 1).maybeSingle();
   const token = (link as { token?: string } | null)?.token;
+  // Delivery trips (2026-10-13): the delivery page is checked only once Jared flips delivery_settings.web_live (the new frontend is on prod then).
+  // The server half (lax_guest_public returns `place` + `delivery`) is checked for every live delivery trip right away.
+  const { data: ds } = await sb.from("delivery_settings").select("web_live").eq("id", true).maybeSingle();
+  const deliveryWebLive = (ds as { web_live?: boolean } | null)?.web_live === true;
   const page = (path: string, must: string) => async () => {
     const r = await get(`${SITE}${path}`);
     if (!r.ok) return `${path} returned ${r.status}`;
@@ -50,6 +54,24 @@ async function checks(): Promise<Check[]> {
       if (!token) return null;
       const { data, error } = await sb.rpc("lax_guest_public", { p_token: token });
       return error ? `page data error: ${error.message}` : (data as { ok?: boolean })?.ok ? null : "page data says the link isn't working";
+    } },
+    { name: "delivery page", run: deliveryWebLive ? page("/t/demo-delivery", "Your Turo trip") : async () => null },
+    { name: "delivery icon", run: deliveryWebLive ? asset("/wallet/delivery/apple-touch-icon.png") : async () => null },
+    { name: "delivery preview", run: deliveryWebLive ? asset("/wallet/delivery/og.png") : async () => null },
+    { name: "delivery data", run: async () => {
+      // Every live trip must report a `place`; every live delivery trip must also carry the `delivery` block the new page reads.
+      const { data: rows } = await sb.from("lax_guest_links").select("token, reservation_id, turo_trips!inner(ends_at)").gt("turo_trips.ends_at", new Date().toISOString()).gt("reservation_id", 0).limit(25);
+      const bad: string[] = [];
+      for (const r of (rows ?? []) as { token: string; reservation_id: number }[]) {
+        const { data: place } = await sb.rpc("trip_place", { p_reservation: r.reservation_id });
+        const { data, error } = await sb.rpc("lax_guest_public", { p_token: r.token });
+        if (error) { bad.push(`res ${r.reservation_id} error: ${error.message.slice(0, 60)}`); continue; }
+        const pub = data as { ok?: boolean; place?: string; delivery?: { location_id?: string } | null };
+        if (!pub?.ok) continue;
+        if (!pub.place) bad.push(`res ${r.reservation_id} has no place`);
+        else if (place === "delivery" && (pub.place !== "delivery" || !pub.delivery?.location_id)) bad.push(`res ${r.reservation_id} is a delivery trip but the page data has no delivery block`);
+      }
+      return bad.length ? bad.slice(0, 3).join("; ") : null;
     } },
     { name: "helper", run: fn("lax-ask") },
     { name: "reminders", run: fn("trip-remind") },

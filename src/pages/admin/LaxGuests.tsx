@@ -6,7 +6,7 @@
  * Reminders go out from support@bestly.tech (wallet-pass op remind_due, cron lax-guest-tick every 10 min).
  */
 import { useCallback, useEffect, useState } from "react";
-import { Activity, ChevronDown, ExternalLink, House, KeyRound, Loader2, Mail, MessageCircleQuestion, Plane, RefreshCw, RotateCcw, Send, Zap } from "lucide-react";
+import { Activity, Car, ChevronDown, ExternalLink, House, KeyRound, Loader2, Mail, MessageCircleQuestion, Plane, RefreshCw, RotateCcw, Send, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { CopyButton } from "@/components/CopyText";
@@ -17,6 +17,8 @@ export type Row = {
   reservation_id: number; pickup_battery?: number | null; pickup_battery_at?: string | null; first: string | null; last: string | null; starts_at: string; ends_at: string; lax: boolean;
   token: string | null; email: string | null; email_by: "guest" | "host" | null; reminder_at: string | null;
   reminder_sent_at: string | null; reminder_error: string | null; suggested_reminder_at: string; kind?: "lax" | "home";
+  place?: "lax" | "home" | "delivery" | null; delivery_short?: string | null; delivery_ask?: string[] | null;
+  delivery_info?: { room?: string | null; front_desk?: string | null; parking?: string | null; eta?: string | null; reported_at?: string | null; via?: string | null } | null;
   activity?: { views: number; first_seen: string | null; last_seen: string | null; devices: string[]; asks: number; unsure?: number; host?: number; recent: { kind: string; at: string; detail: Record<string, string> | null; actor?: string }[] } | null;
   key?: { status: string; error: string | null; ready_at: string | null; accepted_at: string | null; removed_at: string | null; driver: string | null; opens_at: string; license_ok?: boolean; checkin_ok?: boolean; override?: boolean; released?: boolean; gate_token?: string | null } | null;
 };
@@ -353,7 +355,13 @@ export function GuestRow({ r, reload, compact }: { r: Row; reload: () => void; c
   };
   const link = r.token ? `${SITE}/t/${r.token}` : null;
   const home = r.kind === "home";
-  const msg = !link ? "" : home
+  const delivery = r.place === "delivery";
+  const dShort = r.delivery_short ?? "your location";
+  const dInfo = r.delivery_info;
+  const dNotes = delivery && dInfo ? [["Room", dInfo.room], ["Front desk", dInfo.front_desk], ["Parking", dInfo.parking], ["Train", dInfo.eta]].filter(([, v]) => v) as [string, string][] : [];
+  const msg = !link ? "" : delivery
+    ? `Hi ${r.first ?? ""}, thanks for booking my Model 3! You're all set for delivery to ${dShort}. When you check in, tell Leo your room number (or type it) on your trip page and let him know anything the front desk says about parking. When I arrive I'll take about 10 minutes of photos, then your phone key turns on. Your trip page: ${link}`
+    : home
     ? `Hi ${r.first ?? ""}! Everything for picking up the Tesla is on this page: your phone key (it shows up 2 hours before pickup), where the car is parked, and A/C buttons. ${link}`
     : `Hi ${r.first ?? ""}! Here's how to pick up your Turo car at LAX, plus the QR code that opens the lobby door (you can add it to Apple or Google Wallet): ${link}`;
   const status = r.reminder_sent_at ? `Reminder sent ${when(r.reminder_sent_at)}`
@@ -366,11 +374,18 @@ export function GuestRow({ r, reload, compact }: { r: Row; reload: () => void; c
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="font-medium text-white bento:text-neutral-900">
           {r.first ?? "Guest"} {r.last ? r.last.slice(0, 1) + "." : ""}
-          {r.lax ? <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#0A84FF26] px-2 py-0.5 text-[11px] text-[#409CFF] bento:bg-[#007AFF1a] bento:text-[#007AFF]"><Plane className="h-3 w-3" />LAX</span>
+          {delivery ? <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#E2733A33] px-2 py-0.5 text-[11px] text-[#F0A070] bento:bg-[#E2733A1f] bento:text-[#A8480F]"><Car className="h-3 w-3" />Delivery · {dShort}</span>
+            : r.lax ? <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#0A84FF26] px-2 py-0.5 text-[11px] text-[#409CFF] bento:bg-[#007AFF1a] bento:text-[#007AFF]"><Plane className="h-3 w-3" />LAX</span>
             : <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/60 bento:bg-neutral-100 bento:text-neutral-500"><House className="h-3 w-3" />Home pickup</span>}
         </p>
         <p className="text-sm text-white/55 bento:text-neutral-500">{when(r.starts_at)} → {when(r.ends_at)}</p>
       </div>
+      {delivery && (
+        <p className="mt-1 text-sm text-white/70 bento:text-neutral-600">
+          {dNotes.length ? dNotes.map(([k, v], i) => <span key={k}>{i > 0 ? " · " : ""}<span className="text-white/45 bento:text-neutral-400">{k}</span> {v}</span>)
+            : <span className="text-white/45 bento:text-neutral-400">Waiting on {(r.delivery_ask ?? []).includes("eta") ? "the train time" : "the room number and front desk notes"} from the guest.</span>}
+        </p>
+      )}
       </>}
       {link ? (
         <>
