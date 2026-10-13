@@ -10,13 +10,19 @@
 //                                                 (bestly.tech/y/<code>); the approval happens in Jared's signed-in admin after a fresh Face ID (webauthn-authenticate
 //                                                 approval_options / approval_verify -> ava_approval_decide), and the page runs the action with his admin JWT, the same
 //                                                 "Yes, do it" path the Fix Ladder pane uses. `check` reports the approval, then the Scout job.
+//   POST /verify                                  {conversation_id, caller_id, spoken}: the spoken-PIN backup for another phone or a web call (docs/ava-owner-mode-opusplan.md).
+//                                                 Layers 1 and 2 only (a live Ava call); Jared's own number never needs it. Whatever STT heard ("03/07/29", "three seven twenty nine",
+//                                                 "zero three zero seven two nine") becomes at most 6 six-digit candidates, each hashed against the salted bcrypt in Vault and compared in
+//                                                 constant time. 3 wrong tries a call, 10 a day, then locked 30 minutes (note signed Ava). A match opens this call for 2 hours:
+//                                                 status, metrics, call ops, fix list / retry / ask / check. approve and undo still need his own phone and Face ID.
 //   POST|GET /selftest                            service key only (pg_cron ava-admin-bridge-selftest, hourly at :17)
-//   POST /provision                               service key only: {op:"sync_secret"} pushes the Vault secret to the ElevenLabs workspace secret
+//   POST /provision                               service key only: {op:"sync_secret"} pushes the Vault secret to the ElevenLabs workspace secret;
+//                                                 {op:"snapshot", label?, seq?, procedures?} stores the dashboard config (PIN-looking numbers redacted) in ava_admin_bridge_state.snapshots
 //
 // Three layers on every tool route, in this order:
 //   1. Authorization: Bearer <Vault ava_admin_bridge_secret>, compared in constant time. Wrong = HTTP 401 (the only 401).
 //   2. The conversation is a live Ava call (ElevenLabs GET /convai/conversations/{id}, cached 60 s per id).
-//   3. The caller is Jared. The number comes from ElevenLabs' own record of the call, not from the tool's caller_id field
+//   3. The caller is Jared, or this call proved the owner PIN (ava_owner_sessions, 2 hours). The number comes from ElevenLabs' own record of the call, not from the tool's caller_id field
 //      (that one is only compared and logged). Web chats carry no caller number, so they are refused until there is a way to
 //      prove a web session is Jared's (the init hook marks nobody on the web; see bestly_memory ava/admin-bridge-2026-10-13).
 // Everything else is HTTP 200 with {ok:false, reason_code, say} so Ava just speaks the say line. No LLM in here.
@@ -24,6 +30,7 @@
 // pipeline_send, ava-assistant action "call". Capped at 20 place_call a day; a repeat inside 2 minutes replays the first answer.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { MARKER, FIX_MARKER, APPROVAL_MARKER, withPromptBlock } from "../_shared/ava-admin-prompt.ts";
+import { pinCandidates, redactDeep, redactPins, countPlainPins } from "../_shared/ava-owner-pin.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -169,9 +176,11 @@ const logRow = (r: LogRow) => bg(sb.from("ava_admin_bridge_log").insert({
   conversation_id: r.conversation_id ?? null, caller_id: r.caller_id ?? null, op: r.op, args: r.args ?? {}, ok: r.ok, reason_code: r.reason_code ?? null,
   ms: r.ms ?? null, idem_key: r.idem_key ?? null, say: r.say ? r.say.slice(0, 300) : null, data: r.data ?? null }).then(() => {}));
 
-type Ctx = { conv: string; caller: string; selftest: boolean; t0: number };
-/** All three layers. Returns the context, or the Response to send. */
-async function guard(req: Request, p: Any, op: string): Promise<Ctx | Response> {
+type Ctx = { conv: string; caller: string; selftest: boolean; t0: number; pin?: boolean };
+type Pre = { conv: string; caller: string | null; selftest: boolean; t0: number; claimed: string | null };
+const OWNER_SESSION_MS = 2 * 3600_000;
+/** Layers 1 and 2: the bearer secret, then "this is a live Ava call". Returns what ElevenLabs saw, or the Response to send. */
+async function guardCall(req: Request, p: Any, op: string): Promise<Pre | Response> {
   const t0 = Date.now();
   const bearer = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
   const secret = await bridgeSecret();
@@ -183,7 +192,7 @@ async function guard(req: Request, p: Any, op: string): Promise<Ctx | Response> 
   const conv = clip(p.conversation_id, 80);
   const selftest = conv === "conv_selftest" && (await safeEq(req.headers.get("x-ava-selftest") ?? "", SB_SECRET));
   const claimed = normPhone(p.caller_id);
-  if (selftest) return { conv, caller: claimed ?? "+18165007236", selftest: true, t0 };
+  if (selftest) return { conv, caller: null, selftest: true, t0, claimed };
   if (!/^conv_[A-Za-z0-9]+$/.test(conv)) {
     logRow({ op, ok: false, reason_code: "stale_call", ms: Date.now() - t0, conversation_id: conv || null });
     return respond(fail("stale_call", "I can't tell which call this is, so I can't open that."));
@@ -195,12 +204,49 @@ async function guard(req: Request, p: Any, op: string): Promise<Ctx | Response> 
     return respond(c.upstream ? fail("upstream_down", "I can't check this call right now. Try me again in a minute.") : fail("stale_call", "That call isn't live anymore, so I can't open the business."));
   }
   // the number ElevenLabs saw wins; the tool's caller_id is only compared
-  const caller = c.caller;
-  if (!caller || !JARED.has(caller)) {
-    logRow({ op, ok: false, reason_code: "not_jared", ms: Date.now() - t0, conversation_id: conv, caller_id: caller ?? claimed, args: { web: !caller, claimed_matches: claimed === caller } });
-    return respond(fail("not_jared", "That's something only Jared can pull up."));
-  }
-  return { conv, caller, selftest: false, t0 };
+  return { conv, caller: c.caller, selftest: false, t0, claimed };
+}
+/** All three layers. Returns the context, or the Response to send. */
+async function guard(req: Request, p: Any, op: string): Promise<Ctx | Response> {
+  const pre = await guardCall(req, p, op);
+  if (pre instanceof Response) return pre;
+  if (pre.selftest) return { conv: pre.conv, caller: pre.claimed ?? "+18165007236", selftest: true, t0: pre.t0 };
+  if (pre.caller && JARED.has(pre.caller)) return { conv: pre.conv, caller: pre.caller, selftest: false, t0: pre.t0 };
+  // not his number: a call that proved the owner PIN in the last 2 hours is let in (it never unlocks approve / undo, see fix())
+  const { data: sess } = await sb.from("ava_owner_sessions").select("verified_at").eq("conversation_id", pre.conv).maybeSingle();
+  if (sess && Date.now() - Date.parse(String((sess as Any).verified_at)) < OWNER_SESSION_MS) return { conv: pre.conv, caller: "pin-verified", selftest: false, t0: pre.t0, pin: true };
+  logRow({ op, ok: false, reason_code: "not_jared", ms: Date.now() - pre.t0, conversation_id: pre.conv, caller_id: pre.caller ?? pre.claimed, args: { web: !pre.caller, claimed_matches: pre.claimed === pre.caller } });
+  return respond(fail("not_jared", "That's something only Jared can pull up."));
+}
+
+// ---------- /verify (the spoken PIN, docs/ava-owner-mode-opusplan.md) ----------
+/** Never logs or returns what was said. The compare is constant time over every candidate (no early exit), the verdict goes back to the DB which owns the counters and the lock. */
+async function verify(pre: Pre, p: Any): Promise<Reply> {
+  if (!pre.selftest && pre.caller && JARED.has(pre.caller)) return { ok: true, say: "You're calling from your own number, so you're already in. Go ahead.", data: { already: true } };
+  const cands = pinCandidates(String(p.spoken ?? ""));
+  if (!cands.length) return fail("bad_request", "I didn't catch six digits. Say the code again, one number at a time.");
+  const scope = pre.selftest ? "selftest" : "live";
+  const { data, error } = await sb.rpc("ava_owner_pin_probe", { p_conv: pre.conv, p_scope: scope, p_candidates: cands });
+  const d = (data ?? {}) as Any;
+  if (error || !d.status) return fail("upstream_down", "I can't check that right now. Try me again in a minute.");
+  if (d.status === "unset") return fail("pin_unset", "There's no owner code set up yet. Jared can set one in admin.");
+  if (d.status === "locked") return fail("pin_locked", "The owner code is locked for a little while. Jared can still call from his own cell.", { lock_until: d.lock_until ?? null });
+  if (d.status === "locked_call") return fail("pin_locked", "That's three tries on this call, so I can't take another. Jared can call from his own cell.");
+  if (d.status !== "ready" || d.attempt_id == null || typeof d.stored !== "string") return fail("upstream_down", "I can't check that right now. Try me again in a minute.");
+  let hit = false;
+  for (const h of ((d.hashes ?? []) as string[])) { if (await safeEq(String(h), d.stored)) hit = true; }   // every candidate, no early exit
+  const { data: rr, error: re } = await sb.rpc("ava_owner_pin_result", { p_attempt: d.attempt_id, p_ok: hit });
+  const r = (rr ?? {}) as Any;
+  if (re || r.ok === undefined) return fail("upstream_down", "I can't check that right now. Try me again in a minute.");
+  // tidy old rows now and then (service key; the SQL functions never delete)
+  bg(Promise.all([
+    sb.from("ava_owner_pin_attempts").delete().lt("ts", new Date(Date.now() - 30 * 86400_000).toISOString()),
+    sb.from("ava_owner_sessions").delete().lt("verified_at", new Date(Date.now() - 2 * 86400_000).toISOString()),
+  ]));
+  if (hit) return { ok: true, say: pre.selftest ? "Selftest: that code matches." : "Thanks, you're verified. What do you need?", data: { verified: true, selftest: pre.selftest || undefined } };
+  if (r.locked) return fail("pin_locked", "That's not it, and I've locked the code for a little while. Jared can still call from his own cell.", { locked: true });
+  const left = Number(r.tries_left ?? 0);
+  return fail("wrong_pin", left > 0 ? `That didn't match. You have ${left === 1 ? "one try" : `${num(left)} tries`} left.` : "That didn't match.", { tries_left: left });
 }
 
 async function params(req: Request): Promise<Any> {
@@ -833,6 +879,8 @@ async function fix(ctx: Ctx, p: Any): Promise<R> {
   if (action === "ask_scout") return fixAskScout(ctx, p, confirmed);
   if (action === "check") return fixCheck(ctx, p);
   // approve / undo: never executed here, whatever `confirmed` says. They create a request for Jared's phone (passkey tap).
+  // A call that only proved the spoken PIN is not his phone: it can look and retry, it cannot even ask for a tap.
+  if (ctx.pin) return fail("needs_phone", "Approving or undoing a fix needs your own phone and Face ID. Call me from your cell, or tap it in admin.");
   const all = await loadItems();
   if (!all) return fail("upstream_down", "I couldn't read the issues just now.");
   const issue = clip(p.issue, 120);
@@ -885,6 +933,44 @@ async function syncSecret(): Promise<{ ok: boolean; secret_id?: string; error?: 
   const fp = hexOf(await sha(val)).slice(0, 16);
   await sb.from("ava_admin_bridge_state").update({ el_secret_id: id, detail: { ...st.detail, synced_fp: fp, synced_at: new Date().toISOString() }, updated_at: new Date().toISOString() }).eq("id", true);
   return { ok: true, secret_id: id };
+}
+
+// ---------- snapshots of the dashboard config (so a change to her prompt / workflow / procedures / guardrails can be put back) ----------
+const SNAP_KEEP = 8;
+/** The agent as ElevenLabs has it right now (or `full`, when the caller already fetched it), plus any procedure bodies the caller passes in (the agent GET only carries their triggers).
+ *  Every PIN-looking number near the word PIN is redacted BEFORE anything is stored, and nothing is stored if one survives. Newest first, last 8 kept. */
+async function takeSnapshot(opts: { label?: string; seq?: number | null; procedures?: Any[]; full?: Any | null }): Promise<Any> {
+  const st = await getState();
+  let a = opts.full ?? null;
+  if (!a) {
+    const r = await xi(`/convai/agents/${st.agent_id ?? AVA_AGENT}`);
+    if (!r.ok) return { ok: false, error: `ElevenLabs answered ${r.status}` };
+    a = r.j;
+  }
+  const cc = (a.conversation_config ?? {}) as Any, ag = (cc.agent ?? {}) as Any, pr = (ag.prompt ?? {}) as Any;
+  const procs: Record<string, Any> = {};
+  const base = a.procedures;
+  if (Array.isArray(base)) for (const x of base) procs[String((x as Any).procedure_id)] = x as Any;
+  else if (base && typeof base === "object") Object.assign(procs, base as Record<string, Any>);
+  for (const x of opts.procedures ?? []) { const id = String(x.procedure_id ?? ""); if (id) procs[id] = { ...(procs[id] ?? {}), ...x }; }
+  const raw = {
+    prompt: String(pr.prompt ?? ""), workflow: a.workflow ?? null, procedures: procs,
+    guardrails: ((a.platform_settings ?? {}) as Any).guardrails ?? null, tool_ids: (pr.tool_ids ?? []) as string[],
+    agent: { first_message: ag.first_message ?? null, llm: pr.llm ?? null, dynamic_variable_placeholders: ((ag.dynamic_variables ?? {}) as Any).dynamic_variable_placeholders ?? {} },
+  };
+  const { value, changed } = redactDeep(raw);
+  if (countPlainPins(value) > 0) return { ok: false, error: "a PIN-looking number survived redaction, so nothing was stored" };
+  const at = new Date().toISOString();
+  const id = `snap-${at.replace(/[-:.TZ]/g, "").slice(0, 14)}-${String(a.version_id ?? "").slice(-6)}`;
+  const snap = { id, at, version_id: a.version_id ?? null, branch_id: a.branch_id ?? null, seq: opts.seq ?? null, label: clip(opts.label, 120) || null, ...value };
+  const { data: cur } = await sb.from("ava_admin_bridge_state").select("snapshots").eq("id", true).maybeSingle();
+  const list = [snap, ...((((cur ?? {}) as Any).snapshots as Any[] | null) ?? [])].slice(0, SNAP_KEEP);
+  const { error } = await sb.from("ava_admin_bridge_state").update({ snapshots: list, updated_at: new Date().toISOString() }).eq("id", true);
+  if (error) return { ok: false, error: fit(error.message, 120) };
+  const wf = (snap.workflow ?? {}) as Any;
+  return { ok: true, id, version_id: snap.version_id, redacted_strings: changed, prompt_chars: snap.prompt.length, procedures: Object.keys(procs).length,
+    procedures_with_content: Object.values(procs).filter((x) => typeof x.content === "string").length, nodes: Object.keys((wf.nodes ?? {}) as Any), edges: Object.keys((wf.edges ?? {}) as Any),
+    guardrail_keys: Object.keys((snap.guardrails ?? {}) as Any), tool_ids: snap.tool_ids, kept: list.length };
 }
 
 type Check = { name: string; ok: boolean; ms?: number; note?: string };
@@ -964,21 +1050,61 @@ async function selftest(): Promise<Any> {
     });
     await hit(`/status?${qs}`, { headers: { Authorization: "Bearer not-the-secret", "x-ava-selftest": SB_SECRET } }, (s) => s === 401, "bad_secret_401");
     await hit(`/status?conversation_id=conv_selftest&caller_id=%2B15555550100`, { headers: { Authorization: `Bearer ${secret}` } }, (s, j) => s === 200 && j.ok === false, "stub_needs_service_key");
+
+    // owner mode (docs/ava-owner-mode-opusplan.md). The real PIN is never used here: the normalizer is tried on a random throwaway PIN against a hash made on the spot,
+    // the real hash only has to exist and look like bcrypt, and the live /verify route is poked once with a random wrong code on the selftest scope.
+    await probe("owner_pin_normalizer", async () => {
+      const pin = Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => String(b % 10)).join("");
+      const forms = [pin, pin.split("").join(" "), pin.split("").join("-"), `my pin is ${pin.slice(0, 3)} ${pin.slice(3)}`];
+      if (!forms.every((f) => pinCandidates(f).includes(pin))) return { ok: false, note: "digit forms" };
+      // a spoken date and the words form of a non-real code (030729): what STT does to six digits on a phone line
+      const spokenForms = ["03/07/29", "3-7-29", "March seventh twenty nine", "zero three zero seven two nine", "oh three oh seven two nine", "three seven two thousand twenty nine"];
+      const missed = spokenForms.filter((f) => !pinCandidates(f).includes("030729"));
+      if (missed.length) return { ok: false, note: `${missed.length} spoken forms` };
+      const { data: hash, error } = await sb.rpc("ava_owner_pin_crypt", { p_value: pin });
+      if (error || typeof hash !== "string") return { ok: false, note: "crypt" };
+      const other = String((Number(pin) + 1) % 1_000_000).padStart(6, "0");
+      const [same, diff] = await Promise.all([sb.rpc("ava_owner_pin_crypt", { p_value: pin, p_salt: hash }), sb.rpc("ava_owner_pin_crypt", { p_value: other, p_salt: hash })]);
+      return { ok: same.data === hash && diff.data !== hash, note: `${forms.length + spokenForms.length} forms` };
+    });
+    await probe("owner_pin_health", async () => {
+      const { data, error } = await sb.rpc("ava_owner_pin_health");
+      const d = (data ?? {}) as Any;
+      return { ok: !error && d.set === true && d.wellformed === true, note: error ? fit(error.message, 60) : d.set !== true ? "no PIN set" : d.exposed ? "set, still the exposed first one" : "set" };
+    });
+    {
+      const wrong = Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => String(b % 10)).join("");
+      await hit(`/verify`, { method: "POST", headers: H, body: JSON.stringify({ conversation_id: "conv_selftest", caller_id: "+15555550100", spoken: wrong }) },
+        (s, j) => s === 200 && (j.ok === true || ["wrong_pin", "pin_locked"].includes(String(j.reason_code))), "verify_route");
+      await hit(`/verify`, { method: "POST", headers: { Authorization: "Bearer not-the-secret", "x-ava-selftest": SB_SECRET, "Content-Type": "application/json" }, body: JSON.stringify({ conversation_id: "conv_selftest", spoken: wrong }) }, (s) => s === 401, "verify_bad_secret_401");
+    }
   }
   const sorted = [...lat].sort((a, b) => a - b);
   const p95 = sorted.length ? sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)] : 0;
   add("p95_under_1500ms", p95 <= 1500, `${p95} ms`);
 
   // 2. Ava still has her 4 bridge tools (status, metrics, call_ops, fix_issue), her prompt block (with the fix_issue and passkey-tap rules), and the ElevenLabs secret still matches Vault
-  const verifyEl = async () => {
-    const out: { tools: boolean; prompt: boolean; secret: boolean; agent: Any | null } = { tools: false, prompt: false, secret: false, agent: null };
+  type El = { tools: boolean; prompt: boolean; secret: boolean; agent: Any | null; full: Any | null; pinPrompt: number; pinElsewhere: string[]; jaredEdge: boolean | null; verifyTool: boolean | null };
+  const verifyEl = async (): Promise<El> => {
+    const out: El = { tools: false, prompt: false, secret: false, agent: null, full: null, pinPrompt: 0, pinElsewhere: [], jaredEdge: null, verifyTool: null };
     const a = await xi(`/convai/agents/${agentId}`);
     if (a.ok) {
       const pr = (((a.j.conversation_config as Any | undefined)?.agent as Any | undefined)?.prompt ?? {}) as Any;
       const ids = ((pr.tool_ids ?? []) as string[]);
-      out.tools = st.tool_ids.length >= 4 && st.tool_ids.every((t) => ids.includes(t));   // admin_status, call_ops, admin_metrics + fix_issue
+      out.tools = st.tool_ids.length >= 4 && st.tool_ids.every((t) => ids.includes(t));   // admin_status, call_ops, admin_metrics, fix_issue (+ verify_owner once it is in the state)
       out.prompt = String(pr.prompt ?? "").includes(MARKER) && String(pr.prompt ?? "").includes(FIX_MARKER) && String(pr.prompt ?? "").includes(APPROVAL_MARKER);
-      out.agent = pr;
+      out.agent = pr; out.full = a.j;
+      // no PIN-looking number near "PIN" / "passcode" in her prompt, her procedures (trigger and body when present) or any workflow node
+      out.pinPrompt = countPlainPins(String(pr.prompt ?? ""));
+      if (countPlainPins(a.j.procedures ?? null) > 0) out.pinElsewhere.push("a procedure");
+      if (countPlainPins(a.j.workflow ?? null) > 0) out.pinElsewhere.push("the workflow");
+      // Jared's number goes straight to the owner node (no greeting): an edge that reads caller_is_jared and lands on an override_agent node
+      const wf = (a.j.workflow ?? {}) as Any; const edges = Object.values((wf.edges ?? {}) as Record<string, Any>); const nodes = (wf.nodes ?? {}) as Record<string, Any>;
+      out.jaredEdge = edges.some((e) => JSON.stringify(e.forward_condition ?? {}).includes("caller_is_jared") && ["owner_node", "assistant_node"].includes(String(e.target)) && nodes[String(e.target)]?.type === "override_agent");
+      // verify_owner is a workspace tool; once it exists it has to be on her and in the state
+      const tl = await xi("/convai/tools?page_size=100");
+      const vt = tl.ok ? ((tl.j.tools ?? []) as Any[]).find((t) => String(((t.tool_config ?? t) as Any).name) === "verify_owner") : undefined;
+      out.verifyTool = tl.ok ? (vt ? ids.includes(String(vt.id)) && st.tool_ids.includes(String(vt.id)) : null) : null;
     }
     const list = await xi("/convai/secrets");
     const hitS = ((list.j.secrets ?? []) as Any[]).find((s) => s.name === SECRET_NAME);
@@ -988,19 +1114,43 @@ async function selftest(): Promise<Any> {
     return out;
   };
   let el = await verifyEl();
-  if (!el.tools || !el.prompt || !el.secret) {
-    // recover: re-attach the tools (keeping everything she already has), re-add the prompt block, re-sync the secret
+  // a new dashboard version since the last run: keep a snapshot of it (the checks below say whether it undid anything)
+  const seenVersion = String((st.detail as Any).seen_version ?? "");
+  const nowVersion = String(el.full?.version_id ?? "");
+  const versionChanged = !!nowVersion && !!seenVersion && nowVersion !== seenVersion;
+  if (nowVersion && nowVersion !== seenVersion) {
+    if (seenVersion) { const sn = await takeSnapshot({ label: `selftest saw a new dashboard version (${seenVersion.slice(-8)} -> ${nowVersion.slice(-8)})`, full: el.full }); fixes.push(sn.ok ? `kept a snapshot of the new dashboard version (${sn.id})` : `snapshot failed: ${sn.error}`); }
+  }
+  if (!el.tools || !el.prompt || !el.secret || el.pinPrompt > 0) {
+    // recover: re-attach the tools (keeping everything she already has), re-add the prompt block, take a PIN-looking number out of the prompt, re-sync the secret.
+    // This only ever PATCHes tool_ids and the prompt. The workflow and the procedures are Jared's dashboard edits and are never rewritten from here.
     if (!el.secret) { const r = await syncSecret(); fixes.push(r.ok ? "re-synced the ElevenLabs secret" : `secret sync failed: ${r.error}`); }
-    if ((!el.tools || !el.prompt) && el.agent) {
+    if ((!el.tools || !el.prompt || el.pinPrompt > 0) && el.agent) {
       const pr = el.agent; const ids = Array.from(new Set([...(((pr.tool_ids ?? []) as string[])), ...st.tool_ids]));
       const body: Any = { tool_ids: ids };
-      if (!el.prompt) body.prompt = withPromptBlock(String(pr.prompt ?? ""));   // append if missing, swap in place if an older copy of the block is there
+      if (!el.prompt || el.pinPrompt > 0) body.prompt = redactPins(withPromptBlock(String(pr.prompt ?? "")));   // append if missing, swap in place if an older copy of the block is there; never a PIN
       const r = await xi(`/convai/agents/${agentId}`, "PATCH", { conversation_config: { agent: { prompt: body } } });
-      fixes.push(r.ok ? `${!el.tools ? "re-attached her tools" : ""}${!el.tools && !el.prompt ? " and " : ""}${!el.prompt ? "re-added her admin prompt block" : ""}` : `agent patch failed (${r.status})`);
+      const did = [!el.tools && "re-attached her tools", !el.prompt && "re-added her admin prompt block", el.pinPrompt > 0 && "took a PIN-looking number out of her prompt"].filter(Boolean).join(" and ");
+      fixes.push(r.ok ? did : `agent patch failed (${r.status})`);
     }
     el = await verifyEl();
   }
   add("ava_has_tools", el.tools); add("ava_prompt_block", el.prompt); add("el_secret_matches_vault", el.secret);
+  add("no_pin_in_prompt", el.pinPrompt === 0);
+  add("no_pin_in_procedures_or_workflow", el.pinElsewhere.length === 0, el.pinElsewhere.join(", ") || undefined);
+  add("jared_edge_skips_greeting", el.jaredEdge !== false, el.jaredEdge === null ? "agent not read" : undefined);
+  if (el.verifyTool !== null) add("verify_owner_attached", el.verifyTool);
+  if (nowVersion) await sb.from("ava_admin_bridge_state").update({ detail: { ...(await getState()).detail, seen_version: nowVersion }, updated_at: new Date().toISOString() }).eq("id", true);
+  // a dashboard edit that undid part of the admin line (dropped a tool, brought a PIN back, removed the Jared edge): say so as Ava, in plain words
+  const undone = [!el.tools && "dropped one of my admin tools", el.pinPrompt > 0 && "put a PIN-looking number in my prompt", el.pinElsewhere.length > 0 && `left a PIN-looking number in ${el.pinElsewhere.join(" and ")}`, el.jaredEdge === false && "removed the path that skips my greeting for you", el.verifyTool === false && "took the PIN check off me"].filter(Boolean) as string[];
+  if (versionChanged && undone.length) {
+    const needs = el.pinElsewhere.length || el.jaredEdge === false ? { p_needs_jared: "Open Ava in the ElevenLabs dashboard (or ask Claude) and fix the workflow / procedure." } : {};
+    await sb.rpc("bestly_raise", { p_key: "ava.admin-bridge.dashboard-edit", p_kind: "problem", p_severity: "warning", p_title: "an edit to me in the ElevenLabs dashboard undid part of my admin line",
+      p_body: `A new version of me was saved in the dashboard and it ${undone.join(", ")}. ${fixes.length ? `I put back what I could: ${fixes.join("; ")}. ` : ""}I never rewrite the workflow or the procedures, so anything about those is yours to look at.`, p_area: "ava", ...needs });
+  } else if (!undone.length) {
+    const { data: open } = await sb.from("monitor_issues").select("key").eq("key", "ava.admin-bridge.dashboard-edit").eq("status", "open").limit(1);
+    if (open?.length) await sb.rpc("bestly_raise", { p_key: "ava.admin-bridge.dashboard-edit", p_kind: "resolved", p_severity: "info", p_title: "my admin line is whole again after the dashboard edit", p_body: null, p_area: "ava" });
+  }
 
   const bad = checks.filter((c) => !c.ok);
   const ok = bad.length === 0;
@@ -1027,7 +1177,17 @@ Deno.serve(async (req) => {
       if (path === "/selftest") return new Response(JSON.stringify(await selftest()), { headers: { "Content-Type": "application/json" } });
       const b = await params(req);
       if (b.op === "sync_secret") return new Response(JSON.stringify(await syncSecret()), { headers: { "Content-Type": "application/json" } });
+      if (b.op === "snapshot") return new Response(JSON.stringify(await takeSnapshot({ label: String(b.label ?? ""), seq: Number.isFinite(Number(b.seq)) ? Number(b.seq) : null, procedures: Array.isArray(b.procedures) ? (b.procedures as Any[]).slice(0, 20) : [] })), { headers: { "Content-Type": "application/json" } });
       return respond(fail("bad_request", "unknown op"));
+    }
+    if (path === "/verify") {
+      if (req.method !== "POST") return respond(fail("bad_request", "Wrong method."), 405);
+      const p = await params(req);
+      const pre = await guardCall(req, p, "verify");
+      if (pre instanceof Response) return pre;
+      const r = await verify(pre, p);
+      logRow({ conversation_id: pre.conv, caller_id: pre.caller ?? pre.claimed, op: "verify", args: { scope: pre.selftest ? "selftest" : "live" }, ok: r.ok, reason_code: r.ok ? null : r.reason_code, ms: Date.now() - pre.t0, say: r.say });   // never what was said
+      return respond(r);
     }
     const routes: Record<string, { method: string; op: string }> = { "/status": { method: "GET", op: "status" }, "/metrics": { method: "GET", op: "metrics" }, "/calls": { method: "POST", op: "calls" }, "/fix": { method: "POST", op: "fix" } };
     const route = routes[path];
