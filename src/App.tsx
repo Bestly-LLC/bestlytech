@@ -87,12 +87,10 @@ const AdminContacts = lazyPage(() => import("./pages/admin/AdminContacts"));
 const AdminMeetingsSection = lazyPage(() => import("./pages/admin/AdminMeetingsSection"));
 const AdminPartners = lazyPage(() => import("./pages/admin/AdminPartners"));
 const AdminTuro = lazyPage(() => import("./pages/admin/AdminTuro"));
-const LaxPass = lazyPage(() => import("./pages/admin/LaxPass"));
-// Old Guest Trips page: guests/car/audit moved to Turo Watch, everything else to Turo settings. Keeps ?query#hash (Tesla/TezLab sign-in returns).
+// Old Guest Trips + Turo settings pages: everything now lives on Turo Watch (settings = #settings). Keeps ?query#hash (Tesla/TezLab sign-in returns).
 function LaxPassRedirect() {
   const l = useLocation();
-  const trips = /^#(keys|trips|sc-audit|car-health)/.test(l.hash);
-  return <Navigate to={`${trips ? "/admin/turo" : "/admin/turo/settings"}${l.search}${l.hash}`} replace />;
+  return <Navigate to={`/admin/turo${l.search}${l.hash || "#settings"}`} replace />;
 }
 const AdminPlaybook = lazyPage(() => import("./pages/admin/AdminPlaybook"));
 const PartnerPortal = lazyPage(() => import("./pages/partner/PartnerPortal"));
@@ -307,7 +305,7 @@ const App = () => {
                   <Route path="skytouch" element={<SkyTouch />} />
                   <Route path="turo/lax-pass" element={<LaxPassRedirect />} />
                   <Route path="lax" element={<LaxPassRedirect />} />
-                  <Route path="turo/settings" element={<LaxPass />} />
+                  <Route path="turo/settings" element={<LaxPassRedirect />} />
                   <Route path="playbook" element={<AdminPlaybook />} />
                   <Route path="skills" element={<AdminSkills />} />
                   <Route path="*" element={<AdminNotFound />} />

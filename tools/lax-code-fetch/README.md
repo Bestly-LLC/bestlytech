@@ -2,7 +2,7 @@
 
 Gets the monthly Park My Share lobby QR by itself so guests and Apple Wallet passes always have the active code.
 
-- **Job:** `lax_code_fetch.py` → `/opt/bestly/cron/jobs/`, cron `*/30 * * * * /opt/bestly/cron/run.sh lax_code_fetch`
+- **Job:** `lax_code_fetch.py` → `/opt/bestly/cron/jobs/`, cron `*/5 * * * * /opt/bestly/cron/run.sh lax_code_fetch` (asks Park My Share at most every 25 min unless Check now)
 - **Fallback:** `browser.py` → `/opt/bestly/parkmyshare/`, run with `/opt/bestly/turo-watch/.venv/bin/python` (Playwright)
 - **Install / update (on the Pi):** `sh install.sh` from this folder
 - **DB:** `supabase/migrations/20261013200000_lax_code_fetch.sql` (`lax_fetch_*`, team card `lax-code-fetch`, alerts `lax.code.*`)

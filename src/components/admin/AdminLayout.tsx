@@ -30,7 +30,6 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin": "Command Center",
   "/admin/submissions": "Marketplace Intake",
   "/admin/settings": "Settings",
-  "/admin/turo/settings": "Turo settings",
   "/admin/leads": "Pipeline",
   "/admin/pipeline": "Pipeline",
   "/admin/cookie-yeti": "CY Command Center",

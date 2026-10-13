@@ -57,6 +57,9 @@ GOOD = {
 
 class Parker(unittest.TestCase):
     def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        P.STATE_FILE = self._tmp.name + "/state.json"
         calls.clear()
         GATE.update(configured=True, need=True, why="missing")
         SAVE.clear(); SAVE.update(saved=True, guests_see=True)
@@ -149,6 +152,15 @@ class Parker(unittest.TestCase):
         SAVE.clear(); SAVE.update(saved=False, same=True, guests_see=True)
         with mock.patch.object(P, "call", api(GOOD)):
             self.assertTrue(P.main([]).startswith("ok: same"))
+
+    def test_paced_between_sign_ins_unless_asked(self):
+        with mock.patch.object(P, "call", api(GOOD)):
+            P.main([])
+            calls.clear()
+            out = P.main([])                                  # 'missing' again right away: paced
+            self.assertTrue(out.startswith("ok: waiting"), out)
+            GATE.update(why="asked")                          # Check now skips the pacing
+            self.assertTrue(P.main([]).startswith("ok: saved"))
 
     def test_dry_run_writes_nothing(self):
         with mock.patch.object(P, "call", api(GOOD)):

@@ -1,6 +1,8 @@
 """Parker, the Parking Pass Clerk: gets the LAX garage QR from Park My Share by itself (bestly-pi, free, no AI).
 
-Installed as /opt/bestly/cron/jobs/lax_code_fetch.py; cron: */30 * * * * /opt/bestly/cron/run.sh lax_code_fetch
+Installed as /opt/bestly/cron/jobs/lax_code_fetch.py; cron: */5 * * * * /opt/bestly/cron/run.sh lax_code_fetch
+(Ticks every 5 min so "Check now" and a newly saved login act within minutes. A tick is one cheap gate call; Park My Share
+itself is asked at most every 25 min unless Jared pressed Check now: see MIN_GAP_S.)
 Repo copy: tools/lax-code-fetch/ in bestlytech. DB side: supabase/migrations/20261013200000_lax_code_fetch.sql.
 
 Each run asks lax_fetch_gate() whether a check is due (code missing, daily check, month end, or "Check now"). Most runs
@@ -34,6 +36,8 @@ JOB = "lax_code_fetch"
 API = "https://iq.parkimo.com/"
 PORTAL = "https://app.parkmycarshare.com/"
 BROWSER = ["/opt/bestly/turo-watch/.venv/bin/python", "/opt/bestly/parkmyshare/browser.py"]
+STATE_FILE = "/opt/bestly/cron/state/lax_code_fetch.json"
+MIN_GAP_S = 25 * 60          # between Park My Share sign-ins, except when Jared asked ("asked")
 UTC = datetime.timezone.utc
 LA = ZoneInfo("America/Los_Angeles")
 HEADERS = {
@@ -216,6 +220,25 @@ def report(ok, kind, result=None, error=None, method=None, expires=None, facilit
             p_expires=expires.isoformat() if expires else None, p_facility=facility)
 
 
+# ---------------------------------------------------------------- local pacing (keeps Park My Share from being hammered)
+
+def _last_net():
+    try:
+        with open(STATE_FILE) as f:
+            return float(json.load(f).get("net_at") or 0)
+    except (OSError, ValueError):
+        return 0.0
+
+
+def _mark_net():
+    try:
+        os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+        with open(STATE_FILE, "w") as f:
+            json.dump({"net_at": time.time()}, f)
+    except OSError:
+        pass
+
+
 # ---------------------------------------------------------------- main
 
 def main(argv):
@@ -225,6 +248,10 @@ def main(argv):
         return "skip: Park My Share login not saved yet (Turo Watch > Settings)"
     if not g.get("need") and not force:
         return f"ok: nothing due ({g.get('why')})"
+    if g.get("why") != "asked" and not force and time.time() - _last_net() < MIN_GAP_S:
+        return f"ok: waiting (checked Park My Share under 25 min ago; due: {g.get('why')})"
+    if not dry:
+        _mark_net()
 
     email = lib.rpc("pi_secret_get", p_name="pi:parkmyshare:email") or ""
     password = lib.rpc("pi_secret_get", p_name="pi:parkmyshare:password") or ""
