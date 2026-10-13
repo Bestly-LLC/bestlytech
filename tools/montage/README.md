@@ -40,6 +40,19 @@ Brand files the videos use: `fetch-assets.sh` downloads Cookie Yeti and Inventor
 4. Render one free text-only job through `montage_start`, look at frames, then name the brand in `make_montage`'s description in `studio-chat`.
 (`comp/<slug>` is still supported: leave `COMP_DIR` unset and om_render copies `comp/<slug>`.)
 
+## B-roll on a re-cut (2026-10-12, Jared approved one order for BC05)
+Default re-cuts (trigger `montage_recut`, a "changes" note) stay `broll=false`, cost $0 and reuse the parent's clips. A re-cut orders FRESH clips only when its job has `broll=true`,
+and the only thing that sets that is `select montage_recut_broll(<item id>, '<note>', <approved usd>, 'spark')` (service_role only; approved amount lands in `budget_usd`).
+Do this ONLY after `select ltx_quote(<sec>)->>'text'` was shown to Jared and he said yes (about 5 sec per scene). The worker re-prices the whole order as one batch
+(`ltx_quote(total sec)` + idle tail) and refuses, ordering nothing, if it is above `budget_usd`. Flow after that is the normal one: writer adds a `shot` per scene,
+voice, `montage_clip_request` parks the job, LTX renders, `montage_claim` resumes it, render, `montage_file` updates the SAME item.
+- A note that says "keep the current copy" (`_common.KEEP_NOTE`) restores the current kickers, lines, says, icons and caption word for word; the model only supplies shots + end card.
+- `comp/brand` (BrandShort) plays each clip behind its scene under the brand-colored feathered veil (same as HokuShort); the scene icons stay (soft glow) over the clips.
+- End-card chips: `_common.chip_problems` (2-4 words, 24 letters at most, a concrete topic, icon must match the topic: files, calendar, chat, passwords=key/lock, fees=tag, own=box, people, handled=check,
+  private=lock/eyeslash; vague or jargon words like single/hardware/server/platform are refused). A proposal that fails keeps the brand default. A brand's own default chips must pass too (`default_chip_problems`).
+  Bestly Cloud default: "Files, calendar, chat" (files), "No per-person fees" (tag), "A box you own" (box).
+Pi backups of 2026-10-12: files named `*.bak_broll_20261012` next to worker.py, brands/_common.py, brands/bestly_cloud.py, comp/brand/BrandShort.tsx, README.md.
+
 ## Voice (ElevenLabs only; a video waits instead of using Piper)
 `worker.voice()` uses ONE provider per video (never mixes voices). Track V, 2026-10-06. **Piper fallback retired 2026-10-10** (Jared, answer 20 of
 `docs/elevenlabs-studio-opusplan.md`: "pause everywhere"). Montage never falls back to Piper by itself any more.
