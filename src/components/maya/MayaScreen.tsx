@@ -430,6 +430,8 @@ export function MayaScreenLauncher({ onOpen }: { onOpen: () => void }) {
     const t = window.setTimeout(() => setN((x) => (x + 1) % LAUNCHER_LABELS.length), LABEL_MS);
     return () => window.clearTimeout(t);
   }, [n, held]);
+  // Each label change is a "pulse": the button swells and the hero's dot grid splashes from here (every other one).
+  useEffect(() => { if (n > 0) window.dispatchEvent(new Event("maya:pulse")); }, [n]);
   return (
     <motion.button type="button" onClick={onOpen}
       onPointerEnter={() => { setHeld(true); loadMayaSdk().catch(() => {}); }}
