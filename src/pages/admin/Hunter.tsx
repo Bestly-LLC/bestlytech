@@ -22,6 +22,7 @@ import { rpcArgs } from "@/components/admin/roofguard/AvaShared";
 import { Switch } from "@/components/ui/switch";
 import { Card, NB, NumberField, Stat, when } from "@/components/admin/hunter/shared";
 import { JevCard } from "@/components/admin/hunter/JevCard";
+import { ApolloCard } from "@/components/admin/hunter/ApolloCard";
 
 type Campaign = {
   slug: string; owner: string; name: string; area: string; business_types: string[]; daily_target: number; enabled: boolean;
@@ -177,6 +178,8 @@ export default function Hunter() {
         </Card>
 
         <JevCard />
+
+        <ApolloCard />
 
         <Card title="Sources" hint="Free, public listings only.">
           <ul className="divide-y divide-white/10">
