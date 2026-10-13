@@ -18,6 +18,7 @@
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
 import { AlertCircle, ArrowUp, ChevronDown, Loader2, Mic, MicOff, PhoneOff, Presentation, Sparkles, Volume2, X } from "lucide-react";
 import { mayaProductForPath, normalizePath } from "./siteTools";
@@ -408,16 +409,52 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
     </aside>, document.body);
 }
 
+/* Rotating launcher labels (Jared, 2026-10-12): Maya is the live demo of Bestly's AI agents, so the pill says so in
+ * several plain ways. Every 4 s the label swaps and the glow swells once; the button resizes smoothly to fit. */
+const LAUNCHER_LABELS = [
+  "Talk to Maya",
+  "See an AI agent in action",
+  "Try a live AI agent demo",
+  "Chat with Maya, our AI",
+  "Talk to our AI, live",
+];
+const LABEL_MS = 4000;
+
 /** The launcher while the screen is closed: Maya's orb and one clear action. */
 export function MayaScreenLauncher({ onOpen }: { onOpen: () => void }) {
+  const reduce = useReducedMotion();
+  const [n, setN] = useState(0);
+  const [held, setHeld] = useState(false); // hold still while someone is about to tap it
+  useEffect(() => {
+    if (held) return;
+    const t = window.setTimeout(() => setN((x) => (x + 1) % LAUNCHER_LABELS.length), LABEL_MS);
+    return () => window.clearTimeout(t);
+  }, [n, held]);
   return (
-    <button type="button" onClick={onOpen} onPointerEnter={() => loadMayaSdk().catch(() => {})} onFocus={() => loadMayaSdk().catch(() => {})}
-      aria-label="Talk to Maya, Bestly's AI guide"
-      className="maya-pill fixed z-[60] flex items-center gap-2.5 rounded-full py-2 pl-2 pr-5 text-[16px] font-semibold text-white transition-transform duration-100 active:scale-[0.97] motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8E9BFF]">
-      <MayaOrb size={34} />
-      <span className="whitespace-nowrap">Talk to Maya</span>
-      <Sparkles className="h-4 w-4 text-[#C7CBEA]" aria-hidden />
-    </button>
+    <motion.button type="button" onClick={onOpen}
+      onPointerEnter={() => { setHeld(true); loadMayaSdk().catch(() => {}); }}
+      onPointerLeave={() => setHeld(false)}
+      onFocus={() => { setHeld(true); loadMayaSdk().catch(() => {}); }}
+      onBlur={() => setHeld(false)}
+      layout={!reduce}
+      transition={{ layout: { type: "spring", bounce: 0, duration: 0.45 } }}
+      aria-label="Talk to Maya, Bestly's AI agent demo"
+      className="maya-pill maya-pill-glow fixed z-[60] flex items-center gap-2.5 rounded-full py-2 pl-2 pr-5 text-[16px] font-semibold text-white active:scale-[0.97] motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8E9BFF]">
+      <span key={`halo-${n}`} aria-hidden className="maya-pill-swell" />
+      <motion.span layout={!reduce ? "position" : false}><MayaOrb size={34} /></motion.span>
+      <span className="relative grid overflow-hidden" aria-hidden>
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span key={n} className="whitespace-nowrap"
+            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12, filter: "blur(4px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: -12, filter: "blur(4px)" }}
+            transition={{ type: "spring", bounce: 0, duration: 0.45 }}>
+            {LAUNCHER_LABELS[n]}
+          </motion.span>
+        </AnimatePresence>
+      </span>
+      <motion.span layout={!reduce ? "position" : false}><Sparkles className="h-4 w-4 text-[#C7CBEA]" aria-hidden /></motion.span>
+    </motion.button>
   );
 }
 
