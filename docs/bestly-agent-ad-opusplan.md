@@ -34,3 +34,16 @@ No invented stats, customers or claims. No compliance claims (HIPAA etc.). No ab
 
 ## Scripts
 See the bottom of this file ("Result") for the final scene lines, post codes and costs.
+
+## Result (2026-10-12, Spark)
+Two Studio posts in Drafts > To review (nothing posted or sent): **BA01** "Bestly Agent ad: missed call" (26 s) and **BA02** "Bestly Agent ad: what she does" (32 s). Both 1080x1920, yuv420p / tv / bt709, about -16 LUFS, music under the voice (9 dB duck). Each has a caption and an Instagram variant.
+- BA01 media: https://rcqfqhguwpmaarseifqg.supabase.co/storage/v1/object/public/review/video/bestly-agent/montage-cc916299-80d8-43e8-b2ae-2f7a59793c66.mp4
+- BA02 media: https://rcqfqhguwpmaarseifqg.supabase.co/storage/v1/object/public/review/video/bestly-agent/montage-d2c5d93d-c3e4-408e-860c-7cbd79502fd1.mp4
+
+Scene lines. BA01: "A missed call can send a customer elsewhere." (ringing call card, then Missed call) / "Maya answers your business phone." (Answered by Maya, Appointment booked) / "She books appointments and answers questions." / "From $49 a month." / closing card (Bestly Agent, Inter; chips Answers your calls, Books on your calendar, From $49 a month; bestly.tech/agent).
+BA02: "Meet Maya. She answers your business phone." (call card) / "She books appointments and answers questions." / "She connects to the apps you already use." / "Calls, texts and chat in 90+ languages." / "From $49 a month." / closing card (chips Calls, texts, chat; 90+ languages; From $49 a month).
+Voice: ElevenLabs "Hope - upbeat and clear" (Maya's own voice). Music: borrowed Bestly Studio beds (BA01 upbeat 35s, BA02 confident 35s). Whisper listen-check matched both scripts word for word (Whisper heard "slash" as a dot, and "Hear" as "Here").
+Cost: 4 voice takes (two first cuts, two re-cuts for the price-line wrap and a call card on the opening scene of ad 2), about 27 cents total; everything else $0. No b-roll, no new music.
+Re-cuts: a re-cut marked `[recut-ad]` in the revise note keeps the hand-written script (`brands/bestly_agent.py`); any other re-cut note goes to the free-AI writer with the same gates.
+
+Open for Jared: review the 13 claim rules (Studio > Settings > Claim rules); a house-brand to @bestly_llc posting map does not exist yet; there is no voiceover switch table.
