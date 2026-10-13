@@ -138,7 +138,8 @@ const SceneView: React.FC<{s: Scene; t: Theme; dur: number}> = ({s, t, dur}) => 
   if (lay === 'stat' && s.big) {
     const pop = spring({frame: f - 3, fps, config: {damping: 13, stiffness: 95, mass: 0.9}});
     const out = interpolate(f, [dur - 10, dur], [1, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
-    const sz = s.big.length <= 5 ? 360 : s.big.length <= 8 ? 280 : s.big.length <= 12 ? 210 : 160;
+    const base = s.big.length <= 5 ? 360 : s.big.length <= 8 ? 280 : s.big.length <= 12 ? 210 : 160;
+    const sz = Math.min(base, Math.floor(860 / (0.66 * Math.max(...s.big.split(/\s+/).map((x) => x.length), 1))));
     return (
       <AbsoluteFill>
         {bg}
