@@ -6,6 +6,10 @@
         "fra1"
       ],
       "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
+    },
+    "api/hero-check.js": {
+      "maxDuration": 60,
+      "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
     }
   },
   "rewrites": [
