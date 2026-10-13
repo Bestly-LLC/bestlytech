@@ -11,7 +11,7 @@ Built 2026-10-06. Spark's main video tool (`make_montage` in `supabase/functions
 
 ## Flow
 1. `montage_claim` -> brand writer (`brands/<slug>.py`, free AI via `/opt/bestly/cron/freellm.py`, the brand's claim rules + fact check).
-2. ElevenLabs voices each scene (held, not Piper, if it cannot; see Voice); scene lengths follow the voice; a quiet synthesized pad sits under it.
+2. Music gate, then ElevenLabs voices each scene (held, not Piper, if it cannot; see Voice); scene lengths follow the voice. Then the music bed (see Music).
 3. b-roll (optional): `montage_clip_request` orders vertical LTX clips and parks the job; `montage_claim` resumes it
    when no clip is still queued/rendering (or after 90 min, with plain cards for missing clips).
 4. Render + OpenMontage review, then our checks (1080x1920, length, loudness, size), thumbnail, upload to `review`.
@@ -39,6 +39,25 @@ Brand files the videos use: `fetch-assets.sh` downloads Cookie Yeti and Inventor
 3. Add a `montage_brand_policy` row (montage_ok false until a test video has been looked at), then flip it to true.
 4. Render one free text-only job through `montage_start`, look at frames, then name the brand in `make_montage`'s description in `studio-chat`.
 (`comp/<slug>` is still supported: leave `COMP_DIR` unset and om_render copies `comp/<slug>`.)
+
+## Music (every video ships with a real music bed, Jared 2026-10-12)
+Rule: `bestly_memory` `studio/rule-music-every-video`. The old synthesized pad (10 percent volume) is gone.
+- Library: table `studio_music_tracks` (brand_slug or null = shared, mood, bpm, duration_s, storage_path, source, license, loudness_lufs, active) + private storage bucket `music`;
+  `studio_music_uses` remembers which track went under which video. Moods (fixed set): calm, upbeat, confident, warm, playful. The writer adds `mood` to the script
+  (`_common.MOODS`); the brand's `CFG["mood"]` (HOKU: `MOOD`) is the fallback.
+- Picker `montage_music_pick(brand, mood, job)`: the brand's own and shared tracks; mood match first, then the brand's own track, then least recently used; never the
+  track used last for that brand (unless it is the only one). `music.build` fits it to the video (crossfaded loop if short, soft fade in 0.8 s / out 2.2 s) and lowers it under
+  every narration line with soft ramps (`volume` expression from the saved `voice_at`/`voice_end` timings): bed at -18 LUFS in the gaps, 9 dB lower under the voice, a small swell after
+  the end card's line. Result `public/music.wav` (already ducked, played at volume 1.0 by `comp/brand` and `comp/hoku`). Levels: `montage_settings` key `music`.
+- Gate: `worker._music_gate` runs BEFORE the voice is bought; a brand with no track means the job is `held` (reason starts "no music"), Spark alert `montage.music` (info, no push, one a
+  day per brand, thread post on the first hold), re-checked every 30 min, resumes by itself when a track exists, stopped after 7 days. `worker.check` fails any video with no bed, a near-silent
+  bed (mean under -45 dB) or a finished mix that is silent in the gaps between narration lines (`music.bed_problems`). Never filed silent.
+- Filling the library: `music_library.py` (Pi: `python3 /opt/bestly/montage/music_library.py quote|run|list`). `quote` reads the live ElevenLabs balance, prices the starter library
+  (3 beds x 5 house brands, 35 s, instrumental) and checks the 30 percent voice reserve; spends nothing. `run` does NOTHING until `select montage_music_approve(<credits>, <usd>)` ran
+  after Jared said yes to Spark's dollar quote; it then generates, normalizes to -18 LUFS (FLAC), uploads, registers, stops before passing the approved credits or the reserve, and switches
+  the approval off. One call per bed, never retried. Free tracks: the Pi has no licensed music (the wall audiofx is not a source); only OpenMontage sfx. Add one by hand with `montage_music_register`
+  (license in plain words) after uploading the file to `music/<brand>/...`.
+- Rollback: copy the `*.bak_music_20261012` files back next to worker.py / brands/*.py and restart `bestly-montage`.
 
 ## B-roll on a re-cut (2026-10-12, Jared approved one order for BC05)
 Default re-cuts (trigger `montage_recut`, a "changes" note) stay `broll=false`, cost $0 and reuse the parent's clips. A re-cut orders FRESH clips only when its job has `broll=true`,
