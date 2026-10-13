@@ -478,6 +478,7 @@ def write(job, log, cfg):
         p["caption"], p["title"], p["topic"] = keep["caption"], keep["title"], keep["topic"]
         log("keep-the-copy re-cut: scene words and caption restored from the current script; kept the new shots and end card")
     out = finish(cfg, p, theme, prov, score, broll)
+    _carry_end(out, parent, note)
     if wants_copy:
         share = same_share(parent, out, cfg.get("tail") or "")
         log(f"re-cut copy check: {share:.0%} of the lines are unchanged (note asks for copy changes)")
@@ -486,6 +487,7 @@ def write(job, log, cfg):
                             {"role": "user", "content": STRONGER.format(pct=round(share * 100))}]
             p, prov, score = _loop(cfg, msgs2, broll, deadline, log, label="retry: ")
             out = finish(cfg, p, theme, prov, score, broll)
+            _carry_end(out, parent, note)
             share2 = same_share(parent, out, cfg.get("tail") or "")
             log(f"re-cut retry: {share2:.0%} of the lines are unchanged")
             if share2 >= SAME_LIMIT:
@@ -493,6 +495,16 @@ def write(job, log, cfg):
                                      f"({share:.0%} then {share2:.0%} unchanged). Nothing was filed so the old video is not replaced by a copy of itself")
         out["recut_changed"] = round(1 - same_share(parent, out, cfg.get("tail") or ""), 2)
     return out
+
+
+def _carry_end(out, parent, note):
+    """A re-cut keeps the current closing card (sub line, chips, spoken line) unless the note talks about the end card, so a note about
+    something else (a font, the music) never swaps the chips back to the brand default. Added 2026-10-12."""
+    pe = (parent or {}).get("end") or {}
+    if parent and pe.get("chips") and not END_NOTE.search(note or ""):
+        for k in ("sub", "chips", "say", "proposed"):
+            if k in pe:
+                out["end"][k] = pe[k]
 
 
 def finish(cfg, p, theme, prov, score, broll=False):
