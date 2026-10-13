@@ -1,3 +1,14 @@
+// webauthn-authenticate: passkey sign-in (actions options / verify) and, since 2026-10-13, passkey APPROVALS for Ava
+// (actions approval_options / approval_verify; docs/ava-fix-issues-opusplan.md Phase B).
+//
+// Approval ceremony, bound to ONE approval row (public.ava_approvals):
+//   approval_options  needs the signed-in admin's JWT. Mints a fresh challenge and stores it ON THE APPROVAL ROW (never in
+//                     webauthn_challenges, so an approval assertion can never sign anyone in and a login assertion can never
+//                     approve). userVerification is "required", allowCredentials is that admin's own passkeys.
+//   approval_verify   consumes the challenge atomically (single use), then checks clientDataJSON.challenge === the row's challenge,
+//                     origin, rpIdHash, flags UP *and* UV, that the credential belongs to the SAME signed-in admin, and the signature.
+//                     Only then does it stamp assertion_at / assertion_user on the row. The RPC ava_approval_decide refuses unless that
+//                     stamp is under 60 s old, belongs to auth.uid(), and the page's action hash matches. A session alone is never enough.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsWith } from "../_shared/cors.ts";
 
@@ -110,6 +121,21 @@ async function verifySignature(
   }
 
   throw new Error(`Unsupported algorithm: ${publicKeyData.algorithm}`);
+}
+
+/** The signed-in admin behind this request's JWT, or null. */
+async function adminFromJwt(
+  admin: ReturnType<typeof createClient>,
+  req: Request,
+): Promise<{ id: string } | null> {
+  const auth = req.headers.get("Authorization") ?? "";
+  const jwt = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (!jwt) return null;
+  const { data } = await admin.auth.getUser(jwt);
+  const id = data?.user?.id;
+  if (!id) return null;
+  const { data: isAdmin } = await admin.rpc("has_role", { _user_id: id, _role: "admin" });
+  return isAdmin === true ? { id } : null;
 }
 
 Deno.serve(async (req) => {
@@ -370,6 +396,119 @@ Deno.serve(async (req) => {
         token_hash: tokenHash,
         email: userData.user.email,
       });
+    }
+
+    if (action === "approval_options" || action === "approval_verify") {
+      const who = await adminFromJwt(supabaseAdmin, req);
+      if (!who) return errorResponse("Sign in to the admin first, then try again.");
+      const code = String(body.code ?? "").toLowerCase().trim();
+      if (!/^[a-z0-9]{7}$/.test(code)) return errorResponse("That approval link isn't valid.");
+      const { data: ap } = await supabaseAdmin
+        .from("ava_approvals")
+        .select("id, status, expires_at, challenge, challenge_at, challenge_n")
+        .eq("code", code)
+        .maybeSingle();
+      if (!ap) return errorResponse("That approval link isn't valid.");
+      if (ap.status === "expired" || (ap.status === "pending" && Date.parse(ap.expires_at) <= Date.now())) {
+        return errorResponse("This request expired. Ask Ava again.");
+      }
+      if (ap.status !== "pending") return errorResponse("This request was already used.");
+
+      if (action === "approval_options") {
+        if ((ap.challenge_n ?? 0) >= 6) return errorResponse("Too many tries on this request. Ask Ava again.");
+        const { data: credentials } = await supabaseAdmin
+          .from("passkey_credentials")
+          .select("credential_id, transports")
+          .eq("user_id", who.id);
+        if (!credentials || credentials.length === 0) {
+          return errorResponse("No passkey on this account yet. Add one in Settings, then tap again.");
+        }
+        const challenge = generateChallenge();
+        const { data: saved } = await supabaseAdmin
+          .from("ava_approvals")
+          .update({ challenge, challenge_at: new Date().toISOString(), challenge_n: (ap.challenge_n ?? 0) + 1 })
+          .eq("id", ap.id)
+          .eq("status", "pending")
+          .select("id");
+        if (!saved?.length) return errorResponse("This request was already used.");
+        return jsonResponse({
+          rpId,
+          challenge,
+          timeout: 60000,
+          userVerification: "required", // Face ID / Touch ID / PIN, every time
+          allowCredentials: credentials.map((c) => ({
+            id: c.credential_id,
+            type: "public-key",
+            transports: c.transports || ["internal"],
+          })),
+        });
+      }
+
+      // approval_verify
+      const { credential } = body;
+      if (!credential?.id || !credential?.response) return errorResponse("No passkey answer came back. Tap again.");
+      if (!ap.challenge || !ap.challenge_at || Date.now() - Date.parse(ap.challenge_at) > 90_000) {
+        return errorResponse("That Face ID prompt timed out. Tap again.");
+      }
+      // Single use: whoever clears the challenge first gets to verify against it.
+      const { data: taken } = await supabaseAdmin
+        .from("ava_approvals")
+        .update({ challenge: null })
+        .eq("id", ap.id)
+        .eq("challenge", ap.challenge)
+        .select("id");
+      if (!taken?.length) return errorResponse("That Face ID prompt was already used. Tap again.");
+
+      const credResponse = credential.response;
+      const clientDataJSONBytes = base64urlToBuffer(credResponse.clientDataJSON);
+      const clientDataJSON = JSON.parse(new TextDecoder().decode(clientDataJSONBytes));
+      if (clientDataJSON.type !== "webauthn.get") return errorResponse("Invalid ceremony type");
+      // BINDING: the browser signed THIS approval's challenge, nothing else.
+      if (clientDataJSON.challenge !== ap.challenge) return errorResponse("That tap wasn't for this request. Tap again.");
+      let originHost = "";
+      try { originHost = new URL(clientDataJSON.origin).hostname; } catch { /* handled below */ }
+      if (!originHost || originHost !== rpId) return errorResponse("Origin mismatch. Open the link from bestly.tech.");
+
+      const authData = base64urlToBuffer(credResponse.authenticatorData);
+      const rpIdHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rpId)));
+      if (!rpIdHash.every((b, i) => b === authData[i])) return errorResponse("Passkey domain mismatch. Re-register your passkey.");
+      const flags = authData[32];
+      if ((flags & 0x01) === 0) return errorResponse("User presence flag not set");
+      if ((flags & 0x04) === 0) return errorResponse("Face ID or your passcode is required for this. Tap again and confirm.");
+
+      const { data: storedCred } = await supabaseAdmin
+        .from("passkey_credentials")
+        .select("*")
+        .eq("credential_id", credential.id)
+        .maybeSingle();
+      // The tap must come from one of THIS signed-in admin's own passkeys.
+      if (!storedCred || storedCred.user_id !== who.id) return errorResponse("That passkey isn't on this account.");
+      let publicKeyData: { publicKeyJwk: JsonWebKey; algorithm: number };
+      try { publicKeyData = JSON.parse(storedCred.public_key); } catch { return errorResponse("Passkey needs re-registration in Settings."); }
+      if (!publicKeyData.publicKeyJwk || !publicKeyData.algorithm) return errorResponse("Passkey needs re-registration in Settings.");
+      let verified = false;
+      try {
+        verified = await verifySignature(publicKeyData, authData, clientDataJSONBytes, base64urlToBuffer(credResponse.signature));
+      } catch (err) {
+        return errorResponse("Signature verification failed: " + (err instanceof Error ? err.message : String(err)));
+      }
+      if (!verified) return errorResponse("Invalid signature. Tap again.");
+
+      const counter = (authData[33] << 24) | (authData[34] << 16) | (authData[35] << 8) | authData[36];
+      await supabaseAdmin
+        .from("passkey_credentials")
+        .update({ counter: counter > storedCred.counter ? counter : storedCred.counter, last_used: new Date().toISOString() })
+        .eq("id", storedCred.id);
+
+      // The record ava_approval_decide checks (fresh within 60 s, same admin).
+      const { data: stamped } = await supabaseAdmin
+        .from("ava_approvals")
+        .update({ assertion_at: new Date().toISOString(), assertion_user: who.id, assertion_cred: credential.id })
+        .eq("id", ap.id)
+        .eq("status", "pending")
+        .select("id");
+      if (!stamped?.length) return errorResponse("This request was already used.");
+      return jsonResponse({ success: true, verified: true });
     }
 
     return errorResponse("Invalid action");
