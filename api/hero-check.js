@@ -33,12 +33,13 @@ async function photosOk() {
   const bad = [];
   await Promise.all(urls.map(async (u) => {
     try {
-      const r = await fetch(u, { method: "HEAD" });
+      const r = await fetch(u, { method: "HEAD", signal: AbortSignal.timeout(8000) });
       if (r.status !== 200) bad.push(`${u.split("/").pop()} HTTP ${r.status}`);
     } catch (e) {
       bad.push(`${u.split("/").pop()} ${e.message}`);
     }
   }));
+  log("photos-checked");
   return bad;
 }
 
@@ -81,7 +82,9 @@ async function heroOk() {
     log("rotation-checked");
     if (!moved) problems.push(`Hero stuck on scene ${first} for 11 seconds`);
   } finally {
-    await browser.close();
+    // close can hang in the serverless sandbox: give it 3 s, then move on
+    await Promise.race([browser.close().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
+    log("closed");
   }
   return problems;
 }
