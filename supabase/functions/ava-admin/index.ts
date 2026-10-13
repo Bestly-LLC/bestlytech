@@ -4,6 +4,9 @@
 //   GET  /status?conversation_id&caller_id&q     overall health + what needs Jared, or one client / lead / contact by name or phone
 //   POST /calls                                   {conversation_id, caller_id, action, agent, campaign?, to?, purpose?, confirmed}
 //   GET  /metrics?conversation_id&caller_id&range&agent
+//   POST /fix                                     {conversation_id, caller_id, action: list|retry|ask_scout|check|approve|undo, issue?, ask?, job_id?, confirmed}
+//                                                 Phase A of docs/ava-fix-issues-opusplan.md: read-and-route only, NO new write privilege. approve and undo never run
+//                                                 (reason_code needs_tap); retry = the Fix Ladder's "Try again"; ask_scout = admin-chat on autopilot (writes blocked).
 //   POST|GET /selftest                            service key only (pg_cron ava-admin-bridge-selftest, hourly at :17)
 //   POST /provision                               service key only: {op:"sync_secret"} pushes the Vault secret to the ElevenLabs workspace secret
 //
@@ -17,6 +20,7 @@
 // Writes (call_ops with confirmed=true) go through the paths that already exist: hunter_campaign_set, rg_settings.calling_enabled,
 // pipeline_send, ava-assistant action "call". Capped at 20 place_call a day; a repeat inside 2 minutes replays the first answer.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { MARKER, FIX_MARKER, withPromptBlock } from "../_shared/ava-admin-prompt.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -34,13 +38,6 @@ const IDEM_MS = 120_000;
 const CONV_TTL = 60_000;
 const SAY_MAX = 199;
 const PAYLOAD_MAX = 1900;
-const MARKER = "Admin bridge";
-
-/** The block appended to Ava's system prompt (Jared owns her tone, so this is all that was added). The selftest re-adds it if a setup run wipes it. */
-const PROMPT_BLOCK = `Admin bridge (Jared only):
-- When Jared asks about the business, what needs him, how Maya, Reese, Leo or you are doing, calls, spend, leads or campaigns, use the admin tools and say the "say" line back as written, in your natural voice. Don't add facts the tool didn't give. If it offers a "next" line you may offer it in a few words. The tools check who is calling; if one says only Jared can pull that up, say so and move on.
-- To start, pause or resume a campaign, or place a call for him: first call call_ops without confirmed to get the exact action line, say it back in one short line, and only after a clear yes call call_ops again with confirmed true. Never confirm on your own, and never for anyone but Jared.
-- Never mention tools, IDs, JSON or that a system sits behind this. If a tool fails, say so in a few words and offer to take a note instead.`;
 
 type Any = Record<string, unknown>;
 type Reply = { ok: boolean; say: string; data?: Any; next?: string; reason_code?: string };
@@ -65,7 +62,7 @@ const pretty = (e: string) => { const d = e.replace(/\D/g, "").replace(/^1(?=\d{
 const T12 = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
 const DAYF = new Intl.DateTimeFormat("en-US", { timeZone: TZ, year: "numeric", month: "numeric", day: "numeric" });
 const MD = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short", month: "short", day: "numeric" });
-const t12 = (d: string | number | Date) => T12.format(new Date(d)).replace(/ /g, " ");
+const t12 = (d: string | number | Date) => T12.format(new Date(d)).replace(/\u202f/g, " ");
 /** "today at 3:05 PM" / "Mon, Oct 12". */
 const when = (d: string | number | Date) => DAYF.format(new Date(d)) === DAYF.format(new Date()) ? `today at ${t12(d)}` : MD.format(new Date(d));
 const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
@@ -77,7 +74,7 @@ function fit(s: string, n: number): string {
   const t = s.replace(/\s+/g, " ").trim();
   if (t.length <= n) return t;
   const cut = t.slice(0, n + 1); const sp = cut.lastIndexOf(" ");
-  return (sp > n * 0.5 ? cut.slice(0, sp) : t.slice(0, n)).replace(/[\s,;:.\-–—]+$/, "");
+  return (sp > n * 0.5 ? cut.slice(0, sp) : t.slice(0, n)).replace(/[\s,;:.\-\u2013\u2014]+$/, "");
 }
 function pacificMidnightIso(): string {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })
@@ -418,6 +415,324 @@ async function calls(ctx: Ctx, p: Any): Promise<Reply & { _log?: Any }> {
   return { ok: true, say, data: { ...(r.data ?? {}), action, agent }, _log: { idem_key: idem } };
 }
 
+// ---------- /fix (Phase A of docs/ava-fix-issues-opusplan.md) ----------
+// list, retry, ask_scout, check run here. approve and undo NEVER run: they only line the incident up as a one-tap card for Jared.
+// No new write privilege: retry is the Fix Ladder's own "Try again" (service key, same as the pane), ask_scout is admin-chat on
+// autopilot (writes blocked in code there, exactly like voice-ask), and the notes are info-class through notify_route.
+const FIX_ACTIONS = ["list", "retry", "ask_scout", "check", "approve", "undo"] as const;
+const DAILY_SCOUT = 10;
+const VOICE_THREAD = "Ava (voice)";
+const JOB_STALE_MS = 8 * 60_000;
+const LADDER_WAIT_MS = 5_500;
+const SCOUT_START_WAIT_MS = 2_500;
+const SPOKEN_TITLE = 38;
+const TRAIL_WORD = /\s+(the|a|an|of|to|as|for|and|or|in|on|at|is|are|with|by|from|that|than|its|their|but|if)$/i;
+/** A title short enough to say aloud, never ending on a dangling word like "the". */
+const spoken = (t: string) => { let s = fit(t, SPOKEN_TITLE); for (let i = 0; i < 4 && TRAIL_WORD.test(s); i++) s = s.replace(TRAIL_WORD, ""); return s; };
+
+const keyHeaders = (k: string): Record<string, string> => k.startsWith("sb_secret_") ? { apikey: k, "Content-Type": "application/json" } : { apikey: k, Authorization: `Bearer ${k}`, "Content-Type": "application/json" };
+const sleep = (ms: number) => new Promise<null>((r) => setTimeout(() => r(null), ms));
+
+type R = Reply & { _log?: Any };
+type Item = { kind: "incident" | "card" | "autofix"; key: string; title: string; name: string; area: string; stage: string; ask: string; severity: string; hay: string; order: number };
+const plainTitle = (t: string) => String(t ?? "").replace(/^\s*(Still down after an hour|Ares couldn't fix|Fixed|Resolved)\s*:\s*/i, "").replace(/\s+/g, " ").trim();
+const norm = (t: string) => plainTitle(t).toLowerCase().replace(/[0-9]+/g, "#").replace(/[^a-z#]+/g, " ").trim();
+const SEV: Record<string, number> = { critical: 0, error: 0, urgent: 0, warning: 1, info: 2, todo: 2 };
+const STAGE_ORDER: Record<string, number> = { needs_yes: 0, claude: 2, scout: 3, free_ai: 4, auto: 5 };
+const hayOf = (...p: string[]) => p.join(" ").toLowerCase().replace(/[^a-z0-9]+/g, " ");
+
+/** Open incidents + Needs-you cards, deduped. needs_yes incidents first, then Needs-you cards, then the rest by how far along the ladder they are. */
+async function loadItems(): Promise<{ items: Item[]; autofix: Item[] } | null> {
+  const [inc, cards] = await Promise.all([
+    sb.from("monitor_issues").select("key, title, area, severity, fix_stage, scout_ask, opened_at").eq("status", "open").limit(120),
+    sb.rpc("admin_today_rows"),
+  ]);
+  if (inc.error && cards.error) return null;
+  const items: Item[] = [];
+  const seenKey = new Set<string>(), seenTitle = new Set<string>();
+  for (const r of (inc.data ?? []) as Any[]) {
+    const key = String(r.key), title = plainTitle(String(r.title ?? key)), stage = String(r.fix_stage ?? "auto");
+    seenKey.add(key); seenTitle.add(norm(title));
+    const sev = SEV[String(r.severity)] ?? 2;
+    items.push({ kind: "incident", key, title, name: spoken(title), area: String(r.area ?? ""), stage, ask: String(r.scout_ask ?? ""), severity: String(r.severity ?? "info"),
+      hay: hayOf(title, String(r.area ?? ""), key), order: (stage === "needs_yes" ? 0 : (STAGE_ORDER[stage] ?? 5)) * 10 + sev + Math.min(0.9, Date.parse(String(r.opened_at)) / 1e14) });
+  }
+  let n = 0;
+  for (const r of (cards.data ?? []) as Any[]) {
+    const title = plainTitle(String(r.title ?? ""));
+    if (!title) continue;
+    if (r.origin_table === "monitor_issues" && seenKey.has(String(r.origin_id))) continue;
+    if (seenTitle.has(norm(title))) continue;
+    seenTitle.add(norm(title));
+    items.push({ kind: "card", key: String(r.key), title, name: spoken(title), area: String(r.source ?? ""), stage: "card", ask: "", severity: String(r.severity ?? "info"),
+      hay: hayOf(title, String(r.source ?? "")), order: 10 + Math.min(Number(r.rank ?? 3), 5) * 0.1 + n++ * 0.001 });
+  }
+  items.sort((a, b) => a.order - b.order);
+  const af = await sb.from("security_autofix_log").select("id, at, finding_key, action, note").not("undo_sql", "is", null).eq("ok", true)
+    .gte("at", new Date(Date.now() - 14 * 86400_000).toISOString()).order("at", { ascending: false }).limit(20);
+  const autofix: Item[] = ((af.data ?? []) as Any[]).map((r, i) => {
+    const title = plainTitle(String(r.note || r.action || r.finding_key || "an automatic fix"));
+    return { kind: "autofix" as const, key: `autofix:${r.id}`, title, name: spoken(title), area: "security", stage: "autofix", ask: "", severity: "info", hay: hayOf(title, String(r.finding_key ?? ""), String(r.action ?? "")), order: i };
+  });
+  return { items, autofix };
+}
+
+const STOP = new Set(["the", "an", "that", "this", "thing", "things", "one", "issue", "problem", "please", "fix", "try", "again", "retry", "my", "it", "for", "on", "with", "about", "of", "to", "is", "are", "ask", "scout", "undo", "approve", "and", "its"]);
+const ORDINALS: [RegExp, number][] = [[/\b(first|1st|top|number one)\b/i, 0], [/\b(second|2nd|number two)\b/i, 1], [/\b(third|3rd|number three)\b/i, 2]];
+const tokens = (s: string) => s.toLowerCase().replace(/'s\b/g, "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((t) => t.length >= 2 && !STOP.has(t));
+const hasTok = (hay: string, t: string) => t.length <= 3 ? new RegExp(`\\b${t}\\b`).test(hay) : hay.includes(t) || (t.endsWith("s") && hay.includes(t.slice(0, -1)));
+
+/** Plan section 1: one hit goes, 2+ is ambiguous (Ava asks which), none is not_found. */
+function resolveItem(pool: Item[], issue: string, what: string): { item: Item } | Reply {
+  const q = clip(issue, 120);
+  for (const [re, i] of ORDINALS) if (re.test(q) && pool[i]) return { item: pool[i] };
+  const qt = tokens(q);
+  if (!qt.length) return fail("not_found", `I'm not sure which ${what} you mean.`);
+  const scored = pool.map((it) => ({ it, s: qt.filter((t) => hasTok(it.hay, t)).length / qt.length })).filter((x) => x.s >= 0.5);
+  if (!scored.length) return fail("not_found", `I can't find ${what} matching ${fit(q, 40)}.`);
+  const top = Math.max(...scored.map((x) => x.s));
+  const hits = scored.filter((x) => x.s === top).map((x) => x.it);
+  if (hits.length === 1) return { item: hits[0] };
+  return ambiguous(hits);
+}
+function ambiguous(hits: Item[]): Reply {
+  const c = hits.slice(0, 3);
+  const names = c.map((h) => h.name);
+  const say = hits.length > 3 ? `That matches ${hits.length} things. Is it ${names.slice(0, -1).join(", ")}, or ${names[names.length - 1]}?`
+    : `That matches ${names.join(" and ")}. Which one?`;
+  return { ok: false, reason_code: "ambiguous", say, data: { choices: c.map((h) => ({ name: h.name, stage: h.stage })) } };
+}
+
+const STAGE_SAY: Record<string, string> = { needs_yes: "fix ready", card: "needs you", claude: "stuck", scout: "in progress", free_ai: "in progress", auto: "in progress" };
+
+async function fixList(): Promise<Reply> {
+  const all = await loadItems();
+  if (!all) return fail("upstream_down", "I couldn't read the issues just now.");
+  const { items } = all;
+  if (!items.length) return { ok: true, say: "Nothing's broken right now.", data: { count: 0, items: [] } };
+  const top = items.slice(0, 3);
+  const ord = ["First,", "Then", "And"];
+  const say = `${items.length <= 10 ? cap(num(items.length)) : items.length} open. ${top.map((t, i) => `${ord[i]} ${t.name}, ${STAGE_SAY[t.stage] ?? "in progress"}.`).join(" ")}`;
+  const first = top[0];
+  const next = first.stage === "needs_yes" ? "The first one needs your tap in admin." : first.kind === "incident" ? "Want me to try the first one again?" : "The first one needs you in admin.";
+  return { ok: true, say, data: { count: items.length, spoken: top.length, items: top.map((t) => ({ name: t.name, stage: t.stage })) }, next };
+}
+
+// ----- notes: Ava-signed, info class, through notify_route (the autonomy gate decides; nothing here pushes on its own) -----
+let voiceThreadCache: { id: string; uid: string; at: number } | null = null;
+async function adminUid(): Promise<string | null> {
+  const { data } = await sb.from("user_roles").select("user_id").eq("role", "admin").order("user_id").limit(1).maybeSingle();
+  return (data as Any | null)?.user_id as string | null ?? null;
+}
+/** The one reusable "Ava (voice)" admin chat thread (created on first use). */
+async function voiceThread(): Promise<{ id: string; uid: string } | null> {
+  if (voiceThreadCache && Date.now() - voiceThreadCache.at < 300_000) return voiceThreadCache;
+  const uid = await adminUid();
+  if (!uid) return null;
+  const { data: th } = await sb.from("admin_chat_threads").select("id").eq("user_id", uid).eq("title", VOICE_THREAD).order("created_at").limit(1);
+  let id = (th?.[0] as Any | undefined)?.id as string | undefined;
+  if (!id) {
+    const { data, error } = await sb.from("admin_chat_threads").insert({ user_id: uid, title: VOICE_THREAD }).select("id").single();
+    if (error || !data) return null;
+    id = (data as Any).id as string;
+  }
+  voiceThreadCache = { id, uid, at: Date.now() };
+  return voiceThreadCache;
+}
+/** A short note signed Ava in the "Ava (voice)" thread. Unread = purple dot; a note carrying NEEDS_YES turns it orange (admin_chat_thread_list). */
+async function threadNote(text: string, dedupeContains: string): Promise<void> {
+  const th = await voiceThread();
+  if (!th) return;
+  const since = new Date(Date.now() - 30 * 60_000).toISOString();
+  const { data: recent } = await sb.from("admin_chat_messages").select("body").eq("thread_id", th.id).eq("role", "assistant").gte("created_at", since).limit(30);
+  if (((recent ?? []) as Any[]).some((m) => String(m.body).includes(dedupeContains))) return;
+  await sb.from("admin_chat_messages").insert({ thread_id: th.id, role: "assistant", body: text });
+  await sb.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", th.id);
+}
+async function bellNote(title: string, body: string, tag: string): Promise<void> {
+  await sb.rpc("notify_route", { p_title: fit(title, 160), p_body: fit(body, 300), p_level: "passive", p_source: "Ava", p_url: "https://bestly.tech/admin", p_tag: tag });
+}
+const dayTag = () => new Date().toLocaleDateString("en-CA", { timeZone: TZ });
+
+async function tapNeeded(ctx: Ctx, action: "approve" | "undo", item: Item): Promise<Reply> {
+  const t = item.title;
+  let say: string, note: string;
+  if (action === "undo") {
+    say = item.kind === "autofix" ? "Undoing an automatic fix needs your tap in admin, under Security. I put a note there." : "That one needs your tap in admin.";
+    note = `Ava (voice): you asked me by phone to undo "${t}". Undoing needs your tap in admin (Security, the automatic fixes list), not your voice.`;
+  } else if (item.kind === "incident" && item.stage === "needs_yes") {
+    say = "That one needs your tap in admin. The fix is ready and waiting there.";
+    note = `Ava (voice): you asked me by phone to approve "${t}". I can't approve by voice, so it needs your tap, one button.\nNEEDS_YES: ${fit(item.ask || "the fix Scout wrote", 200)}\nOpen the alert for it (bell or Needs you) and tap "Yes, do it".`;
+  } else if (item.kind === "incident") {
+    return fail("not_ready", `${cap(item.name)} isn't waiting on a yes yet. It's ${STAGE_SAY[item.stage] ?? "in progress"}.`, { stage: item.stage });
+  } else {
+    say = "That one needs your tap in admin. It's in Needs you.";
+    note = `Ava (voice): you asked me by phone about "${t}". It needs you in admin, it is in Needs you.`;
+  }
+  if (!ctx.selftest) {
+    await threadNote(note, `"${t}"`).catch(() => {});
+    await bellNote(`Ava (voice): ${action === "undo" ? "undo" : "approval"} needs your tap, ${fit(t, 80)}`, "You asked on a call. I can't do it by voice, it is lined up for your tap.", `ava-tap-${action}-${norm(t).slice(0, 40)}-${dayTag()}`).catch(() => {});
+  }
+  return { ok: false, reason_code: "needs_tap", say, data: { issue: item.name, stage: item.stage, action, noted: !ctx.selftest } };
+}
+
+// ----- retry: the Fix Ladder's own "Try again" -----
+async function priorOk(idem: string): Promise<Reply | null> {
+  const since = new Date(Date.now() - IDEM_MS).toISOString();
+  const { data: prior } = await sb.from("ava_admin_bridge_log").select("say, data").eq("idem_key", idem).eq("ok", true).gte("ts", since).order("ts", { ascending: false }).limit(1);
+  return prior?.length ? { ok: true, say: `Already done a minute ago. ${prior[0].say ?? ""}`.trim(), data: { ...(prior[0].data as Any ?? {}), repeat: true } } : null;
+}
+async function fixRetry(ctx: Ctx, p: Any, confirmed: boolean): Promise<R> {
+  const all = await loadItems();
+  if (!all) return fail("upstream_down", "I couldn't read the issues just now.");
+  const inc = all.items.filter((i) => i.kind === "incident");
+  const issue = clip(p.issue, 120);
+  let item: Item;
+  if (!issue) {
+    if (inc.length === 1) item = inc[0];
+    else if (!inc.length) return fail("not_found", "There's nothing open I can try again.");
+    else return { ...ambiguous(inc), say: `Which one should I try again? ${inc.slice(0, 3).map((h) => h.name).join(", ")}.` };
+  } else {
+    const r = resolveItem(all.items, issue, "issue");
+    if ("ok" in r) return r;
+    item = r.item;
+  }
+  if (item.kind !== "incident") return fail("needs_tap", `${cap(item.name)} isn't something I can try again. It needs you in admin.`, { issue: item.name });
+  const note = item.stage === "needs_yes" ? " It already has a fix ready; trying again starts the ladder over." : "";
+  if (!confirmed) {
+    return { ok: false, reason_code: "not_confirmed", say: `Try the ladder again on ${item.name}.${note} Say yes and I'll do it.`, data: { preview: true, action: "retry", issue: item.name },
+      next: "Read that back to Jared, then call again with confirmed true after a clear yes.", _log: { args: { issue_key: item.key } } };
+  }
+  const idem = `${ctx.conv}|retry|${item.key}`;
+  const rep = await priorOk(idem);
+  if (rep) return rep;
+  const run = fetch(`${SB_URL}/functions/v1/fix-ladder`, { method: "POST", headers: keyHeaders(SB_SECRET), body: JSON.stringify({ op: "retry", key: item.key }) })
+    .then(async (r) => ({ status: r.status, j: await r.json().catch(() => ({})) as Any })).catch(() => ({ status: 0, j: {} as Any }));
+  bg(run);
+  const first = await Promise.race([run, sleep(LADDER_WAIT_MS)]);
+  if (first && (first.status === 0 || first.status >= 400 || first.j.ok === false)) return fail("upstream_down", "The ladder didn't take that. Try the button in admin.", { issue: item.name });
+  const already = first?.j?.result === "already fixed";
+  const say = already ? `${cap(item.name)} is already fixed.` : "Kicked it back to the ladder. I'll check in a minute.";
+  bg(bellNote(`Ava (voice): tried the ladder again on ${fit(item.title, 80)}`, `You asked on a call. ${t12(Date.now())} Pacific.`, `ava-retry-${item.key}-${Math.floor(Date.now() / IDEM_MS)}`));
+  return { ok: true, say, data: { issue: item.name, action: "retry", ladder: first ? fit(String(first.j.result ?? "started"), 40) : "started" }, _log: { idem_key: idem, args: { issue_key: item.key } } };
+}
+
+// ----- ask_scout: a background Scout job on autopilot (writes blocked in admin-chat), logged in the "Ava (voice)" thread -----
+async function scoutToday(): Promise<number> {
+  const { count } = await sb.from("ava_admin_bridge_log").select("id", { count: "exact", head: true }).eq("op", "fix_ask_scout").eq("ok", true).gte("ts", pacificMidnightIso());
+  return count ?? 0;
+}
+const QUESTION_WORDS = /^\s*(who|what|what's|whats|why|how|which|when|where|is|are|does|do|did|can|could|will|any|tell me|show me|list|check|status)\b/i;
+async function fixAskScout(ctx: Ctx, p: Any, confirmed: boolean): Promise<R> {
+  let ask = clip(p.ask, 500);
+  const issue = clip(p.issue, 120);
+  let about = "";
+  if (issue) {
+    const all = await loadItems();
+    if (!all) return fail("upstream_down", "I couldn't read the issues just now.");
+    const r = resolveItem(all.items, issue, "issue");
+    if ("ok" in r) return r;
+    about = r.item.title;
+    if (!ask) ask = `Look into this issue and tell me what is wrong and what you would do: ${about}`;
+  }
+  if (ask.length < 6) return fail("bad_request", "What should I ask Scout? One sentence is plenty.");
+  const preview = `Ask Scout${about ? ` about ${fit(about, 50)}` : ""}: ${fit(ask, 90)}`;
+  if (!confirmed) {
+    return { ok: false, reason_code: "not_confirmed", say: `${preview}. It only looks, it can't change anything. Say yes and I'll send it.`, data: { preview: true, action: "ask_scout" },
+      next: "Read that back to Jared, then call again with confirmed true after a clear yes." };
+  }
+  const idem = `${ctx.conv}|ask_scout|${hexOf(await sha(ask + about)).slice(0, 12)}`;
+  const rep = await priorOk(idem);
+  if (rep) return rep;
+  const used = await scoutToday();
+  if (used >= DAILY_SCOUT) return fail("limit_hit", `That's ${num(DAILY_SCOUT)} Scout jobs through me today, the limit. Try tomorrow, or ask Scout in admin.`, { used, limit: DAILY_SCOUT });
+  const th = await voiceThread();
+  if (!th) return fail("upstream_down", "I couldn't open the Scout chat just now.");
+  const jobId = `av${crypto.randomUUID().replace(/-/g, "").slice(0, 6)}`;
+  const q = QUESTION_WORDS.test(ask) && !/[?.!]\s*$/.test(ask) ? `${ask}?` : ask;
+  const text = `[Ava job ${jobId}] From Ava, Jared on the phone. He asked this out loud and Ava will read your answer to him, so reply in one or two short plain sentences, no lists or markdown. ` +
+    `This path is read-only: nothing can be changed from here. If the answer needs a change or his yes, say what you would do in one line.${about ? `\nIt is about this issue: ${about}.` : ""}\nHe said: ${q}`;
+  const run = fetch(`${SB_URL}/functions/v1/admin-chat`, { method: "POST", headers: keyHeaders(SB_SECRET), body: JSON.stringify({ body: text.slice(0, 5800), autopilot: true, thread_id: th.id, title: VOICE_THREAD }) })
+    .then(async (r) => ({ status: r.status, text: (await r.text().catch(() => "")).slice(0, 200) })).catch(() => ({ status: 0, text: "" }));
+  bg(run);
+  const early = await Promise.race([run, sleep(SCOUT_START_WAIT_MS)]);
+  if (early && (early.status === 0 || early.status >= 400)) return fail("upstream_down", "Scout didn't pick that up. Try again in a minute.", { status: early.status });
+  bg(bellNote(`Ava (voice): asked Scout: ${fit(ask, 100)}`, `You asked on a call. Read-only. The answer lands in the Ava (voice) chat.`, `ava-scout-${jobId}`));
+  return { ok: true, say: "Scout's looking into it. Give it a couple of minutes, then ask me to check.", data: { job_id: jobId, action: "ask_scout", status: "running" }, next: "Keep chatting; ask me to check when you want the answer.",
+    _log: { idem_key: idem, args: { job_id: jobId, ask: clip(ask, 120) } } };
+}
+
+// ----- check: read the job back out of the "Ava (voice)" thread -----
+type JobRead = { status: "running" | "done" | "fixed" | "needs_yes" | "stuck"; line: string };
+function readJob(reply: string): JobRead {
+  const clean = (s: string) => s.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/^\s*OPTIONS:.*$/gim, "").replace(/[*_`#>\[\]]/g, "").replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim();
+  const last = [...reply.matchAll(/^(FIXED|NEEDS_YES|STUCK):\s*(.+)$/gm)].pop();
+  if (last && last[1] === "NEEDS_YES" && /paid AI/i.test(last[2])) return { status: "needs_yes", line: "The free AI couldn't finish it. Going further would use paid AI, and that's your call in admin" };
+  if (last) return { status: last[1].toLowerCase() as JobRead["status"], line: fit(clean(last[2]), 150) };
+  const body = clean(reply.split(/\n\s*\n/)[0] ?? reply);
+  const sentence = (body.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? body).trim();
+  let line = sentence;
+  if (line.length > 150) { const cut = line.slice(0, 170); const k = Math.max(cut.lastIndexOf(";"), cut.lastIndexOf(" - ")); line = k > 60 ? cut.slice(0, k) : fit(line, 150); }
+  return { status: "done", line: line.replace(/[\s,;:]+$/, "") };
+}
+async function fixCheck(ctx: Ctx, p: Any): Promise<R> {
+  let jobId = clip(p.job_id, 20).toLowerCase();
+  if (jobId && !/^av[0-9a-f]{6}$/.test(jobId)) jobId = "";
+  if (!jobId) {
+    const { data } = await sb.from("ava_admin_bridge_log").select("args").eq("conversation_id", ctx.conv).eq("op", "fix_ask_scout").eq("ok", true).order("ts", { ascending: false }).limit(1);
+    jobId = String((data?.[0]?.args as Any | undefined)?.job_id ?? "");
+  }
+  if (!jobId) return fail("not_found", "I haven't sent Scout anything on this call.");
+  const th = await voiceThread();
+  if (!th) return fail("upstream_down", "I couldn't open the Scout chat just now.");
+  const { data: um } = await sb.from("admin_chat_messages").select("id, created_at").eq("thread_id", th.id).eq("role", "user").ilike("body", `%[Ava job ${jobId}]%`).order("created_at", { ascending: false }).limit(1);
+  const mine = um?.[0] as Any | undefined;
+  if (!mine) return fail("not_found", "I can't find that Scout job.", { job_id: jobId });
+  const { data: after } = await sb.from("admin_chat_messages").select("role, body, created_at").eq("thread_id", th.id).gt("created_at", String(mine.created_at)).order("created_at").limit(12);
+  let reply = "";
+  for (const m of (after ?? []) as Any[]) { if (m.role === "user") break; if (m.role === "assistant") reply = String(m.body); }
+  if (!reply) {
+    const age = Date.now() - Date.parse(String(mine.created_at));
+    if (age > JOB_STALE_MS) return { ok: true, say: "Scout hasn't answered after a few minutes. It's in the Ava voice chat in admin.", data: { job_id: jobId, status: "stuck", result: "no answer yet" }, _log: { args: { job_id: jobId } } };
+    return { ok: true, say: "Scout's still working on it.", data: { job_id: jobId, status: "running" }, _log: { args: { job_id: jobId } } };
+  }
+  const r = readJob(reply);
+  const say = r.status === "needs_yes" ? `Scout needs one yes: ${r.line}. That one needs your tap in admin.`
+    : r.status === "stuck" ? `Scout got stuck: ${r.line}.` : r.status === "fixed" ? `Scout fixed it: ${r.line}.` : `Scout says: ${r.line.replace(/[.!?]?$/, ".")}`;
+  if ((r.status === "needs_yes" || r.status === "stuck") && !ctx.selftest) {
+    bg(bellNote(`Ava (voice): Scout ${r.status === "stuck" ? "got stuck" : "needs a yes"} on the job you asked for`, fit(r.line, 200), `ava-scout-result-${jobId}`));
+  }
+  return { ok: true, say, data: { job_id: jobId, status: r.status, result: r.line }, _log: { args: { job_id: jobId } } };
+}
+
+async function fix(ctx: Ctx, p: Any): Promise<R> {
+  const action = clip(p.action, 20).toLowerCase();
+  if (!(FIX_ACTIONS as readonly string[]).includes(action)) return fail("bad_request", "I can list what's broken, try one again, ask Scout, or check on a Scout job.");
+  const confirmed = p.confirmed === true || String(p.confirmed).toLowerCase() === "true";
+  if (action === "list") return fixList();
+  if (action === "retry") return fixRetry(ctx, p, confirmed);
+  if (action === "ask_scout") return fixAskScout(ctx, p, confirmed);
+  if (action === "check") return fixCheck(ctx, p);
+  // approve / undo: never executed, whatever `confirmed` says. They only line the incident up as a one-tap card.
+  const all = await loadItems();
+  if (!all) return fail("upstream_down", "I couldn't read the issues just now.");
+  const issue = clip(p.issue, 120);
+  const pool = action === "undo" ? [...all.autofix, ...all.items] : all.items;
+  let item: Item;
+  if (!issue) {
+    const cands = action === "undo" ? all.autofix : all.items.filter((i) => i.stage === "needs_yes");
+    if (!cands.length) return fail("not_found", action === "undo" ? "I don't see an automatic fix I could put back." : "Nothing is waiting on your yes right now.");
+    if (cands.length > 1) return { ...ambiguous(cands), say: `Which one? ${cands.slice(0, 3).map((h) => h.name).join(", ")}.` };
+    item = cands[0];
+  } else {
+    const r = resolveItem(pool, issue, action === "undo" ? "fix" : "issue");
+    if ("ok" in r) return r;
+    item = r.item;
+  }
+  const rep = await tapNeeded(ctx, action as "approve" | "undo", item);
+  return { ...rep, _log: { args: { issue_key: item.key } } };
+}
+
 // ---------- selftest + recovery ----------
 async function xi(path: string, method = "GET", body?: Any): Promise<{ ok: boolean; status: number; j: Any }> {
   const key = await xiKey();
@@ -481,6 +796,13 @@ async function selftest(): Promise<Any> {
         hit(`/metrics?${qs}&range=today`, { headers: H }, (s, j) => s === 200 && j.ok === true, "metrics"),
         hit(`/calls`, { method: "POST", headers: H, body: JSON.stringify({ conversation_id: "conv_selftest", caller_id: "+18165007236", action: "pause_campaign", agent: "maya", campaign: "zz-selftest-no-such-campaign", confirmed: false }) },
           (s, j) => s === 200 && j.reason_code === "not_found", "calls_dry"),
+        // Phase A fix routes: a real list, a retry that cannot match anything, and an approve that must never come back ok
+        hit(`/fix`, { method: "POST", headers: H, body: JSON.stringify({ conversation_id: "conv_selftest", caller_id: "+18165007236", action: "list" }) },
+          (s, j) => s === 200 && j.ok === true && typeof j.say === "string", "fix_list"),
+        hit(`/fix`, { method: "POST", headers: H, body: JSON.stringify({ conversation_id: "conv_selftest", caller_id: "+18165007236", action: "retry", issue: "zzqx-selftest-no-such-issue", confirmed: false }) },
+          (s, j) => s === 200 && j.ok === false && j.reason_code === "not_found", "fix_retry_dry"),
+        hit(`/fix`, { method: "POST", headers: H, body: JSON.stringify({ conversation_id: "conv_selftest", caller_id: "+18165007236", action: "approve", confirmed: true }) },
+          (s, j) => s === 200 && j.ok === false && (j.reason_code === "needs_tap" || j.reason_code === "not_found" || j.reason_code === "ambiguous"), "fix_approve_never_runs"),
       ]);
     }
     await hit(`/status?${qs}`, { headers: { Authorization: "Bearer not-the-secret", "x-ava-selftest": SB_SECRET } }, (s) => s === 401, "bad_secret_401");
@@ -490,15 +812,15 @@ async function selftest(): Promise<Any> {
   const p95 = sorted.length ? sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)] : 0;
   add("p95_under_1500ms", p95 <= 1500, `${p95} ms`);
 
-  // 2. Ava still has the 3 tools, her prompt block, and the ElevenLabs secret still matches Vault
+  // 2. Ava still has her 4 bridge tools (status, metrics, call_ops, fix_issue), her prompt block (with the fix_issue rules), and the ElevenLabs secret still matches Vault
   const verifyEl = async () => {
     const out: { tools: boolean; prompt: boolean; secret: boolean; agent: Any | null } = { tools: false, prompt: false, secret: false, agent: null };
     const a = await xi(`/convai/agents/${agentId}`);
     if (a.ok) {
       const pr = (((a.j.conversation_config as Any | undefined)?.agent as Any | undefined)?.prompt ?? {}) as Any;
       const ids = ((pr.tool_ids ?? []) as string[]);
-      out.tools = st.tool_ids.length === 3 && st.tool_ids.every((t) => ids.includes(t));
-      out.prompt = String(pr.prompt ?? "").includes(MARKER);
+      out.tools = st.tool_ids.length >= 4 && st.tool_ids.every((t) => ids.includes(t));   // admin_status, call_ops, admin_metrics + fix_issue
+      out.prompt = String(pr.prompt ?? "").includes(MARKER) && String(pr.prompt ?? "").includes(FIX_MARKER);
       out.agent = pr;
     }
     const list = await xi("/convai/secrets");
@@ -515,13 +837,13 @@ async function selftest(): Promise<Any> {
     if ((!el.tools || !el.prompt) && el.agent) {
       const pr = el.agent; const ids = Array.from(new Set([...(((pr.tool_ids ?? []) as string[])), ...st.tool_ids]));
       const body: Any = { tool_ids: ids };
-      if (!el.prompt) body.prompt = `${String(pr.prompt ?? "").trimEnd()}\n\n${PROMPT_BLOCK}`;
+      if (!el.prompt) body.prompt = withPromptBlock(String(pr.prompt ?? ""));   // append if missing, swap in place if an older copy of the block is there
       const r = await xi(`/convai/agents/${agentId}`, "PATCH", { conversation_config: { agent: { prompt: body } } });
       fixes.push(r.ok ? `${!el.tools ? "re-attached her tools" : ""}${!el.tools && !el.prompt ? " and " : ""}${!el.prompt ? "re-added her admin prompt block" : ""}` : `agent patch failed (${r.status})`);
     }
     el = await verifyEl();
   }
-  add("ava_has_3_tools", el.tools); add("ava_prompt_block", el.prompt); add("el_secret_matches_vault", el.secret);
+  add("ava_has_tools", el.tools); add("ava_prompt_block", el.prompt); add("el_secret_matches_vault", el.secret);
 
   const bad = checks.filter((c) => !c.ok);
   const ok = bad.length === 0;
@@ -550,7 +872,7 @@ Deno.serve(async (req) => {
       if (b.op === "sync_secret") return new Response(JSON.stringify(await syncSecret()), { headers: { "Content-Type": "application/json" } });
       return respond(fail("bad_request", "unknown op"));
     }
-    const routes: Record<string, { method: string; op: string }> = { "/status": { method: "GET", op: "status" }, "/metrics": { method: "GET", op: "metrics" }, "/calls": { method: "POST", op: "calls" } };
+    const routes: Record<string, { method: string; op: string }> = { "/status": { method: "GET", op: "status" }, "/metrics": { method: "GET", op: "metrics" }, "/calls": { method: "POST", op: "calls" }, "/fix": { method: "POST", op: "fix" } };
     const route = routes[path];
     if (!route) return respond(fail("not_found", "Unknown route."), 404);
     if (req.method !== route.method && !(route.method === "GET" && req.method === "POST")) return respond(fail("bad_request", "Wrong method."), 405);
@@ -560,11 +882,14 @@ Deno.serve(async (req) => {
     let r: Reply & { _log?: Any };
     if (route.op === "status") r = await status(g, p);
     else if (route.op === "metrics") r = await metrics(g, p);
+    else if (route.op === "fix") r = await fix(g, p);
     else r = await calls(g, p);
-    const opName = route.op === "calls" ? clip(p.action, 20) || "calls" : route.op;
+    const opName = route.op === "calls" ? clip(p.action, 20) || "calls" : route.op === "fix" ? `fix_${clip(p.action, 20).toLowerCase() || "unknown"}` : route.op;
     const idem = r._log?.idem_key as string | undefined;
     const args: Any = route.op === "calls" ? { action: p.action, agent: p.agent, campaign: clip(p.campaign, 60) || undefined, to_last4: p.to ? last4(String(p.to)) || clip(p.to, 30) : undefined, purpose: clip(p.purpose, 120) || undefined, confirmed: p.confirmed === true || String(p.confirmed) === "true" }
-      : route.op === "status" ? { q: clip(p.q, 60) || undefined } : { range: p.range, agent: p.agent };
+      : route.op === "status" ? { q: clip(p.q, 60) || undefined }
+      : route.op === "fix" ? { action: clip(p.action, 20).toLowerCase(), issue: clip(p.issue, 60) || undefined, confirmed: p.confirmed === true || String(p.confirmed).toLowerCase() === "true", ...((r._log?.args ?? {}) as Any) }
+      : { range: p.range, agent: p.agent };
     logRow({ conversation_id: g.conv, caller_id: g.caller, op: opName, args, ok: r.ok, reason_code: r.ok ? null : r.reason_code, ms: Date.now() - g.t0, idem_key: r.ok ? idem : null, say: r.say, data: r.ok && idem ? (r.data ?? null) : null });
     delete r._log;
     return respond(r);
