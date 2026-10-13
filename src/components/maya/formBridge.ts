@@ -15,11 +15,14 @@
  */
 import "./maya-form.css";
 
-export type FormFieldKey = "name" | "email" | "phone" | "company" | "team_size" | "topic" | "details";
+export type FormFieldKey = "name" | "email" | "phone" | "company" | "team_size" | "topic" | "details"
+  // The Bestly Agent setup form (/agent/welcome, id "agent-setup").
+  | "website" | "current_phone" | "phone_plan" | "hours" | "timezone" | "call_goal" | "transfer_name" | "transfer_phone"
+  | "apps" | "faqs" | "never" | "voice" | "agent_name";
 export type FormValues = Partial<Record<FormFieldKey, string | number>>;
 
 export type FormApi = {
-  id: "contact" | "cloud-lead";
+  id: "contact" | "cloud-lead" | "agent-setup";
   fill(v: FormValues): Promise<{ say: string; missing: string[] }>;
   submit(): Promise<{ ok: boolean; say: string }>;
   read(): { say: string; missing: string[] };

@@ -1,5 +1,5 @@
-import { useRef } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { Link, useLocation } from "react-router-dom";
 import {
   ArrowRight, Check, ClipboardCheck, Languages, Mail, MessageCircle, MessageSquareText, MessagesSquare, Mic,
   Phone, PhoneIncoming, Plus, ShieldCheck, UserRoundCheck,
@@ -15,6 +15,8 @@ import { IntegrationsDirectory } from "@/components/agentDemo/IntegrationsDirect
 import { appCountLabel } from "@/components/agentDemo/integrations";
 import { BRANDS } from "@/components/agentDemo/brand";
 import { useReducedMotion } from "@/components/agentDemo/appKit";
+import { AgentPricing } from "@/components/agentDemo/AgentPricing";
+import { AGENT_TERMS } from "../../supabase/functions/_shared/agent-plans";
 
 /**
  * Bestly Agent product page (/agent). Plan: docs/bestly-agent-page-opusplan.md.
@@ -67,11 +69,32 @@ const faqs = [
   { q: "Do I have to change my phone number?", a: "No. You keep your number. Send her every call, or only the ones you can't pick up. You choose." },
   { q: "Will callers know she's AI?", a: "She sounds like a real person, and she's honest about what she is. If someone asks, she tells them. Anyone who wants a person can reach one." },
   { q: "What if she gets something wrong?", a: "She follows the rules you set and only uses the apps her job needs. Every call is summarized, so you can check her work in seconds." },
+  // Pricing questions (the numbers themselves live in the pricing section, which reads the plans file).
+  { q: "What counts as a minute?", a: "Time on a call. Each call is rounded up to the next full minute, so a call that lasts two minutes and ten seconds counts as three." },
+  { q: "What happens if I go over my minutes?", a: "Nothing stops. Calls keep getting answered, and the extra minutes are billed at your plan's extra-minute price on your next bill." },
+  { q: "How does the money-back promise work?", a: `If it is not right for you, email jared@bestly.tech or call ${PHONE_DISPLAY} within ${AGENT_TERMS.moneyBackDays} days of paying, and you get all of your money back.` },
+  { q: "Can I switch plans?", a: "Yes, any time. Tell us and we change it, and the new price starts on your next bill." },
 ];
 
 export default function BestlyAgent() {
   const stage = useRef<DemoStageHandle>(null);
   const reduce = useReducedMotion();
+  const { hash } = useLocation();
+
+  // /agent#pricing from a link, a shared URL or Maya: the page renders after the browser looked for the id, so scroll once it exists.
+  useEffect(() => {
+    const id = hash.replace(/^#/, "");
+    if (!/^[a-z][a-z0-9-]{0,40}$/.test(id)) return;
+    let tries = 0;
+    const t = window.setInterval(() => {
+      const el = document.getElementById(id);
+      if (el || ++tries > 20) {
+        window.clearInterval(t);
+        el?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+      }
+    }, 100);
+    return () => window.clearInterval(t);
+  }, [hash, reduce]);
 
   // Land with the scene line (the chips, on a phone) just under the sticky site header, so the call, the window and the
   // transport are all in view together.
@@ -129,6 +152,9 @@ export default function BestlyAgent() {
               </Button>
               <Button size="lg" variant="outline" className="min-h-[44px]" onClick={openMaya}>
                 <Mic className="mr-2 h-4 w-4" aria-hidden="true" /> Talk to Maya live
+              </Button>
+              <Button size="lg" variant="ghost" className="min-h-[44px]" asChild>
+                <a href="#pricing">See prices</a>
               </Button>
             </div>
             <p className="mt-5 text-sm text-muted-foreground">
@@ -346,6 +372,9 @@ export default function BestlyAgent() {
         </div>
       </section>
 
+      {/* 8a. Pricing: plans, the picker and the checkout card (Maya can drive all three) */}
+      <AgentPricing />
+
       {/* 8. Questions people ask before they buy */}
       <section id="questions" className="border-b border-border bg-secondary/20">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
@@ -409,11 +438,14 @@ export default function BestlyAgent() {
               Tell us about your business. We set up your agent, connect your apps and test her, and you keep your phone
               number. If it is not a fit, we will tell you.
             </p>
-            <div className="mt-8 flex justify-center">
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Button size="lg" className="min-h-[44px]" asChild>
-                <Link to="/contact?topic=agent">
-                  Get your own agent <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-                </Link>
+                <a href="#pricing">
+                  See prices <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                </a>
+              </Button>
+              <Button size="lg" variant="outline" className="min-h-[44px]" asChild>
+                <Link to="/contact?topic=agent">Ask us a question first</Link>
               </Button>
             </div>
           </AnimatedSection>
