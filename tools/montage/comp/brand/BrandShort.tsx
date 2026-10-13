@@ -94,7 +94,8 @@ const rr = (x: number, y: number, w: number, h: number, r: number) =>
   `M${x + r} ${y} H${x + w - r} a${r} ${r} 0 0 1 ${r} ${r} V${y + h - r} a${r} ${r} 0 0 1 ${-r} ${r} H${x + r} a${r} ${r} 0 0 1 ${-r} ${-r} V${y + r} a${r} ${r} 0 0 1 ${r} ${-r} Z`;
 
 export const ICONS: Record<string, Seg[]> = {
-  phone: [at(F(FPHONE), 3.5, 8.5, 8.5), at(S(FPHONE), 3.5, 8.5, 8.5), D(70, 30, 3.4, true)],
+  phone: [at(F(FPHONE), 3.5, 8.5, 8.5), at(S(FPHONE), 3.5, 8.5, 8.5)],
+  pricetag: [F(TAG), S(TAG), H(circle(72, 28, 5)), D(60, 60, 3.6, true)],
   missedcall: [at(F(FPHONE), 3.1, 6, 18), at(S(FPHONE), 3.1, 6, 18), at(H('M23 1l-6 6'), 3.1, 6, 18), at(H('M17 1l6 6'), 3.1, 6, 18)],
   globe: [F(circle(50, 50, 36)), S(circle(50, 50, 36)), H('M14 50 H86'), at(H(FGLOBE_MERIDIAN), 3.0, 14, 14), D(50, 50, 3.4, true)],
   apps: [F(rr(16, 16, 30, 30, 9)), S(rr(16, 16, 30, 30, 9)), S(rr(54, 16, 30, 30, 9)), S(rr(16, 54, 30, 30, 9)), F(rr(54, 54, 30, 30, 9)),
@@ -258,8 +259,8 @@ const CallCardView: React.FC<{c: CallCard; t: Theme; b: Brand; dur: number}> = (
             {!missed ? (
               <div style={{position: 'absolute', right: -26, bottom: -22, transform: `scale(${Math.min(1, booked)})`}}><Orb size={78} t={t} /></div>
             ) : (
-              <div style={{position: 'absolute', right: -18, bottom: -12, width: 82, height: 82, transform: `rotate(${wiggle}deg)`}}>
-                <Icon name={flip > 0.5 ? 'missedcall' : 'phone'} t={{...t, accent: stateColor}} draw={1} size={82} />
+              <div style={{position: 'absolute', right: -26, bottom: -20, width: 100, height: 100, transform: `rotate(${wiggle}deg)`}}>
+                <Icon name={flip > 0.5 ? 'missedcall' : 'phone'} t={{...t, accent: stateColor}} draw={1} size={100} />
               </div>
             )}
           </div>
@@ -275,12 +276,15 @@ const CallCardView: React.FC<{c: CallCard; t: Theme; b: Brand; dur: number}> = (
                      background: `linear-gradient(90deg, ${rgba(stateColor, 0.22)} 0%, ${rgba(stateColor, 0.06)} 100%)`}}>
           <div style={{width: 18, height: 18, borderRadius: '50%', background: `radial-gradient(circle, ${stateColor} 30%, ${rgba(stateColor, 0)} 72%)`, boxShadow: `0 0 24px ${rgba(stateColor, 0.7)}`}} />
           <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 44, color: stateColor, whiteSpace: 'nowrap'}}>{stateText}</div>
-          {!missed ? (
-            <div style={{marginLeft: 'auto', fontFamily: b.label.family, fontWeight: 400, fontSize: 36, color: t.ink, opacity: Math.min(1, booked), whiteSpace: 'nowrap'}}>
-              {'Appointment booked'}
-            </div>
-          ) : null}
         </div>
+        {!missed ? (
+          <div style={{display: 'flex', alignItems: 'center', gap: 16, marginTop: 18, padding: '20px 30px', borderRadius: 999, opacity: Math.min(1, booked),
+                       transform: `translateY(${(1 - Math.min(1, booked)) * 24}px)`,
+                       background: `linear-gradient(90deg, ${rgba(t.accent, 0.22)} 0%, ${rgba(t.accent, 0.06)} 100%)`}}>
+            <Icon name="check" t={t} draw={booked} size={44} />
+            <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 44, color: t.ink, whiteSpace: 'nowrap'}}>Appointment booked</div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -309,7 +313,7 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
         </AbsoluteFill>
       ) : null}
       <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center'}}>
-        <div style={{transform: `translateY(${drift}px)`, marginTop: hasIcon ? -30 : hasCard ? -60 : -100}}>
+        <div style={{transform: `translateY(${drift}px)`, marginTop: hasIcon ? -30 : hasCard ? 0 : -100}}>
           {hasCard ? (
             <div style={{display: 'flex', justifyContent: 'center', marginBottom: 56}}>
               <CallCardView c={s.card as CallCard} t={t} b={b} dur={dur} />
