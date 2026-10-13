@@ -39,6 +39,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchPeople, type Person } from "./contacts.ts";
+import { withPromptBlock } from "../_shared/ava-admin-prompt.ts";
 import { busyFrom, DEFAULT_HOURS, discover, eventsIn, ptParts, zonedToUtc, durationFor, freeSlots, parseConstraints, putEvent, spoken, turoWindows, TURO_WINDOW_MIN, type Busy, type Cal, type Creds, type Hours, type Provider, type Slot } from "./calendar.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -420,13 +421,17 @@ async function setup(): Promise<Response> {
   if (!initSecret) { initSecret = rnd(24); await db.rpc("ava_secret_put", { p_name: "ava_init_secret", p_value: initSecret }); }
 
   // 5. her agent
+  const { data: bridgeState } = await db.from("ava_admin_bridge_state").select("tool_ids").eq("id", true).maybeSingle();
+  const bridgeToolIds = ((bridgeState?.tool_ids ?? []) as string[]).filter((t) => typeof t === "string" && t);
   const agentBody = {
     name: "Ava (Jared's assistant)",
     conversation_config: {
       agent: {
         first_message: "{{greeting}}", language: "en",
         dynamic_variables: { dynamic_variable_placeholders: { ...UNKNOWN, call_context: "Someone called Jared's line.", ...nowVars(), knowledge: await knowledge(), coach_notes: await coachNotes() } },
-        prompt: { prompt: PROMPT, llm: s?.llm ?? "gpt-4.1-mini", temperature: 0.5,
+        // The PATCH replaces her prompt object, which used to wipe the "Admin bridge" block and her bridge tools (2026-10-13): re-append the
+        // block from the one shared copy and keep the tool ids ava-admin recorded. The ava-admin selftest stays as the backstop.
+        prompt: { prompt: withPromptBlock(PROMPT), ...(bridgeToolIds.length ? { tool_ids: bridgeToolIds } : {}), llm: s?.llm ?? "gpt-4.1-mini", temperature: 0.5,
           built_in_tools: {
             end_call: { name: "end_call", params: { system_tool_type: "end_call" } },
             // keypad tones: only for a spam robocall that says "press 1 to speak to someone" (the prompt limits it to that)
