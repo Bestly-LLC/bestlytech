@@ -25,11 +25,11 @@ NAME = "Bestly Agent"
 COMPOSITION, COMP_DIR = "BrandShort", "brand"
 THEMES = ["agent"]
 MOOD = "upbeat"
-ICONS = ["phone", "missedcall", "calendar", "apps", "globe", "chat", "check", "tag"]
+ICONS = ["phone", "missedcall", "calendar", "apps", "globe", "chat", "check", "pricetag"]
 ICON_HELP = {"phone": "a phone handset (answering the phone)", "missedcall": "a phone handset with a cross (a missed call)",
              "apps": "a grid of app tiles (the apps the business already uses)", "globe": "a globe (many languages)",
              "calendar": "a calendar (booking appointments)", "chat": "a chat bubble (texts and website chat)",
-             "check": "a check mark (done, handled)", "tag": "a price tag (the monthly price)"}
+             "check": "a check mark (done, handled)", "pricetag": "a price tag (the monthly price)"}
 
 ABOUT = (
     "Bestly Agent is an AI receptionist for small businesses. Her name is Maya. She answers the business phone and does the work: she books "
@@ -83,14 +83,14 @@ CFG = {
     "chip_topics": [("calls", r"calls?|phone|answers?|picks?|rings?", {"phone"}),
                     ("apps", r"apps?|software|tools?|connects?", {"apps"}),
                     ("languages", r"languages?|translat\w*|spanish|multilingual", {"globe"}),
-                    ("price", r"months?|monthly|plans?|back", {"tag"})],
+                    ("price", r"months?|monthly|plans?|back", {"pricetag"})],
     "shot_brand": ("A small business at work, seen from behind or in close-up: a workshop bench, a shop counter, a phone face down on a desk. "
                    "Never a readable screen or label."),
     "end_cta_say": "Try Maya at Bestly dot tech slash agent.",
     "end": {"title": "Bestly Agent", "sub": "An AI receptionist that answers your business phone.", "cta": "bestly.tech/agent",
             "say": "Bestly Agent. An AI receptionist that answers your business phone. Try Maya at Bestly dot tech slash agent.",
             "chips": [{"icon": "phone", "text": "Answers your calls"}, {"icon": "calendar", "text": "Books on your calendar"},
-                      {"icon": "tag", "text": "From $49 a month"}]},
+                      {"icon": "pricetag", "text": "From $49 a month"}]},
 }
 END = CFG["end"]
 
@@ -108,11 +108,11 @@ ADS = {
              "say": "Your hands are full, the phone rings, and the caller hangs up.", "icon": "missedcall", "card": CARD_MISSED},
             {"line": "Maya answers your business phone.", "say": "Maya is an AI receptionist. She picks up for you.", "icon": "phone", "card": CARD_ANSWERED},
             {"line": "She books appointments and answers questions.", "say": "She books the appointment on your calendar and answers questions.", "icon": "calendar"},
-            {"line": f"From $49{NB}a month.", "say": "Plans start at forty-nine dollars a month, with thirty days to get your money back.", "icon": "tag"},
+            {"line": f"From $49{NB}a{NB}month.", "say": "Plans start at forty-nine dollars a month, with thirty days to get your money back.", "icon": "pricetag"},
         ],
         "end": {"sub": "An AI receptionist that answers your business phone.",
                 "chips": [{"icon": "phone", "text": "Answers your calls"}, {"icon": "calendar", "text": "Books on your calendar"},
-                          {"icon": "tag", "text": f"From $49{NB}a month"}],
+                          {"icon": "pricetag", "text": f"From $49{NB}a{NB}month"}],
                 "say": "Bestly Agent. An AI receptionist that answers your business phone. Try Maya at Bestly dot tech slash agent."},
         "caption": ("A missed call can send a customer to someone else. You can't answer when you're on a job or with a client.\n\n"
                     "Maya is an AI receptionist. She answers your business phone, books appointments on your calendar and answers customer questions.\n\n"
@@ -127,11 +127,11 @@ ADS = {
             {"line": "She books appointments and answers questions.", "say": "Maya books appointments and answers questions, and you see every call.", "icon": "calendar"},
             {"line": "She connects to the apps you already use.", "say": "Calendar, customer list, help desk, payments. More than one hundred twenty apps.", "icon": "apps"},
             {"line": f"Calls, texts and chat in 90+{NB}languages.", "say": "She handles calls, texts and website chat in more than ninety languages.", "icon": "globe"},
-            {"line": f"From $49{NB}a month.", "say": "Plans start at forty-nine dollars a month. No setup fee, and thirty days to get your money back.", "icon": "tag"},
+            {"line": f"From $49{NB}a{NB}month.", "say": "Plans start at forty-nine dollars a month. No setup fee, and thirty days to get your money back.", "icon": "pricetag"},
         ],
         "end": {"sub": "An AI receptionist that answers your business phone.",
                 "chips": [{"icon": "chat", "text": "Calls, texts, chat"}, {"icon": "globe", "text": f"90+{NB}languages"},
-                          {"icon": "tag", "text": f"From $49{NB}a month"}],
+                          {"icon": "pricetag", "text": f"From $49{NB}a{NB}month"}],
                 "say": "Bestly Agent. An AI receptionist that answers your business phone. Hear a demo at Bestly dot tech slash agent."},
         "caption": ("Meet Maya, an AI receptionist for your business.\n\n"
                     "She answers your phone, books appointments and answers questions. She connects to the apps you already use, handles calls, texts and website chat in 90+ languages, "
