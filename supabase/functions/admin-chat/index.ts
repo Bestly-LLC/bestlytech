@@ -1546,7 +1546,8 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
         ? "Auto-run is on: actions may run with confirmed:true without asking him first."
         : "He has not said yes yet: before any action that needs confirmed:true, say what it will do and end with OPTIONS: Do it | Not now.";
 
-  const system = `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You run on a free model WITH real tools: do the work yourself, don't tell Jared what someone else should do.
+  const ledgerFree = await actionLedger(threadId).catch(() => "");
+  const system = ledgerFree + "\n" + `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You run on a free model WITH real tools: do the work yourself, don't tell Jared what someone else should do.
 How to work:
 - Read before you answer or act: search_mail + read_email (any email or person), run_sql, today, incidents, read_file, meeting_transcript. Anything about a person, an email, an invoice, a task or a call is answered from what you read THIS turn: after search_mail, read_email the 2 or 3 best matches (newest first) before you answer, and give the concrete answer (names, amounts, dates) with where it came from. Never invent numbers, names, files or results. Never use placeholders like X or [Name].
 - run_sql is one SELECT/WITH on the public schema. If a table or column is wrong, look it up: SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND table_name ILIKE '%word%'. Then retry. Never answer from a failed query.
@@ -1555,7 +1556,7 @@ How to work:
 - ${ADHD_RULE}
 - ${yesRule}
 - mac_run: propose a short, safe, idempotent zsh script with a plain title and why; it waits for his Run tap.
-- Only say something is done if a tool result in this turn shows ok:true for it.
+- Only say something is done if a tool result shows ok:true for it: one in this turn, or one marked OK in "What you already did in this chat" below. Never deny an action that log shows.
 ${vm
     ? "- This is autopilot: Jared is not here, so commit_files, db_write and mac_run are not available. Anything that needs them: say it in your last line (NEEDS_YES)."
     : `- You can do everything paid Scout can: read (run_sql, today, incidents, read_file, list_files), change data (db_write: ONE INSERT/UPDATE/DELETE with a WHERE), change the admin and site code (commit_files: watched, reverted automatically on a failed build), run jobs on the Mac mini (mac_run, mac_command), the Pi (pi_command), email (send_email), notify. None of it needs paid AI.
@@ -2352,6 +2353,28 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
 // Tools autopilot never runs even without a confirmed flag: they reach Jared or a machine.
 const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "code_job", "db_write", "clear_alerts", "ask_user", "make_video", "send_email", "report_spam"]);
 
+
+// v66 (2026-10-12): Scout denied sending emails he really sent. Chat history is rebuilt from admin_chat_messages
+// (text only), but tool runs live in admin_chat_actions and were never shown back to the model. Next turn he saw only
+// his own prose, no send_email call, and "Only say something is done if a tool result in THIS turn shows ok:true"
+// made him swear he never sent them. This ledger feeds the real record of past actions into every turn.
+async function actionLedger(threadId: string): Promise<string> {
+  const { data } = await db.from("admin_chat_actions").select("tool, args, result, ok, created_at")
+    .eq("thread_id", threadId).order("created_at", { ascending: false }).limit(25);
+  const rows = ((data ?? []) as any[]).reverse();
+  if (!rows.length) return "";
+  const t = (iso: string) => new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const brief = (v: unknown, n: number) => { let s = ""; try { s = JSON.stringify(v ?? {}); } catch { s = String(v); } return s.replace(/\s+/g, " ").slice(0, n); };
+  const lines = rows.map((r) => {
+    const a = r.args ?? {};
+    const what = r.tool === "send_email"
+      ? `send_email to ${brief(a.to ?? a.recipient ?? a.name, 80)} subject ${brief(a.subject, 80)}`
+      : `${r.tool} ${brief(a, 140)}`;
+    return `- ${t(r.created_at)} ${what} -> ${r.ok ? "OK (it happened)" : `FAILED ${brief(r.result?.error ?? r.result, 120)}`}`;
+  });
+  return `\n\n# What you already did in this chat (the real tool log, oldest first)\nThis log is the truth about your past actions. Anything marked OK really happened, even if your earlier replies don't show the tool call. Never deny it; if Jared says he sees something sent, check this log (and admin_chat_actions) and own it plainly.\n${lines.join("\n")}`;
+}
+
 // ---------------------------------------------------------------- v35 send_email: mail as Jared with his Bestly signature
 const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]{2,}$/;
 /** "Eli" -> eli.cooper@bdcuniversal.com from his own mail: people who wrote to him first, then people he wrote to. */
@@ -3066,6 +3089,7 @@ Deno.serve(async (req) => {
     system += `\n\n# The free AI already worked on this\nIt had the same tools as you.${handed.goal ? ` The job: ${handed.goal}` : ""}${tl ? `\nIts failed tries:\n${tl}\nDo not repeat those; work out why they failed, then fix the real cause.` : ""}${nl ? `\nWhat it found:\n${nl}` : ""}`;
   }
   if (handed) await saveRunState(threadId, null).catch(() => {});
+  system += await actionLedger(threadId).catch(() => "");
 
   // Daily chat cap: a runaway guard, even with the Paid AI switch on.
   const { data: budget } = await db.rpc("ai_budget", { p_scope: "chat" });
