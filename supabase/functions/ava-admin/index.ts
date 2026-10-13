@@ -5,8 +5,11 @@
 //   POST /calls                                   {conversation_id, caller_id, action, agent, campaign?, to?, purpose?, confirmed}
 //   GET  /metrics?conversation_id&caller_id&range&agent
 //   POST /fix                                     {conversation_id, caller_id, action: list|retry|ask_scout|check|approve|undo, issue?, ask?, job_id?, confirmed}
-//                                                 Phase A of docs/ava-fix-issues-opusplan.md: read-and-route only, NO new write privilege. approve and undo never run
-//                                                 (reason_code needs_tap); retry = the Fix Ladder's "Try again"; ask_scout = admin-chat on autopilot (writes blocked).
+//                                                 docs/ava-fix-issues-opusplan.md. retry = the Fix Ladder's "Try again"; ask_scout = admin-chat on autopilot (writes blocked).
+//                                                 PHASE B (passkey tap): approve and undo NEVER run here. They create a pending public.ava_approvals row and push a short link
+//                                                 (bestly.tech/y/<code>); the approval happens in Jared's signed-in admin after a fresh Face ID (webauthn-authenticate
+//                                                 approval_options / approval_verify -> ava_approval_decide), and the page runs the action with his admin JWT, the same
+//                                                 "Yes, do it" path the Fix Ladder pane uses. `check` reports the approval, then the Scout job.
 //   POST|GET /selftest                            service key only (pg_cron ava-admin-bridge-selftest, hourly at :17)
 //   POST /provision                               service key only: {op:"sync_secret"} pushes the Vault secret to the ElevenLabs workspace secret
 //
@@ -20,7 +23,7 @@
 // Writes (call_ops with confirmed=true) go through the paths that already exist: hunter_campaign_set, rg_settings.calling_enabled,
 // pipeline_send, ava-assistant action "call". Capped at 20 place_call a day; a repeat inside 2 minutes replays the first answer.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { MARKER, FIX_MARKER, withPromptBlock } from "../_shared/ava-admin-prompt.ts";
+import { MARKER, FIX_MARKER, APPROVAL_MARKER, withPromptBlock } from "../_shared/ava-admin-prompt.ts";
 
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -416,7 +419,7 @@ async function calls(ctx: Ctx, p: Any): Promise<Reply & { _log?: Any }> {
 }
 
 // ---------- /fix (Phase A of docs/ava-fix-issues-opusplan.md) ----------
-// list, retry, ask_scout, check run here. approve and undo NEVER run: they only line the incident up as a one-tap card for Jared.
+// list, retry, ask_scout, check run here. approve and undo NEVER run here: they create a request that Jared taps on his phone (see requestTap, Phase B).
 // No new write privilege: retry is the Fix Ladder's own "Try again" (service key, same as the pane), ask_scout is admin-chat on
 // autopilot (writes blocked in code there, exactly like voice-ask), and the notes are info-class through notify_route.
 const FIX_ACTIONS = ["list", "retry", "ask_scout", "check", "approve", "undo"] as const;
@@ -514,7 +517,7 @@ async function fixList(): Promise<Reply> {
   const ord = ["First,", "Then", "And"];
   const say = `${items.length <= 10 ? cap(num(items.length)) : items.length} open. ${top.map((t, i) => `${ord[i]} ${t.name}, ${STAGE_SAY[t.stage] ?? "in progress"}.`).join(" ")}`;
   const first = top[0];
-  const next = first.stage === "needs_yes" ? "The first one needs your tap in admin." : first.kind === "incident" ? "Want me to try the first one again?" : "The first one needs you in admin.";
+  const next = first.stage === "needs_yes" ? "Want me to send the first fix to your phone for a Face ID tap?" : first.kind === "incident" ? "Want me to try the first one again?" : "The first one needs you in admin.";
   return { ok: true, say, data: { count: items.length, spoken: top.length, items: top.map((t) => ({ name: t.name, stage: t.stage })) }, next };
 }
 
@@ -574,6 +577,71 @@ async function tapNeeded(ctx: Ctx, action: "approve" | "undo", item: Item): Prom
     await bellNote(`Ava (voice): ${action === "undo" ? "undo" : "approval"} needs your tap, ${fit(t, 80)}`, "You asked on a call. I can't do it by voice, it is lined up for your tap.", `ava-tap-${action}-${norm(t).slice(0, 40)}-${dayTag()}`).catch(() => {});
   }
   return { ok: false, reason_code: "needs_tap", say, data: { issue: item.name, stage: item.stage, action, noted: !ctx.selftest } };
+}
+
+// ----- approve / undo: create a request for Jared's phone. Nothing here runs the fix. -----
+const APPROVAL_TTL_MIN = 10;
+const REQUEST_PUSH_OK = new Set(["ha", "web"]);
+async function requestTap(ctx: Ctx, p: Any, action: "approve" | "undo", item: Item, confirmed: boolean): Promise<R> {
+  let source = "", actionText = "", plain = "", autofixId: number | null = null, preview = "";
+  const title = item.title;
+  if (action === "approve") {
+    if (item.kind !== "incident") return tapNeeded(ctx, action, item);   // a Needs-you card: not a ladder fix, stays his tap in admin
+    if (item.stage !== "needs_yes") return fail("not_ready", `${cap(item.name)} isn't waiting on a yes yet. It's ${STAGE_SAY[item.stage] ?? "in progress"}.`, { stage: item.stage });
+    source = item.ask.trim();
+    if (!source) return fail("not_ready", `${cap(item.name)} doesn't have a written fix yet, so there's nothing to approve.`);
+    actionText = `Yes, do it: ${source}`;
+    plain = fit(source, 200);
+    preview = `The fix is: ${fit(source, 90).replace(/[.!?]+$/, "")}.`;
+  } else {
+    if (item.kind !== "autofix") return fail("not_found", "I can only put back an automatic fix, and that isn't one.");
+    autofixId = Number(item.key.replace("autofix:", ""));
+    const { data: row } = await sb.from("security_autofix_log").select("id, note, action, undo_sql, ok").eq("id", autofixId).maybeSingle();
+    if (!row || !row.ok || !row.undo_sql) return fail("not_found", "I can't find the undo for that automatic fix.");
+    source = String(row.undo_sql);
+    const what = plainTitle(String(row.note || row.action || "an automatic fix"));
+    actionText = `Yes, do it: Undo the automatic fix "${what}". Run exactly this SQL and nothing else, then say FIXED: ${source}`;
+    plain = fit(`Put back the automatic fix: ${what}`, 200);
+    preview = `Put back the automatic fix on ${fit(what, 60).replace(/[.!?]+$/, "")}.`;
+  }
+  // Already approved a moment ago (the incident can stay at needs_yes while Scout works): never run the same thing twice.
+  const recent = await sb.from("ava_approvals").select("decided_at").eq("kind", action).eq("issue_key", item.key).in("status", ["approved", "running", "done"])
+    .gte("decided_at", new Date(Date.now() - 60 * 60_000).toISOString()).order("decided_at", { ascending: false }).limit(1);
+  const done = (recent.data?.[0] as Any | undefined)?.decided_at as string | undefined;
+  if (done) return fail("already_done", action === "undo" ? `You already put that one back at ${t12(done)}.` : `You already approved that one at ${t12(done)}. Scout's on it.`, { issue: item.name });
+  if (!confirmed) {
+    return { ok: false, reason_code: "not_confirmed", say: `${preview} Say yes and I'll send it to your phone for Face ID.`, data: { preview: true, action, issue: item.name },
+      next: "Read that back to Jared, then call again with confirmed true after a clear yes. This only sends a request to his phone.", _log: { args: { issue_key: item.key } } };
+  }
+  // The hourly selftest may exercise the whole path, but only on an explicit flag, and its rows can never be approved or pushed.
+  if (ctx.selftest && p.selftest_create !== true) {
+    return fail("not_confirmed", "Selftest: the request would go to his phone here.", { selftest: true });
+  }
+  const { data: made, error } = await sb.rpc("ava_approval_create", { p_kind: action, p_issue_key: item.key, p_title: title, p_action_text: actionText, p_source_text: source,
+    p_plain: plain, p_autofix_id: autofixId, p_conversation: ctx.conv, p_verified: !ctx.selftest });
+  const m = (made ?? {}) as Any;
+  if (error || !m.ok) {
+    if (m.reason === "too_many_pending") return fail("limit_hit", "There are already five requests waiting on your phone. Clear those first.", { reason: m.reason });
+    if (m.reason === "daily_cap") return fail("limit_hit", "That's twenty approval requests today, the limit. Use the button in admin.", { reason: m.reason });
+    return fail("upstream_down", "I couldn't set that up just now. Use the button in admin.", { error: error ? fit(error.message, 80) : String(m.reason ?? "") });
+  }
+  const code = String(m.code);
+  let pushed = m.pushed === true;
+  if (!ctx.selftest && !pushed) {
+    const { data: res } = await sb.rpc("ava_approval_push", { p_code: code });
+    pushed = REQUEST_PUSH_OK.has(String(res ?? ""));
+    if (!pushed) {
+      return { ok: true, say: "The request is made but the push didn't go. Look in your bell in admin and tap it there.", data: { action, issue: item.name, approval: "pending", pushed: false, push: fit(String(res ?? "none"), 20) },
+        _log: { args: { issue_key: item.key, approval: code.slice(0, 2) + "*****" } } };
+    }
+  }
+  const expires = t12(String(m.expires_at));
+  if (!ctx.selftest && !m.existing) {
+    bg(threadNote(`Ava (voice): you asked me by phone to ${action === "undo" ? "put back" : "approve"} "${title}". I sent it to your phone for a Face ID tap. It expires at ${expires}.`, `"${title}"`));
+  }
+  const say = ctx.selftest ? "Selftest: request created, nothing was sent." : m.existing ? "That's already on your phone. Tap it and Face ID it." : "Sent to your phone. Tap it and Face ID it.";
+  return { ok: true, say, data: { action, issue: item.name, approval: "pending", pushed, selftest: ctx.selftest || undefined, expires_at_pacific: expires, ...(ctx.selftest ? { code } : {}) },
+    next: "Keep chatting. When he says he tapped it, call check.", _log: { args: { issue_key: item.key, approval: code.slice(0, 2) + "*****" } } };
 }
 
 // ----- retry: the Fix Ladder's own "Try again" -----
@@ -675,12 +743,63 @@ function readJob(reply: string): JobRead {
   if (line.length > 150) { const cut = line.slice(0, 170); const k = Math.max(cut.lastIndexOf(";"), cut.lastIndexOf(" - ")); line = k > 60 ? cut.slice(0, k) : fit(line, 150); }
   return { status: "done", line: line.replace(/[\s,;:]+$/, "") };
 }
+/** The tap request Ava made on this call, and then the Scout job the tap started. */
+async function approvalCheck(ctx: Ctx, a: Any): Promise<R> {
+  const id = String(a.id), status = String(a.status), undo = a.kind === "undo";
+  const base = { approval: status, kind: a.kind, issue: spoken(plainTitle(String(a.issue_title ?? ""))) };
+  if (status === "pending" && Date.parse(String(a.expires_at)) <= Date.now()) {
+    await sb.from("ava_approvals").update({ status: "expired" }).eq("id", id).eq("status", "pending");
+    return { ok: true, say: "That request timed out before you tapped. Want me to send it again?", data: { ...base, approval: "expired" }, _log: { args: { approval_id: id } } };
+  }
+  if (status === "pending") {
+    const mins = Math.max(1, Math.ceil((Date.parse(String(a.expires_at)) - Date.now()) / 60_000));
+    return { ok: true, say: `Still waiting on your tap. It's on your phone, about ${plural(mins, "minute")} left.`, data: { ...base, minutes_left: mins }, _log: { args: { approval_id: id } } };
+  }
+  if (status === "expired") {
+    return { ok: true, say: a.result === "changed" ? "That fix changed since I asked, so I dropped it. Want me to send it again?" : "That request timed out before you tapped. Want me to send it again?", data: base, _log: { args: { approval_id: id } } };
+  }
+  if (status === "declined") return { ok: true, say: "You said no on your phone, so nothing ran.", data: base, _log: { args: { approval_id: id } } };
+  // approved / running / done / failed: your tap went through. Read Scout's answer out of the Ava (voice) chat.
+  const since = a.decided_at ? Date.parse(String(a.decided_at)) : Date.now();
+  if (status === "failed") return { ok: true, say: "Your tap went through but Scout didn't start it. Tap Yes, do it in admin instead.", data: { ...base, result: fit(String(a.result ?? ""), 100) }, _log: { args: { approval_id: id } } };
+  const thread = String(a.run_thread_id ?? "");
+  let reply = "", started = false;
+  if (thread) {
+    const { data: um } = await sb.from("admin_chat_messages").select("id, body, created_at").eq("thread_id", thread).eq("role", "user")
+      .gte("created_at", new Date(since - 5000).toISOString()).order("created_at").limit(10);
+    const mine = ((um ?? []) as Any[]).find((m) => String(m.body).replace(/\s+/g, " ").trim().startsWith(String(a.action_text).replace(/\s+/g, " ").trim().slice(0, 120)));
+    if (mine) {
+      started = true;
+      const { data: after } = await sb.from("admin_chat_messages").select("role, body").eq("thread_id", thread).gt("created_at", String(mine.created_at)).order("created_at").limit(12);
+      for (const m of (after ?? []) as Any[]) { if (m.role === "user") break; if (m.role === "assistant") reply = String(m.body); }
+    }
+  }
+  if (!reply) {
+    const age = Date.now() - since;
+    if (!started && age > JOB_STALE_MS) return { ok: true, say: "Got your tap, but I don't see Scout start. Look in the Ava voice chat in admin.", data: { ...base, scout: "not_started" }, _log: { args: { approval_id: id } } };
+    if (age > JOB_STALE_MS * 2) return { ok: true, say: "Got your tap. Scout hasn't answered after a while. It's in the Ava voice chat in admin.", data: { ...base, scout: "stuck" }, _log: { args: { approval_id: id } } };
+    return { ok: true, say: started ? "Got your tap. Scout's on it." : "Got your tap. Scout's starting.", data: { ...base, scout: started ? "running" : "starting" }, _log: { args: { approval_id: id } } };
+  }
+  const r = readJob(reply);
+  const what = undo ? "put it back" : "fixed it";
+  const say = r.status === "needs_yes" ? `Got your tap. Scout needs one more yes: ${r.line}. It's in the Ava voice chat in admin.`
+    : r.status === "stuck" ? `Got your tap, but Scout got stuck: ${r.line}.` : r.status === "fixed" ? `Got your tap. Scout ${what}: ${r.line}.` : `Got your tap. Scout says: ${r.line.replace(/[.!?]?$/, ".")}`;
+  if ((r.status === "needs_yes" || r.status === "stuck") && !ctx.selftest) {
+    bg(bellNote(`Ava (voice): Scout ${r.status === "stuck" ? "got stuck" : "needs one more yes"} after your tap`, fit(r.line, 200), `ava-approval-result-${String(a.code)}`));
+  }
+  return { ok: true, say, data: { ...base, scout: r.status, result: r.line }, _log: { args: { approval_id: id } } };
+}
+
 async function fixCheck(ctx: Ctx, p: Any): Promise<R> {
   let jobId = clip(p.job_id, 20).toLowerCase();
   if (jobId && !/^av[0-9a-f]{6}$/.test(jobId)) jobId = "";
   if (!jobId) {
-    const { data } = await sb.from("ava_admin_bridge_log").select("args").eq("conversation_id", ctx.conv).eq("op", "fix_ask_scout").eq("ok", true).order("ts", { ascending: false }).limit(1);
+    const { data } = await sb.from("ava_admin_bridge_log").select("args, ts").eq("conversation_id", ctx.conv).eq("op", "fix_ask_scout").eq("ok", true).order("ts", { ascending: false }).limit(1);
     jobId = String((data?.[0]?.args as Any | undefined)?.job_id ?? "");
+    // Whichever she did last on this call wins: a tap request newer than the last Scout job is what he is asking about.
+    const { data: ap } = await sb.from("ava_approvals").select("*").eq("conversation_id", ctx.conv).order("created_at", { ascending: false }).limit(1);
+    const a = ap?.[0] as Any | undefined;
+    if (a && (!jobId || Date.parse(String(a.created_at)) > Date.parse(String(data?.[0]?.ts ?? 0)))) return approvalCheck(ctx, a);
   }
   if (!jobId) return fail("not_found", "I haven't sent Scout anything on this call.");
   const th = await voiceThread();
@@ -713,7 +832,7 @@ async function fix(ctx: Ctx, p: Any): Promise<R> {
   if (action === "retry") return fixRetry(ctx, p, confirmed);
   if (action === "ask_scout") return fixAskScout(ctx, p, confirmed);
   if (action === "check") return fixCheck(ctx, p);
-  // approve / undo: never executed, whatever `confirmed` says. They only line the incident up as a one-tap card.
+  // approve / undo: never executed here, whatever `confirmed` says. They create a request for Jared's phone (passkey tap).
   const all = await loadItems();
   if (!all) return fail("upstream_down", "I couldn't read the issues just now.");
   const issue = clip(p.issue, 120);
@@ -729,8 +848,7 @@ async function fix(ctx: Ctx, p: Any): Promise<R> {
     if ("ok" in r) return r;
     item = r.item;
   }
-  const rep = await tapNeeded(ctx, action as "approve" | "undo", item);
-  return { ...rep, _log: { args: { issue_key: item.key } } };
+  return requestTap(ctx, p, action as "approve" | "undo", item, confirmed);
 }
 
 // ---------- selftest + recovery ----------
@@ -801,10 +919,49 @@ async function selftest(): Promise<Any> {
           (s, j) => s === 200 && j.ok === true && typeof j.say === "string", "fix_list"),
         hit(`/fix`, { method: "POST", headers: H, body: JSON.stringify({ conversation_id: "conv_selftest", caller_id: "+18165007236", action: "retry", issue: "zzqx-selftest-no-such-issue", confirmed: false }) },
           (s, j) => s === 200 && j.ok === false && j.reason_code === "not_found", "fix_retry_dry"),
+        // Phase B: an approve never runs anything, and on the selftest stub it does not even create a request unless explicitly asked
         hit(`/fix`, { method: "POST", headers: H, body: JSON.stringify({ conversation_id: "conv_selftest", caller_id: "+18165007236", action: "approve", confirmed: true }) },
-          (s, j) => s === 200 && j.ok === false && (j.reason_code === "needs_tap" || j.reason_code === "not_found" || j.reason_code === "ambiguous"), "fix_approve_never_runs"),
+          (s, j) => s === 200 && j.ok === false && ["needs_tap", "not_found", "ambiguous", "not_confirmed", "not_ready", "already_done"].includes(String(j.reason_code)), "fix_approve_never_runs"),
+        hit(`/fix`, { method: "POST", headers: H, body: JSON.stringify({ conversation_id: "conv_selftest", caller_id: "+18165007236", action: "undo", issue: "zzqx-selftest-no-such-fix", confirmed: true }) },
+          (s, j) => s === 200 && j.ok === false && j.reason_code === "not_found", "fix_undo_dry"),
       ]);
     }
+    // approvals: nothing the dry runs did may have created a request; expired / used / mismatched / un-tapped are refused; the tap page, push and the passkey endpoint are up
+    const probe = async (label: string, run: () => Promise<{ ok: boolean; note?: string }>) => {
+      const t = Date.now();
+      let r: { ok: boolean; note?: string } = { ok: false, note: "no answer" };
+      try { r = await run(); } catch (e) { r = { ok: false, note: clip((e as Error).message, 60) }; }
+      add(label, r.ok, r.note, Date.now() - t);
+    };
+    await probe("approval_refusals", async () => {
+      const { data, error } = await sb.rpc("ava_approval_selftest");
+      const d = (data ?? {}) as Any;
+      return { ok: !error && d.ok === true, note: error ? fit(error.message, 60) : ((d.checks ?? []) as Any[]).filter((c) => c.ok !== true).map((c) => String(c.name)).join(", ") || undefined };
+    });
+    await probe("approvals_swept", async () => {
+      const { data, error } = await sb.rpc("ava_approvals_sweep");
+      const d = (data ?? {}) as Any;
+      return { ok: !error && Number(d.approved_waiting_over_30m ?? 0) === 0, note: error ? fit(error.message, 60) : `${d.pending ?? 0} waiting` };
+    });
+    await probe("no_dry_run_created_requests", async () => {
+      const { count } = await sb.from("ava_approvals").select("id", { count: "exact", head: true }).eq("conversation_id", "conv_selftest").gte("created_at", new Date(Date.now() - 5 * 60_000).toISOString());
+      return { ok: (count ?? 0) === 0, note: `${count ?? 0}` };
+    });
+    await probe("tap_page_loads", async () => {
+      const r = await fetch("https://www.bestly.tech/y/zzzzzzz", { signal: AbortSignal.timeout(7000) });
+      const html = await r.text();
+      return { ok: r.status === 200 && html.includes('id="root"'), note: `${r.status}` };
+    });
+    await probe("push_notify_reachable", async () => {
+      const r = await fetch(`${SB_URL}/functions/v1/push-notify`, { method: "POST", headers: keyHeaders(SB_SECRET), body: JSON.stringify({ action: "init" }), signal: AbortSignal.timeout(7000) });
+      const j = await r.json().catch(() => ({})) as Any;
+      return { ok: r.status === 200 && typeof j.public_key === "string", note: `${r.status}` };
+    });
+    await probe("passkey_endpoint_guarded", async () => {
+      const r = await fetch(`${SB_URL}/functions/v1/webauthn-authenticate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "approval_options", code: "zzzzzzz", origin: "https://www.bestly.tech" }), signal: AbortSignal.timeout(7000) });
+      const j = await r.json().catch(() => ({})) as Any;
+      return { ok: r.status === 200 && /sign in/i.test(String(j.error ?? "")), note: `${r.status}` };
+    });
     await hit(`/status?${qs}`, { headers: { Authorization: "Bearer not-the-secret", "x-ava-selftest": SB_SECRET } }, (s) => s === 401, "bad_secret_401");
     await hit(`/status?conversation_id=conv_selftest&caller_id=%2B15555550100`, { headers: { Authorization: `Bearer ${secret}` } }, (s, j) => s === 200 && j.ok === false, "stub_needs_service_key");
   }
@@ -812,7 +969,7 @@ async function selftest(): Promise<Any> {
   const p95 = sorted.length ? sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)] : 0;
   add("p95_under_1500ms", p95 <= 1500, `${p95} ms`);
 
-  // 2. Ava still has her 4 bridge tools (status, metrics, call_ops, fix_issue), her prompt block (with the fix_issue rules), and the ElevenLabs secret still matches Vault
+  // 2. Ava still has her 4 bridge tools (status, metrics, call_ops, fix_issue), her prompt block (with the fix_issue and passkey-tap rules), and the ElevenLabs secret still matches Vault
   const verifyEl = async () => {
     const out: { tools: boolean; prompt: boolean; secret: boolean; agent: Any | null } = { tools: false, prompt: false, secret: false, agent: null };
     const a = await xi(`/convai/agents/${agentId}`);
@@ -820,7 +977,7 @@ async function selftest(): Promise<Any> {
       const pr = (((a.j.conversation_config as Any | undefined)?.agent as Any | undefined)?.prompt ?? {}) as Any;
       const ids = ((pr.tool_ids ?? []) as string[]);
       out.tools = st.tool_ids.length >= 4 && st.tool_ids.every((t) => ids.includes(t));   // admin_status, call_ops, admin_metrics + fix_issue
-      out.prompt = String(pr.prompt ?? "").includes(MARKER) && String(pr.prompt ?? "").includes(FIX_MARKER);
+      out.prompt = String(pr.prompt ?? "").includes(MARKER) && String(pr.prompt ?? "").includes(FIX_MARKER) && String(pr.prompt ?? "").includes(APPROVAL_MARKER);
       out.agent = pr;
     }
     const list = await xi("/convai/secrets");
