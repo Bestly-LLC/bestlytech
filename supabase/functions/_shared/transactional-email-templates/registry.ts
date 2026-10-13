@@ -24,6 +24,7 @@ import { template as cloudLeadReceived } from './cloud-lead-received.tsx'
 import { template as cloudBriefSubmitted } from './cloud-brief-submitted.tsx'
 import { template as cloudDepositPaid } from './cloud-deposit-paid.tsx'
 import { template as cloudIntakeReceived } from './cloud-intake-received.tsx'
+import { template as agentWelcome } from './agent-welcome.tsx'
 import { template as roofguardInfo } from './roofguard-info.tsx'
 import { template as privacyVerify } from './privacy-verify.tsx'
 import { template as privacyDone } from './privacy-done.tsx'
@@ -37,6 +38,8 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   'cloud-brief-submitted': cloudBriefSubmitted,
   'cloud-deposit-paid': cloudDepositPaid,
   'cloud-intake-received': cloudIntakeReceived,
+  // Bestly Agent: sent by the Stripe webhook when a signup is paid (carries the setup link)
+  'agent-welcome': agentWelcome,
   // RoofGuard: what Ava emails during a call when someone asks for information
   'roofguard-info': roofguardInfo,
   // Vera, the Privacy Clerk: confirm a data request, then say what was done

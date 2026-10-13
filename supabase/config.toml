@@ -154,3 +154,9 @@ project_id = "keowunrxpxlbgebujbao"
 
 [functions.leo-10dlc]
   verify_jwt = false
+
+[functions.agent-checkout]
+  verify_jwt = false
+
+[functions.agent-onboard]
+  verify_jwt = false

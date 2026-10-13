@@ -158,6 +158,66 @@ serve(async (req) => {
         const subscriptionId = session.subscription;
         const mode = session.mode;
 
+        // ─── Bestly Agent signup (agent-checkout, bestly.tech/agent#pricing) ─────
+        // metadata.product === "bestly_agent": mark the order paid, send the welcome email with the setup link, and tell Jared
+        // (signed by Maya). Bail out before the cloud and Cookie Yeti paths. Idempotent: only the first event claims paid_at.
+        if (session.metadata?.product === "bestly_agent") {
+          const orderId = session.metadata?.order_id as string | undefined;
+          if (!orderId || session.payment_status === "unpaid") {
+            console.error("bestly_agent session without an order or not paid yet", session.id);
+            break;
+          }
+          const { data: claimed, error: claimErr } = await supabase
+            .from("agent_orders")
+            .update({
+              status: "paid",
+              paid_at: new Date().toISOString(),
+              stripe_session_id: session.id,
+              stripe_customer_id: typeof customerId === "string" ? customerId : null,
+              stripe_subscription_id: typeof subscriptionId === "string" ? subscriptionId : null,
+            })
+            .eq("id", orderId)
+            .is("paid_at", null)
+            .select("id, token, plan, monthly_cents, name, email, company");
+          if (claimErr) {
+            console.error("agent_orders paid update error", claimErr);
+            // Forget this event so Stripe's retry is processed instead of being skipped as a duplicate.
+            await supabase.from("webhook_events").delete().eq("stripe_event_id", event.id);
+            return new Response("Webhook handler error", { status: 500 });
+          }
+          const order = claimed?.[0];
+          if (!order) {
+            console.log("bestly_agent order already paid or unknown", orderId);
+            break;
+          }
+          const planName = formatPlanName(String(order.plan));
+          const price = order.monthly_cents % 100 === 0 ? `$${order.monthly_cents / 100}` : `$${(order.monthly_cents / 100).toFixed(2)}`;
+          const buyerEmail = order.email || email;
+          if (buyerEmail) {
+            await sendEmail(supabase, "agent-welcome", buyerEmail, `agent-paid-${order.id}`, {
+              contact_name: order.name,
+              company_name: order.company,
+              plan_name: planName,
+              price: `${price} a month`,
+              setup_url: `https://bestly.tech/agent/welcome?o=${order.token}`,
+            });
+          }
+          try {
+            await supabase.rpc("maya_sales_note", {
+              p_title: `New Bestly Agent customer, ${order.company ?? "unknown"}, ${planName} ${price}/mo`,
+              p_body: `${order.name ?? "A buyer"} paid for ${planName}. The welcome email with the setup link is on its way.`,
+              p_url: "/admin/maya",
+              p_dedupe: `agent-paid-${order.id}`,
+              p_push: true,
+            });
+          } catch (noteErr) {
+            console.error("maya_sales_note failed", noteErr);
+          }
+          console.log("Bestly Agent order paid", order.id);
+          break;
+        }
+        // ─── End Bestly Agent handler ─────────────────────────
+
         // ─── Cloud deal payment short-circuit ─────────────────
         // Payment links created by cloud-deal-payment-link include a
         // metadata.deal_id. If present, this is a B2B cloud deployment
@@ -430,6 +490,31 @@ serve(async (req) => {
       case "customer.subscription.deleted": {
         const subscription = event.data.object;
         const customerId = subscription.customer;
+
+        // Bestly Agent subscription ended: mark the order cancelled and note it for Jared. Not a Cookie Yeti subscription.
+        if (subscription.metadata?.product === "bestly_agent") {
+          const { data: gone, error: goneErr } = await supabase
+            .from("agent_orders")
+            .update({ status: "cancelled" })
+            .eq("stripe_subscription_id", subscription.id)
+            .neq("status", "cancelled")
+            .select("id, company, plan");
+          if (goneErr) console.error("agent_orders cancel update error", goneErr);
+          for (const g of gone ?? []) {
+            try {
+              await supabase.rpc("maya_sales_note", {
+                p_title: `Bestly Agent customer cancelled: ${g.company ?? "unknown"} (${formatPlanName(String(g.plan))})`,
+                p_body: "Their subscription ended in Stripe. Turn their agent off when the paid period is over.",
+                p_url: "/admin/maya",
+                p_dedupe: `agent-cancel-${g.id}`,
+                p_severity: "warning",
+              });
+            } catch (noteErr) {
+              console.error("maya_sales_note failed", noteErr);
+            }
+          }
+          break;
+        }
 
         // Look up email before updating status
         const { data: subRecord } = await supabase
