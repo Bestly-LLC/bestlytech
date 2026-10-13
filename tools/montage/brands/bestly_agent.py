@@ -94,7 +94,7 @@ CFG = {
 }
 END = CFG["end"]
 
-NB = " "
+NB = "\u00a0"
 CARD_MISSED = {"kind": "missed", "name": "Mark Ellis", "place": "Ridgeline Plumbing",
                "photo": "agent/mark-ellis.webp", "logo": "agent/ridgeline-plumbing.svg"}
 CARD_ANSWERED = dict(CARD_MISSED, kind="answered")
@@ -123,10 +123,10 @@ ADS = {
         "title": "Bestly Agent ad: what she does", "topic": "ai receptionist", "mood": "confident",
         "scenes": [
             {"kicker": "AI receptionist", "line": "Meet Maya. She answers your business phone.",
-             "say": "Meet Maya, an AI receptionist who answers your business phone and does the work.", "icon": "phone"},
-            {"line": "She books appointments and answers questions.", "say": "Maya books appointments and answers questions, and you see every call.", "icon": "calendar"},
-            {"line": "She connects to the apps you already use.", "say": "Calendar, customer list, help desk, payments. More than one hundred twenty apps.", "icon": "apps"},
-            {"line": f"Calls, texts and chat in 90+{NB}languages.", "say": "She handles calls, texts and website chat in more than ninety languages.", "icon": "globe"},
+             "say": "Meet Maya, an AI receptionist who answers your business phone.", "icon": "phone", "card": CARD_ANSWERED},
+            {"line": "She books appointments and answers questions.", "say": "She books appointments, answers questions, and you see every call.", "icon": "calendar"},
+            {"line": "She connects to the apps you already use.", "say": "She connects to more than one hundred twenty apps.", "icon": "apps"},
+            {"line": f"Calls, texts and chat in 90+{NB}languages.", "say": "Calls, texts and website chat, in more than ninety languages.", "icon": "globe"},
             {"line": f"From $49{NB}a{NB}month.", "say": "Plans start at forty-nine dollars a month. No setup fee, and thirty days to get your money back.", "icon": "pricetag"},
         ],
         "end": {"sub": "An AI receptionist that answers your business phone.",
