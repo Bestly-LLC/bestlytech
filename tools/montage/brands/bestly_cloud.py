@@ -4,7 +4,7 @@ writer and checks are in _common.py. Design: comp/brand (BrandShort) in the Best
 The closing card shows bestly.tech, the same line every Bestly card carries in its footer.
 2026-10-12: scenes carry one of ICONS (drawn as motion graphics by comp/brand), scene 1 says plainly what the product is (explain_first),
 and the closing card is a rich one: hero logo, one plain line, three benefit chips with icons, glowing bestly.tech button. A re-cut whose note
-mentions the end card may propose the sub line and chips (claim-checked); this default is the fallback."""
+mentions the end card may propose the sub line and chips (claim-checked); this default is the fallback. Chips must pass _common.chip_problems (concrete, icon matches meaning)."""
 import sys
 
 sys.path.insert(0, "/opt/bestly/cron")
@@ -25,8 +25,9 @@ CFG = {
     "end_cta_say": "Learn more at Bestly dot tech.",
     "end": {"title": "Bestly Cloud", "sub": "Files, calendar, chat and passwords on one box your business owns.", "cta": "bestly.tech",
             "say": "Bestly Cloud. Files, calendar, chat and passwords on one box your business owns. Learn more at Bestly dot tech.",
-            "chips": [{"icon": "box", "text": "You own the box"}, {"icon": "tag", "text": "No per-seat fees"},
-                      {"icon": "people", "text": "We can run it for you"}]},
+            # plain, concrete, 2-4 words, each icon says what the chip says (checked by _common.chip_problems; facts: bestly_social.PRODUCT)
+            "chips": [{"icon": "files", "text": "Files, calendar, chat"}, {"icon": "tag", "text": "No per-person fees"},
+                      {"icon": "box", "text": "A box you own"}]},
 }
 END = CFG["end"]
 BRAND = {
