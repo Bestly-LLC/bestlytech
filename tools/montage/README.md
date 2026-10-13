@@ -164,6 +164,30 @@ anything changed. What a re-cut does now (`brands/_common.py`):
   `montage-watch` cron and the `montage` heartbeat still cover the worker itself.
 - Backups of the files replaced on the Pi: `*.bak_recut_20261012` next to each (worker.py, brands/_common.py, brands/bestly_cloud.py, comp/brand/*, README.md).
 
+## Unique content (2026-10-12): no two videos look or open alike, and viewers have a reason to come back
+Jared: "no duplicate-looking content, brand-consistent, but every piece unique, engaging, and it brings viewers back." Plan and results:
+`docs/studio-unique-content-opusplan.md`. Code: `variety.py`, `brands/_common.write`, `brands/hoku.write`, `comp/brand/BrandShort.tsx`, `comp/hoku/HokuShort.tsx`.
+- **A look per video.** Before the writer runs, `variety.make_plan` picks a LOOK: scene-layout set (L1-L6, the order of five templates: stack, center, split,
+  stat, steps), hook style (question, bold count, problem, imagined story, myth versus fact), accent colour (the brand's approved list in `CFG["accents"]`),
+  closing-card layout (list, claim, qa) and icon style (orbit, badge, rings). Chosen so it differs from the brand's last 8 videos on 4 of its dimensions, and
+  from the other brands' recent layouts. The music track is the sixth dimension: `montage_music_pick` never repeats the last 2 tracks of a brand (the last
+  1 when the brand has fewer than 3). A forced look can be pinned in a brief or note with `[look:layout=L2,hook=myth,end=qa,icon=badge,accent=1,segment=myth-or-fact]`.
+- **The gate.** A finished script must differ from each of the last 8 filed videos on at least 3 look dimensions and open with a hook sentence not 72% the same
+  as any of the last 20 openings. A miss re-rolls the look and the words twice, then `VarietyHold`: the job is HELD (re-tried every 30 min with a fresh draw,
+  stopped after 7 days) and Spark alerts `montage.variety` (info, no push). The fingerprint lives in `studio_look_ledger` (written at plan time, marked filed by the
+  trigger `trg_look_filed`, earlier cuts of the same item marked superseded, a failed or stopped job marked failed).
+- **Come-back features.** Numbered series per brand (`studio_series`: "Tip 3 of 8", "Moment 2 of 8", ... shown small in the corner of every scene), named recurring
+  segments (`studio_segments`: Quick fix, Myth or fact, ... shown as the first kicker, rotated), an upcoming-topics queue (`studio_series_topics`) so the closing
+  card, the spoken last line and the caption carry a real "Next: <topic>" (claim-checked; Spark alerts `montage.series` when fewer than 2 topics remain), and one
+  easy comment question at the end of the caption (caption order: series line, body, tail, Next, question, hashtags last). A re-cut keeps its parent's number.
+- **Templates.** `BrandShort` scene templates: stack (the old one), center, split (text top, graphic bottom), stat (one huge word), steps (2 or 3 numbered rows).
+  Icon styles: orbit (the old one), badge, rings. Closing cards: list (chips), claim (title big, compact chips), qa (the question and its answer, then the product).
+  The HOKU composition has the same five templates and two closing layouts. Every prop is optional; old props draw as before.
+- **Alerts** `montage.variety` and `montage.series` are Spark's (`notification_owners`), info, never pushed.
+- **Centering YOU** has no Montage brand: its videos are recordings of Elizabeth (cy-kit). `tests/cy_music_graphics.py` shows the pattern for a CY copy with a
+  borrowed music bed and soft callout cards (CY29 itself is never touched).
+- Deploy: `deploy_unique.sh <sha>` on the Pi (backs up as `*.bak_unique_20261012`, compiles, no restart), then `sudo -n systemctl restart bestly-montage`.
+
 ## Watchdogs
 - cron `montage-watch` every 5 min (requeue stalled jobs 3x, then fail + push; push if work waits and the worker is quiet).
 - `agent_beats` row `montage` every 2 min while idle, every minute while working (Team card pulse).
