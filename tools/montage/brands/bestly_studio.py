@@ -32,8 +32,11 @@ BRAND = {
     "fonts": [{"family": "BestlySerif", "file": "fonts/serif700.woff2", "weight": "700"},
               {"family": "BestlySerif", "file": "fonts/serif600.woff2", "weight": "600"},
               {"family": "BestlySans", "file": "fonts/inter400.woff2", "weight": "400"},
+              {"family": "BestlySans", "file": "fonts/inter800.woff2", "weight": "800"},
               {"family": "BestlySans", "file": "fonts/inter600.woff2", "weight": "600"}],
     "head": {"family": "BestlySerif", "weight": 700, "sizes": [108, 96, 84], "spacing": "-0.01em"},
+    # closing-card product name: modern heavy sans (Inter 800), not the serif the scene headlines use (Jared 2026-10-12)
+    "end_title": {"family": "BestlySans", "weight": 800, "spacing": "-0.02em"},
     "label": {"family": "BestlySans", "weight": 600},
     "themes": {"night": {"bg": "radial-gradient(circle at 92% 62%, #232b5c 0%, #151a38 30%, #0b0c18 62%, #08080c 100%)",
                          "veil": "#0b0c18", "ink": "#FFFFFF", "dim": "#9ea6bc", "accent": "#8b9bf0", "head": "#FFFFFF"}},
@@ -41,7 +44,7 @@ BRAND = {
     "end": {},
 }
 ASSETS = {"fonts/serif700.woff2": f"{KIT}/serif700.woff2", "fonts/serif600.woff2": f"{KIT}/serif600.woff2",
-          "fonts/inter400.woff2": f"{KIT}/inter400.woff2", "fonts/inter600.woff2": f"{KIT}/inter600.woff2",
+          "fonts/inter400.woff2": f"{KIT}/inter400.woff2", "fonts/inter800.woff2": f"{KIT}/inter800.woff2", "fonts/inter600.woff2": f"{KIT}/inter600.woff2",
           "pill.png": f"{KIT}/pill.png"}
 VOICE = {"model": "en_US-lessac-medium", "length_scale": 1.05}  # Piper: the automatic backup
 VOICE_11 = {"voice_id": "iP95p4xoKVk53GoZ742B", "name": "Chris", "stability": 0.5, "similarity_boost": 0.75, "style": 0.0, "speed": 1.0}  # ElevenLabs Chris: charming, down-to-earth, conversational (premade; Eric is Bestly Cloud's)

@@ -19,6 +19,7 @@ export type Theme = {bg: string; veil: string; ink: string; dim: string; accent:
 export type Brand = {
   fonts: {family: string; file: string; weight: string}[];
   head: {family: string; weight: number; sizes: [number, number, number]; spacing: string};   // sizes: short, mid, long lines
+  end_title?: {family: string; weight: number; spacing: string};  // closing-card product name; falls back to `head` (2026-10-12: modern sans for Bestly)
   label: {family: string; weight: number};                       // kicker, sub line, handle, call to action
   themes: Record<string, Theme>;
   logo: {
@@ -242,7 +243,7 @@ const EndPlain: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b
              style={{height: b.end.imageHeight ?? 440, borderRadius: b.end.imageRadius ?? 0, opacity: up, transform: `translateY(${(1 - up) * 260}px)`, marginBottom: 70}} />
       ) : null}
       <Rise delay={8} dur={hold} style={{textAlign: 'center'}}>
-        <div style={{fontFamily: b.head.family, fontWeight: b.head.weight, fontSize: 112, lineHeight: 1.1, letterSpacing: b.head.spacing, color: t.head || t.ink, textWrap: 'balance' as any}}>{e.title}</div>
+        <div style={{fontFamily: (b.end_title || b.head).family, fontWeight: (b.end_title || b.head).weight, fontSize: 112, lineHeight: 1.1, letterSpacing: (b.end_title || b.head).spacing, color: t.head || t.ink, textWrap: 'balance' as any}}>{e.title}</div>
       </Rise>
       {e.sub ? (
         <Rise delay={14} dur={hold} style={{textAlign: 'center', marginTop: 34}}>
@@ -309,7 +310,7 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b,
                                                       transform: `scale(${0.7 + 0.3 * logo})`, marginBottom: 34}} />
         ) : null}
         <Rise delay={8} dur={hold} style={{textAlign: 'center'}}>
-          <div style={{fontFamily: b.head.family, fontWeight: b.head.weight, fontSize: 128, lineHeight: 1.05, letterSpacing: b.head.spacing, color: t.head || t.ink, textWrap: 'balance' as any}}>{e.title}</div>
+          <div style={{fontFamily: (b.end_title || b.head).family, fontWeight: (b.end_title || b.head).weight, fontSize: 128, lineHeight: 1.05, letterSpacing: (b.end_title || b.head).spacing, color: t.head || t.ink, textWrap: 'balance' as any}}>{e.title}</div>
         </Rise>
         {e.sub ? (
           <Rise delay={16} dur={hold} style={{textAlign: 'center', marginTop: 30}}>
