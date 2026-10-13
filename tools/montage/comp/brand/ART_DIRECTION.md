@@ -9,3 +9,4 @@ Same quiet, one-idea-per-card film as HOKU, driven by a `brand` prop so each pro
 - Sound: narration on a very low ambient pad.
 - B-roll (when ordered): a vertical clip plays behind each card under a veil of the card color (55-85%), so footage is texture and the line always reads. No faces to camera, no text, signs, logos, brands, no invented app screens or UI; phones and laptops only as dark silhouettes.
 - Numbers keep their units on one line (no-break spaces are put in the script).
+- Graphics (2026-10-12, free, drawn in the comp): a scene may carry one icon from a small fixed set (files, lock, box, people, calendar, chat, key, check, tag, eyeslash) in the brand accent, drawn on by a soft spring inside a feathered glow; a brand may turn on slow ambient glows and a rich closing card (hero logo, one plain line, icon chips, glowing call to action). Every glow fades to transparent; text stays the hero and never sits on a busy area.

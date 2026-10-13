@@ -84,7 +84,7 @@ The current script is below.
 {mode}
 House rules for every re-cut (they override anything above): scene 1 says plainly what the product is and who it is for, in everyday words a
 stranger understands in five seconds (describe it by what it is, without naming {name}: only the closing card and the caption's last paragraph
-name it); no jargon; short sentences; use only the facts above, invent nothing. Where the note asks for a change, the new script must read
+name it); no jargon; short sentences; no absolutes (total, complete, perfect, never, always, guaranteed, nobody); use only the facts above, invent nothing. Where the note asks for a change, the new script must read
 clearly different from the current one.{end_ask}
 Reply with the whole script in the same JSON shape.
 Current script:
@@ -96,7 +96,7 @@ MODE_NARROW = ("Apply the note and change only what it asks for: keep the number
                "does not touch, word for word.")
 END_ASK = (' The note mentions the closing card, so also add an "end" object to the JSON: {{"sub": "one plain sentence of 6 to 14 words saying what '
            '{name} is and does, for a stranger", "chips": [{{"icon": "<icon word>", "text": "1 to 5 words, at most 25 letters"}}, '
-           '...exactly three chips, each a different plain benefit taken from the facts]}}. The closing card title stays "{name}".')
+           '...exactly three chips, each a different plain benefit taken from the facts]}}. No absolutes (total, complete, never, always). The closing card title stays "{name}".')
 STRONGER = ("Not good enough: {pct}% of your lines are still the same as the current script, and the reviewer asked for a different one. Start from a "
             "blank page. Write every kicker, line and say in new words, with a new opening and a new caption (different sentences, not the old ones "
             "rearranged). Scene 1 must say plainly what the product is and who it is for. Reply with the JSON only.")
