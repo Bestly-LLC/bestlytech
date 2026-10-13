@@ -81,7 +81,8 @@ ICON_HELP = {"files": "a folder of documents (files, documents, storage)", "lock
              "list": "a checklist on a clipboard (a list, steps)", "package": "a cardboard box being packed (moving, storing)",
              "image": "a photo frame (pictures, photos)", "shield": "a shield (protection, privacy)", "cookie": "a cookie with a bite out (cookies, banners)",
              "toggle": "a switch (accept or reject, on or off)", "clock": "a clock (time, waiting, how often)", "video": "a play button (a short video)",
-             "pencil": "a pencil (writing, editing a caption)", "star": "a star (the one that stands out)"}
+             "pencil": "a pencil (writing, editing a caption)", "star": "a star (the one that stands out)",
+             "phone": "a phone handset (phone calls, or the phone screen where posts get approved)"}
 
 REVISE = """
 
