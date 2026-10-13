@@ -18,7 +18,9 @@
 import chromium from "@sparticuz/chromium";
 import puppeteer from "puppeteer-core";
 
-const SITE = "https://www.bestly.tech";
+// Vercel origin, not www.bestly.tech: Cloudflare bot protection stalls a headless browser from a data center.
+// The Cloudflare layer itself is already watched by the "www.bestly.tech" uptime row.
+const SITE = "https://bestlytech.vercel.app";
 const SCENES = 30;
 const T0 = () => Date.now();
 let t0 = T0();
