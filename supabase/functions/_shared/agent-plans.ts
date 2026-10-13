@@ -34,7 +34,7 @@ export const AGENT_PLANS: AgentPlan[] = [
     name: "Lite",
     monthlyCents: 4900,
     includedMinutes: 30,
-    extraCentsPerMinute: 20,
+    extraCentsPerMinute: 100,
     blurb: "For a business that gets a few calls a week.",
     lookupKey: "bestly_agent_lite_monthly",
   },
@@ -43,7 +43,7 @@ export const AGENT_PLANS: AgentPlan[] = [
     name: "Starter",
     monthlyCents: 19900,
     includedMinutes: 150,
-    extraCentsPerMinute: 15,
+    extraCentsPerMinute: 75,
     blurb: "For a business with calls most days.",
     lookupKey: "bestly_agent_starter_monthly",
   },
@@ -52,7 +52,7 @@ export const AGENT_PLANS: AgentPlan[] = [
     name: "Growth",
     monthlyCents: 49900,
     includedMinutes: 500,
-    extraCentsPerMinute: 12,
+    extraCentsPerMinute: 50,
     blurb: "For a busy business that lives on the phone.",
     lookupKey: "bestly_agent_growth_monthly",
   },
@@ -101,6 +101,13 @@ export function centsLabel(cents: number): string {
   return cents < 100 ? `${cents}¢` : dollars(cents);
 }
 
+/** "a dollar" / "75 cents", for words Maya says out loud. */
+export function spokenRate(cents: number): string {
+  if (cents === 100) return "a dollar";
+  if (cents < 100) return `${cents} cents`;
+  return `${dollars(cents)}`;
+}
+
 /** The refund and cancel promises as one short line, built from the terms. */
 export function termsLine(): string {
   return `${AGENT_TERMS.setupFeeCents === 0 ? "No setup fee" : `${dollars(AGENT_TERMS.setupFeeCents)} setup fee`}, ${AGENT_TERMS.moneyBackDays}-day money back, ${AGENT_TERMS.cancelAnytime ? "cancel anytime" : "no cancelling mid-month"}`;
@@ -109,6 +116,6 @@ export function termsLine(): string {
 /** Plain-English summary for Maya's instructions. Built from the plans so her numbers always match the page. */
 export function pricingSentence(): string {
   const plans = AGENT_PLANS.map((p) =>
-    `${p.name} is ${dollars(p.monthlyCents)} a month with ${p.includedMinutes} minutes of calls included, and extra minutes are ${p.extraCentsPerMinute} cents each`).join("; ");
+    `${p.name} is ${dollars(p.monthlyCents)} a month with ${p.includedMinutes} minutes of calls included, and extra minutes are ${spokenRate(p.extraCentsPerMinute)} each`).join("; ");
   return `Bestly Agent has three monthly plans. ${plans}. ${termsLine()}. A minute is time on a call, rounded up to the next minute. Minutes past the included ones are billed on the next bill.`;
 }

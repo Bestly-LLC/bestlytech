@@ -5,9 +5,10 @@ Planned with Opus 2026-10-12, built with Sonnet. Jared: "make a plan for maya to
 ## Jared's decisions (2026-10-12)
 
 - **Three plans, monthly, no setup fee:**
-  - **Lite** $49/mo, 30 minutes included, extra minutes 20¢
-  - **Starter** $199/mo, 150 minutes included, extra minutes 15¢
-  - **Growth** $499/mo, 500 minutes included, extra minutes 12¢
+  - **Lite** $49/mo, 30 minutes included, extra minutes $1.00
+  - **Starter** $199/mo, 150 minutes included, extra minutes 75¢
+  - **Growth** $499/mo, 500 minutes included, extra minutes 50¢
+- Extra-minute prices raised the same day (Jared picked it): the old 20¢/15¢/12¢ made Lite cheapest up to 2,670 minutes and Growth's extras sold at our own cost (about 12¢ a minute). New ladder: Lite under 270 minutes, Starter 270 to 650, Growth above.
 - **30-day money-back guarantee.** Cancel anytime.
 - **Maya goes all the way to payment:** recommends a plan, opens secure Stripe checkout, then walks the buyer through the setup questions.
 

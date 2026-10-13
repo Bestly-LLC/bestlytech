@@ -2,7 +2,7 @@
  * Plain-words helpers for the pricing section and for Maya's agent_pricing / agent_checkout tools: the same numbers the
  * page shows, as sentences she can read out. Every figure comes from supabase/functions/_shared/agent-plans.ts.
  */
-import {
+import { spokenRate,
   AGENT_PLANS, dollars, minutesFromCalls, monthlyCost, planById, recommendPlan, termsLine,
   type AgentPlan, type AgentPlanId,
 } from "../../../supabase/functions/_shared/agent-plans";
@@ -31,7 +31,7 @@ export function describeUsage(u: Usage): { say: string; recommended: AgentPlanId
   const others = rec.alternatives.map((q) => `${q.plan.name} about ${spokenDollars(q.cents)} a month`).join("; ");
   const cover = b.extra === 0
     ? `All ${minutes} minutes are included.`
-    : `${dollars(rec.plan.monthlyCents)} covers the first ${rec.plan.includedMinutes} minutes, and the other ${b.extra} minutes are ${rec.plan.extraCentsPerMinute} cents each, ${spokenDollars(b.extraCents)} more.`;
+    : `${dollars(rec.plan.monthlyCents)} covers the first ${rec.plan.includedMinutes} minutes, and the other ${b.extra} minutes are ${spokenRate(rec.plan.extraCentsPerMinute)} each, ${spokenDollars(b.extraCents)} more.`;
   return {
     say: `On the page now: ${basis}. Best fit is ${rec.plan.name}, about ${spokenDollars(rec.cents)} a month. ${cover} For the same minutes: ${others}.`,
     recommended: rec.plan.id,
