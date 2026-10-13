@@ -12,9 +12,16 @@
 // /agent-demo/<id>.json is 200 with duration > 20 s and every .mp3 answers 200, and no visitor browser has reported
 // agent-demo-audio failures (maya_web_sessions kind='diag') in the last hour. Alert only (a static file can't be
 // healed from here); the message says what to re-run. Same alert key maya.site.
+// Selling (2026-10-12, docs/maya-sales-opusplan.md): her three Bestly Agent sales tools (agent_pricing, agent_checkout, agent_setup)
+// attached (heals), the "Selling Bestly Agent" block in her prompt built from _shared/agent-plans.ts so her prices always match the
+// page, and about hourly: agent-checkout?ping=1 (Stripe key + prices + orders table). Two failed pings in a row raise a maya.sales
+// problem ("I can't take payments"), the next pass resolves it. Paid orders with no setup answers after 3 days become a recap note.
+// Until the three ElevenLabs tools exist their ids below are placeholders: placeholders are skipped (never attached) and the
+// tool-driven half of the selling block stays out of her prompt, so nothing tells her to call a tool she doesn't have.
 // Disclosures (2026-10-11, Jared): her phone greeting says she's an AI and that calls are recorded (California needs
 // everyone's consent to record), and recordings + transcripts are kept 90 days. Heals both if they drift. Key maya.line.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { pricingSentence } from "../_shared/agent-plans.ts";
 
 const AGENT_ID = "agent_3701m4jbjnyef6ga4ys73xtbz37s";
 const EL_PHONE_ID = "phnum_2501m4jea1d1enjt3tkyq4nps914";
@@ -27,6 +34,12 @@ const BILLING_TOOLS = [
   "tool_8901m4m3jtvwfdb82kta0c5jmsv8", // cancel_or_pause
   "tool_3101m4m3jx58f4s9cdq89qavw7av", // refund
 ];
+// Placeholders for the three Bestly Agent sales tools. Create them in ElevenLabs (docs/maya-sales-opusplan.md), then replace each
+// constant's value with the real "tool_..." id. While a value is not a real id it is skipped everywhere below.
+const TOOL_ID_AGENT_PRICING_TBD = "TOOL_ID_AGENT_PRICING_TBD";
+const TOOL_ID_AGENT_CHECKOUT_TBD = "TOOL_ID_AGENT_CHECKOUT_TBD";
+const TOOL_ID_AGENT_SETUP_TBD = "TOOL_ID_AGENT_SETUP_TBD";
+const isRealToolId = (t: string) => /^tool_[a-z0-9]{20,}$/.test(t);
 const SITE_TOOLS = [
   "tool_5301m4p1ran1f7z97a2ky50g2z15", // navigate_site_page (client tool, bestly.tech widget)
   "tool_9401m4p1rvxkeg6tt8k0zjbeat0h", // open_site_modal (client tool, bestly.tech widget)
@@ -34,11 +47,36 @@ const SITE_TOOLS = [
   "tool_3901m4p4dgffew580sm8prn3r2c1", // describe_screen (client tool, presenter)
   "tool_9801m4p7z7nze08t38c4hcea47qg", // cloud_calculator (client tool, drives the savings calculator)
   "tool_9601m4pfs50qebrs7gskeetezaw2", // fill_contact_form (client tool, types into the visible contact / get-started form)
+  TOOL_ID_AGENT_PRICING_TBD, // agent_pricing (client tool, drives the plan picker on /agent#pricing)
+  TOOL_ID_AGENT_CHECKOUT_TBD, // agent_checkout (client tool, opens the checkout card and types the buyer's details; never presses Pay)
+  TOOL_ID_AGENT_SETUP_TBD, // agent_setup (client tool, types the setup answers on /agent/welcome)
 ];
+const SALES_TOOLS_READY = [TOOL_ID_AGENT_PRICING_TBD, TOOL_ID_AGENT_CHECKOUT_TBD, TOOL_ID_AGENT_SETUP_TBD].every(isRealToolId);
 const SITE_INDEX_URL = "https://www.bestly.tech/maya/site-index.json";
 const SITE_KB_PREFIX = "Maya KB - bestly.tech site map";
 const PRESENTER_START = "# Website presenter (website visitors only)";
 const PRESENTER_END = "# End website presenter";
+// The "Selling Bestly Agent" part of her prompt. The numbers come from the plans file, the same one the page reads.
+function sellingAgentBlock(): string {
+  const rules = `
+# Selling Bestly Agent
+${pricingSentence()}
+- Say these prices exactly. Never invent a discount, trial, coupon, annual price or custom price; anything custom goes to the contact form for Jared.
+- Always say "no setup fee, 30-day money back, cancel anytime" before checkout.
+- Never take card numbers by voice or in chat. The buyer taps Pay securely themselves and types their card only on Stripe's page.
+- On a phone call (not the website) the website tools don't work and there is no checkout on the phone: explain the prices, and send them to bestly.tech/agent#pricing.
+`;
+  if (!SALES_TOOLS_READY) return rules;
+  return `${rules}- On the website, run the sale as a short conversation, one question at a time, never pressuring:
+  1. Discover: what the business does, about how many calls a day, how long a call runs, which apps they use, and what calls should end in (a booking, a ticket, a transfer).
+  2. Show: play the closest industry demo on the Bestly Agent page with show_section ("Watch Maya take a call"), and point at the apps directory for their software.
+  3. Price: call agent_pricing with their numbers (calls_per_day and avg_minutes, or minutes if they gave a monthly total). Say the best fit and its monthly total from the tool in plain words. Only quote numbers the tool returned.
+  4. Close: when they want it, call agent_checkout with the plan, then ask for their name, email and business name (phone is optional) one at a time, calling agent_checkout again after each answer so they watch it fill in. Read back the plan, the price, "no setup fee, 30-day money back, cancel anytime". After a clear yes, tell them to tap Pay securely at the bottom of the card. You cannot tap it for them.
+  5. Onboard: after they pay, they land on a welcome page. If they talk to you there, walk the setup questions with agent_setup one at a time: business name and website, the number callers use today and whether to forward it or get a new one, hours and time zone, what most calls should end in, who to transfer to and their number, which apps, the top questions callers ask with answers, anything you must never say or do, and the voice and name. Read it back and only send after a clear yes. Then point at the Book your kickoff call button.
+  6. Not ready? Offer the contact form (fill_contact_form, topic sales) or the kickoff call. Never pressure.
+`;
+}
+
 // Kept in this file so it is versioned with the tools it describes. Line Check writes it into her prompt if missing
 // or different, replacing the old "Website Actions (Client Tools)" tail.
 const PRESENTER_BLOCK = `${PRESENTER_START}
@@ -62,7 +100,7 @@ Bestly Cloud is one small server in their office that replaces the apps they ren
 - Same for anyone else who wants to be contacted on the website (Bestly Agent demos, questions for the team): fill the form with them instead of only taking details by voice. Use open_site_modal only when they just want to see the form.
 - Keep momentum: one short answer, show it, one question. Never pressure; if they want to think, offer to send the team a note through the form.
 - On phone calls none of these tools work; never call them there.
-${PRESENTER_END}`;
+${sellingAgentBlock()}${PRESENTER_END}`;
 const SITE_HOSTS = ["bestly.tech", "www.bestly.tech"];
 // Approved by Jared 2026-10-11 ("yes, but shorter"): AI + recording disclosure in the first line, every call.
 const GREETING = "Hi, this is Maya, Bestly's AI assistant. Calls are recorded. How can I help?";
@@ -91,7 +129,7 @@ Deno.serve(async () => {
     else {
       const aj = await a.json();
       const ids: string[] = aj?.conversation_config?.agent?.prompt?.tool_ids ?? [];
-      const missing = [TICKET_TOOL, ...BILLING_TOOLS, ...SITE_TOOLS].filter((t) => !ids.includes(t));
+      const missing = [TICKET_TOOL, ...BILLING_TOOLS, ...SITE_TOOLS].filter(isRealToolId).filter((t) => !ids.includes(t)); // placeholders are never attached
       if (missing.length) {
         const fix = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`, { method: "PATCH", headers: el,
           body: JSON.stringify({ conversation_config: { agent: { prompt: { tool_ids: [...ids, ...missing] } } } }) });
@@ -280,6 +318,46 @@ Deno.serve(async () => {
         site.push(`Agent demo check crashed: ${String(e).slice(0, 120)}`);
       }
     }
+
+    // 5e. Bestly Agent payments and orders (docs/maya-sales-opusplan.md part 9). About hourly, like 5d.
+    // agent-checkout?ping=1 checks the Stripe key, lists the three prices and reads agent_orders; it creates nothing. One failed ping
+    // can be a blip, so the alert needs two in a row (kept in maya_sales_health); a passing ping resolves it.
+    if (new Date().getUTCMinutes() < 10) {
+      try {
+        let reason = "";
+        try {
+          const pr = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/agent-checkout?ping=1`, { headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` } });
+          const pj = await pr.json().catch(() => ({})) as { ok?: boolean; problems?: string[] };
+          if (!(pr.ok && pj?.ok === true)) reason = (pj?.problems ?? []).join("; ") || `the checkout answered ${pr.status}`;
+        } catch (e) {
+          reason = `the checkout did not answer (${String(e).slice(0, 80)})`;
+        }
+        const nowIso = new Date().toISOString();
+        const { data: hs } = await sb.from("maya_sales_health").select("consecutive_failures").eq("id", true).maybeSingle();
+        const fails = reason ? (hs?.consecutive_failures ?? 0) + 1 : 0;
+        await sb.from("maya_sales_health").upsert({ id: true, consecutive_failures: fails, last_checked_at: nowIso, last_reason: reason || null, ...(reason ? {} : { last_ok_at: nowIso }) });
+        if (reason && fails >= 2) {
+          await sb.rpc("bestly_raise", { p_key: "maya.sales", p_kind: "problem", p_severity: "warning",
+            p_title: `I can't take payments: ${reason}`.slice(0, 160), p_body: "Bestly Agent signups on bestly.tech/agent are failing, so nobody can pay right now.",
+            p_area: "maya", p_needs_jared: "Check the Stripe key in the Vault and the Stripe dashboard." });
+        } else if (!reason) {
+          await sb.rpc("bestly_raise", { p_key: "maya.sales", p_kind: "resolved", p_severity: "info", p_title: "Payments are working", p_area: "maya" });
+        }
+
+        // Paid and still no setup answers after 3 days: a recap note, not an interrupt (one per order).
+        const { data: stuck } = await sb.from("agent_orders").select("id, company, plan, paid_at").eq("status", "paid")
+          .lt("paid_at", new Date(Date.now() - 3 * 86400_000).toISOString()).limit(20);
+        for (const o of stuck ?? []) {
+          await sb.rpc("maya_sales_note", {
+            p_title: `${o.company ?? "A customer"} paid 3 days ago and hasn't sent their setup answers`,
+            p_body: "Nudge them with the link in their welcome email, or offer the kickoff call.", p_url: "/admin/maya",
+            p_dedupe: `agent-stuck-${o.id}`, p_severity: "info",
+          });
+        }
+      } catch (e) {
+        site.push(`Bestly Agent payment check crashed: ${String(e).slice(0, 120)}`);
+      }
+    }
   } catch (e) {
     problems.push(`Check crashed: ${String(e).slice(0, 200)}`);
   }
@@ -322,5 +400,5 @@ Deno.serve(async () => {
     p_body: privSoon.map((x: any) => `${x.code}${x.name ? " " + x.name : ""}`).join(", "), p_area: "maya", p_needs_jared: "Legal deadline (CCPA, 45 days)." });
   else await sb.rpc("bestly_raise", { p_key: "maya.privacy", p_kind: "resolved", p_severity: "info", p_title: "Maya: privacy requests on track", p_area: "maya" });
 
-  return new Response(JSON.stringify({ ok, problems, fixed, desk, billing, site, overdue: late?.length ?? 0 }), { headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ ok, problems, fixed, desk, billing, site, overdue: late?.length ?? 0, sales_tools_ready: SALES_TOOLS_READY }), { headers: { "Content-Type": "application/json" } });
 });
