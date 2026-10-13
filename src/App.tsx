@@ -62,6 +62,7 @@ const HostGate = lazyPage(() => import("./pages/HostGate"));
 const TuroEntry = lazyPage(() => import("./pages/TuroEntry"));
 const DriverKey = lazyPage(() => import("./pages/DriverKey"));
 const ApproveDriver = lazyPage(() => import("./pages/ApproveDriver"));
+const AvaApprove = lazyPage(() => import("./pages/AvaApprove"));
 const EmailUnsubscribe = lazyPage(() => import("./pages/EmailUnsubscribe"));
 const PrivacyConfirm = lazyPage(() => import("./pages/PrivacyConfirm"));
 const Status = lazyPage(() => import("./pages/Status"));
@@ -228,6 +229,8 @@ const App = () => {
                 <Route path="/turo-lax" element={<TuroEntry kind="lax" />} />
                 <Route path="/d/:token" element={<DriverKey />} />
                 <Route path="/xa/:token" element={<ApproveDriver />} />
+                {/* Ava asked on a call; the approval is a Face ID tap here, in the signed-in admin (signed out goes to passkey login and back) */}
+                <Route path="/y/:code" element={<AdminRoute><AvaApprove /></AdminRoute>} />
                 <Route path="/lax/:slug" element={<LaxGuest />} />
                 <Route path="/unsubscribe" element={<EmailUnsubscribe />} />
                 <Route path="/p/:token" element={<PrivacyConfirm />} />

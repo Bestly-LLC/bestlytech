@@ -66,6 +66,10 @@
       "destination": "/trip.html"
     },
     {
+      "source": "/y/(.*)",
+      "destination": "/admin.html"
+    },
+    {
       "source": "/lax",
       "destination": "/lax.html"
     },

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { isAdminSurface } from "@/lib/adminNext";
 
 /**
  * Soft indigo dot that lerps toward the cursor across the whole site.
@@ -13,7 +14,7 @@ import { useLocation } from "react-router-dom";
  */
 export function CursorFollower() {
   // Off inside /admin: a trailing dot over dense tables and controls is a distraction, not delight.
-  const inAdmin = useLocation().pathname.startsWith("/admin");
+  const inAdmin = isAdminSurface(useLocation().pathname);
   const dotRef = useRef<HTMLDivElement | null>(null);
   const ringRef = useRef<HTMLDivElement | null>(null);
   const [active, setActive] = useState(false);

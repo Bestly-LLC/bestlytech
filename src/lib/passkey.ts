@@ -193,6 +193,64 @@ export async function signInWithPasskey(email?: string): Promise<string | null> 
   }
 }
 
+
+/**
+ * A fresh Face ID / Touch ID tap for ONE Ava approval (docs/ava-fix-issues-opusplan.md, Phase B). Same contract as above:
+ * null on success, "cancelled" if the person dismissed the prompt, otherwise a message to show.
+ *
+ * Differences from signInWithPasskey: it needs the signed-in admin session (the edge function checks the JWT), the challenge is
+ * minted for and stored on that approval, user verification is REQUIRED (Face ID / passcode, never just a touch), and success
+ * signs nobody in. It only stamps the approval, which ava_approval_decide then checks within 60 seconds.
+ */
+export async function confirmApprovalWithPasskey(code: string): Promise<string | null> {
+  if (!passkeysSupported()) return "This browser can't do passkeys.";
+  try {
+    const opt = await supabase.functions.invoke("webauthn-authenticate", {
+      body: { action: "approval_options", origin: window.location.origin, code },
+    });
+    if (opt.error || (opt.data as ErrorBody | null)?.error) return await why(opt, "Couldn't start.");
+    const o = opt.data as AuthStart;
+    let assertion: PublicKeyCredential | null;
+    try {
+      assertion = (await navigator.credentials.get({
+        publicKey: {
+          challenge: fromB64(o.challenge),
+          rpId: o.rpId,
+          timeout: o.timeout,
+          userVerification: "required",
+          allowCredentials: (o.allowCredentials ?? []).map((c) => ({
+            id: fromB64(c.id),
+            type: c.type,
+            transports: c.transports as AuthenticatorTransport[] | undefined,
+          })),
+        },
+      })) as PublicKeyCredential;
+    } catch (err) {
+      return promptProblem(err, "That didn't work.");
+    }
+    if (!assertion) return "cancelled";
+    const r = assertion.response as AuthenticatorAssertionResponse;
+    const ver = await supabase.functions.invoke("webauthn-authenticate", {
+      body: {
+        action: "approval_verify", origin: window.location.origin, code,
+        credential: {
+          id: assertion.id, rawId: toB64(assertion.rawId), type: assertion.type,
+          response: {
+            clientDataJSON: toB64(r.clientDataJSON),
+            authenticatorData: toB64(r.authenticatorData),
+            signature: toB64(r.signature),
+            userHandle: r.userHandle ? toB64(r.userHandle) : null,
+          },
+        },
+      },
+    });
+    if (ver.error || (ver.data as ErrorBody | null)?.error) return await why(ver, "That didn't work.");
+    return null;
+  } catch (err) {
+    return promptProblem(err, "That didn't work.");
+  }
+}
+
 /** How many passkeys this account has (for "you're all set" copy). */
 export async function passkeyCount(userId: string) {
   const { count } = await supabase.from("passkey_credentials")

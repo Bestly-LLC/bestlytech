@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Fingerprint } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminMark, SIGNIN_STARE_RADIUS_PX } from "@/components/AdminMark";
-import { rememberNext } from "@/lib/adminNext";
+import { isSafeNext, rememberNext } from "@/lib/adminNext";
 import { signInWithPasskey } from "@/lib/passkey";
 import { BrandLoader } from "@/components/BrandLoader";
 import { useAdminFavicon } from "@/hooks/useAdminFavicon";
@@ -55,9 +55,9 @@ export default function AdminLogin() {
   
   const { toast } = useToast();
   const [params] = useSearchParams();
-  // Only ever go back inside the admin.
+  // Only ever go back inside the admin (or to one Ava approval link, /y/<code>).
   const nextRaw = params.get("next") ?? "";
-  const next = nextRaw.startsWith("/admin") && !nextRaw.startsWith("//") ? nextRaw : "/admin";
+  const next = isSafeNext(nextRaw) ? nextRaw : "/admin";
 
   // `checking` covers the moment right after sign-in, before the role check answers.
   if (loading || (user && checking && !isAdmin)) {
@@ -181,6 +181,11 @@ export default function AdminLogin() {
           <p className="text-[0.8125rem] text-white/55 font-light tracking-wide">
             Bestly Admin
           </p>
+          {next.startsWith("/y/") && (
+            <p className="mx-auto max-w-[18rem] rounded-2xl bg-white/[0.06] px-4 py-3 text-[0.9375rem] leading-snug text-white/80 bento:bg-[#F3F2EE]">
+              Sign in with your passkey first. Then you come straight back to Ava's request.
+            </p>
+          )}
           {next.startsWith("/admin/approve") && (
             <p className="mx-auto max-w-[18rem] rounded-2xl bg-white/[0.06] px-4 py-3 text-[0.9375rem] leading-snug text-white/80 bento:bg-[#F3F2EE]">
               Sign in on this phone first. Then you come straight back to approve the other screen.

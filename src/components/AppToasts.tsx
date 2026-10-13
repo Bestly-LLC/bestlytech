@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { isAdminSurface } from "@/lib/adminNext";
 
 /**
  * Where toasts appear.
@@ -16,7 +17,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
  */
 export function AppToasts() {
   const { pathname } = useLocation();
-  const admin = pathname.startsWith("/admin") || pathname.startsWith("/partner");
+  const admin = isAdminSurface(pathname) || pathname.startsWith("/partner");
 
   return (
     <>
