@@ -415,7 +415,8 @@ def decorate(cfg, out, plan, series, tease, p, caption_core, scene_count=None):
             t = "card"
         s["layout"] = t
         if t == "stat":
-            s["big"] = src["big"].strip()
+            b = src["big"].strip()
+            s["big"] = b[:1].upper() + b[1:]
         if t == "steps":
             s["items"] = [x.strip() for x in src["items"][:3]]
     if seg and out["scenes"]:

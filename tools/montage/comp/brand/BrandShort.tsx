@@ -439,7 +439,12 @@ const MiniIcon: React.FC<{name?: string; t: Theme; size: number; delay?: number;
   );
 };
 
-const bigSize = (w: string) => (w.length <= 5 ? 360 : w.length <= 8 ? 280 : w.length <= 12 ? 210 : 160);
+// the huge word must fit the 888 px column on one line per word: the base size by length, capped by the longest word (about 0.7 em a letter)
+const bigSize = (w: string) => {
+  const base = w.length <= 5 ? 360 : w.length <= 8 ? 280 : w.length <= 12 ? 210 : 160;
+  const longest = Math.max(...w.split(/\s+/).map((x) => x.length), 1);
+  return Math.min(base, Math.floor(860 / (0.7 * longest)));
+};
 
 const StatBig: React.FC<{text: string; t: Theme; b: Brand; dur: number}> = ({text, t, b, dur}) => {
   const f = useCurrentFrame();
