@@ -34,6 +34,7 @@ sys.path.insert(0, "/opt/bestly/cron")
 sys.path.insert(0, "/opt/bestly/montage")
 import lib  # noqa: E402
 import music  # noqa: E402
+import variety  # noqa: E402  (2026-10-12: unique-content system)
 
 OM = "/mnt/ssd/apps/openmontage"
 OMPY = f"{OM}/.venv/bin/python"
@@ -155,6 +156,24 @@ class MusicHeld(VoiceHeld):
     def __init__(self, reason, brand=""):
         super().__init__(reason, "music")
         self.brand = brand
+
+
+class VarietyHeld(VoiceHeld):
+    """The writer could not make this video different enough from the brand's recent ones after 2 re-rolls (variety.VarietyHold). Held and
+    re-tried every 30 minutes (a fresh draw of look and words each time), stopped after 7 days; Spark's alert is montage.variety (info, no push)."""
+
+    def __init__(self, reason, brand=""):
+        super().__init__(reason, "variety")
+        self.brand = brand
+
+
+def _variety_alert(brand, why):
+    day = time.strftime("%Y-%m-%d")
+    try:
+        lib.notify(f"Spark: a {brand} video is on hold, it looked too much like the last ones", why[:600], severity="info", push=False,
+                   url="/admin/team", dedupe=f"montage.variety-{brand}-{day}")
+    except Exception as e:  # noqa: BLE001
+        print("variety alert failed:", e, flush=True)
 
 
 def _music_alert(brand, why):
@@ -431,14 +450,16 @@ def hold(job, h):
         except Exception as e:  # noqa: BLE001
             print("cost lookup failed:", e, flush=True)
     is_music = h.kind == "music"
+    is_var = h.kind == "variety"
     if is_music and job.get("script"):          # the script already carries the voice timings; keep it so the resume does not re-buy the voice
         spent["script"] = job["script"]
-    if not is_music:
+    if not is_music and not is_var:
         audio_log(job, "held", h.voice, held_reason=h.reason, credits=h.credits, cost=h.cost)
     if since and now - since > HOLD_GIVE_UP_DAYS * 86400:
-        err = f"held {HOLD_GIVE_UP_DAYS} days without {'a music track' if is_music else 'a voice'}, stopped: {h.reason}"
+        err = f"held {HOLD_GIVE_UP_DAYS} days without {'a music track' if is_music else 'a different look' if is_var else 'a voice'}, stopped: {h.reason}"
         report(jid, status="failed", stage="failed", error=err[:2000], note=err[:400], **spent)
-        if not is_music:
+        variety.set_state(jid, "failed")
+        if not is_music and not is_var:
             audio_log(job, "failed", h.voice, held_reason=err)
         lib.notify("Spark: a video was stopped after a week on hold", f"{job['client_slug']}: {err[:420]} Ask Spark to make it again once "
                    f"{'the music library has a track for this brand' if is_music else 'the voice works'}.",
@@ -448,12 +469,17 @@ def hold(job, h):
     first = since is None
     same = (job.get("held_reason") or "")[:25] == h.reason[:25]
     p = dict(status="held", stage="held", held_reason=h.reason, held_check_at=check_at, **spent)
+    if is_var:
+        variety.set_state(jid, "held")
     if first or not same:
         p["note"] = f"on hold ({h.kind}): {h.reason}"[:480]
     report(jid, **p)
     if first:
         try:
-            if is_music:
+            if is_var:
+                lib.rpc("montage_post", p_id=jid, body=f"I am holding this video: {h.reason}. Every video has to look and open differently from the last ones, so I will not "
+                        f"file a lookalike. I try again with a fresh draw every {HOLD_RECHECK_MIN} minutes (I stop after {HOLD_GIVE_UP_DAYS} days).")
+            elif is_music:
                 lib.rpc("montage_post", p_id=jid, body=f"I am holding this video: {h.reason}. Every video ships with real music, so I will not file it without. "
                         f"I check again every {HOLD_RECHECK_MIN} minutes and finish it on my own as soon as the library has a track (I stop after {HOLD_GIVE_UP_DAYS} days).")
             else:
@@ -462,6 +488,10 @@ def hold(job, h):
         except Exception as e:  # noqa: BLE001
             print("hold post failed:", e, flush=True)
     why = h.reason
+    if is_var:
+        _variety_alert(getattr(h, "brand", "") or job["client_slug"], f"{h.reason}. Montage keeps every video different from the brand's last eight "
+                       "(layout, opening style, accent, music, end card) and its opening line different from the last twenty. It tries again by itself.")
+        return f"held {jid} (variety): {h.reason[:120]}"
     if is_music:
         brand = getattr(h, "brand", "") or job["client_slug"]
         _music_alert(brand, f"{h.reason}. Every Montage video ships with a real music bed (Jared, 2026-10-12), so this video waits and finishes by itself "
@@ -655,7 +685,7 @@ def _render(jd, job, jid):
 
 
 def _has_graphics(props):
-    return any(s.get("icon") or s.get("card") for s in props["scenes"]) or bool((props.get("end") or {}).get("chips")) or \
+    return any(s.get("icon") or s.get("card") or s.get("layout") for s in props["scenes"]) or bool((props.get("end") or {}).get("chips")) or bool(props.get("look")) or \
         bool((props.get("brand") or {}).get("ambient")) or bool(((props.get("brand") or {}).get("end") or {}).get("heroLogo"))
 
 
@@ -663,10 +693,12 @@ def _plain(props):
     """The same props without the 2026-10-12 graphics (what the composition drew before)."""
     p = json.loads(json.dumps(props))
     for s in p["scenes"]:
-        s.pop("icon", None)
-        s.pop("card", None)
+        for k in ("icon", "card", "layout", "big", "items"):
+            s.pop(k, None)
+    p.pop("look", None)
     if p.get("end"):
-        p["end"].pop("chips", None)
+        for k in ("chips", "layout", "recap", "tease", "follow"):
+            p["end"].pop(k, None)
     if p.get("brand"):
         p["brand"].pop("ambient", None)
         (p["brand"].get("end") or {}).pop("heroLogo", None)
@@ -726,7 +758,10 @@ def process(job):
             note("b-roll is back from the LTX box; picking the video up again")
     else:
         report(jid, stage="writing", note="re-cutting with the change note" if job.get("parent_job_id") else "writing the script with free AI")
-        script = brand.write(job, note)
+        try:
+            script = brand.write(job, note)
+        except variety.VarietyHold as vh:
+            raise VarietyHeld(str(vh), job["client_slug"])
         job["script"] = script
         report(jid, stage="voicing", script=script, note=(f"script ok ({script['provider']}, passed the claim rules)" if script["provider"] == "hand-written"
                                                           else f"script ok via {script['provider']} (editor {script['score']:g}/10)"))
@@ -758,6 +793,7 @@ def process(job):
         except music.NoMusic as e:
             raise MusicHeld(f"no music: {e}", job["client_slug"])
         note(f"music: '{minfo['name']}' ({minfo['mood']}{', looped' if minfo.get('looped') else ''}), ducked {minfo['duck_db']:g} dB under the voice")
+        variety.set_track(jid, minfo.get("track_id"))
     if job.get("held_since") and (job.get("held_reason") or "").startswith("no music"):
         note("a music track is available now; picking the video up")
         try:
@@ -767,10 +803,15 @@ def process(job):
     clips = clips_for(job, script, jd, note) if (job.get("clips") or job.get("parent_job_id")) else {}
     props = {"theme": script["theme"],
              "scenes": [{**{k: s[k] for k in ("kicker", "line", "start", "end")}, **({"clip": clips[i]} if i in clips else {}),
-                         **({"icon": s["icon"]} if s.get("icon") else {}), **({"card": s["card"]} if s.get("card") else {})}
+                         **({"icon": s["icon"]} if s.get("icon") else {}), **({"card": s["card"]} if s.get("card") else {}),
+                         **{k: s[k] for k in ("layout", "big", "items") if s.get(k)}}
                         for i, s in enumerate(script["scenes"])],
              "end": {k: v for k, v in script["end"].items() if k != "say"},
              "audio": {"narration": "narration.wav", "music": "music.wav", "musicVolume": 1.0}}   # music.wav is already ducked under the voice (music.py)
+    lk = script.get("look") or {}
+    if lk:        # the video's look (variety.py): icon style, accent colours, the series tag; the composition falls back to the old look without it
+        props["look"] = {"iconStyle": lk.get("icon") if lk.get("icon") in variety.ICON_STYLES else "orbit", "accent": lk.get("accent_hex"), "accent2": lk.get("accent2"),
+                         "series": (variety.series_label(lk["series"]) if lk.get("series") else None)}
     if getattr(brand, "BRAND", None):        # shared composition (comp/brand): palettes, fonts, logo, closing art ride in the props
         props["brand"] = brand.BRAND
     json.dump(props, open(f"{jd}/props.json", "w"))
@@ -817,7 +858,7 @@ def process(job):
         "title": script["title"], "caption": script["caption"], "media_url": media, "thumb_url": turl,
         "variants": [{"platform": "instagram", "caption": script["caption"]}],
         "provenance": {"music": {k: minfo.get(k) for k in ("track_id", "name", "mood", "looped", "duck_db")}, "theme": script["theme"], "provider": script["provider"], "editor_score": script["score"], "broll_clips": len(clips),
-                       "render_s": render_s, "length_s": round(total, 1), "openmontage": "9327439",
+                       "render_s": render_s, "length_s": round(total, 1), "openmontage": "9327439", "look": script.get("look"),
                        **({"recut_changed": script["recut_changed"]} if script.get("recut_changed") is not None else {}),
                        **({"graphics": True} if _has_graphics(props) else {})},
         "note": ((f"Re-cut with the note: \"{(job.get('revise_note') or '')[:300]}\". " if job.get("parent_job_id") else "")
@@ -868,6 +909,7 @@ def main():
             if type(e).__name__ == "RecutUnchanged":      # brands._common: a re-cut that came back the same (twice); not a crash, not an alarm
                 err = f"re-cut not filed: {e}"
                 report(job["id"], status="failed", stage="failed", error=err[:2000], note=err[:400])
+                variety.set_state(job["id"], "failed")
                 beat(True, f"re-cut {job['id']} stopped: copy would not change")
                 try:
                     lib.notify("Spark: a re-cut was stopped, the new copy matched the old", f"{job['client_slug']}: {str(e)[:380]} "
@@ -878,6 +920,7 @@ def main():
                 last_beat = time.time()
                 continue
             report(job["id"], status="failed", stage="failed", error=err[:2000], note=err[:400])
+            variety.set_state(job["id"], "failed")        # a failed job's look no longer counts as one of the brand's recent videos
             beat(True, f"job {job['id']} failed: {err[:200]}")
             lib.notify("Montage: a video job failed", f"{job['client_slug']}: {err[:300]}", severity="warning",
                        push=False, url="/admin/team", dedupe=f"montage-jobfail-{job['id']}")

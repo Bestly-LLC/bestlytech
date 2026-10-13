@@ -27,6 +27,7 @@ import freellm  # noqa: E402
 import lib  # noqa: E402
 import playbook  # noqa: E402  (2026-10-06: content playbook, see playbook.py)
 from jobs import brand_maker as bm  # noqa: E402
+import variety  # noqa: E402  (2026-10-12: unique-content system, see variety.py)
 
 NBSP = " "
 EMOJI = bm.EMOJI
@@ -44,8 +45,8 @@ Brief from the team: {brief}
 Write 4 or 5 scenes. Each scene has:
 - "kicker": 1 to 3 words shown small above the line on the FIRST scene only (use "" on the others)
 - "line": 2 to 9 words shown large on screen. A flat statement that ends with a period.
-- "say": 5 to 18 words the narrator reads. Plain spoken English, said once. It can repeat or extend the line.{icon_rule}{shot_rule}
-All "say" together: 35 to 70 words. One idea, told in order, quietly. Useful to someone who never installs or buys anything.
+- "say": 5 to 18 words the narrator reads (scene 1 may use up to 24). Plain spoken English, said once. It can repeat or extend the line.{icon_rule}{shot_rule}
+All "say" together: 35 to 78 words. One idea, told in order, quietly. Useful to someone who never installs or buys anything.
 {speak_rule}
 Write for the least-informed viewer there is: everyday words, short sentences, no jargon or tech terms.
 In the caption's last paragraph say only what the facts above say {name} does; invent no feature, promise or result. {number_rule}
@@ -53,8 +54,8 @@ Write only what is true and verifiable; if unsure, say less. American English sp
 "caption": 25 to 70 words of prose for the post, two or three short paragraphs. {name} appears only in the LAST paragraph,
 once, answering the idea the video told. No hashtags, emoji, questions or "link in bio".
 "title": 3 to 8 words naming the video for the team (not shown to viewers).
-"mood": the music bed that fits this video, exactly ONE of: calm, upbeat, confident, warm, playful.
-Reply with ONE JSON object only:
+"mood": the music bed that fits this video, exactly ONE of: calm, upbeat, confident, warm, playful.{variety}
+Reply with ONE JSON object only (the VARIETY keys above sit at the same level as "caption"):
 {{"title": "...", "topic": "<1 to 4 words, lowercase>", "mood": "...", "scenes": [{{"kicker": "...", "line": "...", "say": "..."{icon_key}{shot_key}}}], "caption": "..."}}"""
 
 SHOT_RULE = """
@@ -66,8 +67,7 @@ SHOT_RULE = """
 NUMBER_RULE = "No statistics, prices, percentages or numerals (write any number as a word)."
 SPEAK_DEFAULT = 'Speak to the viewer ("you"); never say "we" and never describe what {name} does inside the scenes. Do not name {name} in any scene.'
 SPEAK_EXPLAIN = ('Speak to the viewer ("you"); never say "we". Do not name {name} in any scene, but SCENE 1 MUST say plainly what the product is and '
-                 'who it is for, in everyday words (its category, for example "a private cloud for small businesses: one box that holds your '
-                 'files, calendar, chat and passwords"), so a stranger gets it in the first five seconds. Later scenes show why it matters. '
+                 'who it is for, in everyday words (its category, for example "{example}"), so a stranger gets it in the first five seconds. Later scenes show why it matters. '
                  'Never describe anything the facts above do not list.')
 ICON_RULE = """
 - "icon": the picture drawn above the line, ONE of these words (a different one on every card, the one that matches what the card says):
@@ -76,7 +76,12 @@ ICON_HELP = {"files": "a folder of documents (files, documents, storage)", "lock
              "box": "a small server box the business owns", "people": "a team of people (accounts, staff, support)",
              "calendar": "a calendar (scheduling)", "chat": "a chat bubble (team messages)", "key": "a key (passwords, the password vault)",
              "check": "a check mark (handled, done, it works)", "tag": "a price tag with a slash (no per-seat fees)",
-             "eyeslash": "a crossed-out eye (nobody is watching your data)"}
+             "eyeslash": "a crossed-out eye (nobody is watching your data)",
+             "camera": "a camera (photographing what you own)", "home": "a house (your home)", "receipt": "a receipt (receipts, proof of purchase)",
+             "list": "a checklist on a clipboard (a list, steps)", "package": "a cardboard box being packed (moving, storing)",
+             "image": "a photo frame (pictures, photos)", "shield": "a shield (protection, privacy)", "cookie": "a cookie with a bite out (cookies, banners)",
+             "toggle": "a switch (accept or reject, on or off)", "clock": "a clock (time, waiting, how often)", "video": "a play button (a short video)",
+             "pencil": "a pencil (writing, editing a caption)", "star": "a star (the one that stands out)"}
 
 REVISE = """
 
@@ -154,12 +159,16 @@ def tidy(p):
         t = t.replace("\u2018", "'").replace("\u2019", "'").replace("\u201c", '"').replace("\u201d", '"')
         return t.replace("\u00a0", " ").replace("\u202f", " ").replace("\u2026", "...")
     for s in p.get("scenes") or []:
-        for k in ("kicker", "line", "say", "shot"):
-            if k in s:
+        for k in ("kicker", "line", "say", "shot", "big"):
+            if k in s and isinstance(s[k], str):
                 s[k] = fix(s[k])
-    for k in ("caption", "title", "topic"):
-        if k in p:
+        if isinstance(s.get("items"), list):
+            s["items"] = [fix(x) for x in s["items"] if isinstance(x, str)]
+    for k in ("caption", "title", "topic", "question"):
+        if k in p and isinstance(p[k], str):
             p[k] = fix(p[k])
+    if isinstance(p.get("recap"), dict):
+        p["recap"] = {k: fix(v) for k, v in p["recap"].items() if isinstance(v, str)}
     return p
 
 
@@ -194,7 +203,7 @@ def _claims(cfg, pieces):
     return e
 
 
-def check(cfg, p, broll=False):
+def check(cfg, p, broll=False, plan=None):
     e = []
     name = _name_re(cfg)
     scenes = p.get("scenes") or []
@@ -205,10 +214,10 @@ def check(cfg, p, broll=False):
         line, say = (s.get("line") or "").strip(), (s.get("say") or "").strip()
         if not 2 <= _wc(line) <= 9:
             e.append(f"scene {i} line is {_wc(line)} words (want 2-9)")
-        if not line.endswith("."):
-            e.append(f"scene {i} line must end with a period")
-        if not 5 <= _wc(say) <= 18:
-            e.append(f"scene {i} say is {_wc(say)} words (want 5-18)")
+        if not (line.endswith(".") or (plan and i == 1 and plan["hook"] == "question" and line.endswith("?"))):
+            e.append(f"scene {i} line must end with a period" + (' (a question opening ends with "?")' if plan and i == 1 and plan["hook"] == "question" else ""))
+        if not 5 <= _wc(say) <= (24 if plan and i == 1 else 18):
+            e.append(f"scene {i} say is {_wc(say)} words (want 5-{24 if plan and i == 1 else 18})")
         if re.search(r"\b(we|we're|we'll|we've|our|ours|us)\b", f"{line} {say}", re.I):
             e.append(f"scene {i} says we/our/us: speak to the viewer (you), never as the company")
         if i == 1 and not 1 <= _wc(s.get("kicker")) <= 3:
@@ -225,8 +234,8 @@ def check(cfg, p, broll=False):
     icons = [x.get("icon") for x in scenes if x.get("icon")]
     if cfg.get("icons") and len(icons) != len(set(icons)):
         e.append("use a different icon on every scene")
-    if scenes and not 35 <= total <= 70:
-        e.append(f"all narration together is {total} words (want 35-70)")
+    if scenes and not 35 <= total <= (78 if plan else 70):
+        e.append(f"all narration together is {total} words (want 35-{78 if plan else 70})")
     cap = (p.get("caption") or "").strip()
     if not 25 <= _wc(cap) <= 75:
         e.append(f"caption is {_wc(cap)} words (want 25-70)")
@@ -238,8 +247,19 @@ def check(cfg, p, broll=False):
     elif any(name.search(x) for x in paras[:-1]):
         e.append(f"caption names {cfg['name']} before the last paragraph")
     blob = " ".join([cap] + [f"{s.get('kicker') or ''} {s.get('line') or ''} {s.get('say') or ''}" for s in scenes])
-    if "?" in blob:
-        e.append("no questions anywhere")
+    extras = variety.extra_pieces(plan, p) if plan else []
+    blob_q = blob
+    if plan and plan["hook"] == "question" and scenes:      # the question opening is the one place a question is allowed in the scenes
+        blob_q = " ".join([cap] + [f"{s.get('kicker') or ''} {s.get('line') or ''} {s.get('say') or ''}" for s in scenes[1:]])
+    if "?" in blob_q:
+        e.append("no questions anywhere" + (" except the opening question, the comment question and the closing-card recap" if plan else ""))
+    if plan:
+        blob = blob + " " + " ".join(t for _, t in extras)
+        for w, t in extras:
+            if name.search(t):
+                e.append(f"{w} names {cfg['name']} (only the closing card and the caption's last paragraph do)")
+            if re.search(r"\b(we|we're|we'll|we've|our|ours|us)\b", t, re.I):
+                e.append(f"{w} says we/our/us: speak to the viewer (you)")
     if EMOJI.search(blob) or "#" in blob:
         e.append("no emoji or hashtags anywhere")
     if not cfg.get("allow_numbers"):       # Bestly Agent ads state the plan price and the language count; its claim rules + extra_check police them
@@ -256,9 +276,12 @@ def check(cfg, p, broll=False):
                  "smaller, true thing instead")
     if re.search(r"https?://|www\.|\.com\b|\.tech\b", blob.replace(cfg.get("allow_links") or "\0", ""), re.I):
         e.append("no links" + (f" (only {cfg['allow_links']} is allowed)" if cfg.get("allow_links") else ""))
+    if plan:
+        e += variety.check(cfg, plan, p, len(scenes))
     if e:
         return e
-    pieces = [("caption", cap)] + [(f"scene {i}", f"{s.get('kicker') or ''}. {s['line']} {s['say']}") for i, s in enumerate(scenes, 1)]
+    pieces = [("caption", cap)] + [(f"scene {i}", f"{s.get('kicker') or ''}. {s['line']} {s['say']}") for i, s in enumerate(scenes, 1)] + \
+        (extras if plan else [])
     return _claims(cfg, pieces)
 
 
@@ -402,7 +425,7 @@ def _items(script, tail=""):
     out = []
     for sc in script.get("scenes") or []:
         out += [sc.get("kicker"), sc.get("line"), sc.get("say")]
-    for para in re.split(r"\n\s*\n", script.get("caption") or ""):
+    for para in re.split(r"\n\s*\n", script.get("caption_core") or script.get("caption") or ""):
         if para.strip() and para.strip() != (tail or "").strip():
             out.append(para)
     return [n for n in (_norm(x) for x in out) if n]
@@ -414,7 +437,7 @@ def same_share(old, new, tail=""):
     return sum(1 for x in after if x in before) / len(after) if after else 1.0
 
 
-def _loop(cfg, msgs, broll, deadline, log, label=""):
+def _loop(cfg, msgs, broll, deadline, log, label="", plan=None):
     """Ask, check, fix: up to 4 tries. -> (p, prov, score). Raises RuntimeError with the tries when nothing passes."""
     msgs = list(msgs)
     near, tries = None, []
@@ -422,7 +445,7 @@ def _loop(cfg, msgs, broll, deadline, log, label=""):
         msg, prov = freellm.chat(msgs, None, max_tokens=3000, deadline=deadline, json_mode=True)
         try:
             p = tidy(bm._json(msg.get("content")))
-            errs, score = check(cfg, p, broll), 0.0
+            errs, score = check(cfg, p, broll, plan), 0.0
             if not errs:
                 errs = check_end(cfg, p)
                 if errs and attempt >= 3:      # the closing card is a bonus: after two tries drop the proposal and keep the brand default
@@ -447,26 +470,59 @@ def _loop(cfg, msgs, broll, deadline, log, label=""):
 
 
 def write(job, log, cfg):
-    """-> script dict: title, topic, theme, scenes[{kicker,line,say,icon?,shot?}], end{...}, caption, provider, score."""
+    """-> script dict: title, topic, theme, scenes[{kicker,line,say,icon?,shot?,layout,big?,items?}], end{...}, caption, look{...}, provider, score.
+    2026-10-12 (unique content): picks a LOOK (variety.make_plan), writes under it, and runs the duplicate gate; a miss re-rolls the look and the
+    script twice, then raises variety.VarietyHold (the worker holds the job and Spark alerts)."""
+    job = dict(job)
+    forced = variety.parse_look(job.get("brief"), job.get("revise_note"))
+    job["brief"], job["revise_note"] = variety.strip_look(job.get("brief")), variety.strip_look(job.get("revise_note"))
     parent = _parent_script(job)
-    broll = bool(job.get("broll")) or bool(parent and any(sc.get("shot") for sc in parent.get("scenes", [])))
     recent = _recent(cfg["slug"])
     used = [r.get("theme") for r in recent[:2]]
     themes = list(cfg["themes"])
     theme = parent["theme"] if parent else random.choice([t for t in themes if t not in used] or themes)
+    claims = lambda pieces: _claims(cfg, pieces)  # noqa: E731
+    series = variety.series_for(cfg, job, parent, log)
+    tease = variety.tease_for(cfg, series, claims, log)
+    if series and series.get("planned_left", 9) < 2:
+        variety._series_alert(cfg["slug"], f"{cfg['name']} has {series.get('planned_left')} planned topic(s) left after '{series.get('label')} {series.get('ep')}'. "
+                              "Add more rows to studio_series_topics so the Next: tease stays real.")
+    tried, why = [], ""
+    for roll in range(3):
+        plan = variety.make_plan(cfg, job, theme, (parent or {}).get("look"), forced if roll == 0 else {}, tried)
+        out, p, core = _write_once(job, log, cfg, parent, theme, plan, series)
+        ok, why, opening, fp = variety.gate(cfg, job, plan, out)
+        log(f"look: layout {plan['layout']}, hook {plan['hook']}, end {plan['end']}, icon {plan['icon']}, accent {plan['accent']}, segment "
+            f"{(plan.get('segment') or {}).get('key')}; gate {'ok' if ok else 'MISS: ' + why[:160]}")
+        if ok:
+            variety.decorate(cfg, out, plan, series, tease, p, core)
+            if (out["look"].get("series") or {}).get("ep") and p.get("topic"):
+                try:
+                    lib.rpc("studio_series_topic_set", p_job=job["id"], p_topic=str(p.get("topic"))[:80])
+                except Exception as e:  # noqa: BLE001
+                    log(f"series topic skipped: {str(e)[:100]}")
+            variety.record(cfg, job, plan, fp, opening, series)
+            return out
+        tried.append(plan["key"])
+    raise variety.VarietyHold(f"{cfg['name']}: still too close to recent videos after 2 re-rolls ({why[:300]})")
+
+
+def _write_once(job, log, cfg, parent, theme, plan, series):
+    broll = bool(job.get("broll")) or bool(parent and any(sc.get("shot") for sc in parent.get("scenes", [])))
+    recent = _recent(cfg["slug"])
     lessons = bm._lessons(cfg["lessons_brand"]) if cfg.get("lessons_brand") else []
     user = (f"Earlier {cfg['name']} videos (do not repeat their ideas or lines):\n"
             + "\n".join(f"- {r.get('title')}: {' / '.join(s.get('line', '') for s in r.get('scenes', []))}" for r in recent)
             + (f"\n\nWhat we have learned from {cfg['name']} posts:\n" + "\n".join(f"- {l}" for l in lessons[:5]) if lessons else ""))
     icons = cfg.get("icons")
-    explain = bool(parent) or cfg.get("explain_first")
     system = SYS.format(name=cfg["name"], about=cfg["about"], brief=job["brief"],
-                        speak_rule=(SPEAK_EXPLAIN if explain else SPEAK_DEFAULT).format(name=cfg["name"]),
+                        speak_rule=SPEAK_EXPLAIN.format(name=cfg["name"], example=cfg.get("explain_example") or "a private cloud for small businesses: one box that holds your files, calendar, chat and passwords"),
                         number_rule=cfg.get("number_rule") or NUMBER_RULE,
                         icon_rule=ICON_RULE.format(icon_help="; ".join(f"{k} = {({**ICON_HELP, **(cfg.get('icon_help') or {})})[k]}" for k in icons)) if icons else "",
                         icon_key=', "icon": "..."' if icons else "",
                         shot_rule=SHOT_RULE.format(shot_brand=cfg["shot_brand"]) if broll else "",
-                        shot_key=', "shot": "..."' if broll else "")
+                        shot_key=', "shot": "..."' if broll else "",
+                        variety=variety.prompt_block(cfg, plan, series))
     bad_default = default_chip_problems(cfg)
     if bad_default:
         raise RuntimeError("the brand's default end-card chips are not allowed: " + "; ".join(bad_default)[:400])
@@ -475,7 +531,7 @@ def write(job, log, cfg):
     wants_copy = bool(parent) and bool(COPY_NOTE.search(note)) and not keep_copy
     if parent:
         tail = cfg.get("tail") or ""
-        cap = parent.get("caption") or ""
+        cap = parent.get("caption_core") or parent.get("caption") or ""
         keep = {"title": parent.get("title"), "topic": parent.get("topic"),
                 "caption": cap.replace("\n\n" + tail, "") if tail else cap,
                 "scenes": [{k: sc.get(k, "") for k in (("kicker", "line", "say") + (("icon",) if icons else ()) + (("shot",) if broll else ()))}
@@ -488,7 +544,7 @@ def write(job, log, cfg):
     msgs = [{"role": "system", "content": playbook.add(system)},
             {"role": "user", "content": user or f"This is the first {cfg['name']} video."}]
     deadline = time.time() + 1200
-    p, prov, score = _loop(cfg, msgs, broll, deadline, log)
+    p, prov, score = _loop(cfg, msgs, broll, deadline, log, plan=plan)
     if keep_copy:       # the note says keep the words: whatever the model returned, the words are the current ones; it only supplies shots + end card
         if len(p["scenes"]) != len(keep["scenes"]):
             raise RuntimeError(f"keep-the-copy re-cut came back with {len(p['scenes'])} scenes instead of {len(keep['scenes'])}")
@@ -506,7 +562,7 @@ def write(job, log, cfg):
         if share >= SAME_LIMIT:
             msgs2 = msgs + [{"role": "assistant", "content": json.dumps({k: out[k] for k in ("title", "topic", "scenes", "caption")}, ensure_ascii=False)[:4000]},
                             {"role": "user", "content": STRONGER.format(pct=round(share * 100))}]
-            p, prov, score = _loop(cfg, msgs2, broll, deadline, log, label="retry: ")
+            p, prov, score = _loop(cfg, msgs2, broll, deadline, log, label="retry: ", plan=plan)
             out = finish(cfg, p, theme, prov, score, broll)
             _carry_end(out, parent, note)
             share2 = same_share(parent, out, cfg.get("tail") or "")
@@ -515,7 +571,7 @@ def write(job, log, cfg):
                 raise RecutUnchanged(f"the reviewer's note asks for new copy but the writer returned {share2:.0%} of the old lines twice "
                                      f"({share:.0%} then {share2:.0%} unchanged). Nothing was filed so the old video is not replaced by a copy of itself")
         out["recut_changed"] = round(1 - same_share(parent, out, cfg.get("tail") or ""), 2)
-    return out
+    return out, p, (p["caption"] or "").strip()
 
 
 def _carry_end(out, parent, note):

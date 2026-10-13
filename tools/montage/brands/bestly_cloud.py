@@ -24,6 +24,10 @@ CFG = {
     "shot_brand": ("A small business at work, seen from behind or in close-up: a workshop bench, a shop counter, a studio desk, "
                    "a shelf with one small box with a softly glowing light, cables tidied. Never a readable screen or label."),
     "end_cta_say": "Learn more at Bestly dot tech.",
+    # 2026-10-12 unique content: approved accents (all readable on the night ground), plain-words example for scene 1, a safe bold-count example
+    "accents": ["#8b9bf0", "#f2a07b", "#6fd3c4"],
+    "explain_example": "a private cloud for small businesses: one box that holds your files, calendar, chat and passwords",
+    "stat_hint": 'for example "One box." or "One login."',
     "end": {"title": "Bestly Cloud", "sub": "Files, calendar, chat and passwords on one box your business owns.", "cta": "bestly.tech",
             "say": "Bestly Cloud. Files, calendar, chat and passwords on one box your business owns. Learn more at Bestly dot tech.",
             # plain, concrete, 2-4 words, each icon says what the chip says (checked by _common.chip_problems; facts: bestly_social.PRODUCT)
