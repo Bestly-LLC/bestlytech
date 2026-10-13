@@ -76,6 +76,7 @@ Every new job gets a team card (`team_onboard`) and a pulse, per CLAUDE.md.
 | 7 PM recap | `autonomy_recap()` via `autonomy-recap` hourly tick; `recap_hour` setting | Scout-signed, one screen, done items by employee; Sundays add the week |
 | Watchdog | `autonomy_watch()` cron `autonomy-watch` every 30 min ("Inbox Keeper") | Over 5 cards or 2 days → Scout incident; "still down after an hour" pushes once |
 | Team cards | Inbox Keeper (tool of Scout), Auto-Fixer (tool of Ares) | |
+| One narrow fifth class: `requested_now` (2026-10-13) | `interrupt_class()` first branch; only `ava_approval_push()` (service-only) sets the transaction-local `ava.requested_now` | Lets exactly one push through: the "Ava: tap to approve / undo" link Jared asked for on a live Ava call. Needs source `ava_approvals`, a title starting `Ava: tap to`, and a row that is `verified_call`, pending, unpushed, unexpired and under 15 minutes old. Nothing else can use it. See `docs/ava-fix-issues-opusplan.md` Phase B |
 
 Not done on purpose:
 - **Studio previews are not auto-shipped.** The open ones are 10+ days old and built on an older Studio, so shipping them would roll back newer work (the Sep 20 incident). Internal previews stay with Spark; client ones stay in Needs you.
