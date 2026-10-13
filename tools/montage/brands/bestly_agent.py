@@ -193,7 +193,7 @@ def _carry_cards(out, job):
 
 def write(job, log):
     m = re.search(r"\[ad:([a-z-]+)\]", job.get("brief") or "")
-    if not job.get("parent_job_id") and m and m.group(1) in ADS:
+    if m and m.group(1) in ADS and (not job.get("parent_job_id") or "[recut-ad]" in (job.get("revise_note") or "")):
         return _fixed(m.group(1), log)
     out = _common.write(job, log, CFG)
     _carry_cards(out, job)
