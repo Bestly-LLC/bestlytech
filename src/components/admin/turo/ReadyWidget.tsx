@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { LoadError, SectionHeader, cardCls, focusRing, text, tint } from "@/components/admin/ui";
 import { SentryHomeRow } from "./SentryHome";
+import { DeliveryNavRow } from "./DeliveryNav";
 
 type CheckRow = { id: string; label: string; state: "ok" | "warn" | "unknown"; value: string; action?: string | null; hint?: string | null };
 type Ready = {
@@ -164,6 +165,7 @@ export function ReadyWidget({ compact = false }: { compact?: boolean }) {
           </ul>
         )}
         {!compact && <SentryHomeRow />}
+        {!compact && <DeliveryNavRow />}
         {!compact && !r.on_trip && r.next && (
           <p className={cn(text.detail, "border-t border-white/[0.06] px-4 py-3 sm:px-5")}>Scout pings you if anything is still orange 1 hour before {dlv ? "delivery" : "pickup"}.</p>
         )}
