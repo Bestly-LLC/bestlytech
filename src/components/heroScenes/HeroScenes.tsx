@@ -11,14 +11,15 @@ import { HERO_SCENES } from "./scenes";
  * Layers, back to front: photo (cross-fade + cursor parallax) → feathered scrims →
  * the interactive dot grid (dots, spider web, ripples) → copy.
  *
- * - Advances every 6 s. Pauses on hover/focus, when the tab is hidden, or via the pause button.
- * - Reduced motion: no auto-advance, no parallax, plain cross-fades; arrows still work.
+ * - Advances every 8 s. Pauses only via the pause button or while the tab is hidden.
+ *   (No pause-on-hover: the hero fills the screen, so the cursor is almost always over it.)
+ * - Reduced motion: still advances, but with plain cross-fades and no parallax.
  * - Self-heal: a photo that fails to load is skipped; if every photo fails, the dot grid
  *   still carries the hero on its own.
  * - Only the next photo is preloaded.
  */
 
-const INTERVAL_MS = 6000;
+const INTERVAL_MS = 8000;
 const SPRING = { type: "spring", bounce: 0, duration: 0.6 } as const;
 const PHONE = "(213) 641-0074";
 
@@ -35,7 +36,6 @@ export function HeroScenes() {
   const reduce = useReducedMotion();
   const total = HERO_SCENES.length;
   const [i, setI] = useState(0);
-  const [hovering, setHovering] = useState(false);
   const [paused, setPaused] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [progressKey, setProgressKey] = useState(0);
@@ -57,7 +57,7 @@ export function HeroScenes() {
   );
 
   // Auto-advance
-  const running = !reduce && !hovering && !paused && !hidden;
+  const running = !paused && !hidden;
   useEffect(() => {
     if (!running) return;
     const t = window.setTimeout(() => go(1), INTERVAL_MS);
@@ -104,10 +104,7 @@ export function HeroScenes() {
     <section
       className="relative overflow-hidden min-h-[92vh] flex items-center wow-bg-ink wow-text-paper"
       onPointerMove={onPointerMove}
-      onPointerLeave={() => { mx.set(0); my.set(0); setHovering(false); }}
-      onPointerEnter={(e) => e.pointerType === "mouse" && setHovering(true)}
-      onFocus={() => setHovering(true)}
-      onBlur={() => setHovering(false)}
+      onPointerLeave={() => { mx.set(0); my.set(0); }}
       aria-roledescription="carousel"
       aria-label="What Bestly's AI agents do"
     >
@@ -203,7 +200,7 @@ export function HeroScenes() {
             <button type="button" onClick={() => go(-1)} aria-label="Previous example" className="grid h-11 w-11 place-items-center rounded-full hover:bg-white/10 active:scale-[0.94] transition">
               <ChevronLeft className="h-4 w-4" />
             </button>
-            {!reduce && (
+            {(
               <button type="button" onClick={() => setPaused((p) => !p)} aria-label={paused ? "Play examples" : "Pause examples"} className="grid h-11 w-11 place-items-center rounded-full hover:bg-white/10 active:scale-[0.94] transition">
                 {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
               </button>
