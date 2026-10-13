@@ -73,7 +73,7 @@ const circle = (cx: number, cy: number, r: number) => `M${cx - r} ${cy} a${r} ${
 
 const FOLDER = 'M12 28 a6 6 0 0 1 6-6 H38 L46 31 H82 a6 6 0 0 1 6 6 V72 a6 6 0 0 1-6 6 H18 a6 6 0 0 1-6-6 Z';
 const LOCK = 'M32 44 H68 a8 8 0 0 1 8 8 V74 a8 8 0 0 1-8 8 H32 a8 8 0 0 1-8-8 V52 a8 8 0 0 1 8-8 Z';
-const BOX = 'M26 34 H74 a10 10 0 0 1 10 10 V62 a10 10 0 0 1-10 10 H26 a10 10 0 0 1-10-10 V44 a10 10 0 0 1 10-10 Z';
+const BOX = 'M30 18 H70 a10 10 0 0 1 10 10 V72 a10 10 0 0 1-10 10 H30 a10 10 0 0 1-10-10 V28 a10 10 0 0 1 10-10 Z';
 const CAL = 'M24 24 H76 a8 8 0 0 1 8 8 V74 a8 8 0 0 1-8 8 H24 a8 8 0 0 1-8-8 V32 a8 8 0 0 1 8-8 Z';
 const BUBBLE = 'M18 26 a8 8 0 0 1 8-8 H74 a8 8 0 0 1 8 8 V56 a8 8 0 0 1-8 8 H46 L30 79 V64 H26 a8 8 0 0 1-8-8 Z';
 const TAG = 'M48 14 H80 a6 6 0 0 1 6 6 V52 L52 86 a6 6 0 0 1-8.5 0 L14 56.5 a6 6 0 0 1 0-8.5 Z';
@@ -82,12 +82,12 @@ const EYE = 'M8 50 C24 28 76 28 92 50 C76 72 24 72 8 50 Z';
 export const ICONS: Record<string, Seg[]> = {
   files: [F(FOLDER), S(FOLDER), H('M28 52 H72'), H('M28 64 H56')],
   lock: [F(LOCK), S(LOCK), S('M34 44 V34 a16 16 0 0 1 32 0 V44'), D(50, 60, 5, true), H('M50 65 V72')],
-  box: [F(BOX), S(BOX), S('M30 72 V80 M70 72 V80'), D(30, 53, 4, true), H('M44 53 H70')],
+  box: [F(BOX), S(BOX), H('M32 36 H68'), H('M32 50 H68'), D(34, 68, 4.2, true), H('M46 68 H66')],
   people: [F(circle(50, 34, 10)), S(circle(50, 34, 10)), S('M30 76 a20 20 0 0 1 40 0'), S(circle(24, 44, 7)), S('M10 72 a14 14 0 0 1 16-14'),
            S(circle(76, 44, 7)), S('M90 72 a14 14 0 0 0 -16-14')],
   calendar: [F(CAL), S(CAL), H('M16 42 H84'), S('M34 16 V30 M66 16 V30'), D(34, 57, 2.8), D(50, 57, 2.8), D(66, 57, 2.8), D(34, 70, 2.8), D(50, 70, 3.4, true)],
   chat: [F(BUBBLE), S(BUBBLE), H('M32 35 H68'), H('M32 47 H56')],
-  key: [F(circle(34, 50, 14)), S(circle(34, 50, 14)), D(34, 50, 4, true), S('M48 50 H86'), H('M74 50 V62'), H('M84 50 V58')],
+  key: [F(circle(30, 50, 17)), S(circle(30, 50, 17)), D(30, 50, 5, true), S('M47 50 H90'), H('M76 50 V64'), H('M87 50 V60')],
   check: [F(circle(50, 50, 34)), S(circle(50, 50, 34)), H('M34 51 L46 63 L68 38')],
   tag: [F(TAG), S(TAG), H(circle(72, 28, 5)), H('M20 22 L80 82')],
   eyeslash: [F(EYE), S(EYE), S(circle(50, 50, 10)), H('M20 82 L80 18')],
@@ -108,7 +108,7 @@ const Icon: React.FC<{name?: string; t: Theme; draw: number; size: number}> = ({
           return <circle key={i} cx={cx} cy={cy} r={r * q} fill={sg.hot ? t.ink : t.accent} />;
         }
         return <path key={i} d={sg.d} pathLength={1} strokeDasharray={1} strokeDashoffset={1 - q}
-                     stroke={sg.k === 'h' ? t.ink : t.accent} strokeWidth={sg.k === 'h' ? 3.2 : 3.8} opacity={Math.min(1, q * 3)} />;
+                     stroke={sg.k === 'h' ? t.ink : t.accent} strokeWidth={sg.k === 'h' ? 3.4 : 4.2} opacity={Math.min(1, q * 3)} />;
       })}
     </svg>
   );
@@ -144,7 +144,7 @@ const Emblem: React.FC<{name: string; t: Theme; size: number; delay?: number; du
                              background: `radial-gradient(circle, ${rgba(t.accent, 0.85)} 0%, ${rgba(t.accent, 0.25)} 40%, ${rgba(t.accent, 0)} 70%)`}} />
       ))}
       <div style={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-        <Icon name={name} t={t} draw={draw} size={size * 0.56} />
+        <Icon name={name} t={t} draw={draw} size={size * 0.62} />
       </div>
     </div>
   );
@@ -198,8 +198,8 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
       <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center'}}>
         <div style={{transform: `translateY(${drift}px)`, marginTop: hasIcon ? -30 : -100}}>
           {hasIcon ? (
-            <div style={{display: 'flex', justifyContent: 'center', marginBottom: 56}}>
-              <Emblem name={s.icon as string} t={t} size={s.kicker ? 320 : 360} dur={dur} />
+            <div style={{display: 'flex', justifyContent: 'center', marginBottom: 44}}>
+              <Emblem name={s.icon as string} t={t} size={s.kicker ? 400 : 440} dur={dur} />
             </div>
           ) : null}
           {s.kicker ? (
