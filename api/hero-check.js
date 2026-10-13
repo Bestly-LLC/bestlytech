@@ -101,6 +101,13 @@ async function heroOk() {
 }
 
 export default async function handler(req, res) {
+  // Retired caller: the shared uptime prober (8 s timeout) used to poll this and caught cold-cache misses.
+  // The real check now runs from the database job hero-watch (60 s timeout). Answer the old prober instantly,
+  // never cached, so it can't raise false alarms. Delete its external_health row "bestly.tech hero" when convenient.
+  if (String(req.headers["user-agent"] || "").includes("BestlyExternalProbe")) {
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(200).json({ ok: true, retired: true, note: "Checked by the hero-watch job now" });
+  }
   const started = Date.now();
   t0 = started;
   let problems = [];
