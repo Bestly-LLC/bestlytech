@@ -193,7 +193,7 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
         <AbsoluteFill style={{opacity: clipIn}}>
           <OffthreadVideo src={staticFile(s.clip)} muted
                           style={{width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${zoom})`}} />
-          <AbsoluteFill style={{background: `linear-gradient(180deg, ${t.veil}8C 0%, ${t.veil}D9 42%, ${t.veil}D9 62%, ${t.veil}99 100%)`}} />
+          <AbsoluteFill style={{background: `linear-gradient(180deg, ${t.veil}6B 0%, ${t.veil}C2 40%, ${t.veil}C2 62%, ${t.veil}85 100%)`}} />
         </AbsoluteFill>
       ) : null}
       <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center'}}>
