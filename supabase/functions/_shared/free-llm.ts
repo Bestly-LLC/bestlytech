@@ -93,7 +93,9 @@ const ANTHROPIC_PRICE: Record<string, [number, number]> = { haiku: [1, 5], sonne
 /* ───────── FreeLLM vetted ladder (chief-of-staff plan, section 1) ───────── */
 
 /** Models that must never serve agent or chat work: preview/flash models that loop, think out loud, or write tool calls as text. */
-const DENY_MODEL = /^(dots|ling-|fusion$|auto$|claude-)|note-preview|qwen3[.\d]*-flash|-safety|guard|nemoguard|uncensored|heretic|cerebras|pythia|tiny-aya|riva-|llama-3\.2-1b|qwen3\.5-0\.8b|qwen3-0\.6b/i;
+const DENY_MODEL = /^(dots|ling-|fusion$|auto$|claude-)|note-preview|qwen3[.\d]*-flash|-safety|guard|nemoguard|uncensored|heretic|cerebras|pythia|tiny-aya|riva-|llama-3\.2-1b|qwen3\.5-0\.8b|qwen3-0\.6b|calibrat|embed|rerank|reward/i;
+// v-next (2026-10-13): calibration / embedding / reranker / reward models are not chat models. "nvidia/ising-calibration-1.5-31b" answered
+// through the auto router and echoed the JSON template back. The extra words above extend the same denylist (chain filter, answer gate, strike).
 /** Strongest first. Re-ordered from the daily tool-call probe (llm_model_health); a model that failed the probe is dropped. */
 const FREELLM_PREFERRED = ["gpt-oss-120b", "deepseek-v4-flash", "nemotron-3-super-120b", "gemini-3.8-flash", "qwen3.8-27b", "gemini-3.6-flash", "command-a-2"];
 const FREELLM_PREFERRED_CODE = ["qwen3-coder-480b", "qwen3-coder-30b-a3b-instruct", "gpt-oss-120b", "deepseek-v4-flash", "nemotron-3-super-120b", "gemini-3.8-flash"];
@@ -131,7 +133,8 @@ async function freellmChain(code: boolean): Promise<Rung[]> {
   const picks = order.filter((m) => usable(m) && (!known || h.get(m)?.ok === true || (h.get(m) === undefined && false)));
   const fallback = picks.length ? picks : order.filter(usable);
   const rungs: Rung[] = fallback.slice(0, FREELLM_RUNGS_MAX).map((m) => ({ provider: "freellm", model: m, maxIn: FREELLM_MAX }));
-  rungs.push({ provider: "freellm", model: FREELLM_LAST, maxIn: FREELLM_MAX });
+  // v-next (2026-10-13): the router rung can be benched too (30 s timeouts, 0 ok in 12 calls on Oct 11-13); it used to be added unconditionally.
+  if (usable(FREELLM_LAST)) rungs.push({ provider: "freellm", model: FREELLM_LAST, maxIn: FREELLM_MAX });
   return rungs;
 }
 /** Record that a model misbehaved (text tool call, loop, empty). Benched in-process now and in llm_model_health for a while. */
@@ -139,6 +142,74 @@ async function strike(model: string, why: string, minutes = 60) {
   modelSkip.set(model, Date.now() + Math.min(minutes, 30) * 60_000);
   if (_health) _health.v.set(model, { ok: _health.v.get(model)?.ok ?? null, benched: Date.now() + minutes * 60_000 });
   try { await db().rpc("llm_model_strike", { p_model: model, p_reason: why, p_bench_minutes: minutes }); } catch { /* best effort */ }
+}
+
+/**
+ * v-next (2026-10-13): live benching. The health table was only written by the daily Pi prober, so a model that 429'd 102 times in
+ * three days (gpt-oss-120b via FreeLLM) stayed "ok_tool_calls" and first in line. Now a real failure on a live call counts:
+ * one miss only sits out the short in-process skip; 2 in a row inside 10 minutes benches the model 15 minutes (persisted through
+ * llm_model_strike, an upsert on llm_model_health.model); failing again within the hour after a bench, or 4 in a row, benches 60 minutes.
+ * Attempts are not a new table: the unbroken failure run is read from ai_spend (written by log() just before this runs), so the
+ * count survives edge-function cold starts; failTrail is the same count in-process in case that read fails.
+ */
+const failTrail = new Map<string, number[]>();
+const FAIL_WINDOW_MS = 10 * 60_000;
+function liveOk(model: string) { failTrail.delete(model); }
+async function liveFail(model: string, why: string) {
+  const now = Date.now();
+  const trail = (failTrail.get(model) ?? []).filter((t) => now - t < FAIL_WINDOW_MS);
+  trail.push(now);
+  failTrail.set(model, trail);
+  let run = trail.length;
+  try {
+    const { data } = await db().from("ai_spend").select("ok").eq("provider", "freellm").eq("model", model)
+      .gte("at", new Date(now - FAIL_WINDOW_MS).toISOString()).order("at", { ascending: false }).limit(6);
+    let n = 0;
+    for (const r of (data ?? []) as any[]) { if (r.ok) break; n++; }
+    run = Math.max(run, n);
+  } catch { /* in-process count only */ }
+  if (run < 2) return;
+  const h = await modelHealth();
+  const prev = h.get(model)?.benched ?? 0;
+  const minutes = run >= 4 || prev > now - 60 * 60_000 ? 60 : 15;
+  if (prev > now + minutes * 60_000) return;   // never shorten a longer bench (the prober's 24 h ones)
+  failTrail.delete(model);
+  await strike(model, `live: ${why} (x${run})`.slice(0, 200), minutes);
+}
+
+/** FreeLLM model id without the provider prefix or a ":free" tag, lower-cased. */
+const bareModel = (m: string) => String(m ?? "").replace(/^.*\//, "").replace(/:free$/i, "").toLowerCase();
+/**
+ * v-next (2026-10-13): is this model, as reported by FreeLLM in the response (`model`), one we trust to answer? The router
+ * (auto:smartest) can land on anything: a calibration model echoed the JSON template, dots-3-note-preview answered 27 times.
+ * Trusted = not denylisted, not benched, and llm_model_health says ok_tool_calls=true (the preferred list stands in only if the table is empty).
+ * Called for every FreeLLM answer; an answer from the very model we asked for by name skips the table check (the chain vetted it).
+ */
+async function vettedAnswer(answered: string, requested: string): Promise<boolean> {
+  const bare = bareModel(answered);
+  if (!bare || DENY_MODEL.test(bare) || DENY_MODEL.test(answered)) return false;
+  // Asked for this model by name and it answered: the chain already vetted it (FreeLLM may spell the id differently, so don't re-check the table).
+  if (!/^auto/i.test(requested) && bare === bareModel(requested)) return true;
+  const h = await modelHealth();
+  if (!h.size) return FREELLM_PREFERRED.includes(bare) || FREELLM_PREFERRED_CODE.includes(bare);
+  const x = h.get(answered) ?? h.get(bare);
+  return x?.ok === true && !(x.benched > Date.now());
+}
+
+/**
+ * v-next (2026-10-13): per-request cap on FreeLLM. Keep it first (Jared's preference), but for chat / extract / json work it may use at
+ * most 2 attempts and ~25 s, and one "All models exhausted" 429 or timeout ends it: the other FreeLLM rungs would fail the same way
+ * (Oct 11-13: 288 x 429, 52 timeouts, while Groq and Cloudflare, which sit behind it in the ladder, were barely reached).
+ */
+const FL_MAX_ATTEMPTS = 2, FL_MAX_MS = 25_000;
+interface FlBudget { on: boolean; attempts: number; spentMs: number; bail: boolean }
+const newFlBudget = (on: boolean): FlBudget => ({ on, attempts: 0, spentMs: 0, bail: false });
+const flBlocked = (b: FlBudget) => b.on && (b.bail || b.attempts >= FL_MAX_ATTEMPTS || b.spentMs >= FL_MAX_MS);
+/** The wait a FreeLLM attempt may take: what is left of the request's 25 s (at least 4 s), else the caller's own cap. */
+const flWait = (b: FlBudget, left: number, cap: number) => Math.min(left, cap, b.on ? Math.max(4000, FL_MAX_MS - b.spentMs) : cap);
+function flNote(b: FlBudget, ms: number, f?: Fail) {
+  b.attempts++; b.spentMs += ms;
+  if (f && (f.outcome === "timeout" || (f.outcome === "rate_limited" && /models? exhausted/i.test(f.message)))) b.bail = true;
 }
 
 /* ───────── text tool-call rescue + reply scrub ───────── */
@@ -475,6 +546,35 @@ function parseJson(t: string): any {
   return JSON.parse(c.slice(start, end + 1));
 }
 
+/**
+ * v-next (2026-10-13): did a model hand the prompt's schema back instead of filling it in? Oct 11-13 a calibration model answered with
+ * the template strings themselves ("imperative, under 90 characters", "exact words", "YYYY-MM-DD or null"). True if any string anywhere
+ * in the parsed JSON is a known placeholder or has the shape of one ("...", "<first name>", "Jared|<first name>"). Exported for other callers.
+ */
+const TEMPLATE_EXACT = new Set(["imperative, under 90 characters", "exact words", "2 sentences", "...", "\u2026", "yyyy-mm-dd or null", "jared|<first name>"]);
+const TEMPLATE_SHAPES: RegExp[] = [
+  /^\.{3,}$/,                                                   // "..."
+  /^<[^<>]{1,60}>$/,                                             // "<first name>"
+  /^[\w ]{1,30}\|<[^<>]{1,40}>$/,                                // "Jared|<first name>"
+  /^yyyy-mm-dd(?: or null)?$/,                                   // "YYYY-MM-DD or null"
+  /^imperative\b.{0,40}\bunder \d+ (?:characters|words)$/,       // "imperative, under 90 characters"
+  /^(?:\d+|one|two|three|a few)(?:-\d+)? sentences?$/,            // "2 sentences"
+  /^(?:the )?exact (?:words|quote|text)(?: from .{1,40})?$/,
+];
+export function echoesTemplate(json: unknown): boolean {
+  const walk = (v: unknown, depth: number): boolean => {
+    if (depth > 8) return false;
+    if (typeof v === "string") {
+      const t = v.trim().replace(/^["'`]+|["'`]+$/g, "").trim().toLowerCase();
+      return t.length > 0 && (TEMPLATE_EXACT.has(t) || TEMPLATE_SHAPES.some((re) => re.test(t)));
+    }
+    if (Array.isArray(v)) return v.some((x) => walk(x, depth + 1));
+    if (v && typeof v === "object") return Object.values(v as Record<string, unknown>).some((x) => walk(x, depth + 1));
+    return false;
+  };
+  return walk(json, 0);
+}
+
 class Fail extends Error {
   // Error text can echo request headers (e.g. "Invalid header value: Bearer ..."): never let a key reach a log.
   constructor(public outcome: Outcome, msg: string, public retryAfter = 0) { super(scrub(msg).replace(/Bearer\s+\S+/gi, "Bearer [secret]")); }
@@ -684,6 +784,8 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
   else if (paid === "fallback") ladder.push(paidRung);
 
   let budgetHit = false;
+  // v-next (2026-10-13): chat / extract / json requests give FreeLLM at most 2 attempts and ~25 s before Groq gets its turn.
+  const fl = newFlBudget(req.scope === "chat" || req.task === "extract" || !!req.json);
   // 2026-09-24: a paused (cooled-down) provider is skipped - except in a live chat, where Jared is waiting: if every
   // free rung was skipped only for being paused, try them once anyway before giving up (pauses can be false alarms).
   const cooled: Rung[] = [];
@@ -694,6 +796,7 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
     const skip = (outcome: Outcome) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0 });
     if (left < 3000) { skip("timeout"); continue; }
     const p = prov[rung.provider];
+    if (rung.provider === "freellm" && flBlocked(fl)) { skip("skipped_off"); continue; }
     if (req.skip?.includes(rung.provider)) { skip("skipped_off"); continue; }
     if (p && !p.enabled) { skip("skipped_off"); continue; }
     if (privacy === "private" && p && !p.private_ok) { skip("skipped_privacy"); continue; }
@@ -711,20 +814,32 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
         case "local": c = await callLocal(rung.model, req, left); break;
         case "gemini": c = await callGemini(rung.model, req, left, k); break;
         case "openrouter": c = await callOpenRouter(rung.model, req, left, k); break;
-        case "freellm": c = await callFreeLLM(rung.model, req, left, k); break;
+        case "freellm": c = await callFreeLLM(rung.model, req, flWait(fl, left, 30_000), k); break;
         default: c = await callAnthropic(rung.model, req, left);
       }
       const ms = Date.now() - t0;
+      const isFl = rung.provider === "freellm";
+      if (isFl) flNote(fl, ms);
+      // v-next (2026-10-13): an answer from a model that is not on the vetted list (or is denylisted) is a miss, whatever the task.
+      // Checked on the model id FreeLLM reports (c.model = response.model), so "auto:smartest" cannot smuggle a calibration model in.
+      if (isFl && !(await vettedAnswer(c.model, rung.model))) {
+        if (DENY_MODEL.test(bareModel(c.model))) await strike(c.model, "denylisted model answered via FreeLLM", 24 * 60);
+        await log(req, rung.provider, c.model, "invalid", ms, c, "model not on the vetted list");
+        tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
+        await liveFail(rung.model, `unvetted model ${bareModel(c.model)} answered`);
+        continue;
+      }
       // 2026-10-07: a model thinking out loud is a miss, not an answer (see thinkingLeak).
       if (!req.json && rung.provider !== "anthropic" && thinkingLeak(c.text)) {
         await log(req, rung.provider, c.model, "invalid", ms, c, "thinking out loud");
         tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
+        if (isFl) await liveFail(rung.model, "thinking out loud");
         continue;
       }
-      // 2026-10-07: tool syntax written as text, or an answer from a denylisted model, is a miss (and a strike), never a reply.
-      if (!req.json && rung.provider !== "anthropic" && (hasToolSyntax(c.text) || (rung.provider === "freellm" && DENY_MODEL.test(c.model.replace(/^.*\//, ""))))) {
-        await strike(c.model, hasToolSyntax(c.text) ? "wrote a tool call as text" : "denylisted model answered", 120);
-        await log(req, rung.provider, c.model, "invalid", ms, c, "tool syntax or denylisted model");
+      // 2026-10-07: tool syntax written as text is a miss (and a strike), never a reply.
+      if (!req.json && rung.provider !== "anthropic" && hasToolSyntax(c.text)) {
+        await strike(c.model, "wrote a tool call as text", 120);
+        await log(req, rung.provider, c.model, "invalid", ms, c, "tool syntax");
         tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
         continue;
       }
@@ -733,6 +848,14 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
         try { parsed = parseJson(c.text); } catch {
           await log(req, rung.provider, c.model, "bad_json", ms, c, "reply was not JSON");
           tried.push({ provider: rung.provider, model: c.model, outcome: "bad_json", ms });
+          if (isFl) await liveFail(rung.model, "no json");
+          continue;
+        }
+        // v-next (2026-10-13): the prompt's schema handed back with its placeholders still in it is a miss (and, on FreeLLM, a live fail).
+        if (echoesTemplate(parsed)) {
+          await log(req, rung.provider, c.model, "invalid", ms, c, "echoed the JSON template");
+          tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
+          if (isFl) await liveFail(rung.model, "echoed the JSON template");
           continue;
         }
         const bad = req.validate?.(parsed) ?? null;
@@ -744,6 +867,7 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
       }
       await log(req, rung.provider, c.model, "ok", ms, c);
       tried.push({ provider: rung.provider, model: c.model, outcome: "ok", ms });
+      if (isFl) liveOk(rung.model);
       return { text: c.text, json: parsed, model: c.model, provider: rung.provider, cost_usd: c.cost, tried };
     } catch (e) {
       const ms = Date.now() - t0;
@@ -753,6 +877,10 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
       if (f.outcome.startsWith("skipped")) continue; // nothing was sent; not logged
       await log(req, rung.provider, rung.model, f.outcome, ms, undefined, f.message);
       if (f.outcome === "rate_limited" && rung.provider !== "anthropic") await rateLimited(rung, f);
+      if (rung.provider === "freellm") {
+        flNote(fl, ms, f);
+        if (f.outcome === "rate_limited" || f.outcome === "timeout") await liveFail(rung.model, `${f.outcome} ${f.message.slice(0, 80)}`);
+      }
     }
   }
   }
@@ -864,12 +992,16 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
   const [prov, k] = await Promise.all([providers(), keys()]);
 
   const chain = [...(await freellmChain(code)), ...(code ? CODE_CHAT_TAIL : CHAT_TAIL)];
+  // v-next (2026-10-13): a live chat turn gives FreeLLM at most 2 attempts / ~25 s; one "All models exhausted" 429 or timeout sends it to Groq.
+  // The code ladder keeps its longer waits (qwen3-coder writes long files) and is not capped.
+  const fl = newFlBudget(!code && (input.scope ?? "chat") === "chat");
   const toolNames = new Set<string>(((input.tools ?? []) as any[]).map((t) => String(t?.function?.name ?? "")).filter(Boolean));
   for (const rung of chain) {
     const left = deadline - Date.now();
     const skip = (outcome: Outcome) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0 });
     if (left < 3000) { skip("timeout"); continue; }
     const p = prov[rung.provider];
+    if (rung.provider === "freellm" && flBlocked(fl)) { skip("skipped_off"); continue; }
     if (p && !p.enabled) { skip("skipped_off"); continue; }
     if (p && !p.private_ok) { skip("skipped_privacy"); continue; }
     // Provider pauses (free_llm_watch) are ignored here on purpose: Jared is waiting in a live chat, a paused rung
@@ -904,7 +1036,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
         if (!k.groq_api_key) throw new Fail("skipped_nokey", "no groq_api_key");
         j = await postChat("https://api.groq.com/openai/v1/chat/completions", k.groq_api_key, body, Math.min(left, 25_000));
       } else if (rung.provider === "freellm") {
-        j = await postChat(freellmUrl(k), k.freellm_api_key, body, Math.min(left, code ? 45_000 : 25_000));
+        j = await postChat(freellmUrl(k), k.freellm_api_key, body, flWait(fl, left, code ? 45_000 : 25_000));
       } else if (rung.provider === "gemini") {
         if (!k.gemini_api_key) throw new Fail("skipped_nokey", "no gemini_api_key");
         j = await postChat("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", k.gemini_api_key, body, Math.min(left, 30_000));
@@ -916,6 +1048,8 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
         j = await postChat(`https://api.cloudflare.com/client/v4/accounts/${k.cloudflare_account_id}/ai/v1/chat/completions`, k.cloudflare_ai_token, body, Math.min(left, 60_000));
       }
       const ms = Date.now() - t0;
+      const isFl = rung.provider === "freellm";
+      if (isFl) flNote(fl, ms);
       const msg = j.choices?.[0]?.message ?? {};
       const toolCalls: ChatToolCall[] = ((msg.tool_calls ?? []) as any[]).filter((c) => c?.function?.name).map((c, i) => {
         const raw = typeof c.function.arguments === "string" ? c.function.arguments : JSON.stringify(c.function.arguments ?? {});
@@ -936,10 +1070,14 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
         await strike(String(j.model ?? rung.model), "wrote a tool call as text", 120);
       }
       // Routed to a denylisted model (auto:smartest can land anywhere): a miss, and the model is benched.
-      if (DENY_MODEL.test(String(j.model ?? rung.model).replace(/^.*\//, "")) && rung.provider === "freellm") {
-        await strike(String(j.model), "denylisted model answered via auto", 24 * 60);
-        await log(logReq, rung.provider, String(j.model), "invalid", ms, undefined, "denylisted model");
-        tried.push({ provider: rung.provider, model: String(j.model), outcome: "invalid", ms });
+      // v-next (2026-10-13): also a miss when the model FreeLLM reports is not on the vetted list (llm_model_health ok_tool_calls=true).
+      if (isFl && !(await vettedAnswer(String(j.model ?? rung.model), rung.model))) {
+        const answered = String(j.model ?? rung.model);
+        const denied = DENY_MODEL.test(bareModel(answered));
+        if (denied) await strike(answered, "denylisted model answered via auto", 24 * 60);
+        await log(logReq, rung.provider, answered, "invalid", ms, undefined, denied ? "denylisted model" : "model not on the vetted list");
+        tried.push({ provider: rung.provider, model: answered, outcome: "invalid", ms });
+        await liveFail(rung.model, `unvetted model ${bareModel(answered)} answered`);
         continue;
       }
       // 2026-10-07: reasoning written as content. With tool calls it is just noise beside them, so drop it;
@@ -953,10 +1091,12 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
         // A blank turn is the model's miss, not the provider's: "invalid" keeps free_llm_watch from pausing a healthy provider.
         await log(logReq, rung.provider, c.model, "invalid", ms, c, leaked ? "thinking out loud" : `empty reply (finish ${j.choices?.[0]?.finish_reason ?? "?"})`);
         tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
+        if (isFl) await liveFail(rung.model, leaked ? "thinking out loud" : "empty reply");
         continue;
       }
       await log(logReq, rung.provider, c.model, "ok", ms, c);
       tried.push({ provider: rung.provider, model: c.model, outcome: "ok", ms });
+      if (isFl) liveOk(rung.model);
       return { content, toolCalls, provider: rung.provider, model: c.model, tried, rescued, inTokens: inT || need, outTokens: outT };
     } catch (e) {
       const ms = Date.now() - t0;
@@ -965,6 +1105,10 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       if (f.outcome.startsWith("skipped")) continue;
       await log(logReq, rung.provider, rung.model, f.outcome, ms, undefined, f.message);
       if (f.outcome === "rate_limited") await rateLimited(rung, f);
+      if (rung.provider === "freellm") {
+        flNote(fl, ms, f);
+        if (f.outcome === "rate_limited" || f.outcome === "timeout") await liveFail(rung.model, `${f.outcome} ${f.message.slice(0, 80)}`);
+      }
     }
   }
   throw new LlmUnavailable("all_failed", tried);

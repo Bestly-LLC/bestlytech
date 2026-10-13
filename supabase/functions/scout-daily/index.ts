@@ -3,7 +3,9 @@
 //   op tick     hourly cron; by Los Angeles time: 6 drafts, 9 picks, 18 wrap (once a day each)
 //   op morning  Today's 3: one decision, one quick win, one focus task  -> scout_daily kind pick
 //   op drafts   replies worth sending from the last 48h of synced mail   -> kind draft
-//   op call     {id} a finished transcript -> commitments on the Bestly Ops Deck board -> kind call
+//   op call     {id, force} a finished transcript -> commitments on the Bestly Ops Deck board -> kind call.
+//               v19: chunked map-reduce, resumable; {ok:false, retry:true} means "partial, the sweep will finish it"
+//   op call_sweep  cron every 20 min: debriefs recordings that are unprocessed, partial or saved as a template echo (max 2 per run)
 //   op wrap     what got done, what rolls over, tomorrow's first move    -> kind wrap
 //   op run      {job, force} the same, started from the admin home page (admin JWT)
 //   op deck_check  can we reach the Deck board
@@ -18,6 +20,7 @@
 // Called by pg_cron / a trigger with the service key, or by an admin from the browser.
 // Nothing here sends anything to anyone: drafts wait for Jared's tap in his own mail app.
 // v7: AI runs free-only via ../_shared/free-llm.ts (see claude() below). $0.
+// v19 (2026-10-13): call debrief rebuilt (chunked map-reduce, quote-checked, resumable, swept; template echoes rejected).
 // v18 (2026-10-10): reflect rebuilt (chunked, retried, reads Jared's messages, never exits early, watchdog scout.reflect.stale).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -69,17 +72,18 @@ const TASK: Record<string, LlmTask> = { morning: "pick", drafts: "triage", call:
 const SHAPE: Record<string, (j: any) => string | null> = {
   morning: (j) => Array.isArray(j?.picks) ? null : "no picks array",
   drafts: (j) => Array.isArray(j?.drafts) ? null : "no drafts array",
-  call: (j) => Array.isArray(j?.commitments) && typeof j?.summary === "string" ? null : "no commitments/summary",
+  call: (j) => Array.isArray(j?.commitments) && typeof j?.summary === "string" ? null : "no commitments/summary", // v19: call() passes chunkShape / tldrShape instead
   reflect: (j) => Array.isArray(j?.lessons) ? null : "no lessons array",
 };
 
-async function claude(system: string, user: string, maxTokens = 3000, job = "background", ref: string | null = null): Promise<any> {
+async function claude(system: string, user: string, maxTokens = 3000, job = "background", ref: string | null = null,
+  opts: { validate?: (j: any) => string | null; deadlineMs?: number } = {}): Promise<any> {
   const paid = Deno.env.get("SCOUT_DAILY_PAID") === "fallback" ? "fallback" : "never";
   try {
     const r = await llm({
       task: TASK[job] ?? "summarize", system, user, json: true, job, ref, fn: "scout-daily", scope: "background", paid,
       maxTokens: Math.min(maxTokens * 2, 8000), // free reasoning models spend part of the budget thinking
-      deadlineMs: 110_000, validate: SHAPE[job],
+      deadlineMs: opts.deadlineMs ?? 110_000, validate: opts.validate ?? SHAPE[job],
     });
     return r.json;
   } catch (e) {
@@ -289,63 +293,386 @@ async function deck() {
   };
 }
 
-async function call(id: string, force = false) {
-  const { data: r } = await db.from("meeting_recordings").select("id, name, started_at, roster, transcript, tasks_at").eq("id", id).maybeSingle();
+/* ───────── call debrief (v19: chunked map-reduce, resumable, swept) ─────────
+   A 70 to 135 minute transcript is 72K to 133K characters, far more than one free-AI request can take. So:
+   split it into <=18K-character chunks (1.5K overlap) -> one small extraction per chunk (retried, saved as it goes into
+   meeting_recordings.summary {status:"partial"}) -> merge/dedupe in code -> one tiny TL;DR call -> to-dos + Deck cards.
+   Nothing is created from a partial result. op call_sweep (cron every 20 min) finishes whatever is still partial. */
+
+// ==== call-helpers:begin  (pure: no imports, no I/O; the scratchpad test extracts this block)
+const CHUNK_MAX = 18_000;
+const CHUNK_OVERLAP = 1_500;
+const MAX_TRIES = 12;            // sweep gives up on a recording after this many failed passes
+const STALE_MS = 6 * 60_000;     // a claim older than this with a partial summary is a crashed run, not a live one
+
+// Strings a weak model copies out of a prompt template instead of answering. Also the example values in our own prompt.
+const EXAMPLE_VALUES = [
+  "Email the landlord the signed lease", "Call the plumber about the water heater", "Sign the new lease with Dana",
+  "Move the kickoff to the second week of March", "Monthly rent after the increase", "Who covers the move-in cleaning fee?",
+  "Rent is $2,350 a month", "I'll email the landlord the signed lease by Friday",
+];
+const norm = (s: unknown) => String(s ?? "").toLowerCase().replace(/[‘’']/g, "").replace(/[^\p{L}\p{N}\s]+/gu, " ").replace(/\s+/g, " ").trim();
+const EXAMPLE_NORMS = new Set(EXAMPLE_VALUES.map(norm));
+
+function isTemplateString(s: unknown): boolean {
+  if (typeof s !== "string") return false;
+  const t = s.trim().toLowerCase();
+  if (!t) return false;
+  if (/^[.…\s]+$/.test(t)) return true;                       // "..." / "…"
+  if (/^imperative\b/.test(t) || /under \d+ char/.test(t)) return true; // "imperative, under 90 characters"
+  if (/^exact words\b/.test(t)) return true;                       // "exact words"
+  if (/^\d+\s+sentences?$/.test(t)) return true;                   // "2 sentences"
+  if (/yyyy-mm-dd/.test(t)) return true;                           // "YYYY-MM-DD or null"
+  if (/^jared\s*\|/.test(t) || /\|\s*<?first name>?/.test(t) || /<[^<>]{2,30}>/.test(t)) return true; // "Jared|<first name>"
+  return EXAMPLE_NORMS.has(norm(t));
+}
+// First offending string anywhere in a parsed JSON value, or null.
+function findTemplateEcho(j: unknown, depth = 0): string | null {
+  if (depth > 6 || j == null) return null;
+  if (typeof j === "string") return isTemplateString(j) ? j : null;
+  if (Array.isArray(j)) { for (const x of j) { const r = findTemplateEcho(x, depth + 1); if (r) return r; } return null; }
+  if (typeof j === "object") { for (const v of Object.values(j as object)) { const r = findTemplateEcho(v, depth + 1); if (r) return r; } }
+  return null;
+}
+
+function chunkShape(j: any): string | null {
+  if (!j || typeof j !== "object" || Array.isArray(j)) return "not an object";
+  for (const k of ["decisions", "commitments"]) if (!Array.isArray(j[k])) return `no ${k} array`;
+  const bad = findTemplateEcho(j);
+  if (bad) return `template echo: ${bad.slice(0, 40)}`;
+  for (const c of j.commitments) {
+    if (!c || typeof c !== "object" || typeof c.task !== "string" || c.task.trim().length < 6) return "commitment task missing or under 6 characters";
+  }
+  return null;
+}
+function tldrShape(j: any): string | null {
+  const s = j?.summary;
+  if (typeof s !== "string" || s.trim().length < 30 || s.length > 700) return "no usable summary";
+  return findTemplateEcho(j) ? "template echo" : null;
+}
+
+function splitHeader(text: string): { header: string; body: string } {
+  const lines = text.split("\n");
+  let k = 0;
+  while (k < lines.length && lines[k].startsWith("#")) k++;
+  return { header: lines.slice(0, k).join("\n").slice(0, 600), body: lines.slice(k).join("\n") };
+}
+
+// Split on line boundaries into chunks of <= max characters; each chunk after the first starts with the last ~overlap characters of the one before.
+function chunkTranscript(body: string, max = CHUNK_MAX, overlap = CHUNK_OVERLAP): string[] {
+  const lines: string[] = [];
+  for (const l of body.split("\n")) {
+    if (l.length <= max) lines.push(l);
+    else for (let p = 0; p < l.length; p += max) lines.push(l.slice(p, p + max));
+  }
+  const take = (start: number) => {
+    let end = start, size = 0;
+    while (end < lines.length && (end === start || size + lines[end].length + 1 <= max)) { size += lines[end].length + 1; end++; }
+    return end;
+  };
+  const chunks: string[] = [];
+  let start = 0, prevEnd = 0;
+  while (start < lines.length) {
+    let end = take(start);
+    if (chunks.length && end <= prevEnd) { start = prevEnd; end = take(start); } // overlap ate the whole budget: no overlap this time
+    chunks.push(lines.slice(start, end).join("\n"));
+    if (end >= lines.length) break;
+    let back = end, ov = 0;
+    while (back > start + 1 && ov + lines[back - 1].length + 1 <= overlap) { back--; ov += lines[back].length + 1; }
+    prevEnd = end;
+    start = back;
+  }
+  return chunks;
+}
+
+const stripSpeakers = (s: string) => s.replace(/^\s*\[\d+:\d{2}(?::\d{2})?\]\s*[^:\n]{1,40}:\s*/gm, "");
+function lcsLen(a: string[], b: string[]): number {
+  let prev = new Array(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = new Array(b.length + 1).fill(0);
+    for (let j = 1; j <= b.length; j++) cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+    prev = cur;
+  }
+  return prev[b.length];
+}
+// True when >= minRatio of the quote's words appear, in order, inside a short window of the chunk (case, punctuation and speaker labels ignored).
+function quoteFound(quote: unknown, chunk: string, minRatio = 0.7): boolean {
+  const qw = norm(stripSpeakers(String(quote ?? ""))).split(" ").filter(Boolean);
+  if (qw.length < 3) return false;
+  const cw = norm(stripSpeakers(chunk)).split(" ").filter(Boolean);
+  const W = qw.length * 2 + 6, step = Math.max(1, Math.floor(qw.length / 2));
+  for (let s = 0; s < cw.length; s += step) {
+    if (lcsLen(qw, cw.slice(s, s + W)) / qw.length >= minRatio) return true;
+    if (s + W >= cw.length) break;
+  }
+  return false;
+}
+
+const tsOf = (v: unknown): string | null => { const m = String(v ?? "").match(/\d{1,3}:\d{2}(?::\d{2})?/); return m ? m[0] : null; };
+const tsSec = (v: unknown): number => {
+  const t = tsOf(v); if (!t) return Infinity;
+  const p = t.split(":").map(Number);
+  return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1];
+};
+const STOP = new Set(["the", "a", "an", "to", "and", "of", "for", "on", "in", "it", "is", "at", "with", "that", "this", "be", "will", "up", "out", "about", "by"]);
+const tokSet = (s: unknown) => new Set(norm(s).split(" ").filter((w) => w.length > 1 && !STOP.has(w)));
+function jaccard(a: unknown, b: unknown): number {
+  const x = tokSet(a), y = tokSet(b);
+  if (!x.size || !y.size) return 0;
+  let n = 0; for (const w of x) if (y.has(w)) n++;
+  return n / (x.size + y.size - n);
+}
+const ownerKey = (o: unknown) => norm(o).split(" ")[0] || "jared";
+const cleanStr = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+
+interface Part { topics: string[]; decisions: any[]; commitments: any[]; numbers: any[]; questions: string[]; dropped: string[] }
+
+// Model JSON for one chunk -> clean Part. Commitments whose quote is not in the chunk are dropped (invented to-dos).
+function sanitizePart(j: any, chunk: string): Part {
+  const arr = (v: unknown) => (Array.isArray(v) ? v : []);
+  const strs = (v: unknown, n: number, max: number) => arr(v).map((x) => cleanStr(typeof x === "object" ? (x as any)?.what ?? (x as any)?.text : x, max)).filter((x) => x.length >= 4).slice(0, n);
+  const part: Part = { topics: strs(j?.topics, 8, 120), decisions: [], commitments: [], numbers: [], questions: strs(j?.questions, 8, 160), dropped: [] };
+  for (const d of arr(j?.decisions).slice(0, 15)) {
+    const what = cleanStr(typeof d === "string" ? d : d?.what, 200);
+    if (what.length >= 6) part.decisions.push({ what, who: cleanStr(d?.who, 40) || null, ts: tsOf(d?.ts) });
+  }
+  for (const n of arr(j?.numbers).slice(0, 15)) {
+    const what = cleanStr(n?.what, 120), value = cleanStr(n?.value, 60);
+    if (what && value) part.numbers.push({ what, value, ts: tsOf(n?.ts) });
+  }
+  for (const c of arr(j?.commitments).slice(0, 15)) {
+    const task = cleanStr(c?.task, 160);
+    if (task.length < 6) continue;
+    if (!quoteFound(c?.quote, chunk)) { part.dropped.push(task.slice(0, 90)); continue; }
+    let owner = cleanStr(c?.owner, 40).replace(/\?+$/, "").trim() || "Jared";
+    owner = owner[0].toUpperCase() + owner.slice(1);
+    part.commitments.push({ owner, task, due: /^\d{4}-\d{2}-\d{2}$/.test(String(c?.due)) ? String(c.due) : null, quote: cleanStr(c?.quote, 200), ts: tsOf(c?.ts) });
+  }
+  return part;
+}
+
+// Merge chunk parts in order. Commitments: same owner and token Jaccard >= 0.6 is a duplicate; the earliest ts wins.
+function mergeParts(parts: Part[]) {
+  const commitments: any[] = [], decisions: any[] = [], numbers: any[] = [], topics: string[] = [], questions: string[] = [];
+  for (const p of parts) {
+    for (const c of p.commitments ?? []) {
+      const hit = commitments.find((e) => ownerKey(e.owner) === ownerKey(c.owner) && jaccard(e.task, c.task) >= 0.6);
+      if (!hit) { commitments.push({ ...c }); continue; }
+      if (tsSec(c.ts) < tsSec(hit.ts)) hit.ts = c.ts;
+      if (!hit.due && c.due) hit.due = c.due;
+    }
+    for (const d of p.decisions ?? []) {
+      const hit = decisions.find((e) => jaccard(e.what, d.what) >= 0.6);
+      if (!hit) decisions.push({ ...d }); else if (tsSec(d.ts) < tsSec(hit.ts)) hit.ts = d.ts;
+    }
+    for (const n of p.numbers ?? []) if (!numbers.some((e) => norm(e.what) === norm(n.what) && norm(e.value) === norm(n.value))) numbers.push({ ...n });
+    for (const t of p.topics ?? []) if (!topics.some((e) => jaccard(e, t) >= 0.6)) topics.push(t);
+    for (const q of p.questions ?? []) if (!questions.some((e) => jaccard(e, q) >= 0.6)) questions.push(q);
+  }
+  const byTs = (a: any, b: any) => tsSec(a.ts) - tsSec(b.ts);
+  return {
+    topics: topics.slice(0, 12), questions: questions.slice(0, 10),
+    decisions: decisions.sort(byTs).slice(0, 20), numbers: numbers.sort(byTs).slice(0, 20), commitments: commitments.sort(byTs).slice(0, 20),
+  };
+}
+
+// Plain two-sentence TL;DR built in code, for when the TL;DR call fails.
+function fallbackSummary(m: { topics: string[]; decisions: any[]; commitments: any[] }): string {
+  const s1 = m.topics.length ? `The call covered ${m.topics.slice(0, 3).join("; ")}.` : "The call is transcribed and debriefed.";
+  const d = m.decisions.length, c = m.commitments.length;
+  return `${s1} It produced ${d} decision${d === 1 ? "" : "s"} and ${c} to-do${c === 1 ? "" : "s"}.`;
+}
+
+// What the sweep should do with a recording: "no", "run" or "force". Pure so it can be tested.
+function sweepAction(row: { tasks_at?: string | null; summary?: any }, nowMs: number): "no" | "run" | "force" {
+  const s = row.summary && typeof row.summary === "object" ? row.summary : null;
+  if (s?.summary === "2 sentences") return "force";                       // a template echo was saved as the summary
+  if (s?.status === "done") return "no";
+  if (s?.status === "partial") {
+    if (Number(s.tries ?? 0) >= MAX_TRIES) return "no";
+    return !row.tasks_at || nowMs - Date.parse(row.tasks_at) > STALE_MS ? "run" : "no"; // a fresh claim is a live run
+  }
+  return row.tasks_at ? "no" : "run";                                      // older complete summary, or never processed
+}
+// ==== call-helpers:end
+
+const CHUNK_DEADLINE_MS = 40_000;   // one chunk request (the ladder spends this across providers)
+const TLDR_DEADLINE_MS = 25_000;
+const RETRY_WAIT_MS = 20_000;
+const CHUNK_TRIES = 3;
+const CALL_BUDGET_MS = 125_000;     // an edge run is cut off near 150 s; stop starting work before that and let the sweep resume
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const CHUNK_EXAMPLE = JSON.stringify({
+  topics: ["Lease renewal terms", "Move-in date"],
+  decisions: [{ what: "Sign the new lease with Dana", who: "Jared", ts: "12:40" }],
+  commitments: [{ owner: "Jared", task: "Email the landlord the signed lease", due: "2026-03-06", quote: "I'll email the landlord the signed lease by Friday", ts: "13:05" }],
+  numbers: [{ what: "Monthly rent after the increase", value: "$2,350", ts: "14:10" }],
+  questions: ["Who covers the move-in cleaning fee?"],
+});
+
+function chunkPrompt(n: number, i: number) {
+  return `${VOICE}\nYou are Scout. Read part ${i + 1} of ${n} of a call transcript. Lines look like "[mm:ss] SPEAKER: words". JARED lines are his own mic and always correct; a name ending in ? was a voice guess, so check it against context. ` +
+    `The first lines of a part may repeat the end of the previous part; that is fine.\n` +
+    `Return JSON only, with exactly these keys. The example values come from an unrelated call: never copy them, use only what is said in THIS part:\n${CHUNK_EXAMPLE}\n` +
+    `- topics: up to 6 short phrases for what was discussed. decisions: only things actually agreed or settled (who = the person who decided or owns it). numbers: prices, quantities, dates, percentages and counts actually said. questions: open questions nobody answered.\n` +
+    `- commitments: only what was actually agreed to be done. A due date only if one was said (today is ${la().day}; resolve "Friday" etc. to a date), otherwise null. No duplicates. ` +
+    `Owner = the person who will DO it, worked out from what is said ("I'll send it" -> the speaker; "can you..." -> the person asked; "Jared will..." -> Jared). ` +
+    `Speaker labels can be wrong, especially on one-mic recordings (the header says so): trust what the words say over the label. When it's unclear who will do it, the owner is Jared. ` +
+    `task = an imperative sentence in your own words. quote = the exact words, copied from this part (under 160 characters), that the commitment came from.\n` +
+    `- NOT commitments: anything said in a demo, test call or role-play (e.g. a phone bot like Ava or RoofGuard "booking" a call, someone pretending to be a customer), lines read aloud from an app or to-do list, and hypotheticals.\n` +
+    `- ts = the [mm:ss] stamp of the line where it was said. If this part has nothing for a key, use an empty array. Never invent items to fill a list.`;
+}
+
+// One chunk, up to CHUNK_TRIES attempts with a wait between. Returns the clean Part, or null if it never worked (or time ran out).
+async function extractChunk(id: string, chunk: string, i: number, n: number, head: string, until: number): Promise<{ part: Part | null; err: string }> {
+  let err = "";
+  for (let a = 1; a <= CHUNK_TRIES; a++) {
+    if (until - Date.now() < CHUNK_DEADLINE_MS + 5_000) return { part: null, err: err || "out of time" };
+    try {
+      const out = await claude(chunkPrompt(n, i), `${head}\nPart ${i + 1} of ${n}\n\n${chunk}`, 1500, "call", id, { validate: chunkShape, deadlineMs: CHUNK_DEADLINE_MS });
+      const bad = chunkShape(out);
+      if (bad) throw new Error(bad);
+      return { part: sanitizePart(out, chunk), err: "" };
+    } catch (e) {
+      err = (e as Error).message.slice(0, 300);
+      if (a < CHUNK_TRIES) {
+        if (until - Date.now() < RETRY_WAIT_MS + CHUNK_DEADLINE_MS + 5_000) return { part: null, err };
+        await sleep(RETRY_WAIT_MS);
+      }
+    }
+  }
+  return { part: null, err };
+}
+
+// A template echo got saved as this recording's to-dos: dismiss them and free their keys so the re-run can create the real ones.
+async function dismissBroken(id: string) {
+  const { data: rows } = await db.from("scout_daily").select("id, title, source_key, status").eq("kind", "call").like("source_key", `call:${id}:%`);
+  for (const row of rows ?? []) {
+    if (!isTemplateString((row as any).title)) continue;
+    await db.from("scout_daily").update({ status: "dismissed", source_key: `broken:${(row as any).source_key}` }).eq("id", (row as any).id);
+  }
+}
+
+async function call(id: string, force = false, until = Date.now() + CALL_BUDGET_MS) {
+  const { data: r } = await db.from("meeting_recordings").select("id, name, started_at, roster, transcript, tasks_at, summary").eq("id", id).maybeSingle();
   if (!r) return { ok: false, error: "no recording" };
-  if (r.tasks_at && !force) return { ok: true, skipped: "already done" };
+  const prior = r.summary && typeof r.summary === "object" ? (r.summary as any) : null;
+  const broken = prior?.summary === "2 sentences";
+  const partial = prior?.status === "partial" && !broken;
+  if (!force && !broken) {
+    if (prior?.status === "done") return { ok: true, skipped: "already done" };
+    if (r.tasks_at && !partial) return { ok: true, skipped: "already done" };
+    if (r.tasks_at && partial && Date.now() - Date.parse(r.tasks_at) < STALE_MS) return { ok: true, skipped: "in progress" };
+  }
   const text = String(r.transcript ?? "");
   if (text.length < 400) return { ok: true, skipped: "too short" };
-  await db.from("meeting_recordings").update({ tasks_at: new Date().toISOString() }).eq("id", id); // claim first: no double cards
 
-  const t = text.length > 90_000 ? text.slice(0, 45_000) + "\n[...]\n" + text.slice(-45_000) : text;
-  let out: any;
-  try {
-    out = await claude(
-      `${VOICE}\nYou are Scout. Read this call transcript (JARED lines are his own mic; a name ending in ? was a voice guess, so check it against context). ` +
-      `Return JSON only: {"summary":"2 sentences","decisions":["..."],"commitments":[{"owner":"Jared|<first name>","task":"imperative, under 90 characters","due":"YYYY-MM-DD or null","quote":"exact words"}],"questions":["..."]}. ` +
-      `Only what was actually agreed. A due date only if one was said (today is ${la().day}; resolve "Friday" etc. to a date). No duplicates. ` +
-      `Owner = the person who will DO it, worked out from what is said ("I'll send it" -> the speaker; "can you..." -> the person asked; "Jared will..." -> Jared). ` +
-      `Speaker labels can be wrong, especially on one-mic recordings (the header says so): trust what the words say over the label. When it's unclear who will do it, the owner is Jared. ` +
-      `NOT commitments: anything said in a demo, test call or role-play (e.g. a phone bot like Ava or RoofGuard "booking" a call, someone pretending to be a customer), ` +
-      `lines read aloud from an app or to-do list, and hypotheticals. Add "quote": the exact words (under 160 characters) the commitment came from.`,
-      `Call: ${r.name}\nPeople: Jared, ${(r.roster ?? []).join(", ")}\n\n${t}`,
-      2500, "call", id,
-    );
-  } catch (e) {
-    await db.from("meeting_recordings").update({ tasks_at: null }).eq("id", id);
-    throw e;
+  // claim first: no double cards. Atomic, so the sweep and the stop trigger can't both run the same recording.
+  const claim = db.from("meeting_recordings").update({ tasks_at: new Date().toISOString() }).eq("id", id);
+  const { data: got } = await ((force || broken) ? claim : r.tasks_at ? claim.lt("tasks_at", new Date(Date.now() - STALE_MS).toISOString()) : claim.is("tasks_at", null)).select("id");
+  if (!got?.length) return { ok: true, skipped: "claimed elsewhere" };
+  if (broken) await dismissBroken(id);
+
+  const { header, body } = splitHeader(text);
+  const chunks = chunkTranscript(body);
+  const n = chunks.length;
+  const resume = partial && !force && prior.chunks_total === n && prior.len === text.length && Array.isArray(prior.parts);
+  const parts: (Part | null)[] = resume ? chunks.map((_, k) => prior.parts[k] ?? null) : chunks.map(() => null);
+  const tries = (resume ? Number(prior.tries ?? 0) : 0);
+  const head = `Call: ${r.name}\nPeople: Jared, ${(r.roster ?? []).join(", ")}${header ? `\n${header}` : ""}`;
+  const save = (extra: Record<string, unknown> = {}) => db.from("meeting_recordings").update({
+    summary: { status: "partial", chunks_total: n, chunks_done: parts.filter(Boolean).length, len: text.length, tries, parts, ...extra },
+  }).eq("id", id);
+
+  let lastErr = "";
+  for (let i = 0; i < n; i++) {
+    if (parts[i]) continue;
+    const { part, err } = await extractChunk(id, chunks[i], i, n, head, until);
+    if (part) { parts[i] = part; await save(); } else { lastErr = err; if (err === "out of time") break; }
   }
-  const commitments = (out.commitments ?? []).slice(0, 20);
+  const done = parts.filter(Boolean).length;
+  if (done < n) {
+    await save({ tries: tries + 1, last_error: lastErr || "unfinished", last_try: new Date().toISOString() });
+    await db.from("meeting_recordings").update({ tasks_at: null }).eq("id", id); // un-claim so the sweep picks it up
+    return { ok: false, retry: true, chunks_done: done, chunks_total: n, error: lastErr };
+  }
+
+  const m = mergeParts(parts as Part[]);
+  const dropped = (parts as Part[]).reduce((a, p) => a + (p.dropped?.length ?? 0), 0);
+  let summaryText = "";
+  if (m.decisions.length || m.commitments.length || m.topics.length) {
+    if (until - Date.now() > TLDR_DEADLINE_MS + 5_000) {
+      try {
+        const facts = JSON.stringify({ topics: m.topics.slice(0, 8), decisions: m.decisions.map((d) => d.what), todos: m.commitments.map((c) => `${c.owner}: ${c.task}`) });
+        const o = await claude(
+          `${VOICE}\nYou are Scout. Write a TL;DR of a call in exactly 2 plain sentences, using only the facts given (topics, decisions, to-dos). Return JSON only: {"summary":"Jared and Eli settled the launch date and split the vendor follow-ups. Jared owes the quote by Friday."} ` +
+          `That example is from an unrelated call: never copy it.`,
+          `Call: ${r.name}\nPeople: Jared, ${(r.roster ?? []).join(", ")}\n\n${facts}`, 400, "call", id, { validate: tldrShape, deadlineMs: TLDR_DEADLINE_MS });
+        summaryText = cleanStr(o?.summary, 600);
+      } catch { /* a failed TL;DR never fails the job */ }
+    }
+  }
+  if (!summaryText || tldrShape({ summary: summaryText })) summaryText = fallbackSummary(m);
+
+  const commitments = m.commitments;
   let d: Awaited<ReturnType<typeof deck>> | null = null;
   let deckErr = "";
   try { d = commitments.length ? await deck() : null; } catch (e) { deckErr = (e as Error).message; }
 
+  const { data: have } = await db.from("scout_daily").select("source_key").eq("kind", "call").like("source_key", `call:${r.id}:%`);
+  const haveKeys = new Set((have ?? []).map((x: any) => x.source_key));
   const day = la().day;
   let mine = 0;
   for (let i = 0; i < commitments.length; i++) {
     const c = commitments[i];
     const owner = String(c.owner ?? "Jared").trim() || "Jared";
-    const due = /^\d{4}-\d{2}-\d{2}$/.test(String(c.due)) ? String(c.due) : null;
+    const due = c.due ?? null;
+    if (owner.toLowerCase() === "jared") mine++;
+    // v-next: keys are call:<id>:c<i> so they never collide with older rows for the same call (Oct 12: Scout hand-wrote call:<id>:1..3).
+    if (haveKeys.has(`call:${r.id}:c${i}`)) continue; // a crashed earlier pass already made this card
     let card: { id: number; url: string } | null = null;
     if (d) {
-      try { card = await d.addCard(`${owner}: ${c.task}`, `From the call ${r.name}.\n\n${out.summary ?? ""}`, due); }
+      try { card = await d.addCard(`${owner}: ${c.task}`, `From the call ${r.name}.\n\n${summaryText}`, due); }
       catch (e) { deckErr = (e as Error).message; }
     }
-    if (owner.toLowerCase() === "jared") mine++;
     await db.from("scout_daily").upsert({
       day, kind: "call", title: String(c.task).slice(0, 140), why: `${owner}${due ? ` · due ${due}` : ""} · from ${r.name}`,
-      source_key: `call:${r.id}:${i}`, url: card?.url ?? null,
+      source_key: `call:${r.id}:c${i}`, url: card?.url ?? null,
       action: { owner, due, meeting: r.name, meeting_id: r.id, deck_card: card?.id ?? null, deck_url: card?.url ?? null,
         quote: c.quote ? String(c.quote).slice(0, 200) : null },
     }, { onConflict: "day,kind,source_key", ignoreDuplicates: true });
   }
   await db.from("meeting_recordings").update({
-    summary: { summary: out.summary, decisions: out.decisions ?? [], commitments, questions: out.questions ?? [], deck_error: deckErr || null },
+    summary: { status: "done", summary: summaryText, topics: m.topics, decisions: m.decisions, commitments, numbers: m.numbers, questions: m.questions,
+      chunks_total: n, unverified_dropped: dropped, deck_error: deckErr || null },
   }).eq("id", id);
-  const who = (r.roster ?? []).map((n: string) => n[0]?.toUpperCase() + n.slice(1)).join(", ") || "the call";
+  const who = (r.roster ?? []).map((x: string) => x[0]?.toUpperCase() + x.slice(1)).join(", ") || "the call";
   await notify(`Call with ${who}: ${commitments.length} to-do${commitments.length === 1 ? "" : "s"}${d ? " on Deck" : ""}, ${mine} yours`,
-    String(out.summary ?? "") + (deckErr ? ` (Deck: ${deckErr})` : ""), false, `scout.call.${r.id}`);
-  return { ok: true, commitments: commitments.length, mine, deck: d ? d.board.title : null, deck_error: deckErr || null };
+    summaryText + (deckErr ? ` (Deck: ${deckErr})` : ""), false, `scout.call.${r.id}`);
+  return { ok: true, commitments: commitments.length, mine, chunks: n, unverified_dropped: dropped, deck: d ? d.board.title : null, deck_error: deckErr || null };
+}
+
+// op call_sweep (cron every 20 min): finish recordings that never got debriefed, are still partial, or were saved as a template echo.
+async function callSweep(until: number) {
+  const now = Date.now();
+  const { data: rows, error } = await db.from("meeting_recordings").select("id, name, stopped_at, tasks_at, summary")
+    .not("stopped_at", "is", null)
+    .lt("stopped_at", new Date(now - 10 * 60_000).toISOString())
+    .gte("stopped_at", new Date(now - 3 * 864e5).toISOString())
+    .order("stopped_at", { ascending: true }).limit(40);
+  if (error) return { ok: false, error: error.message };
+  const todo = (rows ?? []).map((x: any) => ({ x, act: sweepAction(x, now) })).filter((t) => t.act !== "no");
+  const results: Record<string, unknown>[] = [];
+  let ran = 0;
+  for (const { x, act } of todo) {
+    if (ran >= 2) break;
+    if (until - Date.now() < 60_000) { results.push({ id: x.id, skipped: "out of time" }); break; }
+    const res = await call(x.id, act === "force", until);
+    results.push({ id: x.id, name: x.name, ...res });
+    if (!(res as any).skipped) ran++; // too short / claimed elsewhere don't use up a slot
+  }
+  return { ok: true, candidates: todo.length, ran, results };
 }
 
 /* ───────── 6pm: wrap ───────── */
@@ -701,6 +1028,8 @@ Deno.serve(async (req) => {
       }
       case "call":
         return J(await call(String(body.id), !!body.force));
+      case "call_sweep":
+        return J(await callSweep(Date.now() + CALL_BUDGET_MS));
       case "tick_reflect":
         // v18: from 2 AM on, every hour, until today's reflect has finished (a night that failed is retried, not skipped).
         return J({ ok: true, hour, ran: hour >= 2 ? await reflectJob(day, false) : null });

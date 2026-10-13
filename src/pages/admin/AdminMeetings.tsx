@@ -265,7 +265,7 @@ export default function AdminMeetings({ embedded }: { embedded?: boolean } = {})
   };
 
   const debriefMeeting = (m: Meeting) => {
-    const msg = `Debrief my call ${m.id}: the decisions, who owes what, and the follow-ups.`;
+    const msg = `Debrief my call ${m.id}: the decisions, who has to do what (with dates), and the follow-ups.`;
     // Post into the Scout chat input if possible, else copy to clipboard.
     const input = document.querySelector<HTMLTextAreaElement>("[data-scout-input]");
     if (input) {
