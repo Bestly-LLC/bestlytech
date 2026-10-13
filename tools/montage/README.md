@@ -29,6 +29,7 @@ Allowed per client by `montage_brand_policy.montage_ok` (read by `montage_quote`
 | `cookie-yeti` | `brands/cookie_yeti.py` | `jobs/brand_maker.py` BRANDS['cookieyeti'], claim slug `cookie-yeti` | `comp/brand`: Inter Tight, plum/teal card grounds, app icon on the closing card |
 | `bestly-cloud` | `brands/bestly_cloud.py` | `jobs/bestly_social.py` PRODUCT, `claim_check('bestly-cloud')` (severity `setup` = no rules yet = house rules only) | `comp/brand`: Bestly card kit colors/type, the real pill logo, scene icons, rich closing card |
 | `bestly-studio` | `brands/bestly_studio.py` | `jobs/bestly_social.py` PRODUCT_STUDIO, `claim_check('bestly-studio')` (rules start unapproved), `docs/studio-promo/claims.md`; text only, one posting tip per video, filed to Drafts > To review (Friday rotation of `bestly_social studio`) | `comp/brand`: same as bestly-cloud, closing card says bestly.tech/studio |
+| `bestly-agent` | `brands/bestly_agent.py` | facts in the module, hand-written ads selected by `[ad:missed-call]` / `[ad:what-she-does]` in the brief (a re-cut marked `[recut-ad]` keeps the script), `claim_check('bestly-agent')` (13 rules, unapproved), number guard (`extra_check`); `docs/bestly-agent-ad-opusplan.md` | `comp/brand`: indigo ground, orchid second glow, Inter, Maya's orb on the closing card, phone call card (fictional caller, made-up business), prices in the accent; music borrowed from the other Bestly brands |
 
 Never made by Montage: Centering YOU (`centering-you`, `demo-two`: Elizabeth films her own videos) and real estate (`listings`, `re-demo`: photo-only tours, planned).
 Brand files the videos use: `fetch-assets.sh` downloads Cookie Yeti and InventoryProof fonts, icon and Proofy into `/opt/bestly/montage-kit` (the same public files `social-render` uses); Bestly uses `/opt/bestly/social-kit`, HOKU `/opt/bestly/hoku-kit`.
@@ -89,7 +90,7 @@ VOICE_11 = {"voice_id": "<id from GET /v1/voices>", "name": "<display name>",
   restart `bestly-montage` after editing a brand file.
 
 Voices in use (premade, none cloned): HOKU Lily `pFZP5JQG7iQjIQuC4Bku`, InventoryProof Matilda `XrExE9yKIg1WjnnlVkGX`, Cookie Yeti Liam `TX3LPaxmHKxFdv7VOQHJ`,
-Bestly Cloud Eric `cjVigY5qzO86Huf0OWal`, Bestly Studio Chris `iP95p4xoKVk53GoZ742B`. Not available: Sarah `EXAVITQu4vr4xnSDxMaL` (the RoofGuard caller). Free premade voices to pick from for a new brand:
+Bestly Cloud Eric `cjVigY5qzO86Huf0OWal`, Bestly Studio Chris `iP95p4xoKVk53GoZ742B`, Bestly Agent Hope (Maya's own voice) `tnSpp4vdxKPjI9w0GnoV`. Not available: Sarah `EXAVITQu4vr4xnSDxMaL` (the RoofGuard caller). Free premade voices to pick from for a new brand:
 Bella `hpp4J3VqNfWAUOO0d1Us` (warm, bright), Roger `CwhRBWXzGAHq8TQ4Fs17` (laid-back), Jessica `cgSgspJ2msm6clMCkdW9` (playful), River `SAz9YHcvj6GT2YYXdXww` (calm, neutral).
 
 ### How to add a voice to a brand
