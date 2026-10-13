@@ -7,6 +7,7 @@
  * This page is the control panel: pause/resume and a note for the next run (turo_settings),
  * price trends (us vs Edgar vs market vs Turo's dynamic price), the price manager, and run history.
  * The runbook Claude follows lives in bestly_private_memory area 'turo' (kept off this page on purpose).
+ * Settings (LAX garage code + Parker, guest pages, car connections) are the last section, #settings (TuroSettings.tsx).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, Pause, Play, Send, Settings } from "lucide-react";
@@ -14,6 +15,7 @@ import { Link } from "react-router-dom";
 import { GuestRow, useGuestRows } from "./LaxGuests";
 import { CarHealth, SuperchargeAudit } from "./CarOps";
 import { PlugPuller } from "./PlugPuller";
+import { TuroSettings } from "./TuroSettings";
 import { CardScans } from "@/components/admin/turo/CardScans";
 import { ReadyWidget } from "@/components/admin/turo/ReadyWidget";
 import { CarProtectLog, TollCheck } from "@/components/admin/turo/CarProtect";
@@ -125,7 +127,7 @@ function TuroOverview() {
   return (
     <div className="space-y-6">
       <PageHeader embedded title="Turo Watch"
-        actions={<Link to="/admin/turo/settings" className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-white/[0.08] px-4 text-sm font-medium text-white bento:bg-[#0000000d] bento:text-[#111]"><Settings className="h-4 w-4" aria-hidden /> Turo settings</Link>} />
+        actions={<Link to="/admin/turo#settings" className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-white/[0.08] px-4 text-sm font-medium text-white bento:bg-[#0000000d] bento:text-[#111] sm:min-h-[40px]"><Settings className="h-4 w-4" aria-hidden /> Settings</Link>} />
 
       {/* Who has the car right now, with each trip's guest page / key / reminder controls. */}
       <div id="keys" className="scroll-mt-24">
@@ -232,7 +234,8 @@ function TuroOverview() {
 
       <Competitors targets={targets} prices={comp} />
 
-
+      {/* Settings live right here, not on their own page (Jared 2026-10-13). /admin/turo/settings redirects to #settings. */}
+      <TuroSettings />
     </div>
   );
 }

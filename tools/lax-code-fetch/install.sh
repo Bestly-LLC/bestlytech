@@ -13,6 +13,6 @@ sudo -n chown -R pi:pi /opt/bestly/parkmyshare
 if ! crontab -l | grep -q 'run.sh lax_code_fetch'; then
   crontab -l > "/home/pi/scripts/crontab.bak-$(date +%Y%m%d)-laxcode"
   (crontab -l
-   echo '*/30 * * * * /opt/bestly/cron/run.sh lax_code_fetch   # Parker: LAX garage QR from Park My Share, free, no AI (checks only when due)') | crontab -
+   echo '*/5 * * * * /opt/bestly/cron/run.sh lax_code_fetch   # Parker: LAX garage QR from Park My Share, free, no AI (ticks every 5 min, asks Park My Share only when due)') | crontab -
 fi
 crontab -l | grep lax_code_fetch
