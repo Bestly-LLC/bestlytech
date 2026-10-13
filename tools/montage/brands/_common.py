@@ -118,6 +118,15 @@ COPY_NOTE = re.compile(rf"\b({_BROAD}|words?|text|lines?|captions?|messag\w*|cle
 END_NOTE = re.compile(r"\b(end[- ]?card|end[- ]?screen|closing[- ]?card|closing screen|outro|last card|final card|ending card|end slate|chips?|cta|call to action)\b", re.I)
 # "keep the current copy": the note wants the words untouched (it may still ask for b-roll or a new end card)
 KEEP_NOTE = re.compile(r"\b(keep|leave|preserve)\b[^.]{0,30}\b(copy|script|lines?|words|wording|text|narration)\b", re.I)
+# a note that says to KEEP the end card / chips ("Keep the current copy, chips, footage and end card") is not a note about changing it
+KEEP_END = re.compile(r"\b(keep|leave|preserve|unchanged|same|don'?t (?:change|touch)|do not (?:change|touch))\b(?:(?!\b(?:new|change|changed|redo|different|swap|replace|rewrite|update)\b)[^.]){0,80}\b(end[- ]?card|end[- ]?screen|closing[- ]?card|closing screen|outro|last card|final card|ending card|end slate|chips?|cta)\b", re.I)
+
+
+def end_note(note):
+    """True when the note asks about the closing card (change it), False when it is silent on it or says to keep it. Fixed 2026-10-12."""
+    return bool(END_NOTE.search(note or "")) and not KEEP_END.search(note or "")
+
+
 SAME_LIMIT = 0.70
 MOODS = ("calm", "upbeat", "confident", "warm", "playful")      # music beds (studio_music_tracks.mood); the writer picks one, the brand's CFG["mood"] is the fallback
 
@@ -463,7 +472,7 @@ def write(job, log, cfg):
                 "caption": cap.replace("\n\n" + tail, "") if tail else cap,
                 "scenes": [{k: sc.get(k, "") for k in (("kicker", "line", "say") + (("icon",) if icons else ()) + (("shot",) if broll else ()))}
                            for sc in parent.get("scenes", [])]}
-        end_ask = END_ASK.format(name=cfg["name"]) if (icons and cfg.get("end_cta_say") and END_NOTE.search(note)) else ""
+        end_ask = END_ASK.format(name=cfg["name"]) if (icons and cfg.get("end_cta_say") and end_note(note)) else ""
         system += REVISE.format(note=note, name=cfg["name"], end_ask=end_ask, script=json.dumps(keep, indent=1, ensure_ascii=False),
                                 mode=(MODE_KEEP if keep_copy else MODE_BROAD if BROAD_NOTE.search(note) else MODE_NARROW)
                                      + (SHOT_ASK if broll and not any(sc.get("shot") for sc in parent.get("scenes", [])) else ""))
@@ -505,7 +514,7 @@ def _carry_end(out, parent, note):
     """A re-cut keeps the current closing card (sub line, chips, spoken line) unless the note talks about the end card, so a note about
     something else (a font, the music) never swaps the chips back to the brand default. Added 2026-10-12."""
     pe = (parent or {}).get("end") or {}
-    if parent and pe.get("chips") and not END_NOTE.search(note or ""):
+    if parent and pe.get("chips") and not end_note(note):
         for k in ("sub", "chips", "say", "proposed"):
             if k in pe:
                 out["end"][k] = pe[k]
