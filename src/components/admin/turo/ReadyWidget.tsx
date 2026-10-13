@@ -15,7 +15,8 @@ import { LoadError, SectionHeader, cardCls, focusRing, text, tint } from "@/comp
 
 type CheckRow = { id: string; label: string; state: "ok" | "warn" | "unknown"; value: string; action?: string | null; hint?: string | null };
 type Ready = {
-  next: { guest: string | null; starts_at: string; kind: string } | null;
+  next: { guest: string | null; starts_at: string; kind: string; place?: "lax" | "home" | "delivery"; delivery_short?: string | null;
+    delivery_address?: string | null; miles?: number | null; need_pct?: number | null; battery_pct?: number | null } | null;
   on_trip: { guest: string | null; ends_at: string } | null;
   eta: { minutes: number; miles: number; eta_at: string; moving: boolean } | null;
   checks: CheckRow[]; state: "ready" | "warn" | "partial"; checked_at: string | null; warn_count: number;
@@ -32,6 +33,8 @@ const INFO: Record<string, string> = {
     "To clear their Bluetooth phone: in the car, tap the Bluetooth icon, pick their phone, then Forget. Yours stays.",
   spot: "Where the car is parked, from its GPS. Home = within about 720 ft of N Kings Rd. LAX = the Park My Share garage.",
 };
+const DELIVERY_CHARGE = "Delivery trip: you drive it over, so it needs to leave with enough to arrive at 80% or more. " +
+  "The target is 80% plus what the drive uses plus a small buffer, never under 90%.";
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 function until(iso: string) {
@@ -39,6 +42,14 @@ function until(iso: string) {
   if (m < 60) return `${Math.max(m, 0)} min`;
   const h = Math.floor(m / 60), d = Math.floor(h / 24);
   return d >= 1 ? `${d} day${d === 1 ? "" : "s"} ${h % 24} hr` : `${h} hr ${m % 60} min`;
+}
+
+/** "3.5" + "mi" glued with a no-break space so a number never wraps away from its unit. */
+const nb = (n: number | string, unit: string) => `${n}\u00A0${unit}`;
+/** Delivery: he drives it over and gets there at least an hour early, so "leave by" = start - 1 hr - drive (~14 mph in LA). */
+function leaveBy(startIso: string, miles: number | null | undefined) {
+  const driveMin = Math.max(10, Math.round(((miles ?? 5) / 14) * 60));
+  return clock(new Date(Date.parse(startIso) - (60 + driveMin) * 60000).toISOString());
 }
 
 function Dot({ s }: { s: CheckRow["state"] }) {
@@ -69,7 +80,7 @@ export function ReadyWidget({ compact = false }: { compact?: boolean }) {
   };
 
   const header = <SectionHeader id="ready-title" title={r?.on_trip ? "Car" : "Next guest"} icon={<Car className="h-3.5 w-3.5" aria-hidden />}
-    aside={r?.next ? `${r.next.guest ?? "Guest"} · ${when(r.next.starts_at)}` : undefined} />;
+    aside={r?.next ? `${r.next.guest ?? "Guest"}${r.next.place === "delivery" ? " · delivery" : ""} · ${when(r.next.starts_at)}` : undefined} />;
   if (!r) return (
     <section aria-labelledby="ready-title">
       {header}
@@ -80,12 +91,15 @@ export function ReadyWidget({ compact = false }: { compact?: boolean }) {
 
   const warns = r.checks.filter((c) => c.state === "warn");
   const ready = r.state === "ready";
+  const dlv = !r.on_trip && r.next?.place === "delivery" ? r.next : null;
+  const where = dlv ? (dlv.delivery_address ?? dlv.delivery_short ?? "their address") : null;
   const title = r.on_trip
     ? `On ${r.on_trip.guest ?? "a guest"}'s trip`
-    : ready ? `Ready for ${r.next?.guest ?? "the next guest"}`
+    : ready ? (dlv ? `Ready to deliver to ${dlv.guest ?? "the guest"}` : `Ready for ${r.next?.guest ?? "the next guest"}`)
     : warns.length ? `Almost ready · ${warns.length} thing${warns.length === 1 ? "" : "s"}` : "Mostly ready";
   const sub = r.on_trip
     ? `Back ${when(r.on_trip.ends_at)}`
+    : dlv ? `Delivery at ${clock(dlv.starts_at)} (in ${until(dlv.starts_at)}) · ${where}${dlv.miles != null ? ` · ${nb(dlv.miles, "mi")} away` : ""}`
     : r.next ? `Pickup in ${until(r.next.starts_at)}${r.checked_at ? ` · checked ${clock(r.checked_at)}` : ""}` : "No trip booked";
   const rows = compact && ready ? [] : compact ? warns : r.checks;
 
@@ -98,11 +112,21 @@ export function ReadyWidget({ compact = false }: { compact?: boolean }) {
             {r.on_trip ? <Car className="h-6 w-6" /> : ready ? <Check className="h-6 w-6" strokeWidth={2.6} /> : <AlertTriangle className="h-6 w-6" />}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[17px] font-semibold leading-tight text-white">{title}</p>
-            <p className={cn(text.detail, "mt-0.5 truncate")}>{sub}</p>
+            <p className="text-[17px] font-semibold leading-tight text-white">{title}</p>
+            <p className={cn(text.detail, "mt-0.5")}>{sub}</p>
           </div>
           {compact && <Link to="/admin/turo#ready" aria-label="Open the car check" className={cn("grid h-11 w-11 place-items-center rounded-full text-white/50 hover:text-white/80", focusRing)}><ChevronRight className="h-5 w-5" /></Link>}
         </div>
+        {dlv && (
+          <div className="flex items-start gap-3 border-t border-white/[0.06] px-4 py-3 sm:px-5">
+            <Navigation className={cn("mt-0.5 h-5 w-5 shrink-0", tint.blue)} aria-hidden />
+            <p className="min-w-0 flex-1 text-[15px] leading-snug text-white">
+              <b className="font-semibold">Leave by {leaveBy(dlv.starts_at, dlv.miles)}</b>
+              <span className="text-white/60"> · charge to {nb(`${dlv.need_pct ?? 90}`, "%")}+ first so it arrives at {nb("80", "%")}+
+                {dlv.battery_pct != null ? ` · now ${nb(`${dlv.battery_pct}`, "%")}` : ""}</span>
+            </p>
+          </div>
+        )}
         {r.eta && (
           <div className="flex items-center gap-3 border-t border-white/[0.06] px-4 py-3 sm:px-5">
             <Navigation className={cn("h-5 w-5 shrink-0", tint.blue)} aria-hidden />
@@ -123,7 +147,7 @@ export function ReadyWidget({ compact = false }: { compact?: boolean }) {
                       <Info className="h-[18px] w-[18px]" aria-hidden />
                     </button>
                   )}
-                  <span className={cn("min-w-0 flex-1 truncate text-right text-[15px]", c.state === "warn" ? tint.orange : "text-white/60")} title={c.value}>{c.value}{c.hint ? ` · ${c.hint}` : ""}</span>
+                  <span className={cn("min-w-0 flex-1 text-right text-[15px]", c.state === "warn" ? tint.orange : "text-white/60")} title={c.value}>{c.value}{c.hint ? ` · ${c.hint}` : ""}</span>
                   {c.action && ACTION_LABEL[c.action] && (
                     <button type="button" onClick={() => fix(c.action!)} disabled={!!busy}
                       className={cn("inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full bg-[#0A84FF] px-3.5 text-[13px] font-semibold text-white disabled:opacity-50", focusRing)}>
@@ -132,14 +156,14 @@ export function ReadyWidget({ compact = false }: { compact?: boolean }) {
                   )}
                 </div>
                 {info === c.id && INFO[c.id] && (
-                  <p role="note" className="mx-4 mb-3 -mt-1 rounded-xl bg-white/[0.06] px-3.5 py-2.5 text-[13px] leading-relaxed text-white/75 ring-1 ring-white/10 sm:mx-5">{INFO[c.id]}</p>
+                  <p role="note" className="mx-4 mb-3 -mt-1 rounded-xl bg-white/[0.06] px-3.5 py-2.5 text-[13px] leading-relaxed text-white/75 ring-1 ring-white/10 sm:mx-5">{c.id === "charge" && dlv ? DELIVERY_CHARGE : INFO[c.id]}</p>
                 )}
               </li>
             ))}
           </ul>
         )}
         {!compact && !r.on_trip && r.next && (
-          <p className={cn(text.detail, "border-t border-white/[0.06] px-4 py-3 sm:px-5")}>Scout pings you if anything is still orange 1 hour before pickup.</p>
+          <p className={cn(text.detail, "border-t border-white/[0.06] px-4 py-3 sm:px-5")}>Scout pings you if anything is still orange 1 hour before {dlv ? "delivery" : "pickup"}.</p>
         )}
       </div>
     </section>
