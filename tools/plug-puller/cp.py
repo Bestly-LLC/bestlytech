@@ -6,6 +6,7 @@ Login comes from env CP_USERNAME + CP_TOKEN (the coulomb_sess cookie, read from 
 
   cp.py status          -> {"ok":true,"session":null | {...},"token":<only if ChargePoint rotated it>}
   cp.py stop <id>       -> {"ok":true,"stopped":true,"session":{...after}}
+  cp.py login           -> {"ok":true,"token":<new coulomb_sess>}   (env CP_USERNAME + CP_PASSWORD; self sign-in)
 Errors -> {"ok":false,"kind":"signed_out"|"captcha"|"error","msg":"..."}
 
 ChargePoint has no public driver API: this is the open-source python-chargepoint library (unofficial).
@@ -33,7 +34,24 @@ def _sess(s):
     }
 
 
+async def login():
+    user, pw = os.environ.get("CP_USERNAME", ""), os.environ.get("CP_PASSWORD", "")
+    if not user or not pw:
+        return {"ok": False, "kind": "error", "msg": "CP_USERNAME/CP_PASSWORD missing"}
+    client = await ChargePoint.create(username=user)
+    try:
+        await client.login_with_password(pw)
+        tok = client.coulomb_token
+        if not tok:
+            return {"ok": False, "kind": "error", "msg": "login gave no token"}
+        return {"ok": True, "token": tok}
+    finally:
+        await client.close()
+
+
 async def run(cmd, arg):
+    if cmd == "login":
+        return await login()
     user, token = os.environ.get("CP_USERNAME", ""), os.environ.get("CP_TOKEN", "")
     client = await ChargePoint.create(username=user, coulomb_token=token)
     try:

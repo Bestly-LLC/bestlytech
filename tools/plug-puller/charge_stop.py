@@ -79,7 +79,7 @@ def _heal_venv(loc):
     loc["venv_heal_at"] = time.time()
     _save_local(loc)
     subprocess.run(["python3", "-m", "venv", VENV], capture_output=True, timeout=120)
-    r = subprocess.run([VENV + "/bin/pip", "install", "-q", "--upgrade", "python-chargepoint"], capture_output=True, text=True, timeout=600)
+    r = subprocess.run([VENV + "/bin/pip", "install", "-q", "--upgrade", "python-chargepoint>=2.3.1"], capture_output=True, text=True, timeout=600)
     return "venv rebuilt" if r.returncode == 0 else "venv rebuild failed: " + (r.stderr or "")[-200:]
 
 
@@ -93,6 +93,19 @@ def _cp(cmd, user, token, *args):
         return json.loads(line[-1])
     except ValueError:
         return {"ok": False, "kind": "bridge", "msg": line[-1][:300]}
+
+
+def _cp_login(email, password):
+    """Password sign-in through the bridge. Secrets go in env only; returns the bridge's JSON (token only to the caller)."""
+    env = dict(os.environ, CP_USERNAME=email, CP_PASSWORD=password)
+    r = subprocess.run([VENV + "/bin/python", BRIDGE, "login"], capture_output=True, text=True, timeout=120, env=env)
+    line = (r.stdout or "").strip().splitlines()
+    if not line:
+        return {"ok": False, "kind": "bridge", "msg": "login bridge gave no output"}
+    try:
+        return json.loads(line[-1])
+    except ValueError:
+        return {"ok": False, "kind": "bridge", "msg": "login bridge gave bad output"}
 
 
 def _notify(title, body, level="active", tag=None):
@@ -168,6 +181,41 @@ def main(argv):
             print(f"  refresh request failed: {e}", flush=True)
 
     res = _cp("status", user, token)
+    relogged = False
+    if not res.get("ok") and res.get("kind") in ("signed_out", "captcha") and not dry:
+        # Self sign-in: at most one password attempt per 60 min (never hammer; Datadome may block).
+        if st.get("signed_in") is not False:
+            lib.rpc("charge_stop_save", p={"signed_in": False, "last_error": res.get("msg") or res.get("kind"),
+                                           "checked": True, "log_kind": "signed_out"})
+            st["signed_in"] = False
+        if time.time() - loc.get("relogin_at", 0) >= 3600:
+            loc["relogin_at"] = time.time()
+            _save_local(loc)
+            email = lib.rpc("pi_secret_get", p_name="pi:chargepoint:email")
+            pw = lib.rpc("pi_secret_get", p_name="pi:chargepoint:password")
+            if email and pw:
+                lg = _cp_login(email, pw)
+                if lg.get("ok") and lg.get("token"):
+                    lib.rpc("pi_secret_put", p_name="pi:chargepoint:token", p_value=lg["token"])
+                    token, user = lg["token"], email
+                    res = _cp("status", user, token)
+                    relogged = bool(res.get("ok"))
+                    print(f"  relogin: login ok, status ok={relogged}", flush=True)
+                if not relogged:
+                    why = lg.get("kind") if not lg.get("ok") else res.get("kind")
+                    if why == "captcha":
+                        reason = "ChargePoint's bot check (Datadome) blocked the password sign-in."
+                    elif why == "signed_out":
+                        reason = "ChargePoint rejected the saved email or password (wrong password?)."
+                    else:
+                        reason = f"The sign-in failed ({why})."
+                    loc["relogin_why"] = why
+                    _save_local(loc)
+                    _raise("chargepoint.signin", "problem", "Plug Puller: ChargePoint blocked my sign-in",
+                           f"{reason} I can't see or end your charging sessions until I'm back in. I'll retry hourly.")
+            else:
+                _raise("chargepoint.signin", "problem", "Plug Puller: ChargePoint blocked my sign-in",
+                       "I have no saved ChargePoint email/password to sign in with. I'll retry hourly.")
     if not res.get("ok"):
         kind = res.get("kind")
         if kind == "bridge":
@@ -176,10 +224,7 @@ def main(argv):
             if not dry:
                 lib.rpc("charge_stop_save", p={"signed_in": False, "last_error": res.get("msg") or kind, "checked": True,
                                                **({"log_kind": "signed_out"} if st.get("signed_in") is not False else {})})
-                _raise("chargepoint.signin", "problem", "Plug Puller: ChargePoint signed me out",
-                       "I can't see or end your charging sessions until I'm signed back in.",
-                       "Log in at driver.chargepoint.com, then paste the fresh coulomb_sess cookie on /admin/turo (Plug Puller card).")
-            return f"signed out of ChargePoint ({kind})"
+            return f"signed out of ChargePoint ({kind}); next password retry within the hour"
         loc["errs"] = loc.get("errs", 0) + 1
         _save_local(loc)
         if loc["errs"] >= 3:
@@ -194,7 +239,7 @@ def main(argv):
              "battery": car.get("battery"), "car_limit": car.get("limit")}
     if st.get("signed_in") is False and not dry:
         _raise("chargepoint.signin", "resolved")
-        patch["log_kind"] = "signed_in"
+        patch["log_kind"] = "relogin" if relogged else "signed_in"
 
     s = res.get("session")
     if not s:
