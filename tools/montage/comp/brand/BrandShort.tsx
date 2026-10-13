@@ -643,24 +643,24 @@ const EndFooter: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, 
   );
 };
 
-const ChipRow: React.FC<{c: Chip; t: Theme; b: Brand; delay: number; compact?: boolean}> = ({c, t, b, delay, compact}) => {
+const ChipRow: React.FC<{c: Chip; t: Theme; b: Brand; delay: number; compact?: boolean; tight?: boolean}> = ({c, t, b, delay, compact, tight}) => {
   const f = useCurrentFrame();
   const {fps} = useVideoConfig();
   const s = spring({frame: f - delay, fps, config: {damping: 16, stiffness: 85, mass: 0.9}});
   const draw = spring({frame: f - delay - 4, fps, config: {damping: 200, stiffness: 45}});
   const o = Math.min(1, s);
   return (
-    <div style={{display: 'flex', alignItems: 'center', gap: compact ? 20 : 34, ...(compact ? {height: 96, padding: '0 34px 0 18px'} : {width: 940, height: 138, padding: '0 40px 0 30px'}), borderRadius: 69,
+    <div style={{display: 'flex', alignItems: 'center', gap: compact ? 20 : 34, ...(compact ? {height: 96, padding: '0 34px 0 18px'} : {width: 940, height: tight ? 112 : 138, padding: '0 40px 0 30px'}), borderRadius: 69,
                  background: `linear-gradient(90deg, ${rgba(t.accent, 0.2)} 0%, ${rgba(t.accent, 0.08)} 55%, ${rgba(t.accent, 0.02)} 100%)`,
                  boxShadow: `0 0 70px ${rgba(t.accent, 0.14)}`,
                  opacity: o, transform: `translateX(${(1 - s) * -90}px) scale(${0.94 + 0.06 * Math.min(1, s)})`}}>
       <div style={{position: 'relative', width: compact ? 64 : 96, height: compact ? 64 : 96, flex: compact ? '0 0 64px' : '0 0 96px'}}>
         <div style={{position: 'absolute', inset: -22, background: `radial-gradient(circle, ${rgba(t.accent, 0.4)} 0%, ${rgba(t.accent, 0)} 68%)`}} />
         <div style={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-          <Icon name={c.icon} t={t} draw={draw} size={compact ? 60 : 88} />
+          <Icon name={c.icon} t={t} draw={draw} size={compact ? 60 : tight ? 76 : 88} />
         </div>
       </div>
-      <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: compact ? 40 : 52, lineHeight: 1.1, color: t.ink, whiteSpace: 'nowrap'}}>{c.text}</div>
+      <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: compact ? 40 : tight ? 46 : 52, lineHeight: 1.1, color: t.ink, whiteSpace: 'nowrap'}}>{c.text}</div>
     </div>
   );
 };
@@ -674,9 +674,10 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number; compact?: 
   const cta = spring({frame: f - 64, fps, config: {damping: 14, stiffness: 90, mass: 0.9}});
   const pulse = 0.5 + 0.5 * Math.sin(f / 14);
   const chips = (e.chips || []).filter((c) => c && c.text);
+  const tz = !!e.tease;                                   // a Next tease sits at the foot: the stack is top-aligned and tighter so nothing touches it
   const sparks = [[170, 430, 34], [905, 360, 26], [110, 1130, 22], [965, 980, 30], [210, 1610, 28], [880, 1590, 24], [560, 270, 20]];
   return (
-    <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center', padding: '0 90px'}}>
+    <AbsoluteFill style={{alignItems: 'center', justifyContent: tz ? 'flex-start' : 'center', padding: tz ? '250px 90px 0' : '0 90px'}}>
       <div style={{position: 'absolute', left: 540 - 760, top: 780 - 760, width: 1520, height: 1520,
                    background: `radial-gradient(circle, ${rgba(t.accent, 0.2 + 0.04 * pulse)} 0%, ${rgba(t.accent, 0.07)} 38%, ${rgba(t.accent, 0)} 68%)`,
                    opacity: Math.min(1, logo)}} />
@@ -685,29 +686,29 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number; compact?: 
                              width: r * 2, height: r * 2, opacity: Math.min(1, logo) * (0.35 + 0.45 * Math.sin(f / (18 + i * 3) + i * 2) ** 2),
                              background: `radial-gradient(circle, ${rgba(t.accent, 0.85)} 0%, ${rgba(t.accent, 0.22)} 42%, ${rgba(t.accent, 0)} 72%)`}} />
       ))}
-      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: e.tease ? (compact ? -130 : -40) : compact ? 60 : 90}}>
+      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: tz ? 0 : compact ? 60 : 90}}>
         {b.end.orb ? (
-          <div style={{marginBottom: 56, opacity: Math.min(1, logo), transform: `scale(${0.6 + 0.4 * logo})`}}><Orb size={190} t={t} /></div>
+          <div style={{marginBottom: tz ? 40 : 56, opacity: Math.min(1, logo), transform: `scale(${0.6 + 0.4 * logo})`}}><Orb size={tz ? 150 : 190} t={t} /></div>
         ) : null}
         {b.end.heroLogo && b.logo.image ? (
-          <Img src={staticFile(b.logo.image)} style={{height: 150, mixBlendMode: (b.logo.blend as any) || 'normal', opacity: Math.min(1, logo),
-                                                      transform: `scale(${0.7 + 0.3 * logo})`, marginBottom: 34}} />
+          <Img src={staticFile(b.logo.image)} style={{height: tz ? 118 : 150, mixBlendMode: (b.logo.blend as any) || 'normal', opacity: Math.min(1, logo),
+                                                      transform: `scale(${0.7 + 0.3 * logo})`, marginBottom: tz ? 22 : 34}} />
         ) : null}
         <Rise delay={8} dur={hold} style={{textAlign: 'center'}}>
-          <div style={{fontFamily: (b.end_title || b.head).family, fontWeight: (b.end_title || b.head).weight, fontSize: compact ? 150 : 128, lineHeight: 1.05, letterSpacing: (b.end_title || b.head).spacing, color: t.head || t.ink, textWrap: 'balance' as any}}>{e.title}</div>
+          <div style={{fontFamily: (b.end_title || b.head).family, fontWeight: (b.end_title || b.head).weight, fontSize: tz ? (compact ? 132 : 116) : compact ? 150 : 128, lineHeight: 1.05, letterSpacing: (b.end_title || b.head).spacing, color: t.head || t.ink, textWrap: 'balance' as any}}>{e.title}</div>
         </Rise>
         {e.sub ? (
-          <Rise delay={16} dur={hold} style={{textAlign: 'center', marginTop: 30}}>
-            <div style={{fontFamily: b.label.family, fontSize: compact ? 58 : 50, lineHeight: 1.28, color: compact ? t.ink : t.dim, maxWidth: 860}}>{e.sub}</div>
+          <Rise delay={16} dur={hold} style={{textAlign: 'center', marginTop: tz ? 24 : 30}}>
+            <div style={{fontFamily: b.label.family, fontSize: tz ? (compact ? 52 : 44) : compact ? 58 : 50, lineHeight: 1.28, color: compact ? t.ink : t.dim, maxWidth: 860}}>{e.sub}</div>
           </Rise>
         ) : null}
-        <div style={compact ? {display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 20, marginTop: 56, maxWidth: 900}
-                            : {display: 'flex', flexDirection: 'column', gap: e.tease ? 20 : 26, marginTop: e.tease ? 48 : 64, alignItems: 'center'}}>
-          {chips.slice(0, 3).map((c, i) => <ChipRow key={i} c={c} t={t} b={b} delay={28 + i * 11} compact={compact} />)}
+        <div style={compact ? {display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 20, marginTop: tz ? 40 : 56, maxWidth: 900}
+                            : {display: 'flex', flexDirection: 'column', gap: tz ? 14 : 26, marginTop: tz ? 38 : 64, alignItems: 'center'}}>
+          {chips.slice(0, 3).map((c, i) => <ChipRow key={i} c={c} t={t} b={b} delay={28 + i * 11} compact={compact} tight={tz && !compact} />)}
         </div>
-        <div style={{marginTop: e.tease ? 50 : 70, opacity: Math.min(1, cta), transform: `translateY(${(1 - Math.min(1, cta)) * 40}px) scale(${0.9 + 0.1 * Math.min(1, cta)})`}}>
-          <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 60, letterSpacing: '0.01em', color: t.veil,
-                       padding: '28px 84px', borderRadius: 999, background: `linear-gradient(135deg, ${t.accent} 0%, ${t.accent2 ? rgba(t.accent2, 0.92) : rgba(t.accent, 0.82)} 100%)`,
+        <div style={{marginTop: tz ? 40 : 70, opacity: Math.min(1, cta), transform: `translateY(${(1 - Math.min(1, cta)) * 40}px) scale(${0.9 + 0.1 * Math.min(1, cta)})`}}>
+          <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: tz ? 54 : 60, letterSpacing: '0.01em', color: t.veil,
+                       padding: tz ? '22px 76px' : '28px 84px', borderRadius: 999, background: `linear-gradient(135deg, ${t.accent} 0%, ${t.accent2 ? rgba(t.accent2, 0.92) : rgba(t.accent, 0.82)} 100%)`,
                        boxShadow: `0 0 ${70 + 40 * pulse}px ${rgba(t.accent, 0.38 + 0.12 * pulse)}`}}>{e.cta}</div>
         </div>
       </div>
