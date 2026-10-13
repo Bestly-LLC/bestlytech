@@ -3,19 +3,21 @@
  *  - LeoHero: the orb (tap to talk, in place), what Leo is doing right now, his lines, "Type instead".
  *  - AskChips: the five "Ask me anything" questions from the printed card. Tapping one sends it to Leo.
  *  - LeoCard: read-only summaries of what Leo's tools return (charging, Superchargers, car, climate).
+ *  - Transcript / Composer / VoiceRow / UnlockAudio / Line: the conversation parts, shared with the docked mini Leo (LeoDock.tsx).
+ * The orb's look (swirl, halo, spring) lives in LeoOrb.tsx.
  * The session itself is useLeoSession.ts (the same code LeoScreen uses), so Leo behaves the same everywhere.
  *
- * The orb reacts to volume: Leo's voice while he talks, the guest's mic while Leo listens. Smoothed, written straight to
- * the element's transform (no re-render per frame), and scale only. Reduce Motion: no scale, the glow just brightens.
+ * The orb reacts to volume (useOrbReact in LeoOrb.tsx): Leo's voice while he talks, the guest's mic while Leo listens.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowUp, Keyboard, Loader2, Mic, MicOff, PhoneOff, Volume2 } from "lucide-react";
 import type { Card, Item, useLeoSession } from "./useLeoSession";
+import { OrbFace, OrbGlow, reducedMotion, useOrbReact } from "./LeoOrb";
 
 type Sess = ReturnType<typeof useLeoSession>;
 const nw = (s: ReactNode) => <span className="whitespace-nowrap">{s}</span>;
 
-const reduced = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const reduced = reducedMotion;
 
 /** Orb + glow, driven by the session's volume. */
 function Orb({ sess, onTap }: { sess: Sess; onTap: () => void }) {
@@ -23,43 +25,94 @@ function Orb({ sess, onTap }: { sess: Sess; onTap: () => void }) {
   const glow = useRef<HTMLSpanElement>(null);
   const live = sess.phase === "live";
   const wait = sess.phase === "connecting";
-  const cur = useRef(sess); cur.current = sess; // read per frame, so the effect doesn't restart on every render
-  useEffect(() => {
-    const o = orb.current, g = glow.current;
-    if (!o || !g) return;
-    if (!live) { o.style.transform = ""; g.style.transform = ""; g.style.opacity = ""; return; }
-    const calm = reduced();
-    let raf = 0, v = 0;
-    const tick = () => {
-      const c = cur.current, l = c.levels();
-      const target = Math.min(1, Math.max(0, c.speaking ? l.out * 1.6 : c.voice && !c.muted ? l.in * 1.1 : 0));
-      v += (target - v) * 0.22; // smoothing: rises quickly, settles softly
-      if (calm) { g.style.opacity = String(0.8 + v * 0.2); }
-      else {
-        o.style.transform = `scale(${(1 + v * 0.13).toFixed(4)})`;
-        g.style.transform = `scale(${(0.98 + v * 0.28).toFixed(4)})`;
-        g.style.opacity = String(Math.min(1, 0.78 + v * 0.3).toFixed(3));
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [live]);
+  useOrbReact(sess, orb, glow, live);
   const label = wait ? "Connecting to Leo" : live ? (sess.voice ? (sess.muted ? "Unmute the microphone" : "Mute the microphone") : "Switch to voice") : "Talk to Leo";
   return (
-    <div className="dl-stage" aria-hidden={false}>
-      <span ref={glow} aria-hidden className={`dl-glow ${live ? "" : wait ? "dl-glow-wait" : "dl-glow-idle"}`} />
+    <div id="leo-stage" className="dl-stage" aria-hidden={false}>
+      <OrbGlow glowRef={glow} mode={live ? "live" : wait ? "wait" : "idle"} />
       <button ref={orb} type="button" className="dl-orb" data-live={live} onClick={onTap} disabled={wait} aria-label={label} aria-busy={wait || undefined}>
-        {wait && <Loader2 className="h-8 w-8 animate-spin motion-reduce:animate-none" style={{ color: "rgba(74,34,8,.75)" }} aria-hidden />}
+        <OrbFace />
+        {wait && <Loader2 className="relative h-8 w-8 animate-spin motion-reduce:animate-none" style={{ color: "rgba(74,34,8,.75)" }} aria-hidden />}
       </button>
     </div>
   );
 }
 
-export function LeoHero({ sess, line, typing, setTyping }: { sess: Sess; line: string; typing: boolean; setTyping: (v: boolean) => void }) {
-  const { phase, voice, speaking, muted, working, locked } = sess;
+/** The mic / mute / end-call row for a live voice call. Shared by the hero and the docked panel. */
+export function VoiceRow({ sess }: { sess: Sess }) {
+  const { phase, voice, muted } = sess;
+  if (!(phase === "live" && voice)) return null;
+  return (
+    <div className="flex items-center justify-center gap-2.5">
+      <button type="button" onClick={() => void sess.toggleMic()} aria-pressed={muted}
+        className="flex min-h-[48px] items-center gap-2 rounded-full bg-white/70 px-5 text-[15px] font-semibold ring-1 ring-[rgba(19,40,42,0.16)] active:scale-[0.97]">
+        {muted ? <MicOff className="h-4 w-4" aria-hidden /> : <Mic className="h-4 w-4" aria-hidden />}{muted ? "Unmute" : "Mute"}
+      </button>
+      <button type="button" onClick={() => void sess.endCall()}
+        className="flex min-h-[48px] items-center gap-2 rounded-full bg-[#13282A] px-5 text-[15px] font-semibold text-white active:scale-[0.97]">
+        <PhoneOff className="h-4 w-4" aria-hidden />End call
+      </button>
+    </div>
+  );
+}
+
+/** "Tap to hear Leo": shown when the phone keeps Leo's audio paused. */
+export function UnlockAudio({ sess, className = "" }: { sess: Sess; className?: string }) {
+  if (!sess.locked) return null;
+  return (
+    <button type="button" onClick={sess.unlockAudio}
+      className={`mx-auto flex min-h-[52px] w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-[#E2733A] text-[16px] font-bold text-[#13282A] shadow-md active:scale-[0.99] ${className}`}>
+      <Volume2 className="h-5 w-5" aria-hidden />Tap to hear Leo
+    </button>
+  );
+}
+
+/** The conversation so far (Leo's lines, the guest's, cards, what Leo is doing). The newest line scrolls into view. */
+export function Transcript({ sess, className = "mt-5", last = 6, id }: { sess: Sess; className?: string; last?: number; id?: string }) {
+  const end = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const shown = sess.items.slice(1);
+  const { working } = sess;
+  useEffect(() => {
+    if (!shown.length) return;
+    // Only follow the conversation if this transcript is on screen. The hero's copy is far above a guest who is talking to
+    // the docked Leo; scrolling it into view would throw them back to the top of the page.
+    const r = box.current?.getBoundingClientRect();
+    if (r && (r.top > window.innerHeight || r.bottom < -80)) return;
+    end.current?.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "nearest" });
+  }, [shown.length, working]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!shown.length && !working) return null;
+  return (
+    <div id={id} ref={box} className={`flex flex-col gap-2.5 ${className}`} aria-live="polite" aria-label="Conversation with Leo">
+      {shown.slice(-last).map((it) => <Line key={it.id} it={it} />)}
+      {working && <p className="dl-enter flex items-center gap-2 text-[15px]" style={{ color: "var(--d-body)" }}><Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />{working}</p>}
+      <div ref={end} />
+    </div>
+  );
+}
+
+/** The typing box. `inputId` keeps the hero's and the panel's label ids apart. */
+export function Composer({ sess, inputId, autoFocus, className = "mt-4" }: { sess: Sess; inputId: string; autoFocus?: boolean; className?: string }) {
   const input = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState("");
+  const go = () => { const t = text.trim(); if (!t) return; setText(""); void sess.send(t); };
+  useEffect(() => { if (autoFocus) { const id = window.setTimeout(() => input.current?.focus(), 80); return () => window.clearTimeout(id); } }, [autoFocus]);
+  return (
+    <form className={`flex items-end gap-2 ${className}`} onSubmit={(e) => { e.preventDefault(); go(); }}>
+      <label className="sr-only" htmlFor={inputId}>Message Leo</label>
+      <textarea id={inputId} ref={input} rows={1} value={text} onChange={(e) => setText(e.target.value)} placeholder="Message Leo"
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); go(); } }}
+        className="max-h-32 min-h-[48px] min-w-0 flex-1 resize-none rounded-3xl border-0 bg-white px-4 py-3 text-[16px] leading-snug text-[#13282A] ring-1 ring-[rgba(19,40,42,0.18)] placeholder:text-[#6A7371] focus:outline-none focus:ring-2 focus:ring-[#13282A]" />
+      <button type="submit" aria-label="Send" disabled={!text.trim()}
+        className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#13282A] text-white active:scale-95 disabled:opacity-40">
+        <ArrowUp className="h-5 w-5" aria-hidden />
+      </button>
+    </form>
+  );
+}
+
+export function LeoHero({ sess, line, typing, setTyping }: { sess: Sess; line: string; typing: boolean; setTyping: (v: boolean) => void }) {
+  const { phase, voice, speaking, muted } = sess;
   const live = phase === "live";
   const onTap = () => {
     if (phase === "connecting") return;
@@ -69,12 +122,6 @@ export function LeoHero({ sess, line, typing, setTyping }: { sess: Sess; line: s
   const status = phase === "connecting" ? "Connecting"
     : live ? (voice ? (speaking ? "Leo is talking" : muted ? "Muted. Tap to unmute" : "Listening. Go ahead") : "Chatting. Tap to talk instead")
     : phase === "ended" ? "Call ended. Tap to talk again" : "Tap to talk to me";
-  const go = () => { const t = text.trim(); if (!t) return; setText(""); void sess.send(t); };
-  useEffect(() => { if (typing) window.setTimeout(() => input.current?.focus(), 80); }, [typing]);
-  // The newest line is the one on screen: bring it into view when it arrives.
-  const end = useRef<HTMLDivElement>(null);
-  const shown = sess.items.slice(1);
-  useEffect(() => { if (shown.length) end.current?.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "nearest" }); }, [shown.length, working]);
 
   return (
     <section id="leo" aria-label="Leo, your trip helper" className="scroll-mt-4">
@@ -83,44 +130,12 @@ export function LeoHero({ sess, line, typing, setTyping }: { sess: Sess; line: s
       <h1 className="mt-3 text-center text-[46px] font-bold leading-[1.02] tracking-[-0.015em]" style={{ fontFamily: "var(--trip-title-font)", color: "var(--d-ink)" }}>Hi, I'm Leo.</h1>
       <p className="mx-auto mt-3 max-w-[20rem] text-center text-[18px] leading-snug" style={{ color: "var(--d-body)" }}>{line}</p>
 
-      {live && voice && (
-        <div className="mt-4 flex items-center justify-center gap-2.5">
-          <button type="button" onClick={() => void sess.toggleMic()} aria-pressed={muted}
-            className="flex min-h-[48px] items-center gap-2 rounded-full bg-white/70 px-5 text-[15px] font-semibold ring-1 ring-[rgba(19,40,42,0.16)] active:scale-[0.97]">
-            {muted ? <MicOff className="h-4 w-4" aria-hidden /> : <Mic className="h-4 w-4" aria-hidden />}{muted ? "Unmute" : "Mute"}
-          </button>
-          <button type="button" onClick={() => void sess.endCall()}
-            className="flex min-h-[48px] items-center gap-2 rounded-full bg-[#13282A] px-5 text-[15px] font-semibold text-white active:scale-[0.97]">
-            <PhoneOff className="h-4 w-4" aria-hidden />End call
-          </button>
-        </div>
-      )}
-      {locked && (
-        <button type="button" onClick={sess.unlockAudio}
-          className="mx-auto mt-4 flex min-h-[52px] w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-[#E2733A] text-[16px] font-bold text-[#13282A] shadow-md active:scale-[0.99]">
-          <Volume2 className="h-5 w-5" aria-hidden />Tap to hear Leo
-        </button>
-      )}
-
-      {(shown.length > 0 || working) && (
-        <div className="mt-5 flex flex-col gap-2.5" aria-live="polite" aria-label="Conversation with Leo">
-          {shown.slice(-6).map((it) => <Line key={it.id} it={it} />)}
-          {working && <p className="dl-enter flex items-center gap-2 text-[15px]" style={{ color: "var(--d-body)" }}><Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />{working}</p>}
-          <div ref={end} />
-        </div>
-      )}
+      {live && voice && <div className="mt-4"><VoiceRow sess={sess} /></div>}
+      <UnlockAudio sess={sess} className="mt-4" />
+      <Transcript sess={sess} />
 
       {typing ? (
-        <form className="mt-4 flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); go(); }}>
-          <label className="sr-only" htmlFor="leo-type">Message Leo</label>
-          <textarea id="leo-type" ref={input} rows={1} value={text} onChange={(e) => setText(e.target.value)} placeholder="Message Leo"
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); go(); } }}
-            className="max-h-32 min-h-[48px] min-w-0 flex-1 resize-none rounded-3xl border-0 bg-white px-4 py-3 text-[16px] leading-snug text-[#13282A] ring-1 ring-[rgba(19,40,42,0.18)] placeholder:text-[#6A7371] focus:outline-none focus:ring-2 focus:ring-[#13282A]" />
-          <button type="submit" aria-label="Send" disabled={!text.trim()}
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#13282A] text-white active:scale-95 disabled:opacity-40">
-            <ArrowUp className="h-5 w-5" aria-hidden />
-          </button>
-        </form>
+        <Composer sess={sess} inputId="leo-type" autoFocus />
       ) : (
         <div className="mt-3 flex justify-center">
           <button type="button" onClick={() => setTyping(true)} className="flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[15px] font-semibold underline decoration-[rgba(19,40,42,0.35)] underline-offset-4" style={{ color: "var(--d-ink)" }}>
@@ -132,7 +147,7 @@ export function LeoHero({ sess, line, typing, setTyping }: { sess: Sess; line: s
   );
 }
 
-function Line({ it }: { it: Item }) {
+export function Line({ it }: { it: Item }) {
   if (it.kind === "card") return <LeoCard card={it.card} />;
   if (it.kind === "note") return <p role={it.tone === "error" ? "alert" : undefined} className="dl-enter rounded-2xl bg-white/70 px-4 py-3 text-[15px] leading-snug ring-1 ring-[rgba(179,38,30,0.35)]" style={{ color: "#8C1C16" }}>{it.text}</p>;
   return <p className={`dl-enter dl-bubble ${it.kind === "you" ? "dl-bubble-you" : "dl-bubble-leo"}`}>{it.text}</p>;
