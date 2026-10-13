@@ -101,7 +101,6 @@ const AdminWaitlist = lazyPage(() => import("./pages/admin/AdminWaitlist"));
 const CloudDealDetail = lazyPage(() => import("./pages/admin/CloudDealDetail"));
 const CloudDiscoveryBrief = lazyPage(() => import("./pages/admin/CloudDiscoveryBrief"));
 const AdminSettings = lazyPage(() => import("./pages/admin/AdminSettings"));
-const AdminLeads = lazyPage(() => import("./pages/admin/AdminLeads"));
 const HomeHubOverview = lazyPage(() => import("./pages/admin/HomeHubOverview"));
 const HomeHubPihole = lazyPage(() => import("./pages/admin/HomeHubPihole"));
 const HomeHubHomeAssistant = lazyPage(() => import("./pages/admin/HomeHubHomeAssistant"));
@@ -114,8 +113,7 @@ const RoofGuard = lazyPage(() => import("./pages/admin/RoofGuard"));
 const AvaAssistant = lazyPage(() => import("./pages/admin/AvaAssistant"));
 const MayaDesk = lazyPage(() => import("./pages/admin/MayaDesk"));
 const AgentDesk = lazyPage(() => import("./pages/admin/AgentDesk"));
-const Hunter = lazyPage(() => import("./pages/admin/Hunter"));
-const HunterScores = lazyPage(() => import("./pages/admin/HunterScores"));
+const Pipeline = lazyPage(() => import("./pages/admin/Pipeline"));
 const AgentNew = lazyPage(() => import("./pages/admin/AgentNew"));
 const ClaimsCloser = lazyPage(() => import("./pages/admin/ClaimsCloser"));
 const Settlements = lazyPage(() => import("./pages/admin/Settlements"));
@@ -137,6 +135,21 @@ function TabRedirect({ to, tab }: { to: string; tab: string }) {
   const params = new URLSearchParams(search);
   params.set("tab", tab);
   return <Navigate to={`${to}?${params.toString()}${hash}`} replace />;
+}
+
+/** The old Leads tabs now live under Pipeline > Inbound (?tab=inbound&sub=<tab>). */
+function InboundRedirect({ sub }: { sub?: string }) {
+  const { search, hash } = useLocation();
+  const params = new URLSearchParams(search);
+  params.set("tab", "inbound");
+  if (sub) params.set("sub", sub);
+  return <Navigate to={`/admin/pipeline?${params.toString()}${hash}`} replace />;
+}
+/** /admin/leads -> Pipeline; /admin/leads?tab=cloud -> Pipeline > Inbound > In-House Cloud. */
+function LeadsRedirect() {
+  const { search } = useLocation();
+  const old = new URLSearchParams(search).get("tab");
+  return old ? <InboundRedirect sub={old} /> : <Navigate to="/admin/pipeline" replace />;
 }
 
 const queryClient = new QueryClient();
@@ -236,19 +249,20 @@ const App = () => {
                 <Route path="/admin/approve" element={<AdminRoute><AdminApproveLogin /></AdminRoute>} />
                 <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
                   <Route index element={<AdminDashboard />} />
-                  <Route path="leads" element={<AdminLeads />} />
-                  <Route path="submissions" element={<TabRedirect to="/admin/leads" tab="marketplace" />} />
+                  <Route path="pipeline" element={<Pipeline />} />
+                  <Route path="leads" element={<LeadsRedirect />} />
+                  <Route path="submissions" element={<InboundRedirect sub="marketplace" />} />
                   <Route path="submissions/:id" element={<AdminSubmissionDetail />} />
                   <Route path="settings" element={<AdminSettings />} />
                   <Route path="guide" element={<Navigate to="/admin/settings?tab=guide" replace />} />
                   <Route path="contacts" element={<AdminContacts />} />
-                  <Route path="hires" element={<TabRedirect to="/admin/leads" tab="hire" />} />
+                  <Route path="hires" element={<InboundRedirect sub="hire" />} />
                   <Route path="waitlist" element={<AdminWaitlist />} />
                   <Route path="meetings" element={<AdminMeetingsSection />} />
                   {/* Clips used to be its own page; keep the link working. */}
                   <Route path="clips" element={<Navigate to="/admin/meetings" replace />} />
                   <Route path="partners" element={<AdminPartners />} />
-                  <Route path="cloud" element={<TabRedirect to="/admin/leads" tab="cloud" />} />
+                  <Route path="cloud" element={<InboundRedirect sub="cloud" />} />
                   <Route path="cloud/:id" element={<CloudDealDetail />} />
                   <Route path="cloud/:id/brief-pdf" element={<CloudDiscoveryBrief />} />
                   <Route path="shield-reports" element={<Navigate to="/admin" replace />} />
@@ -274,11 +288,11 @@ const App = () => {
                   <Route path="maya" element={<MayaDesk />} />
                   <Route path="agents/new" element={<AgentNew />} />
                   <Route path="agents/:slug" element={<AgentDesk />} />
-                  {/* Hunter lives under Leads. The old /admin/hunter address keeps working. */}
-                  <Route path="leads/hunter" element={<Hunter />} />
-                  <Route path="leads/hunter/scores" element={<HunterScores />} />
-                  <Route path="hunter" element={<Navigate to="/admin/leads/hunter" replace />} />
-                  <Route path="hunter/scores" element={<Navigate to="/admin/leads/hunter/scores" replace />} />
+                  {/* Hunter and Jev scores now live in Pipeline. Old addresses keep working. */}
+                  <Route path="leads/hunter" element={<Navigate to="/admin/pipeline" replace />} />
+                  <Route path="leads/hunter/scores" element={<Navigate to="/admin/pipeline" replace />} />
+                  <Route path="hunter" element={<Navigate to="/admin/pipeline" replace />} />
+                  <Route path="hunter/*" element={<Navigate to="/admin/pipeline" replace />} />
                   <Route path="wall" element={<Wall />} />
                   <Route path="sky" element={<Sky />} />
                   <Route path="security" element={<Security />} />

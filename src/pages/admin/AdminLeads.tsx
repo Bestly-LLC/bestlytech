@@ -6,10 +6,12 @@ const CloudDeals = lazyPage(() => import("./CloudDeals"));
 const AdminSubmissions = lazyPage(() => import("./AdminSubmissions"));
 const AdminHireRequests = lazyPage(() => import("./AdminHireRequests"));
 
-/** Work → Leads: every lead in one pipeline, plus each funnel's own working view. */
-export default function AdminLeads() {
+/** Pipeline → Inbound: every lead in one pipeline, plus each funnel's own working view. */
+export default function AdminLeads({ embedded }: { embedded?: boolean } = {}) {
   return (
     <SectionTabs
+      paramName={embedded ? "sub" : "tab"}
+      embedded={embedded}
       title="Leads"
       description="Every lead from every funnel. Move them along, star them, set follow-ups."
       tabs={[
