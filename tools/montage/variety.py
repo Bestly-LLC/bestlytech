@@ -347,6 +347,11 @@ def extra_pieces(plan, p):
 
 
 # ---------------------------------------------------------------------------------------------------------------- gate + record
+def _lead(t):
+    """The first sentence of an opening."""
+    return re.split(r"(?<=[.?!])\s", (t or "").strip(), maxsplit=1)[0]
+
+
 def gate(cfg, job, plan, out, opening_check=True):
     """-> (ok, why). Dimensions: >= 3 of the brand's look dimensions must differ from each of its last 8 videos; the opening must not be
     near-identical to any of the last 20 openings. (The music track is added later; the picker keeps it off the last two.)"""
@@ -361,8 +366,9 @@ def gate(cfg, job, plan, out, opening_check=True):
             why.append(f"looks too much like {r.get('item_code') or str(r['job_id'])[:8]} (only {d} of {len(dims)} look choices differ)")
     first = (out["scenes"][0] if out.get("scenes") else {})
     opening = f"{first.get('line', '')} {first.get('say', '')}".strip()
+    lead = _lead(first.get("line") or opening)          # the hook sentence only: every say carries the same "what it is" sentence, which is not the hook
     for r in (recent if opening_check else []):
-        sim = similarity(opening, r.get("opening"))
+        sim = similarity(lead, _lead(r.get("opening")))
         if sim >= OPENING_LIMIT:
             why.append(f"opening is {sim:.0%} the same as {r.get('item_code') or str(r['job_id'])[:8]}'s ('{(r.get('opening') or '')[:60]}')")
             break
