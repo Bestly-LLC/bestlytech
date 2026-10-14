@@ -8,6 +8,7 @@
  *   Settings    the smallest monthly charge worth a question, and the savings size worth a push
  * Data: cost_cutter_admin() (admin only). Migration 20261011070200_penny_admin_and_mercury_token.sql.
  */
+import { Lines } from "@/components/Lines";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { Check, CircleAlert, Landmark, Loader2, Lock, Scissors } from "lucide-react";
 import { toast } from "sonner";
@@ -49,7 +50,7 @@ function Stat({ title, value, sub }: { title: string; value: React.ReactNode; su
     <div className={cn(card, "p-4")}>
       <p className={cn("text-[13px]", secondary)}>{title}</p>
       <p className={cn("mt-1 text-[22px] font-semibold leading-tight tabular-nums", label)}>{value}</p>
-      {sub && <p className={cn("mt-0.5 text-[13px] leading-snug", secondary)}>{sub}</p>}
+      {sub && <p className={cn("mt-0.5 text-[13px] leading-snug", secondary)}><Lines>{sub}</Lines></p>}
     </div>
   );
 }

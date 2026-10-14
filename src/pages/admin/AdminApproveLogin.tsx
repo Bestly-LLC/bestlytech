@@ -1,3 +1,4 @@
+import { Lines } from "@/components/Lines";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -293,7 +294,7 @@ export default function AdminApproveLogin() {
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Finding the request…
                   </span>
                 ) : msg ? (
-                  <span className="text-red-400 bento:text-red-600">{msg}</span>
+                  <span className="text-red-400 bento:text-red-600"><Lines>{msg}</Lines></span>
                 ) : null}
               </p>
             </section>

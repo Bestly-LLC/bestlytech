@@ -203,7 +203,7 @@ export default function HostGate() {
       </span>
       <div className="min-w-0 flex-1">
         <div className="break-words text-[17px] font-semibold leading-snug">{title}</div>
-        <div className="break-words text-[13px] leading-snug" style={{ color: C.sec }}>{sub}</div>
+        <div className="break-words text-[13px] leading-snug" style={{ color: C.sec }}><Lines>{sub}</Lines></div>
       </div>
       {right}
     </div>
@@ -274,7 +274,7 @@ export default function HostGate() {
           return (<>
             <div>
               <h1 className="break-words text-[28px] font-bold leading-[34px]">{first}</h1>
-              <p className="break-words text-[15px]" style={{ color: C.sec }}>{subtitle}</p>
+              <p className="break-words text-[15px]" style={{ color: C.sec }}><Lines>{subtitle}</Lines></p>
             </div>
 
             <Card>

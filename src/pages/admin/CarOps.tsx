@@ -186,7 +186,7 @@ function Tile({ icon, k, v, sub, bad }: { icon: React.ReactNode; k: string; v: R
     <div className="rounded-2xl bg-white/[0.04] p-3 bento:bg-neutral-50">
       <p className={cn("flex items-center gap-1.5 text-[11px] uppercase tracking-wide", secondary)}>{icon}{k}</p>
       <p className={cn("mt-1 text-[15px] font-semibold tabular-nums", bad ? tint.orange : label)}>{v}</p>
-      {sub && <p className={cn("text-[11px]", secondary)}>{sub}</p>}
+      {sub && <p className={cn("text-[11px]", secondary)}><Lines>{sub}</Lines></p>}
     </div>
   );
 }

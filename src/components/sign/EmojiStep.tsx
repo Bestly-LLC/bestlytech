@@ -1,4 +1,5 @@
 /** Step 2: one emoji per guest, unique across the wall. Scout (the server) decides where it lands. */
+import { Lines } from "@/components/Lines";
 import { useEffect, useMemo, useState } from "react";
 import { PICKS, emojiKey, isOneEmoji, lastEmoji, surprise } from "./emoji";
 import { claimEmoji, takenEmojis, type WallEmoji } from "./signApi";
@@ -128,7 +129,7 @@ export default function EmojiStep({
         <button type="button" onClick={surpriseMe} className="h-11 rounded-[12px] bg-white/[0.1] text-[16px] font-semibold active:scale-[0.97]">
           Surprise me
         </button>
-        {msg && <p role="alert" className="text-[14px] leading-snug text-[#FFB4B4]">{msg}</p>}
+        {msg && <p role="alert" className="text-[14px] leading-snug text-[#FFB4B4]"><Lines>{msg}</Lines></p>}
         <div className="mt-auto flex gap-2">
           <button type="button" onClick={onSkip} className="h-12 w-[84px] rounded-[14px] text-[17px] font-semibold text-white/70 active:scale-[0.97]">
             Skip

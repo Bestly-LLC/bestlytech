@@ -9,6 +9,7 @@
  * Calling rule shown on the page: a number is dialable only once its line type is verified as a
  * landline or VoIP (Phase 2). Scraped numbers stay "unverified" until then.
  */
+import { Lines } from "@/components/Lines";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -399,7 +400,7 @@ function CallingCard() {
         </div>
       </div>
       {c.open_issue && <p className="mt-3 text-sm text-amber-200">{c.open_issue.title}{c.open_issue.body ? `: ${c.open_issue.body}` : ""}</p>}
-      {note && <p className="mt-3 text-sm text-sky-200">{note}</p>}
+      {note && <p className="mt-3 text-sm text-sky-200"><Lines>{note}</Lines></p>}
       <div className="mt-4 flex flex-wrap gap-2">
         <Stat n={c.dialable} label="ready to dial" />
         <Stat n={c.calls_total} label="calls made" />

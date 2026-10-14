@@ -130,7 +130,7 @@ function Tile({ k, v, sub, wrap }: { k: string; v: string; sub?: string; wrap?: 
     <div className="rounded-[14px] bg-[#2C2C2E] p-3 bento:bg-[#7676801f]">
       <p className={cn("text-[11px] uppercase tracking-wide", secondary)}>{k}</p>
       <p className={cn("mt-0.5 text-[15px] font-semibold tabular-nums", wrap ? "break-words" : nw, label)}>{v}</p>
-      {sub && <p className={cn("mt-0.5 text-[11px]", secondary)}>{sub}</p>}
+      {sub && <p className={cn("mt-0.5 text-[11px]", secondary)}><Lines>{sub}</Lines></p>}
     </div>
   );
 }

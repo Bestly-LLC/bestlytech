@@ -220,7 +220,7 @@ function TuroOverview() {
             <div key={k} className={cn(card, "p-4")}>
               <p className="text-xs text-white/60">{k}</p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-white">{v}</p>
-              <p className="mt-0.5 text-xs text-white/60">{sub}</p>
+              <p className="mt-0.5 text-xs text-white/60"><Lines>{sub}</Lines></p>
             </div>
           ))}
         </section>

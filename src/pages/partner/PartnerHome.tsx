@@ -11,6 +11,7 @@
  * Only what RLS lets a partner read. To add a tab: add it to TABS and render it in the switch.
  * To add a shortcut: add it to SHORTCUTS (sidebar on desktop, a list at the bottom of Home on phones).
  */
+import { Lines } from "@/components/Lines";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
@@ -911,7 +912,7 @@ function TabHead({ title, sub, q, setQ, placeholder }: { title: string; sub: str
     <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <h1 className="text-[1.75rem] font-bold tracking-tight">{title}</h1>
-        <p className="mt-0.5 text-sm text-white/60">{sub}</p>
+        <p className="mt-0.5 text-sm text-white/60"><Lines>{sub}</Lines></p>
       </div>
       <label className="relative sm:w-72">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" />

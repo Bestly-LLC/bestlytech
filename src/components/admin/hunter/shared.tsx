@@ -2,6 +2,7 @@
  * Small pieces shared by Hunter's pages (overview, Jev card, score screen).
  * House rules baked in: a number never wraps away from its unit (NB), times are 12-hour, nothing is cut off with "...".
  */
+import { Lines } from "@/components/Lines";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,7 @@ export function Stat({ label, value, warn, hint }: { label: string; value: numbe
     <div className={cn("rounded-2xl px-3 py-3 ring-1", warn ? "bg-orange-500/10 ring-orange-500/30" : "bg-white/[0.04] ring-white/10")}>
       <div className={cn("text-[26px] font-semibold leading-none tabular-nums", warn ? "text-orange-300" : "text-white")}>{value ?? "–"}</div>
       <div className={cn("mt-1.5 text-[12px] leading-snug", warn ? "text-orange-200" : "text-white/60")}>{label}</div>
-      {hint && <div className="mt-0.5 text-[12px] leading-snug text-white/55">{hint}</div>}
+      {hint && <div className="mt-0.5 text-[12px] leading-snug text-white/55"><Lines>{hint}</Lines></div>}
     </div>
   );
 }
@@ -35,7 +36,7 @@ export function Card({ title, hint, children, aside }: { title: string; hint?: s
         <h2 className="text-[17px] font-semibold text-white">{title}</h2>
         {aside}
       </div>
-      {hint && <p className="mt-1 text-[14px] leading-relaxed text-white/65">{hint}</p>}
+      {hint && <p className="mt-1 text-[14px] leading-relaxed text-white/65"><Lines>{hint}</Lines></p>}
       <div className="mt-3">{children}</div>
     </section>
   );

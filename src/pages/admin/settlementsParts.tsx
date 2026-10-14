@@ -2,6 +2,7 @@
  * Settlements page parts: "Your claim details" (settlement_profile_*), "Your answers" (settlement_fact*), and the digest
  * confirm card (settlement_digest_get / settlement_digest_confirm, opened from the lock-screen notification).
  */
+import { Lines } from "@/components/Lines";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Check, CircleAlert, FileCheck2, Pencil, X } from "lucide-react";
@@ -70,7 +71,7 @@ export function ProfileCard({ profile, onSaved }: { profile: Profile; onSaved: (
             <div className="min-w-0">
               <p className={cn("text-[17px] font-semibold leading-snug", label)}>{profile.full_name}</p>
               <p className={cn("mt-0.5 text-[14px] leading-snug", secondary)}>{profile.email}{profile.phone ? <> · <span className="whitespace-nowrap">{profile.phone}</span></> : ""}</p>
-              <p className={cn("text-[14px] leading-snug", secondary)}>{line}</p>
+              <p className={cn("text-[14px] leading-snug", secondary)}><Lines>{line}</Lines></p>
               <p className={cn("mt-1 text-[14px] leading-snug", label)}>Paid by {payout}</p>
               <p className={cn("mt-1 flex items-center gap-1 text-[13px]", tint.green)}>
                 <Check className="h-4 w-4" aria-hidden /> Confirmed <span className="whitespace-nowrap">{shortDay(profile.confirmed_at)}, {shortTime(profile.confirmed_at)}</span>
