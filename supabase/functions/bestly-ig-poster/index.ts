@@ -30,7 +30,7 @@
 //   POST { action:'queue', brand, mediaUrl|mediaUrls[], caption, scheduledAt?,
 //                          mediaType?, coverUrl? }
 //   POST { action:'post', brand, mediaUrl, caption, mediaType?, coverUrl? }
-//                                             -> publish now
+//                                             -> publish now (house brands: files a Studio draft instead, posts nothing)
 //
 // coverUrl applies to video only. A Reel is 1080x1920 and the profile grid
 // shows it in a 3:4 tile, keeping the middle 1440 rows; without an explicit
@@ -645,6 +645,17 @@ Deno.serve(async (req) => {
       const urls: string[] | null = Array.isArray(body.mediaUrls) && body.mediaUrls.length > 1
         ? body.mediaUrls.map(String) : null;
       if (!body.mediaUrl && !urls) return J({ error: "mediaUrl or mediaUrls required" }, 400);
+      // House brands (2026-10-14): nothing posts unless Jared tapped Approve in Studio. A direct call files the piece as a
+      // Studio draft (Drafts > To review) and posts nothing. Studio's own posts go through the queue and the drain, never here.
+      const gate = await db.rpc("house_direct_gate", {
+        p_brand: brand, p_urls: urls ?? [String(body.mediaUrl)], p_type: body.mediaType || (urls ? "carousel" : "image"),
+        p_caption: body.caption || "", p_source: "bestly-ig-poster action=post",
+      });
+      if (gate.error) return J({ brand, ok: false, error: "approval gate unavailable, nothing was posted" }, 503);
+      if (gate.data?.house) {
+        return J({ brand, ok: false, held: true, stage: "needs-approval", filed: !!gate.data.filed, studioCode: gate.data.code ?? null,
+                   detail: "Nothing posts until Jared taps Approve in Studio. The piece was filed under Drafts, To review." });
+      }
       const res = await publishAny(
         acct, urls, body.mediaUrl ?? null, body.caption || "", body.mediaType || "image",
         body.coverUrl ? String(body.coverUrl) : null,
