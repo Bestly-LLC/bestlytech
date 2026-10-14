@@ -444,8 +444,8 @@ def main(argv=None):
              % len(alias_queue)) if alias_queue else "No aliases waiting.")
         supabase_rpc("scout_notify", {
             "p_title": "Hermes (inbox): %d trashed" % moved_total,
-            "p_body": detail, "p_level": "info", "p_push": False,
-            "p_link": "/admin/team", "p_dedupe": "inbox-cleaner." +
+            "p_body": detail, "p_severity": "info", "p_push": False,
+            "p_url": "/admin/team", "p_dedupe": "inbox-cleaner." +
             datetime.now().strftime("%Y%m%d"),
         })
     return summary

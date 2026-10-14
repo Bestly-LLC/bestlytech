@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { askScout } from "@/components/admin/scoutBus";
+import { SecurityTokensCard } from "./SecurityTokensCard";
 import { Binoculars } from "lucide-react";
 import { pollInterval } from "@/lib/polling";
 import {
@@ -413,6 +414,8 @@ export default function Security() {
           )}
         </TabsContent>
       </Tabs>
+
+      <SecurityTokensCard />
     </div>
   );
 }
