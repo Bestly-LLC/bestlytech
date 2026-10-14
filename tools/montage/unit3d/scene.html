@@ -1,0 +1,90 @@
+<!doctype html><html><body style="margin:0;background:transparent">
+<canvas id="c" width="1200" height="1200"></canvas>
+<script type="importmap">{"imports":{"three":"./three/build/three.module.js","three/addons/":"./three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+const SIZE = 1200;
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(SIZE, SIZE, false);
+renderer.setClearColor(0x000000, 0);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.5;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xdfe3ee, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 3.2); key.position.set(4, 7, 5); scene.add(key);
+const fill = new THREE.DirectionalLight(0xeaecff, 1.2); fill.position.set(-5, 3, 2); scene.add(fill);
+const rim = new THREE.PointLight(0x7a8be0, 0, 16); rim.position.set(-3, 2, -4); scene.add(rim);
+// a second, warmer-indigo kicker from the front-right so the gunmetal reads on a dark card ground
+const kick = new THREE.PointLight(0x8b9bf0, 0, 16); kick.position.set(3.5, 0.5, -3); scene.add(kick);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+const device = new THREE.Group(); scene.add(device);
+const draco = new DRACOLoader(); draco.setDecoderPath('./draco/');
+const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
+const clamp01 = (t) => Math.min(1, Math.max(0, t));
+const eio = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+const eo = (t) => 1 - Math.pow(1 - t, 3);
+const RIM = 22, KICK = 14;
+const LID_CLOSED_Y = -0.3, LID_OPEN_Y = 0.55, LID_DRIFT_Z = -1.9;
+let lid = null, lidMats = [];
+const gltf = await loader.loadAsync('./device-web-split.glb');
+const model = gltf.scene;
+const box = new THREE.Box3().setFromObject(model);
+const size = box.getSize(new THREE.Vector3());
+model.scale.setScalar(1.75 / Math.max(size.x, size.y, size.z));
+box.setFromObject(model); model.position.sub(box.getCenter(new THREE.Vector3()));
+device.add(model);
+lid = model.getObjectByName('lid');
+if (lid) lid.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); lidMats.push(o.material); } });
+const polarCam = (polar, radius, azim, ly = -0.1) => {
+  camera.position.set(radius * Math.sin(polar) * Math.sin(azim), radius * Math.cos(polar), radius * Math.sin(polar) * Math.cos(azim));
+  camera.lookAt(0, ly, 0);
+};
+const setLid = (lift, arc) => {
+  if (!lid) return;
+  lid.position.y = LID_CLOSED_Y + lift * (LID_OPEN_Y - LID_CLOSED_Y);
+  lid.position.z = arc * LID_DRIFT_Z; lid.rotation.x = lift * -0.12;
+  const fade = clamp01((arc - 0.55) / 0.3); lid.visible = fade < 1;
+  lidMats.forEach((m) => { m.transparent = fade > 0; m.opacity = 1 - fade; });
+};
+// t in 0..1 over the clip
+const CLIPS = {
+  // closed unit powers on (rim glow ramps), slow settle; the end-card hero
+  hero(t) {
+    const g = eo(clamp01(t / 0.45)); rim.intensity = g * RIM; kick.intensity = g * KICK;
+    device.rotation.set(0.05, -0.85 + eio(t) * 0.5, 0); device.position.y = Math.sin(t * Math.PI * 2) * 0.012;
+    setLid(0, 0); polarCam(1.38 - 0.06 * t, 4.5, 0.0, 0.22);
+  },
+  // full 360 turntable, closed, seamless; sits behind a headline
+  turn(t) {
+    rim.intensity = RIM; kick.intensity = KICK;
+    device.rotation.set(0.05, -0.5 + t * Math.PI * 2, 0); device.position.y = 0;
+    setLid(0, 0); polarCam(1.34, 4.6, 0.0, 0.22);
+  },
+  // the site's split reveal: lid floats off, camera arcs overhead to the open internals
+  reveal(t) {
+    const p = 0.28 + 0.72 * t;                       // the hero's choreography from 28% to 100%
+    const glow = Math.min(1, p * 1.6); rim.intensity = glow * RIM; kick.intensity = glow * KICK;
+    const straighten = eio(clamp01((p - 0.55) / 0.4));
+    const spin = -0.5 + p * Math.PI * 2, target = -Math.PI / 2;
+    const goal = target + Math.round((spin - target) / (Math.PI * 2)) * Math.PI * 2;
+    device.rotation.y = spin + (goal - spin) * straighten; device.rotation.x = (0.05 + Math.sin(p * Math.PI) * 0.04) * (1 - straighten);
+    const arc = eio(clamp01((p - 0.4) / 0.6));
+    device.position.y = -0.1 * (1 - arc);
+    setLid(eio(clamp01((p - 0.35) / 0.5)), arc);
+    polarCam(1.4 - arc * 1.25, 4.9 - arc * 0.35, Math.sin(arc * Math.PI) * 0.25, 0.2 * (1 - arc) - 0.1 * arc);
+  },
+  // quiet 3/4 view from a bit above and the front-left, drifting; placed in a corner
+  glimpse(t) {
+    const g = eo(clamp01(t / 0.3)); rim.intensity = g * RIM; kick.intensity = g * KICK;
+    device.rotation.set(0.05, -1.25 + t * 0.55, 0); device.position.y = Math.sin(t * Math.PI * 2) * 0.015;
+    setLid(0, 0); polarCam(1.12, 4.3 - 0.25 * t, -0.18, 0.22);
+  },
+};
+window.renderFrame = (clip, t) => { CLIPS[clip](t); renderer.render(scene, camera); return canvas.toDataURL('image/png'); };
+window.ready = true;
+</script></body></html>
