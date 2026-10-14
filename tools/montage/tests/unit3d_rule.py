@@ -65,7 +65,10 @@ for mom in unit_moment.MOMENTS:
     ok(len(carriers) == 1 and carriers == [w["scene"]], f"{mom}: one carrier {carriers}")
     if mom == "reveal":
         ok(carriers == [1] and s["scenes"][1]["layout"] == "split", "reveal: scene 2, forced to the split layout")
-    if mom in ("turn", "glimpse"):
+    if mom == "turn":
+        sc = s["scenes"][carriers[0]]
+        ok(sc["layout"] == "split" and not sc.get("big") and not sc.get("items"), f"turn: a split scene with no big number or list (scene {carriers[0] + 1}), so no text crosses the unit")
+    if mom == "glimpse":
         ok(s["scenes"][carriers[0]]["layout"] not in unit_moment.SKIP_LAYOUTS, f"{mom}: not on a steps/card scene (scene {carriers[0] + 1})")
     if mom == "hero":
         ok(carriers == ["end"], "hero: closing card")

@@ -50,7 +50,7 @@ The Bestly Agent price-tag icon lost its stray dots the same night (see below).
   `/opt/bestly/social-kit/unit3d/<moment>/fNNN.webp` (1200x1200, 30 fps, about 20 MB in all; repo copy: `unit3d/bestly-unit-frames.tar`, install: `unit3d/install_on_pi.sh`).
   A video costs nothing extra: `comp/brand` only composites them (`Scene.unit` / `EndCard.unit`, `UnitView`). No WebGL on the Pi, no b-roll, no LTX, no voice.
 - **Four moments, one per video** (`unit_moment.py`): `reveal` (the lid floats off and the camera swings over the open internals, in a split scene: text on top, unit below; scene 2),
-  `turn` (a full slow turn of the closed unit, in the free band under a scene's text, never behind a line), `glimpse` (the closed unit half out of the bottom-right corner of a later scene),
+  `turn` (a full slow turn of the closed unit, under the headline in a split scene (text on top, the unit below, never behind a line)), `glimpse` (the closed unit half out of the bottom-right corner of a later scene),
   `hero` (the closing card: the unit powers on above the name; the chips go compact). Every glow is a radial gradient that fades out; the frames carry only the unit's own silhouette.
 - **How it rotates.** `variety.pick_unit` (called by `make_plan`) offers only moments whose frames are on disk, never the last Bestly Cloud video's moment, then the one used longest ago
   (a moment not seen in the last 8 videos first). `unit` is a seventh look dimension (`fingerprint.unit` in `studio_look_ledger`), `variety.gate` counts it and refuses a repeat
