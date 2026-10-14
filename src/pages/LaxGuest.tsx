@@ -197,8 +197,17 @@ export default function LaxGuest() {
     let n = 0;
     // "Script error." = a cross-origin script (YouTube embed, a browser extension) failed; the browser hides the details and it is never ours.
     const send = (msg: string) => { if (/^Script error\.?$/i.test(msg.trim())) return; if (n++ < 3 && token) track(token, "error", { msg: msg.slice(0, 200), path: window.location.pathname }); };
-    const onErr = (e: ErrorEvent) => send(e.message || "error");
-    const onRej = (e: PromiseRejectionEvent) => send(String((e.reason as Error)?.message ?? e.reason ?? "rejection"));
+    // Only our own code counts. A Safari extension, a password manager or an in-app browser injects scripts that
+    // run inside this page, and their errors reach window.onerror looking exactly like ours.
+    // Marcus's phone filed "feature named `pageContext` was not found" four times on 13 Oct; that string is in
+    // none of our 286 built files and in nothing we load, so it was his browser, not the trip page.
+    // A real error from our bundle always names a file on this origin, so that is the test.
+    const mine = (file?: string) => !!file && file.startsWith(window.location.origin);
+    // A rejection carries no filename, so the stack is all there is.
+    // A stack that names an extension scheme is somebody else's; no stack at all is kept, because most of ours have none.
+    const mineStack = (err: unknown) => !/\b(?:safari-web-)?extension:|moz-extension:|chrome-extension:/i.test(String((err as Error)?.stack ?? ""));
+    const onErr = (e: ErrorEvent) => { if (!mine(e.filename)) return; send(e.message || "error"); };
+    const onRej = (e: PromiseRejectionEvent) => { if (!mineStack(e.reason)) return; send(String((e.reason as Error)?.message ?? e.reason ?? "rejection")); };
     window.addEventListener("error", onErr);
     window.addEventListener("unhandledrejection", onRej);
     return () => { window.removeEventListener("error", onErr); window.removeEventListener("unhandledrejection", onRej); };
