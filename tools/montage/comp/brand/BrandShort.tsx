@@ -743,7 +743,7 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number; compact?: 
       ))}
       <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: tz ? 0 : compact ? 60 : (e.unit ? 40 : 90)}}>
         {e.unit ? (
-          <UnitView u={e.unit} t={t} dur={dur} size={tz ? 500 : 700} holdEnd glow={1} style={{marginTop: tz ? -80 : -130, marginBottom: tz ? -120 : -190}} />
+          <UnitView u={e.unit} t={t} dur={dur} size={tz ? 540 : 680} holdEnd glow={1} style={{marginTop: tz ? -80 : -130, marginBottom: tz ? -130 : -120}} />
         ) : null}
         {b.end.orb ? (
           <div style={{marginBottom: tz ? 40 : 56, opacity: Math.min(1, logo), transform: `scale(${0.6 + 0.4 * logo})`}}><Orb size={tz ? 150 : 190} t={t} /></div>
