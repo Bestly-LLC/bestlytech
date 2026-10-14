@@ -415,6 +415,8 @@ def _daily_fresh(dry, render_only, deadline):
         code, body = _invoke("bestly-ig-poster", {"action": "dryrun", "brand": "bestly", "mediaUrl": url, "caption": cap}, 120000, 5, 15)
         return f"dry: made [{made['theme']}] '{p['headline']}' ({made['why']}); IG rehearsal {code} {json.dumps(body)[:160]}\n{url}\n---\n{cap}"
     ic, ib = _invoke("bestly-ig-poster", {"action": "post", "brand": "bestly", "mediaUrl": url, "caption": cap}, 120000, 6, 20)
+    if ib.get("held"):
+        return _filed(ib)
     fc, fb = _invoke("bestly-fb-photo", {"action": "post", "brand": "bestly", "imageUrl": url, "message": cap}, 60000, 5, 15)
     ig = (bool(ib.get("ok")), ib.get("permalink"), None if ib.get("ok") else f"IG {ic}: {json.dumps(ib)[:400]}")
     fbr = (bool(fb.get("ok")), fb.get("postId"), None if fb.get("ok") else f"FB {fc}: {json.dumps(fb)[:400]}")
@@ -469,6 +471,8 @@ def _carousel_fresh(dry, render_only, deadline):
         code, body = _invoke("bestly-ig-poster", {"action": "dryrun", "brand": "bestly", "mediaUrls": urls, "caption": cap}, 180000, 6, 20)
         return f"dry: made carousel [{theme}] '{plan['hook']}' ({why}); IG rehearsal {code} {json.dumps(body)[:160]}\n{urls[0]}\n---\n{cap}"
     ic, ib = _invoke("bestly-ig-poster", {"action": "post", "brand": "bestly", "mediaUrls": urls, "caption": cap}, 180000, 8, 25)
+    if ib.get("held"):
+        return _filed(ib)
     fc, fb = _invoke("bestly-fb-photo", {"action": "album", "brand": "bestly", "imageUrls": urls, "message": cap}, 120000, 6, 20)
     ig = (bool(ib.get("ok")), ib.get("permalink"), None if ib.get("ok") else f"IG {ic}: {json.dumps(ib)[:400]}")
     fbr = (bool(fb.get("ok")), fb.get("postId"), None if fb.get("ok") else f"FB {fc}: {json.dumps(fb)[:400]}")
@@ -498,6 +502,8 @@ def _daily_pool(m, dry, deadline):
         code, body = _invoke("bestly-ig-poster", {"action": "dryrun", "brand": "bestly", "mediaUrl": url, "caption": cap}, 120000, 5, 15)
         return f"dry (pool): {a['file']} via {prov}; IG rehearsal {code} {json.dumps(body)[:200]}\n---\n{cap}"
     ic, ib = _invoke("bestly-ig-poster", {"action": "post", "brand": "bestly", "mediaUrl": url, "caption": cap}, 120000, 6, 20)
+    if ib.get("held"):
+        return _filed(ib)
     fc, fb = _invoke("bestly-fb-photo", {"action": "post", "brand": "bestly", "imageUrl": url, "message": cap}, 60000, 5, 15)
     ig = (bool(ib.get("ok")), ib.get("permalink"), None if ib.get("ok") else f"IG {ic}: {json.dumps(ib)[:400]}")
     fbr = (bool(fb.get("ok")), fb.get("postId"), None if fb.get("ok") else f"FB {fc}: {json.dumps(fb)[:400]}")
@@ -523,11 +529,19 @@ def _carousel_pool(m, dry, deadline):
         code, body = _invoke("bestly-ig-poster", {"action": "dryrun", "brand": "bestly", "mediaUrls": urls, "caption": cap}, 180000, 6, 20)
         return f"dry (pool): {c['id']} via {prov}; IG rehearsal {code} {json.dumps(body)[:200]}\n---\n{cap}"
     ic, ib = _invoke("bestly-ig-poster", {"action": "post", "brand": "bestly", "mediaUrls": urls, "caption": cap}, 180000, 8, 25)
+    if ib.get("held"):
+        return _filed(ib)
     fc, fb = _invoke("bestly-fb-photo", {"action": "album", "brand": "bestly", "imageUrls": urls, "message": cap}, 120000, 6, 20)
     ig = (bool(ib.get("ok")), ib.get("permalink"), None if ib.get("ok") else f"IG {ic}: {json.dumps(ib)[:400]}")
     fbr = (bool(fb.get("ok")), fb.get("postId"), None if fb.get("ok") else f"FB {fc}: {json.dumps(fb)[:400]}")
     _record("carousel", c["id"], None, c.get("theme"), cap, ig, fbr, headline=c.get("hook"), made_by="pool", media_id=ib.get("remoteId"))
     return _report("carousel (pool)", c["id"], ig, fbr)
+
+
+def _filed(ib):
+    """House gate (2026-10-14): bestly-ig-poster no longer posts for house brands. It files the piece in Studio > Drafts >
+    To review (bestly-cloud) and answers held=true. Nothing is posted until Jared taps Approve, so this is not a failure."""
+    return "ok filed to Studio for Approve: " + str(ib.get("studioCode") or "draft") + " (nothing posted)"
 
 
 def _report(what, asset, ig, fb):

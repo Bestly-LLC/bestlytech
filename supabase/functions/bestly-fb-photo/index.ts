@@ -103,6 +103,16 @@ async function getAccount(brand: string): Promise<Account> {
   return data as Account;
 }
 
+// House brands (2026-10-14): nothing posts unless Jared tapped Approve in Studio. A direct call files the piece as a Studio
+// draft (Drafts > To review) and posts nothing. Studio's own posts go through the queue, never through this function.
+async function heldIfHouse(brand: string, urls: string[], message: string, source: string): Promise<Response | null> {
+  const g = await db.rpc("house_direct_gate", { p_brand: brand, p_urls: urls, p_type: urls.length > 1 ? "carousel" : "image", p_caption: message, p_source: source });
+  if (g.error) return J({ ok: false, error: "approval gate unavailable, nothing was posted" }, 503);
+  if (!g.data?.house) return null;
+  return J({ ok: false, held: true, stage: "needs-approval", filed: !!g.data.filed, studioCode: g.data.code ?? null,
+             detail: "Nothing posts until Jared taps Approve in Studio. The piece was filed under Drafts, To review." });
+}
+
 // The token goes in the Authorization header, never the query string — a URL
 // ends up in logs and proxies, and this one never expires.
 async function graphPost(acct: Account, path: string, form: URLSearchParams) {
@@ -152,6 +162,8 @@ Deno.serve(async (req) => {
       const imageUrl = String(body.imageUrl ?? "");
       if (!/^https:\/\//.test(imageUrl)) return J({ ok: false, error: "imageUrl must be an https URL" }, 400);
       if (!message.trim()) return J({ ok: false, error: "message required" }, 400);
+      const held = await heldIfHouse(brand, [imageUrl], message, "bestly-fb-photo action=post");
+      if (held) return held;
 
       const r = await graphPost(acct, `${acct.page_id}/photos`,
         new URLSearchParams({ url: imageUrl, message, published: "true" }));
@@ -166,6 +178,8 @@ Deno.serve(async (req) => {
       if (urls.length > 10) return J({ ok: false, error: "album takes at most 10 images" }, 400);
       if (!urls.every((u) => /^https:\/\//.test(u))) return J({ ok: false, error: "every imageUrl must be an https URL" }, 400);
       if (!message.trim()) return J({ ok: false, error: "message required" }, 400);
+      const held = await heldIfHouse(brand, urls, message, "bestly-fb-photo action=album");
+      if (held) return held;
 
       // Unpublished photos first. If one fails the feed post is never made, so
       // a half-built album is left as orphaned unpublished photos rather than a
