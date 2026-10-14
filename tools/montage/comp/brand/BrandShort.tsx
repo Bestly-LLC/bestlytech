@@ -536,8 +536,8 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
   // turn and glimpse sit BEHIND the text (drawn first); the icon stays out of their way
   const unitLayer = um === 'turn' ? (
     <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center'}}>
-      <UnitView u={s.unit as UnitMoment} t={t} dur={dur} size={1500} glow={0.9} alpha={0.55} style={{marginTop: 60}} />
-      <AbsoluteFill style={{background: `radial-gradient(circle at 50% 50%, ${rgba(t.veil, 0.62)} 0%, ${rgba(t.veil, 0.38)} 40%, ${rgba(t.veil, 0)} 78%)`}} />
+      <UnitView u={s.unit as UnitMoment} t={t} dur={dur} size={1220} glow={1} alpha={0.9} style={{marginTop: 180}} />
+      <AbsoluteFill style={{background: `radial-gradient(ellipse 62% 30% at 50% 48%, ${rgba(t.veil, 0.5)} 0%, ${rgba(t.veil, 0.24)} 55%, ${rgba(t.veil, 0)} 100%)`}} />
     </AbsoluteFill>
   ) : um === 'glimpse' ? (
     <AbsoluteFill>
