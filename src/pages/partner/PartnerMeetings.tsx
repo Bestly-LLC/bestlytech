@@ -3,6 +3,7 @@
  * calendar (the meeting with a Meet link, plus a private prep brief 15 minutes before) with one tap.
  * Edge fn partner-google does the Google work; this only shows state and asks. Times are 12-hour, in the lead's zone.
  */
+import { Lines } from "@/components/Lines";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -126,7 +127,7 @@ export function AvaMeetings() {
               {connecting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CalendarPlus className="h-4 w-4" aria-hidden />}Connect Google Calendar</button>
           </div>
         )}
-        {note && <p role="alert" className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">{note}</p>}
+        {note && <p role="alert" className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300"><Lines>{note}</Lines></p>}
       </section>
 
       {/* meetings */}

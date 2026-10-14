@@ -89,7 +89,7 @@ export function HostPanel({ token }: { token?: string }) {
       ) : (
         <>
           <p className="mt-2 text-[20px] font-bold leading-tight text-white">{where}</p>
-          {detail && <p className="mt-0.5 text-[15px] text-white/80">{detail}</p>}
+          {detail && <p className="mt-0.5 text-[15px] text-white/80"><Lines>{detail}</Lines></p>}
 
           {ph && ph.battery != null && ph.pickup != null && (
             <div className={`mt-3 rounded-2xl p-3 ring-1 ${ph.short ? "bg-[#FF9F0A]/15 ring-[#FF9F0A]/50" : "bg-white/[0.06] ring-white/10"}`}>

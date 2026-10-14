@@ -4,6 +4,7 @@
  * 20261005130000_ava_knowledge_partner.sql; docs/ava-knowledge.md). Everything goes through RPCs, never the table.
  * Hard-rule warnings (src/lib/roofguardRules.ts) show as he types. They are advice, never a block.
  */
+import { Lines } from "@/components/Lines";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -82,7 +83,7 @@ export function AvaKnowledge() {
         className={cn(BTN, "min-h-[3rem] w-full bg-emerald-500 text-[#052E1F]")}>
         <Plus className="h-4 w-4" aria-hidden />Suggest something Reese can say</button>
 
-      {note && <p role="status" className="flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />{note}</p>}
+      {note && <p role="status" className="flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden /><span><Lines>{note}</Lines></span></p>}
       {rowErr && <p role="alert" className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">{rowErr}</p>}
       {loadErr && <div role="alert" className="rounded-2xl bg-red-500/10 p-4 text-sm text-red-200 ring-1 ring-red-500/40">Could not load the list. Try again in a minute.</div>}
       {!items && !loadErr && <div className="h-32 animate-pulse rounded-3xl bg-white/[0.03] ring-1 ring-white/10" aria-label="Loading" />}

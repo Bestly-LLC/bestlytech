@@ -9,6 +9,7 @@
  *
  * Hard rule: a claim form is a sworn statement. "Yes, file all" only approves the Ready claims on screen (ids passed explicitly).
  */
+import { Lines } from "@/components/Lines";
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -473,7 +474,7 @@ function Stat({ label: text, value, sub, tone, active, onClick }: {
     <>
       <span className={cn("block text-[11px] font-semibold uppercase leading-tight tracking-[0.03em] sm:text-[12px]", secondary)}>{text}</span>
       <span className={cn("mt-1 block text-[20px] font-bold leading-none sm:text-[24px] tabular-nums tracking-[-0.02em]", tone ? tint[tone] : label)}>{value}</span>
-      {sub && <span className={cn("mt-1.5 block text-[12px] leading-snug sm:text-[12.5px]", secondary)}>{sub}</span>}
+      {sub && <span className={cn("mt-1.5 block text-[12px] leading-snug sm:text-[12.5px]", secondary)}><Lines>{sub}</Lines></span>}
     </>
   );
   const cls = cn(card, "flex h-full flex-col items-start justify-start p-3 text-left sm:p-3.5 transition-[box-shadow,transform] duration-150", active && "ring-2 ring-[#0A84FF] bento:ring-[#007AFF]");

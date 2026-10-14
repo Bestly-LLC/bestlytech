@@ -8,6 +8,7 @@
  *
  * One screen, one decision: what will run, who asked, when it expires, then Approve or No.
  */
+import { Lines } from "@/components/Lines";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AlertCircle, ChevronDown, Clock, Loader2, ScanFace, ShieldCheck, Undo2, X } from "lucide-react";
@@ -266,7 +267,7 @@ export default function AvaApprove() {
               </div>
             </div>
           )}
-          <p className="min-h-[1.25rem] px-1 text-[0.9375rem] text-red-400 bento:text-red-600" role={msg ? "alert" : undefined}>{msg}</p>
+          <p className="min-h-[1.25rem] px-1 text-[0.9375rem] text-red-400 bento:text-red-600" role={msg ? "alert" : undefined}><Lines>{msg}</Lines></p>
         </section>
         <div className="flex-1" />
       </main>

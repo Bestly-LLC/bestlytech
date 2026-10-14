@@ -10,6 +10,7 @@
  *   6 Create               agent-hub create (idempotent per slug) with a checklist and a retry per step.
  * Making the agent costs nothing. Calls cost about the per-minute rate shown at the bottom.
  */
+import { Lines } from "@/components/Lines";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Binoculars, Check, ClipboardPaste, Copy, Loader2, Plus, RotateCw, Sparkles, X } from "lucide-react";
@@ -38,7 +39,7 @@ function Section({ n, title, hint, children }: { n: number; title: string; hint?
     <section aria-labelledby={`new-s${n}`} className="rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/10">
       <h2 id={`new-s${n}`} className="flex items-center gap-2.5 text-[17px] font-semibold text-white">
         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-[13px] font-semibold tabular-nums text-white/80" aria-hidden>{n}</span>{title}</h2>
-      {hint && <p className="mt-1 text-[13px] leading-snug text-white/60">{hint}</p>}
+      {hint && <p className="mt-1 text-[13px] leading-snug text-white/60"><Lines>{hint}</Lines></p>}
       <div className="mt-4">{children}</div>
     </section>
   );
@@ -48,7 +49,7 @@ const chip = (on: boolean) => cn("inline-flex min-h-[44px] items-center gap-2 ro
   on ? "bg-white text-black ring-white" : "bg-white/[0.05] text-white/85 ring-white/10 hover:bg-white/[0.1]");
 
 function Label({ id, children, hint }: { id: string; children: ReactNode; hint?: string }) {
-  return <div className="mb-1"><label htmlFor={id} className="block text-[13px] font-medium text-white">{children}</label>{hint && <p className="text-xs text-white/50">{hint}</p>}</div>;
+  return <div className="mb-1"><label htmlFor={id} className="block text-[13px] font-medium text-white">{children}</label>{hint && <p className="text-xs text-white/50"><Lines>{hint}</Lines></p>}</div>;
 }
 
 export default function AgentNew() {

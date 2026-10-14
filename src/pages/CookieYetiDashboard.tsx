@@ -1,3 +1,4 @@
+import { Lines } from "@/components/Lines";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -433,7 +434,7 @@ function TickerCard({ label, value, sub }: { label: string; value: number; sub?:
         <CountUp value={value} />
       </div>
       <div className="mt-2 text-sm font-medium uppercase tracking-wider text-zinc-300">{label}</div>
-      {sub && <div className="mt-1 text-xs text-zinc-500">{sub}</div>}
+      {sub && <div className="mt-1 text-xs text-zinc-500"><Lines>{sub}</Lines></div>}
     </div>
   );
 }

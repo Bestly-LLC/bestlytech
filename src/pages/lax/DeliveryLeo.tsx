@@ -129,7 +129,7 @@ export function LeoHero({ sess, line, typing, setTyping }: { sess: Sess; line: s
       <Orb sess={sess} onTap={onTap} />
       <p className="-mt-1 text-center text-[15px] font-semibold" style={{ color: "var(--d-ink)" }} aria-live="polite">{status}</p>
       <h1 className="mt-3 text-center text-[46px] font-bold leading-[1.02] tracking-[-0.015em]" style={{ fontFamily: "var(--trip-title-font)", color: "var(--d-ink)" }}>Hi, I'm Leo.</h1>
-      <p className="mx-auto mt-3 max-w-[20rem] text-center text-[18px] leading-snug" style={{ color: "var(--d-body)" }}>{line}</p>
+      <p className="mx-auto mt-3 max-w-[20rem] text-center text-[18px] leading-snug" style={{ color: "var(--d-body)" }}><Lines>{line}</Lines></p>
 
       {live && voice && <div className="mt-4"><VoiceRow sess={sess} /></div>}
       <UnlockAudio sess={sess} className="mt-4" />

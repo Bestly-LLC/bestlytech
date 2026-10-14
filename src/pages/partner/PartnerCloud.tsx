@@ -8,6 +8,7 @@
  *   BoardSheet   the Ops board, read-only
  *   CloudSheet   his cloud files, with the in-page previewer
  */
+import { Lines } from "@/components/Lines";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight, Folder, Loader2, Send } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -33,7 +34,7 @@ function Shell({ title, sub, open, onOpenChange, children }: { title: string; su
       <SheetContent side="right" className="flex w-full flex-col gap-0 border-white/10 bg-[#0b0d12] p-0 text-white sm:max-w-xl bento:bg-[#F3F2EE]">
         <div className="border-b border-white/[0.06] px-5 pb-3 pt-6 bento:border-white/5">
           <SheetTitle className="text-lg font-semibold text-white">{title}</SheetTitle>
-          <SheetDescription className="text-sm text-white/60">{sub}</SheetDescription>
+          <SheetDescription className="text-sm text-white/60"><Lines>{sub}</Lines></SheetDescription>
         </div>
         {children}
       </SheetContent>

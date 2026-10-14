@@ -1,4 +1,5 @@
 /** Step 3: "You're on the wall" + the take-home badge (save to Photos / download / email to yourself). */
+import { Lines } from "@/components/Lines";
 import { useEffect, useMemo, useState } from "react";
 import { badgeBlob, drawBadge, type BadgeInput } from "./badge";
 import { emailBadge } from "./signApi";
@@ -118,7 +119,7 @@ export default function BadgeStep({
             </button>
           </form>
         )}
-        {msg && <p role="alert" className="text-[14px] text-[#FFB4B4]">{msg}</p>}
+        {msg && <p role="alert" className="text-[14px] text-[#FFB4B4]"><Lines>{msg}</Lines></p>}
         {emailOpen && sendState !== "sent" && <p className="text-[13px] text-white/40">Just this one email. No list, no newsletter.</p>}
 
         <div className="flex flex-wrap gap-x-4">
