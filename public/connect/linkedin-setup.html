@@ -22,7 +22,7 @@ code{font:14px ui-monospace,Menlo,monospace;background:#fff;padding:2px 6px;bord
 </head><body><main><div class="eb">Bestly Studio · setup</div><div id="out">
 <h1>Connect the LinkedIn app</h1>
 <p class="mute">linkedin.com/developers → your app <b>Bestly Studio</b> → <b>Auth</b> tab. Copy the <b>Client ID</b> and the <b>Primary Client Secret</b> into the boxes below. They go straight into the vault; nobody sees them again.</p>
-<p class="mute">On the same app: the <b>Products</b> tab needs <b>Community Management API</b> (LinkedIn reviews this one), and the app must be linked to a verified Company Page. Under <b>Auth → OAuth 2.0 settings</b> add this <b>Authorized redirect URL</b>:<br><code>https://www.bestly.tech/connect/linkedin.html</code></p><hr>
+<p class="mute">On the same app, the <b>Products</b> tab needs <b>Share on LinkedIn</b> and <b>Sign In with LinkedIn using OpenID Connect</b> (no review needed). Posts go to the profile of whoever connects. Under <b>Auth → OAuth 2.0 settings</b> add this <b>Authorized redirect URL</b>:<br><code>https://www.bestly.tech/connect/linkedin.html</code></p><hr>
 <form id="f"><label>Client ID</label><input name="client_id" autocomplete="off" required>
 <label>Client secret</label><input name="client_secret" type="password" autocomplete="off" required>
 <label>Permissions (optional)</label><input name="scopes" autocomplete="off" placeholder="r_basicprofile w_organization_social r_organization_social rw_organization_admin">
@@ -39,7 +39,7 @@ document.getElementById("f").onsubmit = async (e) => {
   const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ op: "li_setup", s, client_id: f.get("client_id"), client_secret: f.get("client_secret"), scopes: f.get("scopes") }) })
     .then(r => r.json()).catch(() => ({ ok: false, error: "unreachable" }));
-  if (r.ok) { document.getElementById("out").innerHTML = "<h1>Saved.</h1><p>LinkedIn connect links work now, and the LinkedIn tile on client boards is live. Posting to LinkedIn stays off until LinkedIn approves the Community Management API and Bestly switches it on. You can close this tab.</p>"; return; }
+  if (r.ok) { document.getElementById("out").innerHTML = "<h1>Saved.</h1><p>LinkedIn connect links work now, and the LinkedIn tile on client boards is live. Approved posts go to the connected person&rsquo;s profile. You can close this tab.</p>"; return; }
   b.disabled = false;
   m.textContent = r.error === "setup_link_expired" ? "This setup link has expired." : "Didn't save: " + (r.detail || r.error);
 };
