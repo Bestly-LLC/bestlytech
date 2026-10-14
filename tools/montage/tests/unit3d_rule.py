@@ -101,7 +101,7 @@ for mom in unit_moment.MOMENTS:
     for rel, src in bc.ASSETS.items():
         os.makedirs(os.path.dirname(f"{OUT}/public/{rel}"), exist_ok=True)
         shutil.copy(src, f"{OUT}/public/{rel}")
-    props = {"theme": "night", "scenes": [{k: x[k] for k in ("kicker", "line", "start", "end", "icon", "layout", "big", "items", "unit") if x.get(k)} for x in s["scenes"]],
+    props = {"theme": "night", "scenes": [{k: x[k] for k in ("kicker", "line", "start", "end", "icon", "layout", "big", "items", "unit") if x.get(k) not in (None, "", [])} for x in s["scenes"]],
              "end": {k: v for k, v in s["end"].items() if k != "say"}, "audio": {}, "brand": bc.BRAND, "look": {"iconStyle": "orbit"}}
     json.dump(props, open(f"{OUT}/props_unit_{mom}.json", "w"))
     print("wrote", f"{OUT}/props_unit_{mom}.json", s["unit"])
