@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowUp, Keyboard, Loader2, Mic, MicOff, PhoneOff, Volume2 } from "lucide-react";
 import type { Card, Item, useLeoSession } from "./useLeoSession";
 import { OrbFace, OrbGlow, reducedMotion, useOrbReact } from "./LeoOrb";
+import { Lines } from "@/components/Lines";
 
 type Sess = ReturnType<typeof useLeoSession>;
 const nw = (s: ReactNode) => <span className="whitespace-nowrap">{s}</span>;
@@ -200,7 +201,7 @@ function LeoCard({ card }: { card: Card }) {
       const on = !!card.on && card.mode !== "off", mode = String(card.mode ?? "off");
       const head = !on ? <>Climate is off</> : mode === "cool" ? <>A/C on, cooling to {nw("68°F")}</> : mode === "warm" ? <>Heat on, warming to {nw("74°F")}</> : <>Driver seat heater on</>;
       return box("Climate", <><p className="text-[19px] font-semibold leading-snug">{head}</p>
-        <p className="mt-1 text-[14px]" style={sub}>{card.pending ? "Sent. The car can take up to a minute." : on && card.until ? `Turns off by itself at ${String(card.until)}` : on ? "Turns off by itself after 20 minutes" : "Ask me to start it any time."}</p></>);
+        <p className="mt-1 text-[14px]" style={sub}><Lines>{card.pending ? "Sent. The car can take up to a minute." : on && card.until ? `Turns off by itself at ${String(card.until)}` : on ? "Turns off by itself after 20 minutes" : "Ask me to start it any time."}</Lines></p></>);
     }
     case "car": {
       const locked = card.locked as boolean | null;
@@ -223,7 +224,7 @@ function LeoCard({ card }: { card: Card }) {
       </ul>);
     }
     case "nav":
-      return box("Navigation", <><p className="text-[18px] font-semibold leading-snug">{String(card.destination)}</p><p className="mt-1 text-[14px]" style={sub}>{card.pending ? "Sent. It shows on the car's screen in a moment." : "It's on the car's screen."}</p></>);
+      return box("Navigation", <><p className="text-[18px] font-semibold leading-snug">{String(card.destination)}</p><p className="mt-1 text-[14px]" style={sub}><Lines>{card.pending ? "Sent. It shows on the car's screen in a moment." : "It's on the car's screen."}</Lines></p></>);
     case "charging": {
       const sessions = (card.sessions ?? []) as Any[];
       return box("Supercharging this trip", <>

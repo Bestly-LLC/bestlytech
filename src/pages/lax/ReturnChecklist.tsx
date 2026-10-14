@@ -13,6 +13,7 @@ import { SendToCar } from "./KeyNext";
 import { fmtWhen } from "./GuestExtras";
 import type { TripKind } from "./places";
 import { track } from "./track";
+import { Lines } from "@/components/Lines";
 
 type Item = { id: "parked" | "charge" | "trunks" | "locked"; ok: boolean; label: string; detail: string };
 type Check = { ok: boolean; live: boolean; opens_at?: string; items?: Item[]; observed_at?: string; fresh?: boolean; controls?: boolean };
@@ -72,7 +73,7 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { t
   if (!c.live) return (
     <div className="rounded-3xl bg-white/[0.06] p-4 ring-1 ring-white/10">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>Return checklist</p>
-      <p className="mt-1 text-[15px] text-white/80">It checks the car for you (parked, charged, locked). It turns on {c.opens_at ? fmtWhen(c.opens_at) : "2 days before your return"}.</p>
+      <p className="mt-1 text-[15px] text-white/80"><Lines>It checks the car for you (parked, charged, locked). It turns on {c.opens_at ? fmtWhen(c.opens_at) : "2 days before your return"}.</Lines></p>
     </div>
   );
 
@@ -114,7 +115,7 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { t
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: all ? "#6ee7b7" : ACCENT }}>Before you walk away</p>
-          <p className="mt-0.5 text-[20px] font-bold leading-tight text-white">{all ? "All set. You're good to go." : `${done} of ${total} done`}</p>
+          <p className="mt-0.5 text-[20px] font-bold leading-tight text-white"><Lines>{all ? "All set. You're good to go." : `${done} of ${total} done`}</Lines></p>
         </div>
         <Ring done={done} total={total} all={all} />
       </div>
@@ -144,7 +145,7 @@ export function ReturnChecklist({ token, kind, run, demo, endsAt, compact }: { t
         </button>
         <span className="text-[12px] text-white/50">{c.observed_at ? `Car checked ${ago(c.observed_at)}` : ""}</span>
       </div>
-      {msg && <p className="mt-2 text-[13px] text-white/70" aria-live="polite">{msg}</p>}
+      {msg && <p className="mt-2 text-[13px] text-white/70" aria-live="polite"><Lines>{msg}</Lines></p>}
       {!run && <p className="mt-2 text-[12px] text-white/50">The car buttons work until your trip ends.</p>}
     </section>
   );

@@ -12,6 +12,7 @@ import { fmtWhen, type Trip } from "./GuestExtras";
 import { track } from "./track";
 import { realDemoKeyAdded, realDemoKeyTapped, realKey } from "./demo";
 import { CHARGERS, TURO_TRIPS, chargerMaps, type Place, type TripKind } from "./places";
+import { Lines } from "@/components/Lines";
 
 const ACCENT = "var(--trip-accent)";
 const tapKey = (t: string) => `keytap:${t}`;
@@ -82,7 +83,7 @@ export function KeyPending({ token, link, onAdded }: { token: string; link: stri
       </div>
       <p className="mt-2 flex items-center gap-2 text-[14px] text-white/80" aria-live="polite">
         <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" style={{ color: ACCENT }} />
-        {slow ? "Still waiting for Tesla. Make sure you tapped Accept in the Tesla app." : "Checking with Tesla. This page updates by itself."}
+        <span><Lines>{slow ? "Still waiting for Tesla. Make sure you tapped Accept in the Tesla app." : "Checking with Tesla. This page updates by itself."}</Lines></span>
       </p>
       {link && (
         <a href={link} onClick={() => { markKeyTapped(token); track(token, "key_tap", { retry: true }); }}
@@ -132,7 +133,7 @@ export function SendToCar({ run, kind, action, label = "Send to car's navigation
         {st === "busy" ? <Loader2 className="h-4 w-4 animate-spin" /> : st === "done" ? <CheckCircle2 className="h-4 w-4" /> : <Navigation className="h-4 w-4" />}
         {st === "done" ? (full ? "Sent" : "Sent to your car") : label}
       </button>
-      {msg && <p className={`min-w-0 ${center ? "" : "flex-1"} text-[12px] leading-snug ${full ? "mt-1 text-center" : ""} ${st === "err" ? "text-red-300" : "text-white/65"}`} aria-live="polite">{msg}</p>}
+      {msg && <p className={`min-w-0 ${center ? "" : "flex-1"} text-[12px] leading-snug ${full ? "mt-1 text-center" : ""} ${st === "err" ? "text-red-300" : "text-white/65"}`} aria-live="polite"><Lines>{msg}</Lines></p>}
     </div>
   );
 }
@@ -182,7 +183,7 @@ export function KeyNextSteps({ trip, pickupBattery, place, kind, maps, go, run }
             <st.icon className="mt-0.5 h-5 w-5 shrink-0" style={{ color: ACCENT }} strokeWidth={1.75} />
             <div className="min-w-0 flex-1">
               <p className="whitespace-pre-line text-[15px] font-semibold leading-snug text-white">{st.title}</p>
-              <p className="mt-0.5 text-[14px] leading-snug text-white/75">{st.body}</p>
+              <p className="mt-0.5 text-[14px] leading-snug text-white/75"><Lines>{st.body}</Lines></p>
               {st.send && <SendToCar run={run} kind={kind} />}
             </div>
             {st.action && (st.action.href

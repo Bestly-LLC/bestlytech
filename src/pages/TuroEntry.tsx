@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { COPY, pickLang, pickRegion, type Lang } from "./turo-entry/strings";
 import { device, deviceId, isHostDevice } from "./lax/track";
 import "./lax/delivery.css";
+import { Lines } from "@/components/Lines";
 
 type Kind = "home" | "lax";
 /** /turo-key?src=delivery (the printed delivery card): same sign-in, cream look. The lookup stays kind "home". */
@@ -218,7 +219,7 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
             </motion.h1>
           </AnimatePresence>
           <motion.p key={`s-${lang}-${mem ? 1 : 0}`} {...rise(2)} className="mb-5 mt-2 text-[17px] leading-snug text-white/65">
-            {mem ? t.subBack : kind === "lax" ? t.subLax : t.subHome}
+            <Lines>{mem ? t.subBack : kind === "lax" ? t.subLax : t.subHome}</Lines>
           </motion.p>
 
           {mem ? (
@@ -269,7 +270,7 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
                   />
                 </div>
                 {/* Carrier opt-in disclosure (US 10DLC filing cites this line). Always English: the texts are sent in English. */}
-                <p id="te-sms" className="px-4 pb-3 text-[13px] leading-snug text-white/45">We&rsquo;ll text this number about your trip. Msg&nbsp;&amp;&nbsp;data rates may apply. Reply&nbsp;STOP to opt out.</p>
+                <p id="te-sms" className="px-4 pb-3 text-[13px] leading-snug text-white/45"><Lines>We&rsquo;ll text this number about your trip. Msg&nbsp;&amp;&nbsp;data rates may apply. Reply&nbsp;STOP to opt out.</Lines></p>
                 <div className="ml-4 h-px bg-white/10" />
                 <label className="block px-4 pt-3 text-[13px] font-medium text-white/60" htmlFor="te-last">{t.last}</label>
                 <input
@@ -285,7 +286,7 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
                   onChange={(e) => setLast(e.target.value)}
                   aria-describedby="te-last-hint"
                 />
-                <p id="te-last-hint" className="px-4 pb-3 text-[13px] leading-snug text-white/45">{t.lastHint}</p>
+                <p id="te-last-hint" className="px-4 pb-3 text-[13px] leading-snug text-white/45"><Lines>{t.lastHint}</Lines></p>
               </div>
 
               <AnimatePresence initial={false}>
@@ -300,7 +301,7 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
                     transition={SPRING}
                     className={`mt-3 rounded-[14px] px-4 py-3 text-[15px] leading-snug ring-1 ${dl ? "bg-[#B3261E]/10 text-[#8C1D18] ring-[#B3261E]/30" : "bg-[#ff453a]/15 text-[#ff9f97] ring-[#ff453a]/30"}`}
                   >
-                    {err}
+                    <Lines>{err}</Lines>
                   </motion.p>
                 )}
               </AnimatePresence>
@@ -314,7 +315,7 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
               >
                 <ButtonFace state={state} label={t.open} />
               </motion.button>
-              <p className="pt-4 text-center text-[13px] leading-snug text-white/45">{t.note}</p>
+              <p className="pt-4 text-center text-[13px] leading-snug text-white/45"><Lines>{t.note}</Lines></p>
             </motion.form>
             </motion.div>
           )}

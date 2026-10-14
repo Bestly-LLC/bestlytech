@@ -28,6 +28,7 @@ import {
 } from "@/components/admin/ui";
 import { AskScoutButton } from "./AskScoutButton";
 import { toast } from "sonner";
+import { Lines } from "@/components/Lines";
 
 /**
  * Everything waiting on the operator, from one server-side rule set.
@@ -649,9 +650,9 @@ export function ActionInbox() {
                     <div className="min-w-0 flex-1">
                       <p className={cn(text.title, "flex min-w-0 items-center gap-2")}>
                         {pill ? <Pill tone={pill}>{severityWord[item.severity]}</Pill> : <span className="sr-only">{severityWord[item.severity]}: </span>}
-                        <span className="truncate">{item.title}</span>
+                        <span className="min-w-0 break-words"><Lines>{item.title}</Lines></span>
                       </p>
-                      {item.detail && <p className={cn(text.detail, "mt-0.5 truncate")}>{item.detail}</p>}
+                      {item.detail && <p className={cn(text.detail, "mt-0.5 break-words")}><Lines>{item.detail}</Lines></p>}
                     </div>
                     {item.count && <Pill>{item.count}</Pill>}
                     <span className={cn(text.meta, "shrink-0")}>
@@ -671,11 +672,11 @@ export function ActionInbox() {
                   <div className="min-w-0 flex-1">
                     <p className={cn(text.title, "flex min-w-0 items-center gap-2")}>
                       {pill ? <Pill tone={pill}>{severityWord[item.severity]}</Pill> : <span className="sr-only">{severityWord[item.severity]}: </span>}
-                      <span className="truncate">{item.title}</span>
+                      <span className="min-w-0 break-words"><Lines>{item.title}</Lines></span>
                       <span className="shrink-0 whitespace-nowrap rounded-full bg-white/[0.10] px-2 py-0.5 text-[12px] font-semibold tabular-nums text-white/85">×{n}</span>
                     </p>
-                    <p className={cn(text.detail, "mt-0.5 truncate")}>
-                      Latest <span className="whitespace-nowrap">{latest.since ? clock12(latest.since) : timeAgo(g.newestMs)}</span>{latest.detail ? ` · ${latest.detail}` : ""}
+                    <p className={cn(text.detail, "mt-0.5 break-words")}>
+                      <Lines>Latest <span className="whitespace-nowrap">{latest.since ? clock12(latest.since) : timeAgo(g.newestMs)}</span>{latest.detail ? ` · ${latest.detail}` : ""}</Lines>
                     </p>
                   </div>
                   <span className={cn(text.meta, "shrink-0")}><span className="sr-only">Latest </span>{timeAgo(g.newestMs)}</span>
@@ -689,11 +690,11 @@ export function ActionInbox() {
                           <button type="button" onClick={() => setOpenItem(it)} className={cn(rowBtn, "min-h-[44px] py-2.5 pl-10")}
                             aria-label={`${it.title}, ${it.since ? clock12(it.since) : timeAgo(it.ageMs) + " ago"}`}>
                             <div className="min-w-0 flex-1">
-                              <p className={cn(text.detail, "truncate text-white/80")}>
+                              <p className={cn(text.detail, "break-words text-white/80")}>
                                 <span className="whitespace-nowrap font-medium text-white/90">
                                   {it.since ? new Date(it.since).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : timeAgo(it.ageMs)}
                                 </span>
-                                {it.detail ? ` · ${it.detail}` : ""}
+                                <Lines>{it.detail ? ` · ${it.detail}` : ""}</Lines>
                               </p>
                             </div>
                             <span className={cn(text.meta, "shrink-0")}>{timeAgo(it.ageMs)}</span>

@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tint } from "@/pages/admin/laxUi";
+import { Lines } from "@/components/Lines";
 
 export { btnPrimary, btnTinted, btnPlain, tint } from "@/pages/admin/laxUi";
 
@@ -138,7 +139,7 @@ export function LoadError({ label, onRetry, busy, detail, message }: {
   return (
     <div role="alert" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-white/80">
       <AlertTriangle className={cn("h-4 w-4 shrink-0", tint.orange)} aria-hidden />
-      <span title={detail ?? undefined}>{message ?? `Couldn't load ${label}`}</span>
+      <span title={detail ?? undefined}><Lines>{message ?? `Couldn't load ${label}`}</Lines></span>
       <button
         type="button"
         onClick={onRetry}

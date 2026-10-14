@@ -15,6 +15,7 @@ import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { btnTinted, card, secondary, label, tint } from "./laxUi";
 import { TirePsiGrid } from "@/components/admin/turo/TirePsiGrid";
+import { Lines } from "@/components/Lines";
 
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
@@ -132,7 +133,7 @@ export function CarHealth() {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className={cn("text-[17px] font-semibold", label)}>Car health · {h.name ?? "Tesla"}</p>
-          <p className={cn("mt-0.5 text-xs", secondary)}>Watched every 5 minutes. Problems go to Scout; guests get a push for charging, low battery, unlocked, trunk open.</p>
+          <p className={cn("mt-0.5 text-xs", secondary)}><Lines>Watched every 5 minutes. Problems go to Scout; guests get a push for charging, low battery, unlocked, trunk open.</Lines></p>
         </div>
         <button type="button" onClick={() => void check()} disabled={!!busy} className={small}>{busy === "check" ? <><Loader2 className="animate-spin" aria-hidden />Checking…</> : <><RefreshCw aria-hidden />Check now</>}</button>
       </div>

@@ -123,10 +123,10 @@ export function Fold({ icon: Icon, title, sub, children, tone, open: start = fal
 }
 
 function Bullets({ items }: { items: ReactNode[] }) {
-  return <ul className="mt-1.5 space-y-1.5">{items.map((x, i) => <li key={i} className="flex gap-2"><span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: ACCENT }} />{<span>{x}</span>}</li>)}</ul>;
+  return <ul className="mt-1.5 space-y-1.5">{items.map((x, i) => <li key={i} className="flex gap-2"><span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: ACCENT }} /><span><Lines>{x}</Lines></span></li>)}</ul>;
 }
 function Numbered({ items }: { items: ReactNode[] }) {
-  return <ol className="mt-1.5 space-y-1.5">{items.map((x, i) => <li key={i} className="flex gap-2.5"><span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-[#140826]" style={{ background: ACCENT }}>{i + 1}</span><span>{x}</span></li>)}</ol>;
+  return <ol className="mt-1.5 space-y-1.5">{items.map((x, i) => <li key={i} className="flex gap-2.5"><span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-[#140826]" style={{ background: ACCENT }}>{i + 1}</span><span><Lines>{x}</Lines></span></li>)}</ol>;
 }
 const H = ({ children }: { children: ReactNode }) => <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/65 first:mt-0">{children}</p>;
 const Call = ({ tel, label, shown, red }: { tel: string; label: string; shown?: string; red?: boolean }) => (
@@ -140,7 +140,7 @@ export function ChargeBadge({ pct }: { pct: number | null | undefined }) {
   return (
     <div className="mt-3 flex items-center gap-3 rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10">
       <BatteryCharging className="h-8 w-8 shrink-0 text-emerald-300" strokeWidth={1.5} />
-      <p className="text-[14px] leading-snug text-white/80">You picked it up at <b className="text-[22px] font-bold text-white tabular-nums">{pct}%</b>. Return it with at least that much to avoid Turo's recharge fee.</p>
+      <p className="text-[14px] leading-snug text-white/80"><Lines>You picked it up at <b className="text-[22px] font-bold text-white tabular-nums">{pct}%</b>. Return it with at least that much to avoid Turo's recharge fee.</Lines></p>
     </div>
   );
 }
@@ -157,7 +157,7 @@ export function HomeGuide({ pickupBattery, kind = "home", children, valet }: { p
       <Fold id="guide-charging" icon={BatteryCharging} title="Charging" sub="Return with the same charge · nearest Supercharger">
         {pickupBattery != null
           ? <ChargeBadge pct={pickupBattery} />
-          : <p><b className="text-white">Return it at the same charge level as pickup</b> to avoid Turo's recharge fee. Note the % in your pickup photos.</p>}
+          : <p><Lines><b className="text-white">Return it at the same charge level as pickup</b> to avoid Turo's recharge fee. Note the % in your pickup photos.</Lines></p>}
         <H>Nearest Supercharger</H>
         <Bullets items={[
           <><a href={chargerMaps(ch)} className="font-semibold text-white underline decoration-white/40 underline-offset-2">{ch.name}, {ch.street}</a>: {ch.note}</>,
@@ -184,15 +184,15 @@ export function HomeGuide({ pickupBattery, kind = "home", children, valet }: { p
 
 
       <Fold id="guide-fsd" icon={Cpu} title="Full Self-Driving (Supervised)" sub="How to turn it on, start, and take over">
-        <p><b className="text-white">Hands on. Eyes up.</b> It steers, brakes, changes lanes, handles intersections and parks, but it isn't autonomous. You're the driver and responsible at all times. Rain, glare, faded lines and heavy traffic make it worse.</p>
+        <p><Lines><b className="text-white">Hands on. Eyes up.</b> It steers, brakes, changes lanes, handles intersections and parks, but it isn't autonomous. You're the driver and responsible at all times. Rain, glare, faded lines and heavy traffic make it worse.</Lines></p>
         <H>Turn it on (in Park)</H>
         <Numbered items={["Tap the Car icon on the screen.", "Open Self-Driving.", "Under Self-Driving Features, choose Full Self-Driving.", "Accept the on-screen acknowledgment."]} />
         <H>Start from Park</H>
         <Numbered items={["Seatbelt on, doors closed, destination set.", "Tap Start Self-Driving, or pull the gear stalk down once.", "If Brake Confirm is on, press and release the brake."]} />
-        <p className="mt-1.5 text-[13px] text-white/60">It may shift to Reverse, back out, then drive off. That's expected.</p>
+        <p className="mt-1.5 text-[13px] text-white/60"><Lines>It may shift to Reverse, back out, then drive off. That's expected.</Lines></p>
         <H>Take back over: any one of these</H>
         <Bullets items={["Press the brake", "Turn the wheel", "Tap Cancel on the screen"]} />
-        <p className="mt-2 text-[14px] text-white/70">No blue steering-wheel icon or blue path? It isn't available, so drive normally. Not sure? Don't turn it on: nothing about this trip needs FSD. Skip it in heavy construction, storms and tight parking garages. Speed Profiles (Sloth for calm city driving) and Arrival Options are in the same menu.</p>
+        <p className="mt-2 text-[14px] text-white/70"><Lines>No blue steering-wheel icon or blue path? It isn't available, so drive normally. Not sure? Don't turn it on: nothing about this trip needs FSD. Skip it in heavy construction, storms and tight parking garages. Speed Profiles (Sloth for calm city driving) and Arrival Options are in the same menu.</Lines></p>
         <button type="button" onClick={() => playVideo(FSD)} className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white px-4 text-[15px] font-semibold text-[#140826]"><PlayCircle className="h-4 w-4" /> Watch the 3-minute video</button>
       </Fold>
 
@@ -216,7 +216,7 @@ export function HomeGuide({ pickupBattery, kind = "home", children, valet }: { p
           <Call tel="911" label="Call 911" red />
           <Call tel="+14159654525" label="Turo 24/7 Roadside" shown="(415) 965-4525" />
         </div>
-        <p className="mt-2 text-[13px] text-white/60">Turo Roadside sends help to you at no cost. Tesla Roadside is also in the Tesla app under Roadside. Be ready to share your location and what happened.</p>
+        <p className="mt-2 text-[13px] text-white/60"><Lines>Turo Roadside sends help to you at no cost. Tesla Roadside is also in the Tesla app under Roadside. Be ready to share your location and what happened.</Lines></p>
         <a href={INCIDENT_CARD} target="_blank" rel="noreferrer" className="mt-3 flex min-h-[48px] items-center gap-2 rounded-2xl bg-white/[0.09] px-4 text-[15px] font-semibold ring-1 ring-white/15">
           <FileText className="h-5 w-5 shrink-0" style={{ color: ACCENT }} /> Turo incident information card (PDF) <ExternalLink className="ml-auto h-4 w-4 text-white/65" />
         </a>

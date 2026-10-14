@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { BellRing, Puzzle, Share, SquarePlus, X } from "lucide-react";
 import { track } from "./track";
 import { enableTripPush, refreshTripPush, tripPushState } from "./tripPush";
+import { Lines } from "@/components/Lines";
 
 type BIP = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 const ACCENT = "var(--trip-accent)";
@@ -116,7 +117,7 @@ export function InstallToast({ token, kind }: { token: string; kind: "home" | "l
               <li className="rounded-2xl bg-white/[0.08] px-1.5 py-2.5 ring-1 ring-inset ring-white/10"><span className="mx-auto mb-1.5 grid h-8 w-8 place-items-center rounded-full bg-white/15"><SquarePlus className="h-[18px] w-[18px]" /></span>3. <b className="text-white">Add to Home Screen</b> (scroll down if needed)</li>
             </ol>
           )}
-          {mode === "ios" && <p className="mt-2 text-center text-[12px] text-white/60">No puzzle piece? Tap the Share button <Share className="inline h-3 w-3" /> in Safari's toolbar instead.</p>}
+          {mode === "ios" && <p className="mt-2 text-center text-[12px] text-white/60"><Lines>No puzzle piece? Tap the Share button <Share className="inline h-3 w-3" /> in Safari's toolbar instead.</Lines></p>}
           {mode === "android" && bip && (
             <button type="button" onClick={async () => { await bip.prompt(); const c = await bip.userChoice; track(token, "a2hs_android", { outcome: c.outcome }); setShow(false); }}
               className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#1A1140]" style={{ background: ACCENT }}>

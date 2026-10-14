@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { Lines } from "@/components/Lines";
 
 interface PageHeaderProps {
   title: string;
@@ -19,7 +20,7 @@ export function PageHeader({ title, description, actions, embedded }: PageHeader
           {title}
         </h1>}
         {description && (
-          <p className={`text-[0.9375rem] sm:text-sm text-white/60 ${title ? "mt-1.5" : ""}`}>{description}</p>
+          <p className={`text-[0.9375rem] sm:text-sm text-white/60 ${title ? "mt-1.5" : ""}`}><Lines>{description}</Lines></p>
         )}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2 sm:justify-end">{actions}</div>}

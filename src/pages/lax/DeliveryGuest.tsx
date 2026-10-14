@@ -33,6 +33,7 @@ import { AskChips, LeoHero } from "./DeliveryLeo";
 import { LeoDock } from "./LeoDock";
 import { leoNudgeItems, type NudgeKey, type NudgeSection } from "./leoNudges";
 import type { CarAction, HomePub, KeyInfo } from "./HomeGuest";
+import { Lines } from "@/components/Lines";
 
 export type DeliveryPub = HomePub & { place?: "lax" | "home" | "delivery"; delivery?: Delivery | null };
 
@@ -123,7 +124,7 @@ function Panel({ id, kicker, title, children, className = "" }: { id?: string; k
   return (
     <section id={id} aria-label={kicker} className={`mt-5 scroll-mt-4 rounded-[28px] bg-white/[0.66] p-4 ring-1 ring-[rgba(19,40,42,0.09)] ${className}`} style={{ boxShadow: "0 16px 34px -26px rgba(143,77,18,.45)" }}>
       <p className="text-[12px] font-semibold uppercase tracking-[0.2em]" style={{ color: LABEL }}>{kicker}</p>
-      {title && <h2 className="mt-1.5 text-[24px] font-bold leading-tight tracking-[-0.01em]" style={{ fontFamily: "var(--trip-title-font)", color: INK }}>{title}</h2>}
+      {title && <h2 className="mt-1.5 text-[24px] font-bold leading-tight tracking-[-0.01em]" style={{ fontFamily: "var(--trip-title-font)", color: INK }}><Lines>{title}</Lines></h2>}
       <div className={title ? "mt-3" : "mt-2"}>{children}</div>
     </section>
   );
@@ -187,7 +188,7 @@ function DeliveryCard({ d, info, token, demo, onSaved, askLeo }: { d: Delivery; 
       {complete ? (
         <p role="status" className="mt-3 flex items-start gap-2 text-[16px] font-semibold leading-snug" style={{ color: "#1B6B42" }}><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />{DONE_LINE[d.kind]}</p>
       ) : rows.length > 0 && (
-        <p className="mt-3 text-[15px] leading-snug" style={{ color: BODY }}>Tell Leo above, or type it here. It goes straight to Jared.</p>
+        <p className="mt-3 text-[15px] leading-snug" style={{ color: BODY }}><Lines>Tell Leo above, or type it here. It goes straight to Jared.</Lines></p>
       )}
 
       {rows.length > 0 && !form && (
@@ -207,7 +208,7 @@ function DeliveryCard({ d, info, token, demo, onSaved, askLeo }: { d: Delivery; 
                 className="mt-1 h-12 w-full rounded-xl border-0 bg-white px-3 text-[16px] text-[#13282A] ring-1 ring-[rgba(19,40,42,0.20)] placeholder:text-[#6A7371] focus:outline-none focus:ring-2 focus:ring-[#13282A]" />
             </label>
           ))}
-          {st === "err" && <p role="alert" className="text-[14px] font-medium" style={{ color: "#B3261E" }}>That didn't send. Try again, or tell Leo.</p>}
+          {st === "err" && <p role="alert" className="text-[14px] font-medium" style={{ color: "#B3261E" }}><Lines>That didn't send. Try again, or tell Leo.</Lines></p>}
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setForm(false)} className={btnQuiet}>Cancel</button>
             <button type="submit" disabled={st === "busy" || !fields.some((f) => (vals[f.key] ?? "").trim())} className={btnPrimary}>
@@ -243,12 +244,12 @@ function SpotCard({ spot, from, short, token, now, canHonk, honk }: { spot: Spot
           {st === "done" ? "Honked" : "Honk to find it"}
         </button>
       )}
-      {st === "err" && <p role="alert" className="mt-2 text-[14px] font-medium" style={{ color: "#B3261E" }}>Couldn't reach the car. Try again in a minute.</p>}
+      {st === "err" && <p role="alert" className="mt-2 text-[14px] font-medium" style={{ color: "#B3261E" }}><Lines>Couldn't reach the car. Try again in a minute.</Lines></p>}
     </Panel>
   );
 }
 function SpotQuiet({ text }: { text: string }) {
-  return <p className="mt-5 flex items-start gap-2.5 px-1 text-[15px] leading-snug" style={{ color: BODY }}><MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />{text}</p>;
+  return <p className="mt-5 flex items-start gap-2.5 px-1 text-[15px] leading-snug" style={{ color: BODY }}><MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /><span><Lines>{text}</Lines></span></p>;
 }
 
 // ---------- How delivery works ----------
@@ -270,7 +271,7 @@ function HowItWorks({ step, d, startsAt }: { step: Step; d: Delivery; startsAt?:
                 : <span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-[15px] font-bold ${cur ? "bg-[#E2733A] text-[#13282A]" : "bg-transparent ring-2 ring-[rgba(19,40,42,0.28)]"}`} style={cur ? undefined : { color: BODY }}>{i + 1}</span>}
               <div className="min-w-0 flex-1">
                 <p className="text-[17px] font-semibold leading-snug" style={{ color: done ? BODY : INK }}>{r.title}</p>
-                <p className="mt-0.5 text-[15px] leading-snug" style={{ color: BODY }}>{r.sub}</p>
+                <p className="mt-0.5 text-[15px] leading-snug" style={{ color: BODY }}><Lines>{r.sub}</Lines></p>
               </div>
             </li>
           );
@@ -290,21 +291,21 @@ function KeyBlock({ k, token, d, hasApp, onHasApp, onAdded }: { k: KeyInfo; toke
   const store = android() ? "https://play.google.com/store/apps/details?id=com.teslamotors.tesla" : "https://apps.apple.com/app/tesla/id582007913";
   if (k.state === "off") return null;
   const title = added ? "You're all set. Your phone is the key." : k.state === "ready" ? "Your key is ready. Tap the button." : "Your phone is the car key";
-  if (k.state === "ended") return <Panel id="key" kicker="Your key"><p className="text-[16px] leading-snug" style={{ color: BODY }}>Your trip is over, so your key has been turned off. Thanks for driving with us.</p></Panel>;
+  if (k.state === "ended") return <Panel id="key" kicker="Your key"><p className="text-[16px] leading-snug" style={{ color: BODY }}><Lines>Your trip is over, so your key has been turned off. Thanks for driving with us.</Lines></p></Panel>;
   const Row = ({ n, done, t, children }: { n: number; done?: boolean; t: string; children?: ReactNode }) => (
     <li className="flex gap-3">
       {done ? <CheckCircle2 className="mt-0.5 h-7 w-7 shrink-0" style={{ color: "#1B7A4B" }} aria-label="Done" />
         : <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#E2733A] text-[14px] font-bold text-[#13282A]">{n}</span>}
       <div className="min-w-0 flex-1">
         <p className="text-[17px] font-semibold leading-snug" style={{ color: done ? BODY : INK }}>{t}</p>
-        {children && <div className="mt-1 text-[15px] leading-relaxed" style={{ color: BODY }}>{children}</div>}
+        {children && <div className="mt-1 text-[15px] leading-relaxed" style={{ color: BODY }}><Lines>{children}</Lines></div>}
       </div>
     </li>
   );
   return (
     <Panel id="key" kicker="Your key" title={title} className={k.state === "ready" && !tapped ? "dl-ready" : ""}>
       {added ? (
-        <p className="flex items-start gap-2 text-[16px] leading-relaxed" style={{ color: BODY }}><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" style={{ color: "#1B7A4B" }} aria-hidden />The car is in your Tesla app. Walk up with your phone and it unlocks. Access ends by itself after your trip.</p>
+        <p className="flex items-start gap-2 text-[16px] leading-relaxed" style={{ color: BODY }}><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" style={{ color: "#1B7A4B" }} aria-hidden /><span><Lines>The car is in your Tesla app. Walk up with your phone and it unlocks. Access ends by itself after your trip.</Lines></span></p>
       ) : (
         <ol className="space-y-5">
           <Row n={1} done={hasApp} t={hasApp ? "Tesla app: done" : "Get the free Tesla app"}>
@@ -318,21 +319,21 @@ function KeyBlock({ k, token, d, hasApp, onHasApp, onAdded }: { k: KeyInfo; toke
           <Row n={2} t="Add the car to your Tesla app">
             {k.state === "soon" && k.hold && (
               <span className="grid gap-2.5">
-                {k.hold.license && <span className="flex gap-3 rounded-2xl bg-[rgba(19,40,42,0.05)] p-3"><Camera className="mt-0.5 h-5 w-5 shrink-0" style={{ color: LABEL }} aria-hidden /><span><b style={{ color: INK }}>Add your driver's license in the Turo app.</b> Already did? You're all set.</span></span>}
-                <span className="flex gap-3 rounded-2xl bg-[rgba(19,40,42,0.05)] p-3"><Car className="mt-0.5 h-5 w-5 shrink-0" style={{ color: LABEL }} aria-hidden /><span><b style={{ color: INK }}>Jared's check-in photos at {d.short}.</b> When he's done, your key button shows up right here by itself. No need to refresh.</span></span>
+                {k.hold.license && <span className="flex gap-3 rounded-2xl bg-[rgba(19,40,42,0.05)] p-3"><Camera className="mt-0.5 h-5 w-5 shrink-0" style={{ color: LABEL }} aria-hidden /><span><Lines><b style={{ color: INK }}>Add your driver's license in the Turo app.</b> Already did? You're all set.</Lines></span></span>}
+                <span className="flex gap-3 rounded-2xl bg-[rgba(19,40,42,0.05)] p-3"><Car className="mt-0.5 h-5 w-5 shrink-0" style={{ color: LABEL }} aria-hidden /><span><Lines><b style={{ color: INK }}>Jared's check-in photos at {d.short}.</b> When he's done, your key button shows up right here by itself. No need to refresh.</Lines></span></span>
               </span>
             )}
             {k.state === "soon" && !k.hold && (
               <span className="flex min-h-[56px] items-center justify-center gap-2 rounded-2xl bg-[rgba(19,40,42,0.06)] px-3 text-center text-[15px] font-semibold" style={{ color: BODY }}><Lock className="h-4 w-4 shrink-0" aria-hidden />Turns on {k.opens_at ? fmtWhen(k.opens_at) : "after Jared's check-in"}</span>
             )}
-            {k.state === "making" && (slow ? <KeyHelp slow accent="var(--trip-accent)" /> : <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />Making your key. This updates by itself.</span>)}
+            {k.state === "making" && (slow ? <KeyHelp slow accent="var(--trip-accent)" /> : <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /><span><Lines>Making your key. This updates by itself.</Lines></span></span>)}
             {k.state === "ready" && (k.link
               ? tapped ? <KeyPending token={token} link={k.link} onAdded={onAdded} />
                 : <>
                     <a href={k.link} onClick={() => { track(undefined, "key_tap"); markKeyTapped(token); window.setTimeout(() => setTapped(true), 600); }} className={`${btnPrimary} h-14 text-[17px]`}>
                       <KeyRound className="h-5 w-5" aria-hidden />{k.link === "#demo-key" ? "Pretend: add the car" : "Add the car to my Tesla app"}
                     </a>
-                    <span className="mt-2 block text-[14px]">Then tap <b style={{ color: INK }}>Accept</b> in the Tesla app. One-time link, just for you.</span>
+                    <span className="mt-2 block text-[14px]"><Lines>Then tap <b style={{ color: INK }}>Accept</b> in the Tesla app. One-time link, just for you.</Lines></span>
                   </>
               : <span className="block rounded-xl bg-[rgba(19,40,42,0.06)] p-3 text-[14px]">Preview: the real button appears here after Jared's check-in.</span>)}
             {k.state === "problem" && <KeyHelp slow={false} accent="var(--trip-accent)" />}
@@ -360,12 +361,12 @@ function ReturnBlock({ d, trip, pickup, battery, run }: { d: Delivery; trip?: { 
   ];
   return (
     <Panel id="return" kicker="Return" title={<>Bring it back to {d.short}</>}>
-      <p className="text-[17px] leading-snug" style={{ color: BODY }}>Same place as pickup.{trip && <> Return by <b style={{ color: INK }}>{fmtWhen(trip.ends_at)}</b>.</>}</p>
+      <p className="text-[17px] leading-snug" style={{ color: BODY }}><Lines>Same place as pickup.{trip && <> Return by <b style={{ color: INK }}>{fmtWhen(trip.ends_at)}</b>.</>}</Lines></p>
       <div className="mt-3 rounded-2xl bg-[rgba(255,255,255,0.7)] p-3.5 ring-1 ring-[rgba(19,40,42,0.08)]">
         <p className="text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: LABEL }}>Charge rule</p>
         <p className="mt-1 text-[17px] font-semibold leading-snug" style={{ color: INK }}>Bring it back at the same battery level as pickup{pickup != null ? <> ({nw(`${pickup}%`)})</> : null}.</p>
-        {known && <p className="mt-1 text-[15px] leading-snug" style={{ color: BODY }}>{add > 0 ? <>It's at {nw(`${battery}%`)} now. Add about {nw(`${add}%`)} before you return to avoid Turo's recharge fee.</> : <>It's at {nw(`${battery}%`)} now. You're good on charge.</>}</p>}
-        {!known && <p className="mt-1 text-[15px] leading-snug" style={{ color: BODY }}>Under that level, Turo adds a recharge fee. Leo can find a Supercharger.</p>}
+        {known && <p className="mt-1 text-[15px] leading-snug" style={{ color: BODY }}><Lines>{add > 0 ? <>It's at {nw(`${battery}%`)} now. Add about {nw(`${add}%`)} before you return to avoid Turo's recharge fee.</> : <>It's at {nw(`${battery}%`)} now. You're good on charge.</>}</Lines></p>}
+        {!known && <p className="mt-1 text-[15px] leading-snug" style={{ color: BODY }}><Lines>Under that level, Turo adds a recharge fee. Leo can find a Supercharger.</Lines></p>}
         {add > 0 && <SendToCar center run={run} kind="home" label="Send nearest Supercharger to car" />}
       </div>
       <ul className="mt-3 grid gap-3">
@@ -388,7 +389,7 @@ function Footer() {
     <footer className="mt-10 text-center">
       <a href={TURO_TRIPS} target="_blank" rel="noreferrer" onClick={() => track(undefined, "review_tap")} className="mx-auto block max-w-[19rem] rounded-2xl px-2 py-2 active:opacity-80">
         <span className="flex justify-center gap-1.5" role="img" aria-label="5 stars">{[0, 1, 2, 3, 4].map((i) => <Star key={i} className="h-5 w-5" style={{ color: "var(--d-star)", fill: "var(--d-star)" }} strokeWidth={1.5} aria-hidden />)}</span>
-        <span className="mt-2.5 block text-[16px] leading-snug" style={{ color: INK }}>Loved the ride? A 5-star review on Turo helps a small host a ton.</span>
+        <span className="mt-2.5 block text-[16px] leading-snug" style={{ color: INK }}><Lines>Loved the ride? A 5-star review on Turo helps a small host a ton.</Lines></span>
       </a>
       <a href={CALL_HREF} onClick={() => track(undefined, "call_leo")} className="mx-auto mt-3 inline-flex min-h-[48px] items-center gap-2 rounded-full px-5 text-[16px] font-semibold ring-1 ring-[rgba(19,40,42,0.18)]" style={{ color: INK }}>
         <Phone className="h-4 w-4" aria-hidden />Call Leo {nw(CALL)}
@@ -595,7 +596,7 @@ export default function DeliveryGuest({ pub, token, run, demoPage, reload }: { p
         </p>
 
         <LeoHero sess={sess} line={line} typing={typing} setTyping={setTyping} />
-        {pub.trip && !ended && <p className="sr-only">Trip {fmtWhen(pub.trip.starts_at)} to {fmtWhen(pub.trip.ends_at)}. Pickup {t12(pub.trip.starts_at)}.</p>}
+        {pub.trip && !ended && <p className="sr-only"><Lines>Trip {fmtWhen(pub.trip.starts_at)} to {fmtWhen(pub.trip.ends_at)}. Pickup {t12(pub.trip.starts_at)}.</Lines></p>}
 
         {ended && trip ? <>
           <TripDone trip={trip} charging={pub.charging} token={token} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" />

@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { btnTinted, card } from "./laxUi";
+import { Lines } from "@/components/Lines";
 
 export type Row = {
   reservation_id: number; pickup_battery?: number | null; pickup_battery_at?: string | null; first: string | null; last: string | null; starts_at: string; ends_at: string; lax: boolean;
@@ -120,11 +121,11 @@ function Timeline({ res, home }: { res: number; home: boolean }) {
     ...t.events.filter((e) => e.kind !== "view").map((e) => ({ at: e.at, node: (() => { const x = explain(e, home); return (
       <><p className="text-[15px] text-white bento:text-neutral-900">{x.title}
         {e.actor === "unsure" && <span className="ml-1.5 rounded-full bg-[#FF9F0A26] px-1.5 py-0.5 text-[11px] font-semibold text-[#FF9F0A] bento:bg-[#FF95001f] bento:text-[#C93400]">not confirmed as theirs</span>}</p>
-        {x.sub && <p className="text-[13px] text-white/55 bento:text-neutral-500">{x.sub}</p>}</>); })() })),
+        {x.sub && <p className="text-[13px] text-white/55 bento:text-neutral-500"><Lines>{x.sub}</Lines></p>}</>); })() })),
     ...t.questions.map((q) => ({ at: q.at, node: (
       <>
-        <p className="flex items-start gap-1.5 text-[15px] text-white bento:text-neutral-900"><MessageCircleQuestion className="mt-0.5 h-4 w-4 shrink-0 text-[#409CFF] bento:text-[#007AFF]" aria-hidden />“{q.q}”</p>
-        {q.a ? <p className="mt-1 rounded-xl bg-white/[0.05] px-3 py-2 text-[13px] leading-relaxed text-white/70 bento:bg-neutral-100 bento:text-neutral-600">{q.a}</p>
+        <p className="flex items-start gap-1.5 text-[15px] text-white bento:text-neutral-900"><MessageCircleQuestion className="mt-0.5 h-4 w-4 shrink-0 text-[#409CFF] bento:text-[#007AFF]" aria-hidden /><span>“<Lines>{q.q}</Lines>”</span></p>
+        {q.a ? <p className="mt-1 rounded-xl bg-white/[0.05] px-3 py-2 text-[13px] leading-relaxed text-white/70 bento:bg-neutral-100 bento:text-neutral-600"><Lines>{q.a}</Lines></p>
           : <p className="text-[13px] text-amber-300 bento:text-amber-700">No answer{q.unanswered ? " (flagged for you)" : ""}</p>}
       </>) })),
   ].sort((a, b) => +new Date(b.at) - +new Date(a.at));
@@ -248,7 +249,7 @@ function KeyRow({ r, reload }: { r: Row; reload: () => void }) {
           </div>
         </div>
       )}
-      {k?.error && st === "failed" && <p className="mt-1 text-xs text-red-300/80 bento:text-red-600">{k.error}</p>}
+      {k?.error && st === "failed" && <p className="mt-1 text-xs text-red-300/80 bento:text-red-600"><Lines>{k.error}</Lines></p>}
       <div className="mt-2 flex flex-wrap gap-2">
         {["scheduled", "failed", "expired"].includes(st) && <button type="button" className={btn} disabled={!!busy} onClick={() => act("make")}>{busy === "make" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}Make key now</button>}
         {["ready", "accepted", "expired", "failed", "removed"].includes(st) && <button type="button" className={cn(btn, "border-amber-300/40 text-amber-200 bento:border-amber-300 bento:text-amber-700")} disabled={!!busy}
@@ -331,7 +332,7 @@ function ChargingAdmin({ res, first }: { res: number; first: string | null }) {
           <button type="button" className={btn} disabled={busy} onClick={() => void refresh()}>{busy ? <><Loader2 className="animate-spin" aria-hidden />Checking…</> : <><RefreshCw aria-hidden />Check now</>}</button>
         </span>
       </div>
-      {c.last_error && <p className="mt-1 text-xs text-amber-300 bento:text-amber-700">Last check: {c.last_error.includes("Scope") ? "Tesla needs the charging permission. Reconnect Tesla in Settings to get final amounts." : c.last_error}</p>}
+      {c.last_error && <p className="mt-1 text-xs text-amber-300 bento:text-amber-700"><Lines>{`Last check: ${c.last_error.includes("Scope") ? "Tesla needs the charging permission. Reconnect Tesla in Settings to get final amounts." : c.last_error}`}</Lines></p>}
     </div>
   );
 }
@@ -390,7 +391,7 @@ export function GuestRow({ r, reload, compact }: { r: Row; reload: () => void; c
       </div>
       {delivery && (
         <p className="mt-1 text-sm text-white/70 bento:text-neutral-600">
-          {dNotes.length ? dNotes.map(([k, v], i) => <span key={k}>{i > 0 ? " · " : ""}<span className="text-white/45 bento:text-neutral-400">{k}</span> {v}</span>)
+          {dNotes.length ? dNotes.map(([k, v], i) => <span key={k}>{i > 0 ? " · " : ""}<span className="text-white/45 bento:text-neutral-400">{k}</span> <Lines>{v}</Lines></span>)
             : <span className="text-white/45 bento:text-neutral-400">Waiting on {(r.delivery_ask ?? []).includes("eta") ? "the train time" : "the room number and front desk notes"} from the guest.</span>}
         </p>
       )}
@@ -398,7 +399,7 @@ export function GuestRow({ r, reload, compact }: { r: Row; reload: () => void; c
       {compact && delivery && (
         <p className="mt-1 text-sm text-white/70 bento:text-neutral-600">
           <span className="font-medium text-[#F0A070] bento:text-[#A8480F]">Delivery · {dShort}</span>
-          {dNotes.length ? dNotes.map(([k, v]) => <span key={k}> · <span className="text-white/45 bento:text-neutral-400">{k}</span> {v}</span>)
+          {dNotes.length ? dNotes.map(([k, v]) => <span key={k}> · <span className="text-white/45 bento:text-neutral-400">{k}</span> <Lines>{v}</Lines></span>)
             : <span className="text-white/45 bento:text-neutral-400"> · waiting on {(r.delivery_ask ?? []).includes("eta") ? "the train time" : "the unit # and parking notes"} from the guest</span>}
         </p>
       )}
@@ -430,7 +431,7 @@ export function GuestRow({ r, reload, compact }: { r: Row; reload: () => void; c
               </button>
             )}
           </div>
-          <p className={cn("mt-1.5 text-xs", r.reminder_error ? "text-red-300 bento:text-red-600" : "text-white/45 bento:text-neutral-500")}>{status}</p></>}
+          <p className={cn("mt-1.5 text-xs", r.reminder_error ? "text-red-300 bento:text-red-600" : "text-white/45 bento:text-neutral-500")}><Lines>{status}</Lines></p></>}
         </>
       ) : (
         <button type="button" onClick={() => act("link")} disabled={!!busy} className="mt-2 text-sm text-[#409CFF] underline underline-offset-2 bento:text-[#007AFF]">
@@ -510,7 +511,7 @@ function AddTrip({ onDone }: { onDone: () => void }) {
       ) : (
         <>
           <p className="text-sm font-semibold text-white bento:text-neutral-900">Add a trip</p>
-          <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">Paste Turo's “trip is booked” message. Add the trip number from the trip page link (turo.com/reservation/<b>12345678</b>). Turo's own sync replaces this later.</p>
+          <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500"><Lines>Paste Turo's “trip is booked” message. Add the trip number from the trip page link (turo.com/reservation/<b>12345678</b>). Turo's own sync replaces this later.</Lines></p>
           <textarea value={paste} onChange={(e) => onPaste(e.target.value)} rows={4} placeholder="Paste the Turo booking message here" className={cn(fld, "mt-2 h-auto w-full py-2")} />
           <div className="mt-2 grid grid-cols-2 gap-2">
             <input className={fld} inputMode="numeric" placeholder="Trip number" value={f.res} onChange={(e) => setF({ ...f, res: e.target.value.replace(/\D/g, "") })} />
@@ -543,7 +544,7 @@ export function LaxGuests() {
   return (
     <div className={card}>
       <p className="text-[17px] font-semibold text-white bento:text-neutral-900">Guests</p>
-      <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500">Each trip gets its own page: their name, times, weather, and the car's battery and cabin temp from an hour before pickup. Reminder emails come from support@bestly.tech.</p>
+      <p className="mt-0.5 text-xs text-white/50 bento:text-neutral-500"><Lines>Each trip gets its own page: their name, times, weather, and the car's battery and cabin temp from an hour before pickup. Reminder emails come from support@bestly.tech.</Lines></p>
       <AddTrip onDone={load} />
       {!rows ? <Loader2 className="mt-4 h-5 w-5 animate-spin text-white/50" /> : rows.length === 0
         ? <p className="mt-4 text-sm text-white/55 bento:text-neutral-500">No upcoming trips.</p>

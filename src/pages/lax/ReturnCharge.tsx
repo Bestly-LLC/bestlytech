@@ -9,6 +9,7 @@ import { Info, Zap } from "lucide-react";
 import { SendToCar, type NavRun } from "./KeyNext";
 import { RangeCheck, type RangeCheckData } from "./LiveCharge";
 import type { TripKind } from "./places";
+import { Lines } from "@/components/Lines";
 
 export type ReturnChargeInfo = { known: boolean; needs: boolean; arrive: number | null; add: number; used: number; miles: number | null };
 
@@ -67,7 +68,7 @@ export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, obse
         ? (
           <>
             <p className="flex items-start gap-2 text-[16px] font-semibold leading-snug text-white"><Zap className="mt-0.5 h-[18px] w-[18px] shrink-0 fill-[#FF9F0A] text-[#FF9F0A]" aria-hidden />Add about {r.add}% before you return</p>
-            <p className="mt-1 text-[14px] leading-snug text-white/70">It would get back at about {r.arrive}%. Bring it back at {level}, the charge at pick-up, to avoid Turo's recharge fee.</p>
+            <p className="mt-1 text-[14px] leading-snug text-white/70"><Lines>It would get back at about {r.arrive}%. Bring it back at {level}, the charge at pick-up, to avoid Turo's recharge fee.</Lines></p>
           </>
         )
         : (
@@ -82,8 +83,7 @@ export function ReturnChargeBlock({ kind, pickup, battery, rc, run, endsAt, obse
       {check}
       {why && !r.needs && (
         <p className="mt-2 rounded-xl bg-white/[0.06] px-3 py-2 text-[13px] leading-snug text-white/75 ring-1 ring-white/10">
-          It's at {battery}% now. The drive back to {spot}{r.miles != null ? ` (about ${r.miles} mi)` : ""} uses about {r.used}%, so it should get back at about {r.arrive}%.
-          Turo only charges a recharge fee if it comes back under {pickup}%, the charge at pick-up.
+          <Lines>{`It's at ${battery}% now. The drive back to ${spot}${r.miles != null ? ` (about ${r.miles} mi)` : ""} uses about ${r.used}%, so it should get back at about ${r.arrive}%. Turo only charges a recharge fee if it comes back under ${pickup}%, the charge at pick-up.`}</Lines>
         </p>
       )}
       <div className="mt-3 rounded-2xl bg-white/[0.05] px-3 pb-3 pt-2 ring-1 ring-white/10">

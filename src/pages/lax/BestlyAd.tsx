@@ -4,6 +4,7 @@
  */
 import { ArrowRight } from "lucide-react";
 import { Collapse } from "./Collapse";
+import { Lines } from "./Lines";
 
 function Art() {
   // Theme-aware: strokes and fills use the page accent.
@@ -54,7 +55,7 @@ export function BestlyAd({ campaign, blurb }: { campaign: string; blurb: string 
       style={{ background: "linear-gradient(135deg, rgba(122,46,158,0.28), rgba(43,26,115,0.5))" }}>
       <div className="px-4 pb-5">
         <div className="rounded-2xl bg-black/20 p-3 ring-1 ring-white/10"><Art /></div>
-        <p className="mt-3 text-[15px] leading-relaxed text-white/75">{blurb}</p>
+        <p className="mt-3 text-[15px] leading-relaxed text-white/75"><Lines>{blurb}</Lines></p>
         <a href={`https://www.bestly.tech/hire?utm_source=turo&utm_medium=guest-page&utm_campaign=${campaign}`} target="_blank" rel="noopener"
           className="mt-4 inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-5 text-[15px] font-semibold text-[#1A1140] active:scale-[0.98]">
           Tell us what you need <ArrowRight className="h-4 w-4" aria-hidden />

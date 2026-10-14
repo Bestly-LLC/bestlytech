@@ -12,6 +12,7 @@ import { useMemo, useState } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowDownRight, ArrowUpRight, ExternalLink, Minus, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Lines } from "@/components/Lines";
 
 export interface SeriesRow { day: string; series: "us" | "turo" | "market" | "edgar"; value: number }
 export interface Target { id: string; label: string; page_url: string; vehicle: string | null; chart: boolean; note: string | null }
@@ -123,7 +124,7 @@ export function TuroTrends({ rows }: { rows: SeriesRow[] | null }) {
         </div>
       )}
       <p className="mt-3 text-xs text-white/60">
-        Listing-price dollars per day. Market and Edgar are converted from what renters pay (x 0.603, Turo's cut). Right of "today" is what's planned.
+        <Lines>{`Listing-price dollars per day. Market and Edgar are converted from what renters pay (x 0.603, Turo's cut). Right of "today" is what's planned.`}</Lines>
       </p>
     </section>
   );
@@ -211,7 +212,7 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
         <div>
           <h2 className="text-sm font-semibold text-white">Price manager</h2>
           <p className="mt-0.5 max-w-xl text-xs text-white/60">
-            Never goes under Turo's dynamic price. Moves up to the nearby Model 3 market, or to $3 under Edgar's Model 3 when he's higher, holds any price still within 10% of market, and adds 5 to 10% in a busy week. Moves at most 25% per run.
+            <Lines>{"Never goes under Turo's dynamic price. Moves up to the nearby Model 3 market, or to $3 under Edgar's Model 3 when he's higher, holds any price still within 10% of market, and adds 5 to 10% in a busy week. Moves at most 25% per run."}</Lines>
           </p>
         </div>
         <span className={cn("rounded-full px-3 py-1 text-xs font-semibold",
@@ -222,7 +223,7 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
 
       {tips.length > 0 && (
         <ul className="mt-4 space-y-1.5 rounded-2xl bg-[#0A84FF]/10 p-4 text-sm text-white/85">
-          {tips.map((t) => <li key={t} className="flex gap-2"><span className="text-[#5AB0FF]">•</span>{t}</li>)}
+          {tips.map((t) => <li key={t} className="flex gap-2"><span className="text-[#5AB0FF]">•</span><span><Lines>{t}</Lines></span></li>)}
         </ul>
       )}
 
@@ -259,7 +260,7 @@ export function PriceManager({ rows, plan, marketBase, paused, canWrite }: {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-white/60">"vs Turo" is your price minus Turo's dynamic price for that day (booked days show what they booked at). "Estimate" rows use the last known Turo price; the next run replaces them with live numbers.</p>
+      <p className="mt-2 text-xs text-white/60"><Lines>{`"vs Turo" is your price minus Turo's dynamic price for that day (booked days show what they booked at). "Estimate" rows use the last known Turo price; the next run replaces them with live numbers.`}</Lines></p>
     </section>
   );
 }
@@ -280,7 +281,7 @@ export function Competitors({ targets, prices }: { targets: Target[]; prices: Co
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-medium text-white">{t.label} <span className="font-normal text-white/60">· {t.vehicle}</span></p>
-                  {t.note && <p className="text-xs text-white/60">{t.note}</p>}
+                  {t.note && <p className="text-xs text-white/60"><Lines>{t.note}</Lines></p>}
                 </div>
                 <a href={t.page_url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[#5AB0FF] bento:text-[#0A6FD8]">Turo page <ExternalLink className="h-3.5 w-3.5" /></a>
               </div>
@@ -293,7 +294,7 @@ export function Competitors({ targets, prices }: { targets: Target[]; prices: Co
                   ))}
                   <span className="self-center text-xs text-white/60">checked {new Date(at!).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</span>
                 </div>
-              ) : <p className="mt-1 text-xs text-white/60">No reading yet. Every Turo Watch run checks it.</p>}
+              ) : <p className="mt-1 text-xs text-white/60"><Lines>No reading yet. Every Turo Watch run checks it.</Lines></p>}
             </li>
           );
         })}

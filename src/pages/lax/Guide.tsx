@@ -129,7 +129,7 @@ export function NextStep({ next, glow, onAction, onHasApp, run, kind, extra }: {
         <button type="button" onClick={() => { track(undefined, "next_charging"); openCharging(); }}
           className="mt-3 flex min-h-[44px] w-full items-center gap-2.5 border-t border-white/10 pt-3 text-left text-[14px] leading-snug text-white/80 active:opacity-70">
           <Zap className="h-4 w-4 shrink-0" style={{ color: ACCENT }} aria-hidden />
-          <span className="min-w-0 flex-1"><b className="font-semibold text-white">Supercharging?</b> Come back here to see each stop and what it cost.</span>
+          <span className="min-w-0 flex-1"><Lines><b className="font-semibold text-white">Supercharging?</b> Come back here to see each stop and what it cost.</Lines></span>
           <ArrowRight className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
         </button>
       )}
@@ -144,7 +144,7 @@ function Row({ n, done, title, children }: { n: number; done?: boolean; title: R
         : <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-[14px] font-bold text-[#1A1140]" style={{ background: ACCENT }}>{n}</span>}
       <div className="min-w-0 flex-1">
         <p className={`text-[17px] font-semibold leading-snug ${done ? "text-white/70" : "text-white"}`}><Lines>{title}</Lines></p>
-        {children && <div className="mt-1 text-[15px] leading-relaxed text-white/80">{children}</div>}
+        {children && <div className="mt-1 text-[15px] leading-relaxed text-white/80"><Lines>{children}</Lines></div>}
       </div>
     </li>
   );
@@ -175,12 +175,12 @@ export function KeySteps({ k, token, hasApp, onHasApp, onAdded, glow }: { k: Key
         {k.state === "soon" && !k.hold && (
           <>
             <span className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-white/[0.06] text-[15px] font-semibold text-white/55 ring-1 ring-white/10"><Lock className="h-4 w-4" /> Turns on {k.opens_at ? fmtWhen(k.opens_at) : "2 hours before pickup"}</span>
-            <span className="mt-1.5 block text-[13px] text-white/60">Come back then. This button turns on by itself.</span>
+            <span className="mt-1.5 block text-[13px] text-white/60"><Lines>Come back then. This button turns on by itself.</Lines></span>
           </>
         )}
         {k.state === "making" && (keySlow
           ? <KeyHelp slow accent={ACCENT} />
-          : <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" style={{ color: ACCENT }} /> Making your key. This updates by itself.</span>)}
+          : <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" style={{ color: ACCENT }} /><span><Lines> Making your key. This updates by itself.</Lines></span></span>)}
         {k.state === "ready" && (k.link
           ? tapped ? <KeyPending token={token} link={k.link} onAdded={onAdded} />
             : <>
@@ -191,8 +191,8 @@ export function KeySteps({ k, token, hasApp, onHasApp, onAdded, glow }: { k: Key
                   </a>
                 </span>
                 {k.link === "#demo-key"
-                  ? <span className="mt-1.5 block rounded-xl bg-amber-400/10 px-3 py-2 text-[13px] leading-snug text-amber-100 ring-1 ring-amber-300/30">This device isn't set up as yours yet, so this key is pretend. <a href="/admin" className="font-semibold text-white underline underline-offset-2">Sign in to admin once on this device</a>, then come back: from then on it's the real key here.</span>
-                  : <span className="mt-1.5 block text-[13px] text-white/65">Then tap <b className="text-white">Accept</b> in the Tesla app. One-time link, just for you.</span>}
+                  ? <span className="mt-1.5 block rounded-xl bg-amber-400/10 px-3 py-2 text-[13px] leading-snug text-amber-100 ring-1 ring-amber-300/30"><Lines>This device isn't set up as yours yet, so this key is pretend. <a href="/admin" className="font-semibold text-white underline underline-offset-2">Sign in to admin once on this device</a>, then come back: from then on it's the real key here.</Lines></span>
+                  : <span className="mt-1.5 block text-[13px] text-white/65"><Lines>Then tap <b className="text-white">Accept</b> in the Tesla app. One-time link, just for you.</Lines></span>}
               </>
           : <span className="block rounded-xl bg-white/10 p-3 text-[14px]">Preview: the real button appears here 2 hours before pickup.</span>)}
         {k.state === "problem" && <KeyHelp slow={false} accent={ACCENT} />}
@@ -213,7 +213,7 @@ export function ProfileTip() {
   return (
     <span className="mt-3 flex items-start gap-2.5 rounded-2xl bg-white/[0.08] p-3 text-[15px] leading-snug text-white/85 ring-1 ring-white/10">
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/15"><UserRound className="h-4 w-4 text-white" aria-hidden /></span>
-      <span>Tap the <b className="text-white">person icon</b> at the top of the car's screen and pick <b className="text-white">&ldquo;Turo Guest&rdquo;</b>. It's your driver profile for the trip.</span>
+      <span><Lines>Tap the <b className="text-white">person icon</b> at the top of the car's screen and pick <b className="text-white">&ldquo;Turo Guest&rdquo;</b>. It's your driver profile for the trip.</Lines></span>
     </span>
   );
 }

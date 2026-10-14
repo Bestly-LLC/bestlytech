@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Section, btnPrimary, btnTinted, card, field, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
+import { Lines } from "@/components/Lines";
 
 const rpc = supabase.rpc.bind(supabase) as unknown as (fn: string, args?: object) => Promise<{ data: unknown; error: { message: string } | null }>;
 
@@ -132,8 +133,7 @@ export function ChargingCard() {
         </div>
         {open && away && (
           <p className={cn("border-t border-[#38383A] pt-3 text-[13px] leading-snug bento:border-[#C6C6C8]", secondary)}>
-            {live!.kwh.toFixed(2)} kWh so far. These rates and the idle fee are {a.settings.station} only, so
-            nothing here is priced.
+            <Lines>{`${live!.kwh.toFixed(2)} kWh so far. These rates and the idle fee are ${a.settings.station} only, so nothing here is priced.`}</Lines>
           </p>
         )}
         {open && !away && (
@@ -158,8 +158,7 @@ export function ChargingCard() {
           <div className="min-w-0">
             <p className={cn("text-[15px] font-semibold", label)}>ChargePoint login</p>
             <p className={cn("mt-0.5 text-[13px] leading-snug", secondary)}>
-              So Charge Watch can end the session before the idle fee starts. Stored in Vault, write-only &mdash;
-              nothing typed here can be read back, by this page or anyone.
+              <Lines>So Charge Watch can end the session before the idle fee starts. Stored in Vault, write-only &mdash; nothing typed here can be read back, by this page or anyone.</Lines>
             </p>
           </div>
           {a.chargepoint.signed_in === false ? (
@@ -194,11 +193,11 @@ export function ChargingCard() {
             onChange={(e) => setToken(e.target.value)}
             placeholder={a.chargepoint.token_at ? "Saved \u00b7 paste a new one to replace" : "paste coulomb_sess here"} />
           <span className={cn("mt-1.5 block text-[12px] leading-snug", tertiary)}>
-            ChargePoint refuses password logins from servers, so the Plug Puller signs in with a session
+            <Lines>ChargePoint refuses password logins from servers, so the Plug Puller signs in with a session
             token instead. Open <strong>na.chargepoint.com</strong> while signed in &mdash; the cookie is not on
             the driver portal &mdash; then Inspect &rarr; Application &rarr; Cookies &rarr; na.chargepoint.com and
             copy <strong>coulomb_sess</strong>. It is HttpOnly, which is why only you can copy it. The job
-            refreshes it on its own after this; you only come back here if it ever truly expires.
+            refreshes it on its own after this; you only come back here if it ever truly expires.</Lines>
           </span>
         </label>
 

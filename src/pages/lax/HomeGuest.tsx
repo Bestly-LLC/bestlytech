@@ -158,13 +158,13 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
       summary={k.state === "added" ? "Phone key is on. Extra drivers inside." : k.state === "ready" ? "Tap to add the car to your Tesla app." : k.state === "soon" ? (k.hold ? holdTitle(k.hold) + "." : hasApp ? `Next: come back ${k.opens_at ? fmtWhen(k.opens_at) : "2 hours before pickup"} and tap one button.` : "Step 1: get the free Tesla app now.") : undefined}>
       {k.state === "soon" && (
         <div>
-          <p className="text-[16px] leading-relaxed text-white/85">No keys. No meetup. <b className="text-white">Your phone unlocks the car</b> with the free Tesla app. 3 easy steps:</p>
+          <p className="text-[16px] leading-relaxed text-white/85"><Lines>No keys. No meetup. <b className="text-white">Your phone unlocks the car</b> with the free Tesla app. 3 easy steps:</Lines></p>
           <ol className="mt-4 space-y-2.5">
             <li className="flex gap-3 rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10">
               {hasApp ? <CheckCircle2 className="h-7 w-7 shrink-0 text-emerald-300" /> : <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[14px] font-bold text-[#1A1140]" style={{ background: PEACH }}>1</span>}
               <div className="min-w-0 flex-1">
                 <p className="text-[16px] font-semibold text-white">{hasApp ? "Tesla app: done" : "Now: get the Tesla app"}</p>
-                <p className="mt-0.5 text-[14px] leading-snug text-white/70">{hasApp ? "Just make sure you're signed in." : "It's free. Sign in, or make an account. About 2 minutes."}</p>
+                <p className="mt-0.5 text-[14px] leading-snug text-white/70"><Lines>{hasApp ? "Just make sure you're signed in." : "It's free. Sign in, or make an account. About 2 minutes."}</Lines></p>
                 {!hasApp && (
                   <span className="mt-2.5 grid grid-cols-2 gap-2">
                     <a href={appStore} onClick={() => track(undefined, "get_app")} className="flex h-11 items-center justify-center gap-1.5 rounded-xl text-[14px] font-bold text-[#1A1140]" style={{ background: PEACH }}><Smartphone className="h-4 w-4" /> Get the app</a>
@@ -178,7 +178,7 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/15 text-[14px] font-bold text-white">2</span>
               <div className="min-w-0 flex-1">
                 <p className="text-[16px] font-semibold text-white">{k.opens_at ? fmtWhen(k.opens_at) : "2 hours before pickup"}: tap one button</p>
-                <p className="mt-0.5 text-[14px] leading-snug text-white/70">Come back to this page. A button shows up right here. Tap it, and the car is in your Tesla app.</p>
+                <p className="mt-0.5 text-[14px] leading-snug text-white/70"><Lines>Come back to this page. A button shows up right here. Tap it, and the car is in your Tesla app.</Lines></p>
               </div>
             </li>
             )}
@@ -186,7 +186,7 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/15 text-[14px] font-bold text-white">3</span>
               <div className="min-w-0 flex-1">
                 <p className="text-[16px] font-semibold text-white">At the car: tap &ldquo;Set Up&rdquo; -<br />then Unlock</p>
-                <p className="mt-0.5 text-[14px] leading-snug text-white/70">Stand next to the car with Bluetooth on. Open the Tesla app and tap <b className="text-white">&ldquo;Set Up&rdquo;</b>. Follow the steps. Then tap <b className="text-white">Unlock</b> and drive.</p>
+                <p className="mt-0.5 text-[14px] leading-snug text-white/70"><Lines>Stand next to the car with Bluetooth on. Open the Tesla app and tap <b className="text-white">&ldquo;Set Up&rdquo;</b>. Follow the steps. Then tap <b className="text-white">Unlock</b> and drive.</Lines></p>
               </div>
             </li>
           </ol>
@@ -203,7 +203,7 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
       )}
       {k.state === "making" && (keySlow
         ? <KeyHelp slow accent={PEACH} />
-        : <p className="flex items-center gap-2 text-[15px] text-white/80"><Loader2 className="h-4 w-4 animate-spin" style={{ color: PEACH }} /> Making your key. This page updates by itself.</p>)}
+        : <p className="flex items-center gap-2 text-[15px] text-white/80"><Loader2 className="h-4 w-4 animate-spin" style={{ color: PEACH }} /><span><Lines> Making your key. This page updates by itself.</Lines></span></p>)}
       {k.state === "ready" && (
         <>
           <ol className="space-y-3">
@@ -221,9 +221,9 @@ export function KeyCard({ k, trip, run, token, onAdded, next }: { k: KeyInfo; tr
         </>
       )}
       {k.state === "added" && (
-        <><p className="flex items-start gap-2 text-[15px] leading-relaxed text-white/85"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />The car is in your Tesla app. Walk up with your phone and it unlocks. Access ends by itself after your trip.</p>{next}</>
+        <><p className="flex items-start gap-2 text-[15px] leading-relaxed text-white/85"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" /><span><Lines>The car is in your Tesla app. Walk up with your phone and it unlocks. Access ends by itself after your trip.</Lines></span></p>{next}</>
       )}
-      {k.state === "ended" && <p className="text-[15px] text-white/75">Your trip is over, so your key has been turned off. Thanks for driving with us.</p>}
+      {k.state === "ended" && <p className="text-[15px] text-white/75"><Lines>Your trip is over, so your key has been turned off. Thanks for driving with us.</Lines></p>}
       {k.state === "problem" && <KeyHelp slow={false} accent={PEACH} />}
       {k.state !== "ended" && k.state !== "off" && <ExtraDrivers token={token} embedded />}
       {trip && k.state !== "ended" && <p className="mt-1 text-[12px] text-white/65">Access turns off by itself after your {fmtWhen(trip.ends_at)} return.</p>}
@@ -242,7 +242,7 @@ function Bullets({ items }: { items: Row[] }) {
           {i > 0 && <span className="absolute left-[60px] right-0 top-0 h-px bg-white/10" aria-hidden />}
           <span className="grid h-[32px] w-[32px] shrink-0 place-items-center rounded-[9px] text-[17px] leading-none" style={{ background: r.tint }} aria-hidden>{r.e}</span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[16px] font-semibold leading-tight text-white">{r.title}</span>
+            <span className="block text-[16px] font-semibold leading-tight text-white"><Lines>{r.title}</Lines></span>
             {r.sub && <span className="mt-0.5 block text-[14px] leading-snug text-white/65"><Lines>{r.sub}</Lines></span>}
           </span>
         </li>
@@ -341,7 +341,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
 
       <main className="mx-auto max-w-md px-5 pb-64 pt-5">
         <HostPanel token={token} />
-        {!ended && <p className="text-[17px] leading-relaxed text-white/85">Your Turo Tesla is parked on <b className="text-white">{street.replace(/^\d+\s*/, "")}</b>. <b className="text-white">Your phone is the key.</b> No meetup, no keys.</p>}
+        {!ended && <p className="text-[17px] leading-relaxed text-white/85"><Lines>Your Turo Tesla is parked on <b className="text-white">{street.replace(/^\d+\s*/, "")}</b>. <b className="text-white">Your phone is the key.</b> No meetup, no keys.</Lines></p>}
 
         {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="home" recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /><TripChanged at={pub.trip_changed_at} /></div>}
 
@@ -408,7 +408,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
         </TripSlides>
 
         {pub.home?.host_note && (
-          <Section kicker="From your host"><p className="text-white/90">{pub.home.host_note}</p></Section>
+          <Section kicker="From your host"><p className="text-white/90"><Lines>{pub.home.host_note}</Lines></p></Section>
         )}
         </>}
 
@@ -441,7 +441,7 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
               { e: "🔒", tint: "rgba(100,210,255,.22)", title: "Lock it", sub: "In the Tesla app." },
             ]} /><OpenTuro className="mt-3 w-full" label="Open Turo for photos" /></Step>
           </Carousel>
-          <p className="mt-5 text-[14px] text-white/60">Your key turns off by itself after the trip. Nothing to hand back.</p>
+          <p className="mt-5 text-[14px] text-white/60"><Lines>Your key turns off by itself after the trip. Nothing to hand back.</Lines></p>
         </TripSheet>
 
         <TagBar open={sheet === "ask" ? null : sheet} onOpen={openSheet} top={<AskButton leo home active={sheet === "ask"} onOpen={() => openSheet("ask")} />} variant="home" hidePickup hideReturn hideTags={ended} only={tripTab(pub.trip, ended, pub.car_connected_at, pub.key?.state)}

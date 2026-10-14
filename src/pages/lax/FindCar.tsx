@@ -11,6 +11,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { BellRing, Check, Flashlight, Loader2, MapPin, Navigation, X } from "lucide-react";
 import { track } from "./track";
+import { Lines } from "@/components/Lines";
 
 type Spot = { lat: number; lon: number; observed_at: string };
 type Act = "honk" | "flash";
@@ -187,7 +188,7 @@ export function FindCar({ open, onClose, kind, spot, run, demo, token, where, on
                 </li>
               ))}
             </ul>
-            {!spot && !demo && <p className="mt-3 text-center text-[13px] text-white/60">The car's spot isn't in yet. Try again in a minute, or use Honk once you're close.</p>}
+            {!spot && !demo && <p className="mt-3 text-center text-[13px] text-white/60"><Lines>The car's spot isn't in yet. Try again in a minute, or use Honk once you're close.</Lines></p>}
             <div className="flex-1" />
             <button type="button" onClick={() => void start()} disabled={!spot && !demo}
               className="h-[52px] w-full rounded-2xl text-[17px] font-bold shadow-[0_8px_22px_rgba(0,0,0,.28)] active:scale-[0.98] disabled:opacity-50" style={{ background: "var(--fc-accent)", color: "var(--fc-on)" }}>Continue</button>
@@ -199,14 +200,14 @@ export function FindCar({ open, onClose, kind, spot, run, demo, token, where, on
           <>
             <div className="mt-1 text-center">
               <p className="text-[17px] font-bold" style={titleFont}>Tesla Model 3</p>
-              <p className="mt-0.5 text-[14px] text-white/75">{demo ? `${where.replace(/^(on|in) /, "")} · spot updated 4 min ago` : staleH > 6 ? `Last seen ${Math.round(staleH)} hours ago. Tap Honk to find it.` : `${where.replace(/^(on|in) /, "")} · spot updated ${Math.max(1, Math.round(staleH * 60))} min ago`}</p>
+              <p className="mt-0.5 text-[14px] text-white/75"><Lines>{demo ? `${where.replace(/^(on|in) /, "")} · spot updated 4 min ago` : staleH > 6 ? `Last seen ${Math.round(staleH)} hours ago. Tap Honk to find it.` : `${where.replace(/^(on|in) /, "")} · spot updated ${Math.max(1, Math.round(staleH * 60))} min ago`}</Lines></p>
             </div>
             <div className="relative grid flex-1 place-items-center">
               <span aria-hidden className={`absolute h-[236px] w-[236px] rounded-full ${kind === "home" ? "border-[1.5px] border-dashed border-[#E8A93A]/30" : "border border-white/15"}`} />
               {noCompass && !demo ? (
                 <div className="relative px-6 text-center">
                   <MapPin className="mx-auto h-12 w-12" style={{ color: "var(--fc-accent)" }} aria-hidden />
-                  <p className="mt-3 text-[15px] leading-snug text-white/80">No compass on this device, so no arrow. Follow the map instead.</p>
+                  <p className="mt-3 text-[15px] leading-snug text-white/80"><Lines>No compass on this device, so no arrow. Follow the map instead.</Lines></p>
                   {map && <a href={map} className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full px-5 text-[15px] font-bold" style={{ background: "var(--fc-accent)", color: "var(--fc-on)" }}><Navigation className="h-4 w-4" /> Open in Maps</a>}
                 </div>
               ) : rel == null ? (
@@ -220,8 +221,8 @@ export function FindCar({ open, onClose, kind, spot, run, demo, token, where, on
             </div>
             <div aria-live="polite">
               <p className="text-[64px] font-extrabold leading-none tracking-[-0.02em] tabular-nums">{d ? <>{d.n}<small className="ml-1 text-[32px] font-bold tracking-normal">{d.u}</small></> : "—"}</p>
-              <p className="mt-1.5 text-[20px] font-semibold text-white/80">{err ?? (rel != null ? hintFor(rel) : noCompass ? "away" : "Finding you…")}</p>
-              {!demo && p && p.acc > 40 && <p className="mt-1 text-[13px] text-white/65">{kind === "lax" ? `GPS is weak inside the garage. On Level P3, tap Honk or Flash.` : "GPS is weak here. Honk or Flash helps."}</p>}
+              <p className="mt-1.5 text-[20px] font-semibold text-white/80"><Lines>{err ?? (rel != null ? hintFor(rel) : noCompass ? "away" : "Finding you…")}</Lines></p>
+              {!demo && p && p.acc > 40 && <p className="mt-1 text-[13px] text-white/65"><Lines>{kind === "lax" ? `GPS is weak inside the garage. On Level P3, tap Honk or Flash.` : "GPS is weak here. Honk or Flash helps."}</Lines></p>}
             </div>
             <div className="mt-5 flex gap-2.5"><Pill act="honk" run={run} demo={demo} token={token} /><Pill act="flash" run={run} demo={demo} token={token} /></div>
           </>
@@ -235,7 +236,7 @@ export function FindCar({ open, onClose, kind, spot, run, demo, token, where, on
               <Check className="h-[72px] w-[72px]" strokeWidth={2.6} aria-hidden />
             </div>
             <h2 className="mt-7 text-center text-[28px] font-bold leading-tight" style={titleFont}>You're There</h2>
-            <p className="mx-4 mt-2 text-center text-[16px] leading-snug text-white/90">{kind === "lax" ? "It's the Model 3 right in front of you." : "It's the Model 3 parked right next to you."} Not sure which one? Flash the lights.</p>
+            <p className="mx-4 mt-2 text-center text-[16px] leading-snug text-white/90"><Lines>{kind === "lax" ? "It's the Model 3 right in front of you." : "It's the Model 3 parked right next to you."} Not sure which one? Flash the lights.</Lines></p>
             <div className="flex-1" />
             <div className="mb-2.5 flex gap-2.5"><Pill act="flash" run={run} demo={demo} token={token} /><Pill act="honk" run={run} demo={demo} token={token} /></div>
             <button type="button" onClick={() => { onClose(); onNext?.(); }} className="h-[52px] w-full rounded-2xl bg-white text-[17px] font-bold active:scale-[0.98]" style={{ color: "var(--fc-on)" }}>{nextLabel ?? "Next: Set Up and Unlock"}</button>

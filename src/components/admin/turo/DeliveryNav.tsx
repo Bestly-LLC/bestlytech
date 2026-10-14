@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { focusRing, text, tint } from "@/components/admin/ui";
+import { Lines } from "@/components/Lines";
 
 type Decision = {
   state: string; reason?: string; place?: "delivery" | "lax" | "home" | null; label?: string | null; guest?: string | null;
@@ -108,8 +109,8 @@ export function DeliveryNavRow() {
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <p id="delivery-nav-h" className="text-[15px] text-white">Route to car</p>
-          <p className={cn(text.detail, "mt-0.5 break-words", st.warn && tint.orange)}>{st.line}</p>
-          {st.sub && <p className={cn(text.detail, "break-words")}>{st.sub}</p>}
+          <p className={cn(text.detail, "mt-0.5 break-words", st.warn && tint.orange)}><Lines>{st.line}</Lines></p>
+          {st.sub && <p className={cn(text.detail, "break-words")}><Lines>{st.sub}</Lines></p>}
         </div>
         <Switch checked={a.enabled} disabled={busy} aria-labelledby="delivery-nav-h"
           onCheckedChange={(v) => void set({ p_enabled: v }, v ? "Route to car is on" : "Route to car is off")} />
@@ -130,7 +131,7 @@ export function DeliveryNavRow() {
             onChange={(v) => void set({ p_lead_hours: v })} />
           <Stepper label="Send up to" value={a.max_sends} unit={a.max_sends === 1 ? "time" : "times"} min={1} max={5} disabled={busy}
             onChange={(v) => void set({ p_max_sends: v })} />
-          <p className={cn(text.detail, "pt-1")}>It sends about 20 minutes before you need to leave, or when the car starts driving there. It never sends while a guest has the car.</p>
+          <p className={cn(text.detail, "pt-1")}><Lines>It sends about 20 minutes before you need to leave, or when the car starts driving there. It never sends while a guest has the car.</Lines></p>
         </div>
       )}
     </div>

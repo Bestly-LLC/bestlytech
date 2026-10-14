@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { act, agoText, card, copyText, dayOnly, fieldCls, muted, nb, pillPrimary, pillSecondary, rpc, starsLabel, useAdminRpc, well, whenLA } from "./repShared";
+import { Lines } from "@/components/Lines";
 
 interface Metric {
   metric: string; label: string; rate: number | null; threshold: number; ok: boolean; at_risk: boolean;
@@ -89,7 +90,7 @@ function AllStarCard({ data }: { data: Rep }) {
       {c.at_risk && (
         <div role="alert" className="flex items-start gap-3 rounded-xl bg-amber-400/10 p-3 text-[0.95rem] text-white/90 ring-1 ring-amber-300/30 bento:bg-amber-50 bento:text-[#4a3000] bento:ring-amber-300">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300 bento:text-amber-600" aria-hidden />
-          <div><p className="font-semibold">Stella says you are close to a line</p><p className="mt-0.5">{c.message}</p></div>
+          <div><p className="font-semibold">Stella says you are close to a line</p><p className="mt-0.5"><Lines>{c.message}</Lines></p></div>
         </div>
       )}
 
@@ -112,7 +113,7 @@ function AllStarCard({ data }: { data: Rep }) {
               <p className={cn("mt-1.5 flex flex-wrap items-center gap-x-2 text-sm", muted)}>
                 <span className="whitespace-nowrap">{lowIsGood ? "Line: up to" : "Line:"}&nbsp;{m.metric === "trips" ? `${m.threshold} trips` : `${m.threshold}%`}</span>
                 <span aria-hidden>·</span>
-                <span className={cn(m.at_risk || !m.ok ? "font-medium text-amber-200 bento:text-amber-700" : "")}>{cushion(m)}</span>
+                <span className={cn(m.at_risk || !m.ok ? "font-medium text-amber-200 bento:text-amber-700" : "")}><Lines>{cushion(m)}</Lines></span>
               </p>
             </li>
           );
@@ -144,13 +145,13 @@ function TripMessages({ reservation }: { reservation: number }) {
       </button>
       {open && (
         <div className="space-y-2 px-3 pb-3">
-          {err && <p className="text-sm text-red-300 bento:text-red-700">Could not load: {err}</p>}
+          {err && <p className="text-sm text-red-300 bento:text-red-700"><Lines>{`Could not load: ${err}`}</Lines></p>}
           {!msgs && !err && <Skeleton className="h-16 rounded-lg" />}
           {msgs && msgs.length === 0 && <p className={cn("text-sm", muted)}>No messages saved for this trip.</p>}
           {msgs?.map((m, i) => (
             <p key={i} className="text-sm text-white/80">
               <span className="font-medium text-white">{m.role === "host" ? "You" : m.author ?? "Guest"}</span>
-              <span className={muted}> · {whenLA(m.sent_at)}</span><br />{m.body}
+              <span className={muted}> · {whenLA(m.sent_at)}</span><br /><Lines>{m.body}</Lines>
             </p>
           ))}
         </div>
@@ -189,12 +190,12 @@ function ReviewCard({ r, reload }: { r: Review; reload: () => void }) {
         ]} />
       </header>
 
-      {r.text && <blockquote className="rounded-xl border-l-4 border-white/20 bg-white/[0.03] p-3 text-[0.95rem] leading-relaxed text-white/90 bento:bg-[var(--bento-well)]">{r.text}</blockquote>}
-      {r.needs_reason && <p className={cn("flex items-start gap-2 text-sm", muted)}><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300 bento:text-amber-600" aria-hidden />{r.needs_reason}</p>}
+      {r.text && <blockquote className="rounded-xl border-l-4 border-white/20 bg-white/[0.03] p-3 text-[0.95rem] leading-relaxed text-white/90 bento:bg-[var(--bento-well)]"><Lines>{r.text}</Lines></blockquote>}
+      {r.needs_reason && <p className={cn("flex items-start gap-2 text-sm", muted)}><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300 bento:text-amber-600" aria-hidden /><span><Lines>{r.needs_reason}</Lines></span></p>}
       {r.reservation_id && <TripMessages reservation={r.reservation_id} />}
 
       {waiting ? (
-        <p className={cn("flex items-center gap-2 text-sm", muted)}><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Stella is writing a draft. It lands within 10 minutes.</p>
+        <p className={cn("flex items-center gap-2 text-sm", muted)}><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> <span><Lines>Stella is writing a draft. It lands within 10 minutes.</Lines></span></p>
       ) : (
         <div className="space-y-2">
           <label htmlFor={`draft-${r.id}`} className="text-xs font-semibold uppercase tracking-widest text-white/60">
@@ -202,17 +203,17 @@ function ReviewCard({ r, reload }: { r: Review; reload: () => void }) {
           </label>
           <textarea id={`draft-${r.id}`} value={draft} onChange={(e) => setDraft(e.target.value)} rows={rowsFor(draft)} className={cn(fieldCls, "leading-relaxed")} disabled={approved || backlog} readOnly={backlog} />
           <p className={cn("text-sm", muted)}>
-            {backlog
+            <Lines>{backlog
               ? "Backlog review from before Stella was live. The words are locked — approve as written, or skip it."
-              : <><span className="whitespace-nowrap">{draft.trim().length} characters</span>. No emoji. Ends with Hope to host you again soon!</>}
+              : `${draft.trim().length}\u00A0characters. No emoji. Ends with Hope to host you again soon!`}</Lines>
           </p>
         </div>
       )}
 
-      {r.status === "failed" && <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-200 bento:bg-red-50 bento:text-red-800">Posting failed: {r.post_error ?? "unknown error"}. Nothing was posted. Approve again to retry, or reply on Turo yourself.</p>}
-      {approved && <p className="flex items-center gap-2 rounded-xl bg-emerald-400/10 p-3 text-sm text-emerald-200 bento:bg-emerald-50 bento:text-emerald-800"><Loader2 className="h-4 w-4 animate-spin" aria-hidden />Approved. Stella posts it on her next pass, within 10 minutes.</p>}
-      {r.status === "auto_ready" && <p className={cn("text-sm", muted)}>Plain 5-star. It posts itself only when auto-post is on (below). You can approve it now.</p>}
-      {!r.respond_available && !waiting && <p className="rounded-xl bg-white/[0.05] p-3 text-sm text-white/80 bento:bg-[var(--bento-well)]">Turo is not showing a reply button on this review, so Stella cannot post it. Copy the draft if you want to use the words elsewhere.</p>}
+      {r.status === "failed" && <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-200 bento:bg-red-50 bento:text-red-800"><Lines>{`Posting failed: ${r.post_error ?? "unknown error"}. Nothing was posted. Approve again to retry, or reply on Turo yourself.`}</Lines></p>}
+      {approved && <p className="flex items-center gap-2 rounded-xl bg-emerald-400/10 p-3 text-sm text-emerald-200 bento:bg-emerald-50 bento:text-emerald-800"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /><span><Lines>Approved. Stella posts it on her next pass, within 10 minutes.</Lines></span></p>}
+      {r.status === "auto_ready" && <p className={cn("text-sm", muted)}><Lines>Plain 5-star. It posts itself only when auto-post is on (below). You can approve it now.</Lines></p>}
+      {!r.respond_available && !waiting && <p className="rounded-xl bg-white/[0.05] p-3 text-sm text-white/80 bento:bg-[var(--bento-well)]"><Lines>Turo is not showing a reply button on this review, so Stella cannot post it. Copy the draft if you want to use the words elsewhere.</Lines></p>}
 
       {!waiting && (
         <>
@@ -256,8 +257,8 @@ function RatingRow({ g, reload }: { g: Rating; reload: () => void }) {
       {g.status === "watching" && <p className={cn("text-sm", muted)}>Stella drafts it on <span className="whitespace-nowrap">{dayOnly(draftDay)}</span>.</p>}
       {g.status === "draft_ready" && (
         <>
-          <p className="rounded-xl bg-white/[0.04] p-3 text-[0.95rem] text-white/90 bento:bg-[var(--bento-well)]">{g.draft}</p>
-          <p className={cn("text-sm", muted)}>Drafted from trip data only. Check it matches how the trip went before you post it.</p>
+          <p className="rounded-xl bg-white/[0.04] p-3 text-[0.95rem] text-white/90 bento:bg-[var(--bento-well)]"><Lines>{g.draft}</Lines></p>
+          <p className={cn("text-sm", muted)}><Lines>Drafted from trip data only. Check it matches how the trip went before you post it.</Lines></p>
           <div className="flex flex-wrap gap-2">
             <button className={pillSecondary} onClick={() => copyText(g.draft ?? "", "Rating")}><Clipboard className="h-4 w-4" aria-hidden /> Copy</button>
             <button className={pillPrimary} disabled={!!busy} onClick={() => run("rated", "rated", "Marked as rated")}>{busy === "rated" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />} I rated them</button>
@@ -291,7 +292,7 @@ function AskDrafts({ s, reload }: { s: NonNullable<Rep["settings"]>; reload: () 
     <section className={cn(card, "space-y-4 p-5")} aria-labelledby="ask-h">
       <div>
         <h2 id="ask-h" className="text-base font-semibold text-white">Post-trip review messages</h2>
-        <p className={cn("mt-1 text-sm", muted)}>You add these in Turo as scheduled messages. Stella never sends them. Plain and warm, no pressure, nothing offered in return.</p>
+        <p className={cn("mt-1 text-sm", muted)}><Lines>You add these in Turo as scheduled messages. Stella never sends them. Plain and warm, no pressure, nothing offered in return.</Lines></p>
       </div>
       {box("ask-lax", "LAX pickup", lax, setLax, "ask_lax", s.ask_lax)}
       {box("ask-home", "Home pickup", home, setHome, "ask_home", s.ask_home)}
@@ -307,14 +308,14 @@ function AutoPost({ on, reload }: { on: boolean; reload: () => void }) {
     <section className={cn(card, "flex items-start justify-between gap-4 p-5")}>
       <div className="min-w-0">
         <h2 id="auto-h" className="text-base font-semibold text-white">Auto-post plain 5-star replies</h2>
-        <p className={cn("mt-1 text-sm", muted)}>{on ? "On. Stella posts a reply to a plain 5-star review on her own and lists it in the evening recap." : "Off. Stella drafts them and waits for you. Turn it on once the first drafts read right to you."} Under 5 stars, or a mention of damage, smoke, FSD or a claim, always waits for your tap.</p>
+        <p className={cn("mt-1 text-sm", muted)}><Lines>{on ? "On. Stella posts a reply to a plain 5-star review on her own and lists it in the evening recap." : "Off. Stella drafts them and waits for you. Turn it on once the first drafts read right to you."} Under 5 stars, or a mention of damage, smoke, FSD or a claim, always waits for your tap.</Lines></p>
       </div>
       <Switch checked={on} disabled={busy} aria-labelledby="auto-h" onCheckedChange={(v) => (v ? setAsk(true) : void set(false))} />
       <AlertDialog open={ask} onOpenChange={setAsk}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Let Stella post plain 5-star replies?</AlertDialogTitle>
-            <AlertDialogDescription>She will reply in your name to written 5-star reviews without asking, in the style you approved. Anything under 5 stars still waits for you.</AlertDialogDescription>
+            <AlertDialogDescription><Lines>She will reply in your name to written 5-star reviews without asking, in the style you approved. Anything under 5 stars still waits for you.</Lines></AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Not yet</AlertDialogCancel>
@@ -332,7 +333,7 @@ export default function ReviewsTab() {
 
   if (!data) {
     return error
-      ? <div className={cn(card, "space-y-3 p-5")} role="alert"><p className="text-white">Could not load Reviews: {error}</p><button className={pillSecondary} onClick={() => void load()}><RefreshCw className="h-4 w-4" aria-hidden /> Retry</button></div>
+      ? <div className={cn(card, "space-y-3 p-5")} role="alert"><p className="text-white"><Lines>{`Could not load Reviews: ${error}`}</Lines></p><button className={pillSecondary} onClick={() => void load()}><RefreshCw className="h-4 w-4" aria-hidden /> Retry</button></div>
       : <div className="space-y-4" aria-busy="true"><Skeleton className="h-72 rounded-2xl" /><Skeleton className="h-56 rounded-2xl" /></div>;
   }
   const queue = data.queue;
@@ -342,10 +343,10 @@ export default function ReviewsTab() {
   return (
     <div className="space-y-5">
       <p className={cn("text-sm", muted)}>
-        Stella read Turo {agoText(lastRead)}. {data.counts.total} reviews on file, {data.counts.with_text} with words, {data.counts.answered} answered.
+        <Lines>{`Stella read Turo ${agoText(lastRead)}. ${data.counts.total} reviews on file, ${data.counts.with_text} with words, ${data.counts.answered} answered.`}</Lines>
         {" "}<a className="inline-flex items-center gap-1 underline" href="https://turo.com/us/en/business/reviews" target="_blank" rel="noreferrer">Turo reviews <ExternalLink className="h-3.5 w-3.5" aria-hidden /></a>
       </p>
-      {signedOut && <div role="alert" className="flex items-start gap-3 rounded-xl bg-amber-400/10 p-3 text-sm text-white/90 ring-1 ring-amber-300/30 bento:bg-amber-50 bento:text-[#4a3000]"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden />Turo looks signed out in the Pi browser. Stella cannot read reviews until it is signed in again. She never types passwords.</div>}
+      {signedOut && <div role="alert" className="flex items-start gap-3 rounded-xl bg-amber-400/10 p-3 text-sm text-white/90 ring-1 ring-amber-300/30 bento:bg-amber-50 bento:text-[#4a3000]"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden /><span><Lines>Turo looks signed out in the Pi browser. Stella cannot read reviews until it is signed in again. She never types passwords.</Lines></span></div>}
 
       <AllStarCard data={data} />
 
@@ -358,7 +359,7 @@ export default function ReviewsTab() {
 
       <section className={cn(card, "p-5")} aria-labelledby="rate-h">
         <h2 id="rate-h" className="text-base font-semibold text-white">Guests to rate</h2>
-        <p className={cn("mt-1 text-sm", muted)}>You rate guests on Turo. Stella tracks the window (trip end plus 10 days) and drafts it one day before. Trips with an open claim are skipped.</p>
+        <p className={cn("mt-1 text-sm", muted)}><Lines>You rate guests on Turo. Stella tracks the window (trip end plus 10 days) and drafts it one day before. Trips with an open claim are skipped.</Lines></p>
         {data.ratings.length === 0
           ? <p className={cn("mt-3 text-sm", muted)}>No open rating windows right now.</p>
           : <ul className="mt-2 divide-y divide-white/[0.06] bento:divide-black/5">{data.ratings.map((g) => <RatingRow key={g.reservation_id} g={g} reload={() => void load()} />)}</ul>}
@@ -377,8 +378,8 @@ export default function ReviewsTab() {
             {data.posted.map((r) => (
               <li key={r.id} className="space-y-1 py-3 text-[0.95rem]">
                 <p className="flex flex-wrap items-center gap-2 font-medium text-white">{r.guest_first} <Stars n={r.stars} /><span className={cn("text-sm font-normal", muted)}>{dayOnly(r.review_date)}</span></p>
-                {r.text && <p className="text-white/70">{r.text}</p>}
-                {r.response_text && <p className="text-white/90"><span className="font-medium">Your reply:</span> {r.response_text}</p>}
+                {r.text && <p className="text-white/70"><Lines>{r.text}</Lines></p>}
+                {r.response_text && <p className="text-white/90"><span className="font-medium">Your reply:</span> <Lines>{r.response_text}</Lines></p>}
               </li>
             ))}
           </ul>

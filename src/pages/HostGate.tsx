@@ -213,7 +213,7 @@ export default function HostGate() {
     <div className="flex min-h-[100dvh] flex-col" style={{ background: C.bg, color: C.label, paddingLeft: 16, paddingRight: 16, paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif", WebkitTextSizeAdjust: "100%" }}>
       {!LIVE && (
         <div className="fixed inset-x-0 top-0 z-50 px-4 pb-1.5 text-center text-[13px] font-semibold" style={{ background: "#1C1C1EEE", color: C.orange, paddingTop: "calc(env(safe-area-inset-top, 0px) + 6px)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
-          Preview. Buttons here don't save anything.
+          <Lines>Preview. Buttons here don't save anything.</Lines>
         </div>
       )}
       <main className="mx-auto flex w-full max-w-[520px] flex-1 flex-col gap-2" style={!LIVE ? { paddingTop: 30 } : undefined}>

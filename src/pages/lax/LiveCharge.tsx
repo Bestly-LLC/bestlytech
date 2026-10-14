@@ -10,6 +10,7 @@ import { useState } from "react";
 import { ArrowDown, BatteryCharging, Car, CheckCircle2, ChevronRight, Loader2, MapPin, Route, TriangleAlert, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
+import { Lines } from "@/components/Lines";
 
 const ACCENT = "var(--trip-accent)";
 const rpc = (fn: string, args: Record<string, unknown>) =>
@@ -31,10 +32,10 @@ export function ChargeNow({ state, battery, detail, target }: { state?: string |
         {done ? "Charging is done: move the car now" : `Charging now${battery != null ? `: ${battery}%` : ""}${lim ? ` → ${lim}%` : ""}`}
       </p>
       <p className="mt-0.5 text-[13px] leading-snug text-white/75">
-        {done ? "Unplug and move within 5 minutes. Tesla adds idle fees when a full car stays plugged in, and they're billed to you."
+        <Lines>{done ? "Unplug and move within 5 minutes. Tesla adds idle fees when a full car stays plugged in, and they're billed to you."
           : [mins != null ? `${mins} min left` : null, detail?.power_kw ? `${Math.round(detail.power_kw)} kW` : null,
              target != null && battery != null ? (battery >= target ? `You're past your ${target}% return level` : `${target - battery}% to your return level`) : null].filter(Boolean).join(" · ")
-            || "We'll tell you when it's done."}
+            || "We'll tell you when it's done."}</Lines>
       </p>
       {!done && battery != null && (
         <div className="relative mt-2 h-2 rounded-full bg-white/10" aria-hidden>
@@ -93,7 +94,7 @@ export function OpenStalls({ token, live, demo }: { token?: string; live: boolea
         <span className="min-w-0 flex-1 text-[15px] font-semibold text-white">{busy ? "Asking Tesla…" : "Find open stalls nearby"}</span>
         <ChevronRight className="h-4 w-4 shrink-0 text-white/40" aria-hidden />
       </button>
-      {msg && <p className="mt-1 text-[12px] text-white/70" aria-live="polite">{msg}</p>}
+      {msg && <p className="mt-1 text-[12px] text-white/70" aria-live="polite"><Lines>{msg}</Lines></p>}
     </>
   );
   return (
@@ -126,8 +127,8 @@ export function OpenStalls({ token, live, demo }: { token?: string; live: boolea
           })}
         </ul>
       )}
-      {sent && <p className="mt-1 text-[12px] text-emerald-200" aria-live="polite">Sent. It shows on the car's map in about a minute.{demo ? " (Demo: nothing is sent.)" : ""}</p>}
-      {msg && <p className="mt-1 text-[12px] text-white/70" aria-live="polite">{msg}</p>}
+      {sent && <p className="mt-1 text-[12px] text-emerald-200" aria-live="polite"><Lines>Sent. It shows on the car's map in about a minute.{demo ? " (Demo: nothing is sent.)" : ""}</Lines></p>}
+      {msg && <p className="mt-1 text-[12px] text-white/70" aria-live="polite"><Lines>{msg}</Lines></p>}
     </div>
   );
 }
@@ -140,7 +141,7 @@ export function RangeCheck({ rc, kind, className = "", warnOnly }: { rc: RangeCh
     <div className={`rounded-2xl p-3 ring-1 ${tone} ${className}`}>
       <p className="flex items-center gap-2 text-[14px] font-bold text-white"><Route className="h-4 w-4" /> {head}</p>
       <p className="mt-0.5 text-[13px] text-white/75">
-        About <b className="text-white">{rc.range_mi} mi</b> of real-world range. The return spot ({kind === "home" ? "N Kings Rd" : "98th St garage"}) is about <b className="text-white">{rc.miles} mi</b> away by road.
+        <Lines>About <b className="text-white">{rc.range_mi} mi</b> of real-world range. The return spot ({kind === "home" ? "N Kings Rd" : "98th St garage"}) is about <b className="text-white">{rc.miles} mi</b> away by road.</Lines>
       </p>
     </div>
   );

@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { LoadError, SectionHeader, cardCls, focusRing, text, tint } from "@/components/admin/ui";
 import { SentryHomeRow } from "./SentryHome";
 import { DeliveryNavRow } from "./DeliveryNav";
+import { Lines } from "@/components/Lines";
 
 type CheckRow = { id: string; label: string; state: "ok" | "warn" | "unknown"; value: string; action?: string | null; hint?: string | null };
 type Ready = {
@@ -149,7 +150,7 @@ export function ReadyWidget({ compact = false }: { compact?: boolean }) {
                       <Info className="h-[18px] w-[18px]" aria-hidden />
                     </button>
                   )}
-                  <span className={cn("min-w-0 flex-1 text-right text-[15px]", c.state === "warn" ? tint.orange : "text-white/60")} title={c.value}>{c.value}{c.hint ? ` · ${c.hint}` : ""}</span>
+                  <span className={cn("min-w-0 flex-1 text-right text-[15px]", c.state === "warn" ? tint.orange : "text-white/60")} title={c.value}><Lines>{`${c.value}${c.hint ? ` · ${c.hint}` : ""}`}</Lines></span>
                   {c.action && ACTION_LABEL[c.action] && (
                     <button type="button" onClick={() => fix(c.action!)} disabled={!!busy}
                       className={cn("inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full bg-[#0A84FF] px-3.5 text-[13px] font-semibold text-white disabled:opacity-50", focusRing)}>
@@ -158,7 +159,7 @@ export function ReadyWidget({ compact = false }: { compact?: boolean }) {
                   )}
                 </div>
                 {info === c.id && INFO[c.id] && (
-                  <p role="note" className="mx-4 mb-3 -mt-1 rounded-xl bg-white/[0.06] px-3.5 py-2.5 text-[13px] leading-relaxed text-white/75 ring-1 ring-white/10 sm:mx-5">{c.id === "charge" && dlv ? DELIVERY_CHARGE : INFO[c.id]}</p>
+                  <p role="note" className="mx-4 mb-3 -mt-1 rounded-xl bg-white/[0.06] px-3.5 py-2.5 text-[13px] leading-relaxed text-white/75 ring-1 ring-white/10 sm:mx-5"><Lines>{c.id === "charge" && dlv ? DELIVERY_CHARGE : INFO[c.id]}</Lines></p>
                 )}
               </li>
             ))}
