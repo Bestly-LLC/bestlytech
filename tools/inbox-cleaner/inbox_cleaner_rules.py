@@ -238,6 +238,25 @@ def domain_of(address):
     return address.split("@")[-1] if "@" in address else ""
 
 
+def is_explicitly_protected(address, extra_protected=()):
+    """A sender the user put in protected_additions. This beats everything,
+    including the built-in marketing list -- an explicit keep is a decision,
+    not a hint."""
+    address = _norm(address)
+    if not address:
+        return False
+    extra = {_norm(a) for a in extra_protected if a}
+    if not extra:
+        return False
+    for candidate in (address, unmask_relay(address)):
+        if candidate in extra:
+            return True
+        domain = domain_of(candidate)
+        if domain and (domain in extra or any(domain.endswith("." + d) for d in extra)):
+            return True
+    return False
+
+
 def is_job_alert(sender, display_name=""):
     real = unmask_relay(sender)
     haystack = " ".join((_norm(sender), real, _norm(display_name)))
@@ -269,6 +288,8 @@ def is_protected_sender(address, display_name="", extra_protected=()):
 
 def is_protected_message(sender, display_name, subject, extra_protected=()):
     """Per-message protection: topic keywords beat an unknown sender."""
+    if is_explicitly_protected(sender, extra_protected):
+        return True
     if is_known_marketing(sender, display_name) or is_job_alert(sender, display_name):
         return False
     if is_protected_sender(sender, display_name, extra_protected):
