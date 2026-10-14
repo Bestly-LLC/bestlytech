@@ -8,6 +8,7 @@ import { Check, Clock, Minus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { card, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
+import { Lines } from "@/components/Lines";
 
 type Step = { id: string; label: string; at: string | null; count?: number; late_min?: number | null; guessed?: boolean };
 type Trip = { reservation_id: number; guest: string; kind: "home" | "lax"; starts_at: string; ends_at: string; phase: "upcoming" | "on_trip" | "ended"; steps: Step[]; asked: number; resends: number };
@@ -56,7 +57,7 @@ export function GuestFunnel() {
     return { rows, worst };
   }, [trips]);
 
-  if (err) return <div className={cn(card, "text-[14px]", tint.orange)}>Couldn't load guest steps: {err}</div>;
+  if (err) return <div className={cn(card, "text-[14px]", tint.orange)}><Lines>{`Couldn't load guest steps: ${err}`}</Lines></div>;
   if (!trips) return <div className={cn(card, "h-40 animate-pulse")} />;
   if (!trips.length) return <div className={cn(card, "text-[14px]", secondary)}>No guest pages in the last 120 days.</div>;
 

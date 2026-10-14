@@ -14,6 +14,7 @@ import {
 import { TirePsiGrid } from "./TirePsiGrid";
 import { cn } from "@/lib/utils";
 import { act, agoText, card, dayOnly, fieldCls, muted, nb, pillPrimary, pillSecondary, useAdminRpc, whenLA } from "./repShared";
+import { Lines } from "@/components/Lines";
 
 interface Item {
   id: string; item: string; label: string; installed_on: string | null; installed_miles: number | null; vendor: string | null; tread_32nds: number | null;
@@ -75,14 +76,14 @@ function TireCard({ it, set, reload, odo }: { it: Item; set: Maint["settings"]; 
         <div className={cn("h-full rounded-full", t != null && t <= rep ? "bg-red-300 bento:bg-red-500" : t != null && t <= warn ? "bg-amber-300 bento:bg-amber-500" : "bg-emerald-300 bento:bg-emerald-500")} style={{ width: `${width}%` }} />
         {[warn, rep].map((v) => <div key={v} className="absolute -top-1 h-5 w-0.5 rounded bg-white/70 bento:bg-black/60" style={{ left: `${(v / max) * 100}%` }} aria-hidden />)}
       </div>
-      <p className={cn("text-sm", muted)}>Warn at <span className="whitespace-nowrap">{warn}/32"</span>, replace at <span className="whitespace-nowrap">{rep}/32"</span>. New is about <span className="whitespace-nowrap">{max}/32"</span>.</p>
+      <p className={cn("text-sm", muted)}><Lines>{`Warn at ${warn}/32", replace at ${rep}/32". New is about ${max}/32".`}</Lines></p>
       <dl className="grid grid-cols-2 gap-3 text-sm">
         <div><dt className={muted}>Left at this wear</dt><dd className="whitespace-nowrap font-semibold tabular-nums text-white">{miles(it.est_remaining_mi)}</dd></div>
         <div><dt className={muted}>Replace by about</dt><dd className="whitespace-nowrap font-semibold text-white">{it.due_by ? dayOnly(it.due_by) : "–"}</dd></div>
         <div><dt className={muted}>Put on at</dt><dd className="whitespace-nowrap font-semibold tabular-nums text-white">{miles(it.installed_miles)}</dd></div>
         <div><dt className={muted}>Car now</dt><dd className="whitespace-nowrap font-semibold tabular-nums text-white">{miles(odo)}</dd></div>
       </dl>
-      {it.meta?.baseline === "derived" && <p className={cn("text-sm", muted)}>The mileage when these went on is worked out from TezLab and the car, not read off the receipt. A reading below replaces it.</p>}
+      {it.meta?.baseline === "derived" && <p className={cn("text-sm", muted)}><Lines>The mileage when these went on is worked out from TezLab and the car, not read off the receipt. A reading below replaces it.</Lines></p>}
       <AlertDialog open={ask} onOpenChange={setAsk}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -108,7 +109,7 @@ function TreadForm({ reload }: { reload: () => void }) {
     <section className={cn(card, "space-y-3 p-5")} aria-labelledby="tread-h">
       <div>
         <h2 id="tread-h" className="text-base font-semibold text-white">Enter a tread reading</h2>
-        <p className={cn("mt-1 text-sm", muted)}>Penny test or a gauge, in 32nds of an inch. Your number replaces the estimate and Mae counts miles from it.</p>
+        <p className={cn("mt-1 text-sm", muted)}><Lines>Penny test or a gauge, in 32nds of an inch. Your number replaces the estimate and Mae counts miles from it.</Lines></p>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div><label htmlFor="tr-front" className="text-sm text-white/80">Front</label><input id="tr-front" inputMode="decimal" value={front} onChange={(e) => setFront(e.target.value)} placeholder='e.g. 3.5' className={cn(fieldCls, "mt-1 h-11")} aria-invalid={bad(front)} /></div>
@@ -128,7 +129,7 @@ function PressureCard({ car }: { car: Maint["car"] }) {
   return (
     <section className={cn(card, "space-y-3 p-5")} aria-labelledby="psi-h">
       <div className="flex items-baseline justify-between gap-2"><h2 id="psi-h" className="text-base font-semibold text-white">Tire pressure</h2><p className={cn("text-sm", muted)}>{agoText(car.at)}</p></div>
-      {tires ? <div className="flex items-center gap-5"><TirePsiGrid tires={tires} low={car.low_psi ?? 37} size="lg" /><p className={cn("text-sm", muted)}>In psi. Mae takes a reading every hour and flags a tire that keeps losing pressure against the other three. Low is under <span className="whitespace-nowrap">{car.low_psi ?? 37} psi</span>.</p></div>
+      {tires ? <div className="flex items-center gap-5"><TirePsiGrid tires={tires} low={car.low_psi ?? 37} size="lg" /><p className={cn("text-sm", muted)}><Lines>{`In psi. Mae takes a reading every hour and flags a tire that keeps losing pressure against the other three. Low is under ${car.low_psi ?? 37}\u00A0psi.`}</Lines></p></div>
         : <p className={cn("text-sm", muted)}>The car has not reported pressures yet.</p>}
     </section>
   );
@@ -145,9 +146,9 @@ function CostcoCard({ d }: { d: Maint }) {
         <span className="whitespace-nowrap rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-white/90 bento:bg-black/5 bento:text-[#333]">Dry run</span>
       </div>
       {due.length === 0 && <p className={cn("text-sm", muted)}>No tires are due, so Mae is not looking for a slot.</p>}
-      {slot ? <p className="rounded-xl bg-white/[0.04] p-3 text-[0.95rem] text-white/90 bento:bg-[var(--bento-well)]">{slot.text}<span className={cn("mt-1 block text-sm", muted)}>Found {whenLA(slot.at)}</span></p>
+      {slot ? <p className="rounded-xl bg-white/[0.04] p-3 text-[0.95rem] text-white/90 bento:bg-[var(--bento-well)]"><Lines>{slot.text}</Lines><span className={cn("mt-1 block text-sm", muted)}>Found {whenLA(slot.at)}</span></p>
         : due.length > 0 && <p className={cn("text-sm", muted)}>No slot found yet that clears your trips by {s?.min_gap_hours ?? 24} hrs.</p>}
-      <p className={cn("text-sm", muted)}>Mae only records the slot she would take. Nothing is booked, and she never books over a trip. When you are ready, book it yourself on Costco's page.</p>
+      <p className={cn("text-sm", muted)}><Lines>{"Mae only records the slot she would take. Nothing is booked, and she never books over a trip. When you are ready, book it yourself on Costco's page."}</Lines></p>
       {s && <a className={cn(pillSecondary, "w-fit")} href={s.costco_waitwhile} target="_blank" rel="noreferrer">Open Costco {s.tire_vendor.replace("Costco ", "")} <ExternalLink className="h-4 w-4" aria-hidden /></a>}
     </section>
   );
@@ -164,7 +165,7 @@ function OtherItems({ items, reload }: { items: Item[]; reload: () => void }) {
           <li key={it.id} className="flex items-start justify-between gap-3 py-3">
             <div className="min-w-0">
               <p className="text-[0.95rem] font-medium text-white">{it.label}</p>
-              <p className={cn("mt-0.5 text-sm", muted)}>{it.installed_on ? `Changed ${dayOnly(it.installed_on)}, ${it.installed_on.slice(0, 4)}` : it.notes}</p>
+              <p className={cn("mt-0.5 text-sm", muted)}><Lines>{it.installed_on ? `Changed ${dayOnly(it.installed_on)}, ${it.installed_on.slice(0, 4)}` : it.notes}</Lines></p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <Chip status={it.status} />
@@ -185,12 +186,12 @@ function Log({ events }: { events: Ev[] }) {
       <section className={cn(card, "p-5")} aria-labelledby="flags-h">
         <h2 id="flags-h" className="text-base font-semibold text-white">Guest maintenance flags</h2>
         {flags.length === 0 ? <p className={cn("mt-2 text-sm", muted)}>No maintenance flags from guests.</p>
-          : <ul className="mt-2 divide-y divide-white/[0.06] bento:divide-black/5">{flags.map((e) => <li key={e.id} className="py-3 text-[0.95rem] text-white/85">{e.text}<span className={cn("mt-1 block text-sm", muted)}>{whenLA(e.at)}</span></li>)}</ul>}
+          : <ul className="mt-2 divide-y divide-white/[0.06] bento:divide-black/5">{flags.map((e) => <li key={e.id} className="py-3 text-[0.95rem] text-white/85"><Lines>{e.text}</Lines><span className={cn("mt-1 block text-sm", muted)}>{whenLA(e.at)}</span></li>)}</ul>}
       </section>
       <section className={cn(card, "p-5")} aria-labelledby="log-h">
         <h2 id="log-h" className="text-base font-semibold text-white">Mae's notes</h2>
         {rest.length === 0 ? <p className={cn("mt-2 text-sm", muted)}>Nothing yet.</p>
-          : <ul className="mt-2 divide-y divide-white/[0.06] bento:divide-black/5">{rest.map((e) => <li key={e.id} className="py-3 text-[0.95rem] text-white/85">{e.text ?? `${e.kind} logged`}<span className={cn("mt-1 block text-sm", muted)}>{whenLA(e.at)}</span></li>)}</ul>}
+          : <ul className="mt-2 divide-y divide-white/[0.06] bento:divide-black/5">{rest.map((e) => <li key={e.id} className="py-3 text-[0.95rem] text-white/85"><Lines>{e.text ?? `${e.kind} logged`}</Lines><span className={cn("mt-1 block text-sm", muted)}>{whenLA(e.at)}</span></li>)}</ul>}
       </section>
     </>
   );
@@ -200,7 +201,7 @@ export default function MaintenanceTab() {
   const { data, error, load } = useAdminRpc<Maint>("maint_admin");
   if (!data) {
     return error
-      ? <div className={cn(card, "space-y-3 p-5")} role="alert"><p className="text-white">Could not load Maintenance: {error}</p><button className={pillSecondary} onClick={() => void load()}><RefreshCw className="h-4 w-4" aria-hidden /> Retry</button></div>
+      ? <div className={cn(card, "space-y-3 p-5")} role="alert"><p className="text-white"><Lines>{`Could not load Maintenance: ${error}`}</Lines></p><button className={pillSecondary} onClick={() => void load()}><RefreshCw className="h-4 w-4" aria-hidden /> Retry</button></div>
       : <div className="space-y-4" aria-busy="true"><Skeleton className="h-64 rounded-2xl" /><Skeleton className="h-48 rounded-2xl" /></div>;
   }
   const tires = data.items.filter((i) => i.item.endsWith("tires")).sort((a, b) => (a.item === "front_tires" ? -1 : b.item === "front_tires" ? 1 : 0));

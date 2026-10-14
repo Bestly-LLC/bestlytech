@@ -9,6 +9,7 @@ import { QrCode } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { LoadError, SectionHeader, cardCls, text } from "@/components/admin/ui";
+import { Lines } from "@/components/Lines";
 
 type Row = { scanned_at: string; signed_in_at: string | null; kind: string; device: string | null; src: string; reservation_id: number | null; guest_first: string | null };
 type Data = { week: number; month: number; all: number; signed: number; trips: number; last: string | null; recent: Row[] };
@@ -46,7 +47,7 @@ export function CardScans() {
                 ))}
               </div>
               {d.recent.length === 0
-                ? <p className={cn(text.detail, "px-4 py-5 sm:px-5")}>No scans yet. They show up here the moment a guest scans the card in the car.</p>
+                ? <p className={cn(text.detail, "px-4 py-5 sm:px-5")}><Lines>No scans yet. They show up here the moment a guest scans the card in the car.</Lines></p>
                 : (
                   <ul className="divide-y divide-white/[0.06]">
                     {d.recent.map((r) => {

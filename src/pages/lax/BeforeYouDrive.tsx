@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ChevronDown, ClipboardList, ExternalLink } from "lucide-react";
 import { Carousel } from "./Carousel";
 import { track as trackEvent } from "./track";
+import { Lines } from "@/components/Lines";
 
 const MUSTARD = "#E8A93A", ORANGE = "#E36F3C", CREAM = "#F4EAD5", TEAL = "#2a6b66", DEEP = "#132726", OLIVE = "#6f7d3a";
 const star = (cx: number, cy: number, r: number, fill = CREAM) => {
@@ -122,7 +123,7 @@ export function BeforeYouDrive() {
               <div className="p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--trip-accent)" }}>{s.kicker}</p>
                 <h3 className="mt-1 text-[18px] font-bold leading-snug text-white" style={{ fontFamily: "var(--trip-title-font, 'Josefin Sans', Futura, 'Avenir Next', sans-serif)" }}>{s.title}</h3>
-                <p className="mt-1.5 text-[15px] leading-relaxed text-white/80">{s.body}</p>
+                <p className="mt-1.5 text-[15px] leading-relaxed text-white/80"><Lines>{s.body}</Lines></p>
                 {s.cta && (
                   <a href={s.cta.href || turoApp()} onClick={() => trackEvent(undefined, "turo_app")} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-[15px] font-semibold text-[#132726]" style={{ background: "var(--trip-accent)" }}>
                     <ExternalLink className="h-4 w-4" /> {s.cta.label}

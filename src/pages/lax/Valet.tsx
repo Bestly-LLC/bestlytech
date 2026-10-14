@@ -10,6 +10,7 @@ import { KeyRound, Loader2, ShieldAlert, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
 import { setDemoLocked } from "./demoState";
+import { Lines } from "@/components/Lines";
 
 const ACCENT = "var(--trip-accent)";
 const VERSION = "2026-09-24-valet";
@@ -99,11 +100,11 @@ export function UnlockStart({ token, demo }: { token?: string; demo?: boolean })
         </button>
       )}
       <p className="mt-1.5 px-1 text-[12px] text-white/60">
-        {active ? <>Press the brake and shift into Drive before the timer ends{demo ? " (Demo)" : ""}.</>
+        <Lines>{active ? <>Press the brake and shift into Drive before the timer ends{demo ? " (Demo)" : ""}.</>
           : closed ? "The 2-minute window ended. If nobody drove off, lock the car in the Tesla app. Tap to start a new window."
-          : "Unlocks the car and starts the same 2-minute driving window: hand it to the valet, or get in and go."}
+          : "Unlocks the car and starts the same 2-minute driving window: hand it to the valet, or get in and go."}</Lines>
       </p>
-      {msg && <p className="mt-2 text-[13px] text-white/75" aria-live="polite">{msg}</p>}
+      {msg && <p className="mt-2 text-[13px] text-white/75" aria-live="polite"><Lines>{msg}</Lines></p>}
 
       {terms && (
         <div className="fixed inset-0 z-[70] grid place-items-end p-3 sm:place-items-center" role="dialog" aria-modal="true" aria-labelledby="valet-title">
@@ -114,21 +115,21 @@ export function UnlockStart({ token, demo }: { token?: string; demo?: boolean })
             <span className="grid h-11 w-11 place-items-center rounded-full bg-amber-300/20"><ShieldAlert className="h-6 w-6 text-amber-200" /></span>
             <h2 id="valet-title" className="mt-3 pr-12 text-[21px] font-bold leading-tight">Before you use Unlock &amp; Start</h2>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-[14px] leading-snug text-white/85">
-              <li><b className="text-white">Only approved drivers may drive.</b> That's you, and anyone Turo approved as an extra driver on this trip. A parking valet may move and park the car for you. Letting anyone else drive breaks Turo's terms and can void your protection plan.</li>
-              <li><b className="text-white">It unlocks the car and lets it drive for 2 minutes without a key.</b> Only tap it when you or the valet are at the car. If you walk away, lock it in the Tesla app or on this page.</li>
+              <li><Lines><b className="text-white">Only approved drivers may drive.</b> That's you, and anyone Turo approved as an extra driver on this trip. A parking valet may move and park the car for you. Letting anyone else drive breaks Turo's terms and can void your protection plan.</Lines></li>
+              <li><Lines><b className="text-white">It unlocks the car and lets it drive for 2 minutes without a key.</b> Only tap it when you or the valet are at the car. If you walk away, lock it in the Tesla app or on this page.</Lines></li>
               <li><b className="text-white">You're responsible for the car</b> from the moment it's unlocked, the same as with your phone key: damage, tickets, tolls and fees follow Turo's rules for your trip.</li>
               <li>Each use is logged (time and your trip) and your host is told.</li>
             </ul>
             <div className="sticky -bottom-5 -mx-5 mt-4 bg-[linear-gradient(180deg,transparent,rgba(18,16,34,.96)_18%)] px-5 pb-5 pt-3">
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-white/[0.06] p-3 ring-1 ring-white/10">
               <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-[color:var(--trip-accent)]" />
-              <span className="text-[14px] leading-snug">I'm an approved driver on this Turo trip. I'll only use this at the car or to hand it to a parking valet, I won't let unapproved people drive, and I accept responsibility for the car while it's unlocked.</span>
+              <span className="text-[14px] leading-snug"><Lines>I'm an approved driver on this Turo trip. I'll only use this at the car or to hand it to a parking valet, I won't let unapproved people drive, and I accept responsibility for the car while it's unlocked.</Lines></span>
             </label>
             <button type="button" onClick={() => void accept()} disabled={!agree}
               className="mt-4 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold text-[#1A1140] disabled:opacity-40" style={{ background: ACCENT }}>
               <KeyRound className="h-5 w-5" /> I agree: Unlock &amp; Start
             </button>
-            <p className="mt-2 text-center text-[11px] text-white/50">Your Tesla phone key still works as usual. This is a backup.</p>
+            <p className="mt-2 text-center text-[11px] text-white/50"><Lines>Your Tesla phone key still works as usual. This is a backup.</Lines></p>
             </div>
           </div>
         </div>

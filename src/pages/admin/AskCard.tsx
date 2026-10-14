@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Sheet, Switch, btnPlain, btnPrimary, btnTinted, card, field, label, pill, secondary, separator, tertiary, tint } from "./laxUi";
+import { Lines } from "@/components/Lines";
 
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
@@ -89,7 +90,7 @@ function RulesSheet({ open, onClose, text, onSaved }: { open: boolean; onClose: 
           </div>
         </div>
       }>
-      <p className={cn("mb-3 text-[13px] leading-snug", secondary)}>The helper follows these on every answer. Keep each one short and plain.</p>
+      <p className={cn("mb-3 text-[13px] leading-snug", secondary)}><Lines>The helper follows these on every answer. Keep each one short and plain.</Lines></p>
       {rules.length === 0 ? (
         <div className={cn(card, "py-8 text-center")}>
           <ListChecks className={cn("mx-auto h-7 w-7", tertiary)} aria-hidden />
@@ -239,7 +240,7 @@ export function HelperSettings() {
           detail={`${st.daily_limit} questions per guest per day.`} />
       </div>
       <div className={cn(card, "p-0")}>
-        <p className={cn("px-5 pt-4 text-[13px]", secondary)}>Tries each in order, all free. Answers this week in brackets.</p>
+        <p className={cn("px-5 pt-4 text-[13px]", secondary)}><Lines>Tries each in order, all free. Answers this week in brackets.</Lines></p>
         <ol className={cn("divide-y", separator)}>
           {rungs.map((r, i) => (
             <li key={r.name} className="flex items-start gap-3 px-5 py-3">
@@ -247,7 +248,7 @@ export function HelperSettings() {
                 : <AlertTriangle className={cn("mt-0.5 h-5 w-5 shrink-0", tint.orange)} aria-label="Needs attention" />}
               <div className="min-w-0 flex-1">
                 <p className={cn("text-[15px] font-medium", label)}>{i + 1}. {r.name} <span className={cn("font-normal tabular-nums", tertiary)}>({r.count ?? 0})</span></p>
-                <p className={cn("mt-0.5 text-[13px] leading-snug", secondary)}>{r.detail}</p>
+                <p className={cn("mt-0.5 text-[13px] leading-snug", secondary)}><Lines>{r.detail}</Lines></p>
               </div>
             </li>
           ))}
@@ -257,7 +258,7 @@ export function HelperSettings() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className={cn("text-[15px] font-medium", label)}>Gemini key</p>
-            <p className={cn("mt-0.5 text-[13px]", secondary)}>{st.gemini_key ? "Saved in Vault. Can't be read back here." : "Not set."} Model: {st.gemini_model}</p>
+            <p className={cn("mt-0.5 text-[13px]", secondary)}><Lines>{st.gemini_key ? "Saved in Vault. Can't be read back here." : "Not set."} Model: {st.gemini_model}</Lines></p>
           </div>
           {!showKey && <button type="button" onClick={() => setShowKey(true)} className={btnPlain}>{st.gemini_key ? "Replace" : "Add"}</button>}
         </div>
@@ -269,7 +270,7 @@ export function HelperSettings() {
                 {busy && <Loader2 className="h-4 w-4 animate-spin" />} Save to Vault
               </button>
             </div>
-            <p className={cn("text-[12px]", tertiary)}>Free keys: aistudio.google.com/app/apikey. On Google's free tier, Google may use questions to improve its products.</p>
+            <p className={cn("text-[12px]", tertiary)}><Lines>Free keys: aistudio.google.com/app/apikey. On Google's free tier, Google may use questions to improve its products.</Lines></p>
             <button type="button" onClick={() => { setShowKey(false); setKey(""); }} className={btnPlain}>Cancel</button>
           </div>
         )}

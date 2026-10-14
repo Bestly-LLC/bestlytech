@@ -7,6 +7,7 @@
  */
 import { Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Lines } from "@/components/Lines";
 
 export interface DemandRow {
   observed_at: string; scope: "car" | "model3" | "all"; score: number; booked_share: number | null;
@@ -93,15 +94,15 @@ export function DemandMeter({ rows }: { rows: DemandRow[] | null }) {
                       <div className="mt-2 w-full text-white"><Gauge score={r.score} /></div>
                       <p className="-mt-1 text-lg font-bold" style={{ color: b.color }}>{b.label}</p>
                       <p className="text-xs tabular-nums text-white/60">{r.score} / 100</p>
-                      <p className="mt-2 text-xs leading-snug text-white/65">{why(r)}</p>
+                      <p className="mt-2 text-xs leading-snug text-white/65"><Lines>{why(r)}</Lines></p>
                     </>
-                  ) : <p className="mt-6 text-xs text-white/60">No reading yet. The next run checks it.</p>}
+                  ) : <p className="mt-6 text-xs text-white/60"><Lines>No reading yet. The next run checks it.</Lines></p>}
                 </div>
               );
             })}
           </div>
-          {advice && <p className="mt-4 rounded-2xl bg-[#0A84FF]/10 px-4 py-3 text-sm text-white/85">{advice}</p>}
-          <p className="mt-2 text-xs text-white/60">Slow · Normal · Busy · Hot. Checked on every Turo Watch run, twice a day.</p>
+          {advice && <p className="mt-4 rounded-2xl bg-[#0A84FF]/10 px-4 py-3 text-sm text-white/85"><Lines>{advice}</Lines></p>}
+          <p className="mt-2 text-xs text-white/60"><Lines>Slow · Normal · Busy · Hot. Checked on every Turo Watch run, twice a day.</Lines></p>
         </>
       )}
     </section>

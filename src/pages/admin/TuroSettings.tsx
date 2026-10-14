@@ -31,6 +31,7 @@ import { LeoSmsCard } from "./LeoSmsCard";
 import {
   Section, Segmented, btnDestructivePlain, btnPlain, btnPrimary, btnTinted, card, field, label, pill, secondary, separator, tertiary, tint,
 } from "./laxUi";
+import { Lines } from "@/components/Lines";
 
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
@@ -200,7 +201,7 @@ function ParkMyShareLogin({ p, onSaved }: { p: Parker | null; onSaved: (d: Parke
             <div className="min-w-0">
               <p className={cn("text-[15px] font-semibold", label)}>{p?.configured ? "Change the Park My Share login" : "Connect Park My Share"}</p>
               <p className={cn("mt-0.5 text-[13px] leading-snug", secondary)}>
-                The same email and password you use at app.parkmycarshare.com. Parker only reads the QR page; he never changes anything there.
+                <Lines>The same email and password you use at app.parkmycarshare.com. Parker only reads the QR page; he never changes anything there.</Lines>
               </p>
             </div>
           </div>
@@ -224,7 +225,7 @@ function ParkMyShareLogin({ p, onSaved }: { p: Parker | null; onSaved: (d: Parke
             </label>
           </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className={cn("flex items-center gap-1.5 text-[12px]", tertiary)}><Lock className="h-3.5 w-3.5 shrink-0" aria-hidden /> Goes straight into the vault. Nobody can read it back here.</p>
+            <p className={cn("flex items-center gap-1.5 text-[12px]", tertiary)}><Lock className="h-3.5 w-3.5 shrink-0" aria-hidden /> <span><Lines>Goes straight into the vault. Nobody can read it back here.</Lines></span></p>
             <div className="flex items-center justify-end gap-4">
               {p?.configured && !needs && <button type="button" onClick={() => setOpen(false)} className={btnPlain}>Cancel</button>}
               <button type="button" onClick={save} disabled={busy} className={btnPrimary}>
@@ -320,7 +321,7 @@ function GarageCode({ st, reload }: { st: PassState | null; reload: () => void }
           </figure>
         </div>
         <p className="flex items-center gap-2.5"><Check className={cn("h-5 w-5 shrink-0", tint.green)} aria-hidden />
-          <span className={cn("text-[15px] font-semibold", label)}>Code read. Both match.</span></p>
+          <span className={cn("text-[15px] font-semibold", label)}><Lines>Code read. Both match.</Lines></span></p>
         {st && (
           <div className="space-y-2">
             <p className={cn("text-[13px] font-medium", secondary)}>Which month is it for?</p>
@@ -364,7 +365,7 @@ function GarageCode({ st, reload }: { st: PassState | null; reload: () => void }
                 </p>
                 <p className={cn("flex items-start justify-center gap-2 text-[15px] leading-snug md:justify-start", lineTone)} role="status" aria-live="polite">
                   <LineIcon className={cn("mt-[3px] h-4 w-4 shrink-0", iconTone, line.tone === "busy" && "animate-spin")} aria-hidden />
-                  <span>{line.text}</span>
+                  <span><Lines>{line.text}</Lines></span>
                 </p>
               </div>
               <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
@@ -433,7 +434,7 @@ function GuideCard({ guide, onSaved }: { guide: Guide; onSaved: () => void }) {
           <label key={key} className={cn("block", key === "spot" && "sm:col-span-2")}>
             <span className={cn("mb-1.5 block text-[13px] font-medium", secondary)}>{l}</span>
             <input value={g[key] ?? ""} onChange={(e) => setG({ ...g, [key]: e.target.value })} maxLength={120} className={field} />
-            {hint && <span className={cn("mt-1.5 block text-[12px]", tertiary)}>{hint}</span>}
+            {hint && <span className={cn("mt-1.5 block text-[12px]", tertiary)}><Lines>{hint}</Lines></span>}
           </label>
         ))}
       </div>

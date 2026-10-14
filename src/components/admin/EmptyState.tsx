@@ -1,6 +1,7 @@
 import { LucideIcon, Inbox } from "lucide-react";
 import { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { Lines } from "@/components/Lines";
 
 interface EmptyStateProps {
   icon?: LucideIcon;
@@ -21,9 +22,9 @@ export function EmptyState({ icon: Icon = Inbox, title, description, action, com
       <div className="h-12 w-12 rounded-2xl bg-white/[0.05] flex items-center justify-center" aria-hidden="true">
         <Icon className="h-6 w-6 text-white/40" />
       </div>
-      <p className="text-sm font-medium text-white/90">{title}</p>
+      <p className="text-sm font-medium text-white/90"><Lines>{title}</Lines></p>
       {description && (
-        <p className="text-xs leading-relaxed text-white/55 max-w-[20rem]">{description}</p>
+        <p className="text-xs leading-relaxed text-white/55 max-w-[20rem]"><Lines>{description}</Lines></p>
       )}
       {action && <div className="mt-1">{action}</div>}
     </div>

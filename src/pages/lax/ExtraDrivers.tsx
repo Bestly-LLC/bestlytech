@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, Clock, Copy, FlaskConical, Loader2, MessageSquare, Share2, ShieldAlert, UserPlus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
+import { Lines } from "@/components/Lines";
 
 const ACCENT = "var(--trip-accent)";
 type Drv = { id: number; name: string; state: "waiting" | "making" | "ready" | "added" | "ended" | "problem"; link?: string | null; expires_at?: string | null; approved_by?: string; suggest?: string | null; page?: string | null };
@@ -116,13 +117,13 @@ export default function ExtraDrivers({ token, ended, embedded }: { token: string
                 {d.state === "waiting" && <button type="button" onClick={() => void cancel(d.id)} aria-label={`Remove ${d.name}`} className="grid h-9 w-9 place-items-center rounded-full text-white/50 hover:text-white"><X className="h-4 w-4" /></button>}
               </div>
               <p className="mt-1 text-[13px] leading-relaxed text-white/70" aria-live="polite">
-                {d.state === "waiting" && !d.suggest && <>Waiting for Turo to confirm {d.name} is approved. Their key shows up here automatically, so no need to message.</>}
+                <Lines>{d.state === "waiting" && !d.suggest && <>Waiting for Turo to confirm {d.name} is approved. Their key shows up here automatically, so no need to message.</>}
                 {d.state === "waiting" && d.suggest && <>Turo approved a driver named <b className="text-white">{d.suggest}</b>. Is that {d.name}?</>}
                 {d.state === "making" && <>Turo approved {d.name}. Making their key now…</>}
                 {d.state === "ready" && <>Send this to {d.name}. It's their own one-time key: they tap it and the car is added to <i>their</i> Tesla app.</>}
                 {d.state === "added" && <>{d.name}'s phone is set up as a key.</>}
                 {d.state === "ended" && <>Access ended with the trip.</>}
-                {d.state === "problem" && <>Something went wrong making this key. Jared's been notified and will fix it.</>}
+                {d.state === "problem" && <>Something went wrong making this key. Jared's been notified and will fix it.</>}</Lines>
               </p>
               {d.state === "ready" && d.link && (
                 <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
@@ -162,7 +163,7 @@ export default function ExtraDrivers({ token, ended, embedded }: { token: string
 
       {!open ? (
         <>
-          {!drivers.length && <p className="text-[15px] leading-relaxed text-white/80">Anyone else who drives must be <b className="text-white">added and approved in Turo first</b>. Then they get their own phone key here. Everyone drives with a phone key; there&apos;s no key card or remote unlock.</p>}
+          {!drivers.length && <p className="text-[15px] leading-relaxed text-white/80"><Lines>Anyone else who drives must be <b className="text-white">added and approved in Turo first</b>. Then they get their own phone key here. Everyone drives with a phone key; there&apos;s no key card or remote unlock.</Lines></p>}
           <button type="button" onClick={() => { setOpen(true); track(token, "driver_open"); }} className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.09] text-[15px] font-semibold text-white ring-1 ring-white/15 active:scale-[0.99]">
             <UserPlus className="h-5 w-5" style={{ color: ACCENT }} /> Add a driver
           </button>
@@ -171,14 +172,14 @@ export default function ExtraDrivers({ token, ended, embedded }: { token: string
         <div className="mt-3">
           <div className="flex gap-2 rounded-2xl bg-red-500/10 p-3 text-[13px] leading-relaxed text-red-100 ring-1 ring-red-300/25">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />
-            <p><b>Important:</b> Turo's protection only covers drivers Turo has approved on this trip. Anyone else driving isn't insured, and the renter is responsible for any damage.</p>
+            <p><Lines><b>Important:</b> Turo's protection only covers drivers Turo has approved on this trip. Anyone else driving isn't insured, and the renter is responsible for any damage.</Lines></p>
           </div>
           <p className="mt-4 text-[13px] font-semibold uppercase tracking-[0.12em] text-white/60">First, in the Turo app</p>
           <ol className="mt-2 space-y-2.5">
             {STEPS.map((s, i) => (
               <li key={i} className="flex gap-3 text-[14px] leading-relaxed text-white/80">
                 <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[12px] font-bold text-[#132726]" style={{ background: ACCENT }}>{i + 1}</span>
-                <span>{s}</span>
+                <span><Lines>{s}</Lines></span>
               </li>
             ))}
           </ol>
@@ -189,7 +190,7 @@ export default function ExtraDrivers({ token, ended, embedded }: { token: string
             <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-[#E8A93A]" />
             <span className="text-[13px] leading-relaxed text-white/85">{ackText(name.trim())}</span>
           </label>
-          {err && <p role="alert" className="mt-2 text-[13px] text-red-300">{err}</p>}
+          {err && <p role="alert" className="mt-2 text-[13px] text-red-300"><Lines>{err}</Lines></p>}
           <div className="mt-4 flex gap-2">
             <button type="button" onClick={() => { setOpen(false); setErr(null); }} className="h-12 flex-1 rounded-2xl text-[15px] font-semibold text-white/70 ring-1 ring-white/15">Cancel</button>
             <button type="button" onClick={() => void submit()} disabled={busy || !ack || name.trim().length < 2}

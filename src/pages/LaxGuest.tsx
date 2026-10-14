@@ -536,7 +536,7 @@ export default function LaxGuest() {
           </div>
         ) : (
           <>
-            {!ended && <p className="text-[17px] leading-relaxed text-white/85">Your Turo Tesla is in a garage 5 minutes from LAX. <b className="text-white">Your phone is the key</b>, and a QR code opens the lobby door.</p>}
+            {!ended && <p className="text-[17px] leading-relaxed text-white/85"><Lines>Your Turo Tesla is in a garage 5 minutes from LAX. <b className="text-white">Your phone is the key</b>, and a QR code opens the lobby door.</Lines></p>}
 
             {pub.trip && <div className="mt-5"><TripCard trip={pub.trip} theme="lax" recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /><TripChanged at={pub.trip_changed_at} /></div>}
 
@@ -567,15 +567,15 @@ export default function LaxGuest() {
                     )}
                   </div>
                   <p className="mt-3 text-[13px] leading-snug text-white/55">
-                    {plat === "android" && pub.google
+                    <Lines>{plat === "android" && pub.google
                       ? "Adding it to Google Wallet keeps it one tap away at the door. Saving the image works too."
                       : plat === "android"
                       ? "To keep it in Google Wallet: open Google Wallet, tap Add to Wallet → Everything else → Photo, and pick the saved code."
-                      : "Adding it to Wallet keeps it one double-click away at the door. A screenshot works too."}
+                      : "Adding it to Wallet keeps it one double-click away at the door. A screenshot works too."}</Lines>
                   </p>
                 </>
               ) : (
-                <div className="mt-3 rounded-2xl bg-white/[0.06] p-4 text-white/80 ring-1 ring-white/10">Your QR code shows up right here before your trip. Nothing to do: this page updates by itself.</div>
+                <div className="mt-3 rounded-2xl bg-white/[0.06] p-4 text-white/80 ring-1 ring-white/10"><Lines>Your QR code shows up right here before your trip. Nothing to do: this page updates by itself.</Lines></div>
               )}
             </Collapse>
             )}
@@ -647,12 +647,12 @@ export default function LaxGuest() {
             </TripSlides>
 
             {pub.trip && pub.ready && pub.code_for_trip_month === false && (
-              <p className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[13px] text-white/70 ring-1 ring-white/10">Your trip is next month. The garage issues a new code on the 1st; this page and your Wallet pass switch to it automatically.</p>
+              <p className="mt-4 rounded-2xl bg-white/[0.06] p-3 text-[13px] text-white/70 ring-1 ring-white/10"><Lines>Your trip is next month. The garage issues a new code on the 1st; this page and your Wallet pass switch to it automatically.</Lines></p>
             )}
 
             {pub.note && (
               <Collapse id="host-note" kicker="From your host" accent={PEACH} summary={pub.note.slice(0, 60) + (pub.note.length > 60 ? "…" : "")}>
-                <p className="text-white/90">{pub.note}</p>
+                <p className="text-white/90"><Lines>{pub.note}</Lines></p>
               </Collapse>
             )}
 
@@ -705,7 +705,7 @@ export default function LaxGuest() {
                 {keySteps && (
                   <Step n={n0 + 6} when="At the car" title={<>Tap &ldquo;Set Up&rdquo; -<br />then Unlock</>}>
                     Next to the car, with Bluetooth on, open the Tesla app and tap <b className="text-white">&ldquo;Set Up&rdquo;</b>. Follow the steps, then tap <b className="text-white">Unlock</b>. Take your check-in photos in the Turo app.
-                    <span className="mt-1 block text-white/60">Not sure which one is yours? Use Find the Car, or tap Honk.</span>
+                    <span className="mt-1 block text-white/60"><Lines>Not sure which one is yours? Use Find the Car, or tap Honk.</Lines></span>
                     <OpenTuro className="mt-3 w-full" label="Open Turo for photos" />
                   </Step>
                 )}
@@ -717,8 +717,8 @@ export default function LaxGuest() {
               {phone && (
                 <div className="mt-8 rounded-2xl p-4 ring-1 ring-white/10" style={{ background: "linear-gradient(135deg, rgba(122,46,158,0.35), rgba(228,82,122,0.25))" }}>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>10 PM – 6 AM</p>
-                  <p className="mt-1 text-lg font-semibold">Late arrival? Call for the shuttle.</p>
-                  <p className="mt-1 text-[15px] leading-relaxed text-white/80">Shuttles run every 15–20 minutes around the clock. Between 10 PM and 6 AM, call to request a pickup:</p>
+                  <p className="mt-1 text-lg font-semibold"><Lines>Late arrival? Call for the shuttle.</Lines></p>
+                  <p className="mt-1 text-[15px] leading-relaxed text-white/80"><Lines>Shuttles run every 15–20 minutes around the clock. Between 10 PM and 6 AM, call to request a pickup:</Lines></p>
                   <a href={telHref(phone)} className="mt-3 flex h-12 items-center justify-center gap-2 rounded-xl bg-white text-base font-semibold text-[#1A1140]">
                     <Phone className="h-4 w-4" /> {dotted(phone)}
                   </a>
@@ -757,7 +757,7 @@ export default function LaxGuest() {
               {phone && (
                 <div className="mt-8 rounded-2xl p-4 ring-1 ring-white/10" style={{ background: "linear-gradient(135deg, rgba(122,46,158,0.35), rgba(228,82,122,0.25))" }}>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: PEACH }}>10 PM – 6 AM</p>
-                  <p className="mt-1 text-lg font-semibold">Late departure? Request the shuttle.</p>
+                  <p className="mt-1 text-lg font-semibold"><Lines>Late departure? Request the shuttle.</Lines></p>
                   <p className="mt-1 text-[15px] leading-relaxed text-white/80">Between 10 PM and 6 AM, call to request a shuttle to your terminal:</p>
                   <a href={telHref(phone)} className="mt-3 flex h-12 items-center justify-center gap-2 rounded-xl bg-white text-base font-semibold text-[#1A1140]">
                     <Phone className="h-4 w-4" /> {dotted(phone)}

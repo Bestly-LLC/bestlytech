@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { LoadError, SectionHeader, cardCls, focusRing, text, tint } from "@/components/admin/ui";
 import { TirePsiGrid } from "./TirePsiGrid";
+import { Lines } from "@/components/Lines";
 
 type Ev = { id: number; at: string; kind: string; severity: string; title: string; detail: string; lat: number | null; lon: number | null; guest: string | null; read_at: string | null };
 const at12 = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
@@ -113,15 +114,15 @@ export function CarProtectLog() {
                             </p>
                           </div>
                         )}
-                        <p className={cn(text.detail, "pb-2")}>{g.about}</p>
+                        <p className={cn(text.detail, "pb-2")}><Lines>{g.about}</Lines></p>
                         {list.length === 0 ? <p className={cn(text.meta, "pb-1")}>Nothing yet.</p> : (
                           <ol className="space-y-2">
                             {list.map((e) => (
                               <li key={e.id} className="flex gap-3 rounded-xl bg-white/[0.04] px-3 py-2.5">
                                 <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", serious(e) ? "bg-[#FF453A]" : e.severity === "info" ? "bg-white/30" : "bg-[#FFD60A]")} aria-hidden />
                                 <div className="min-w-0 flex-1">
-                                  <p className={text.title}>{e.title}</p>
-                                  {e.detail && <p className={text.detail}>{e.detail}</p>}
+                                  <p className={text.title}><Lines>{e.title}</Lines></p>
+                                  {e.detail && <p className={text.detail}><Lines>{e.detail}</Lines></p>}
                                   <p className={cn(text.meta, "mt-0.5")}>{at12(e.at)}{e.guest ? ` · ${e.guest}` : " · no trip"}
                                     {e.lat != null && e.lon != null && <> · <a href={maps(e.lat, e.lon)} target="_blank" rel="noreferrer" className={cn(tint.blue, "hover:underline")}>Map</a></>}</p>
                                 </div>
@@ -172,7 +173,7 @@ export function TollCheck() {
     <section aria-labelledby="toll-title">
       <SectionHeader id="toll-title" title="Toll & ticket check" icon={<Search className="h-3.5 w-3.5" aria-hidden />} />
       <div className={cn(cardCls, "space-y-3 p-4 sm:p-6")}>
-        <p className={text.detail}>Enter the date and time on the ticket or toll. You'll see who had the car and where it was.</p>
+        <p className={text.detail}><Lines>{"Enter the date and time on the ticket or toll. You'll see who had the car and where it was."}</Lines></p>
         <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="toll-at" className="sr-only">Date and time on the ticket</label>
           <input id="toll-at" type="datetime-local" value={val} onChange={(e) => setVal(e.target.value)}

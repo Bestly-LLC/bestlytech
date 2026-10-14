@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { DemandMeter, type DemandRow } from "@/components/admin/turo/DemandMeter";
 import { FleetNow, type Trip, type VehicleState } from "@/components/admin/turo/FleetNow";
 import { Competitors, PriceManager, TuroTrends, type CompPrice, type SeriesRow, type Target } from "@/components/admin/turo/TuroTrends";
+import { Lines } from "@/components/Lines";
 
 interface Run {
   id: string; ran_at: string; runner: string; mode: string; market_base: number | null; host_net: number | null;
@@ -171,9 +172,9 @@ function TuroOverview() {
                   {settings?.paused ? "Paused: runs compute prices but write nothing." : noBrowser ? "The scheduled run couldn't reach your Chrome, so it couldn't check Turo." : signedOut ? `The last run (${when(last!.ran_at)}) couldn't reach Turo: it looked signed out then.` : stale ? "No run in over 14 hours." : "Running normally."}
                 </p>
                 <p>Claude runs it at 7:05am and 7:12pm in your own Chrome on the Mac mini, then reports here and to your phone.</p>
-                {noBrowser && <p className="text-white/60">Fix, once: in the Claude desktop app on the Mac mini, open Scheduled tasks, open "Turo Watch 7:05am" and "Turo Watch 7:12pm", and turn on "Require this computer". Runs then happen on the Mac with your Chrome.</p>}
+                {noBrowser && <p className="text-white/60"><Lines>Fix, once: in the Claude desktop app on the Mac mini, open Scheduled tasks, open "Turo Watch 7:05am" and "Turo Watch 7:12pm", and turn on "Require this computer". Runs then happen on the Mac with your Chrome.</Lines></p>}
                 {signedOut && <p className="text-white/60">If you're signed in to turo.com in Chrome now, nothing to do: the next run checks again and this clears.</p>}
-                {settings?.paused && settings.pause_reason && <p className="text-white/60">Why: {settings.pause_reason}</p>}
+                {settings?.paused && settings.pause_reason && <p className="text-white/60"><Lines>{`Why: ${settings.pause_reason}`}</Lines></p>}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -190,7 +191,7 @@ function TuroOverview() {
               <label htmlFor="turo-note" className="text-xs font-semibold uppercase tracking-widest text-white/60">Note for the next run</label>
               {settings?.note_for_claude ? (
                 <div className="mt-2 flex items-start justify-between gap-3 rounded-xl bg-white/[0.04] p-3 bento:bg-[var(--bento-well)]">
-                  <p className="text-[0.95rem] text-white/85">{settings.note_for_claude}</p>
+                  <p className="text-[0.95rem] text-white/85"><Lines>{settings.note_for_claude}</Lines></p>
                   <button className="shrink-0 text-xs text-white/60 underline" onClick={() => save({ p_note: "" }, "Note cleared")}>Clear</button>
                 </div>
               ) : (

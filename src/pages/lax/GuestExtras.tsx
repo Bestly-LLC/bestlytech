@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { track } from "./track";
 import { setDemoClimate } from "./demoState";
+import { Lines } from "@/components/Lines";
 
 const PEACH = "var(--trip-accent, #FFB878)"; // themeable: the home page sets WeHo colors
 const LA = "America/Los_Angeles";
@@ -315,7 +316,7 @@ export function ClimateAdvice({ car, outsideF }: { car: CarState | null; outside
   const outside = outsideF ?? car?.outside_f ?? null;
   const inside = car?.inside_f ?? null;
   if (car?.climate_until && +new Date(car.climate_until) > Date.now()) {
-    return <p className="flex items-center gap-2 text-[15px] font-medium text-white/90"><Fan className="h-4 w-4 shrink-0 animate-spin text-sky-300 motion-reduce:animate-none" aria-hidden />Climate is on. The car will be comfy when you get there.</p>;
+    return <p className="flex items-center gap-2 text-[15px] font-medium text-white/90"><Fan className="h-4 w-4 shrink-0 animate-spin text-sky-300 motion-reduce:animate-none" aria-hidden /><span><Lines>Climate is on. The car will be comfy when you get there.</Lines></span></p>;
   }
   const need = climateNeed(inside, outside);
   const nt = needTemp(need, inside, outside);
@@ -324,7 +325,7 @@ export function ClimateAdvice({ car, outsideF }: { car: CarState | null; outside
   const [Icon, color, text] = need === "cool"
     ? [Snowflake, "text-sky-300", `It's ${t}° ${nt.where === "inside" ? "inside the car" : "outside"}. Turn on the A/C before you head over.`]
     : [Flame, "text-orange-300", `It's ${t}° ${nt.where === "inside" ? "inside the car" : "outside"}. Warm it up before you head over.`];
-  return <p className="flex items-start gap-2 text-[15px] font-medium leading-snug text-white/90"><Icon className={`mt-0.5 h-4 w-4 shrink-0 ${color}`} aria-hidden />{text}</p>;
+  return <p className="flex items-start gap-2 text-[15px] font-medium leading-snug text-white/90"><Icon className={`mt-0.5 h-4 w-4 shrink-0 ${color}`} aria-hidden /><span><Lines>{text}</Lines></span></p>;
 }
 
 type Hour = { forecastStart: string; temperature: number; conditionCode: string; precipitationChance: number; daylight?: boolean };
@@ -549,7 +550,7 @@ function ClimateOn({ mode, until, onOff, busy, stoppedAt, auto }: { mode: string
         <div className={`h-full w-full origin-left rounded-full ${off ? "bg-white/30" : cool ? "bg-sky-300 transition-transform duration-1000 ease-linear" : "bg-orange-300 transition-transform duration-1000 ease-linear"}`} style={{ transform: `scaleX(${frac})` }} />
       </div>
       {off ? (
-        <p className="mt-2 text-[12px] leading-snug text-white/60">The cabin stays comfy for a while. Turn it back on anytime.</p>
+        <p className="mt-2 text-[12px] leading-snug text-white/60"><Lines>The cabin stays comfy for a while. Turn it back on anytime.</Lines></p>
       ) : (
         <>
           <p className="mt-1.5 text-[11px] leading-snug text-white/65">Turns off by itself at {fmtTime(until)}</p>
@@ -664,7 +665,7 @@ function ClimateControls({ demo, onAction, compact = false, lockedUntil, car, ou
         </>
       )}
       <p className={`mt-1 min-h-[1.25rem] text-[12px] leading-snug ${busy ? "text-white/75" : done?.startsWith("Couldn't") ? "text-red-300" : "text-emerald-300"}`} aria-live="polite">
-        {busy ? <>{stage ?? "Working"}… <span className="tabular-nums text-white/65">{secs}s</span>{stage === "Waking up the car" && <span className="block text-white/65">Can take up to a minute.</span>}</> : done}
+        {busy ? <>{stage ?? "Working"}… <span className="tabular-nums text-white/65">{secs}s</span>{stage === "Waking up the car" && <span className="block text-white/65">Can take up to a minute.</span>}</> : <Lines>{done}</Lines>}
       </p>
       <p className="text-[11px] leading-snug text-white/65">
         {demo ? (hostDemo() ? "Host demo: these buttons run Blue Steel's A/C for real (never while a guest has it)." : "Demo: nothing is sent to the car.")
@@ -700,7 +701,7 @@ export function CarCard({ trip, car, demo = false, onClimate, compact = false, l
             )}
           </>
         ) : (
-          <p className="mt-1.5 text-[13px] leading-snug text-white/70">{onClimate ? "Parked and asleep. Tap a button and it wakes up." : "Car info isn't available right now."}</p>
+          <p className="mt-1.5 text-[13px] leading-snug text-white/70"><Lines>{onClimate ? "Parked and asleep. Tap a button and it wakes up." : "Car info isn't available right now."}</Lines></p>
         )}
         {(demo || onClimate || lockedUntil) ? (
           <ClimateControls demo={demo} onAction={onClimate} compact lockedUntil={lockedUntil} car={car} outsideF={outsideF} />
@@ -776,8 +777,8 @@ export function EmailCard({ token, email, reminderAt, sentAt, home = false }: { 
               {busy ? "Saving…" : home ? "Remind me" : "Email me"}
             </button>
           </div>
-          {err && <p className="mt-2 text-[13px] text-[#FF8FA8]">{err}</p>}
-          <p className="mt-2 text-[11px] text-white/65">Only used for this trip's reminder. Never shared.</p>
+          {err && <p className="mt-2 text-[13px] text-[#FF8FA8]"><Lines>{err}</Lines></p>}
+          <p className="mt-2 text-[11px] text-white/65"><Lines>Only used for this trip's reminder. Never shared.</Lines></p>
         </div>
       )}
     </Card>

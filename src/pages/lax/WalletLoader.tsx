@@ -3,6 +3,7 @@
  * A pass slides into a wallet pocket on a loop, like Apple Wallet's add animation. Respects reduced motion.
  */
 import { useEffect, useState } from "react";
+import { Lines } from "@/components/Lines";
 
 const STEPS = ["Building your pass", "Adding your lobby door QR code", "Signing it for Apple Wallet", "Almost there"];
 
@@ -45,7 +46,7 @@ export function WalletLoader({ open, onCancel }: { open: boolean; onCancel: () =
         </div>
         <p className="mt-5 text-[20px] font-semibold tracking-tight">Getting your pass ready</p>
         <p className="mt-1 min-h-[1.5rem] text-[15px] text-white/70" aria-live="polite">{STEPS[step]}…</p>
-        <p className="mt-3 text-[13px] leading-snug text-white/45">This can take up to a minute. Apple Wallet opens on its own when it's ready.</p>
+        <p className="mt-3 text-[13px] leading-snug text-white/45"><Lines>This can take up to a minute. Apple Wallet opens on its own when it's ready.</Lines></p>
         <button type="button" onClick={onCancel} className="mt-5 min-h-[44px] rounded-full px-5 text-[15px] font-medium text-[#0A84FF] active:opacity-60">Cancel</button>
       </div>
     </div>

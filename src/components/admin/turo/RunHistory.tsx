@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Navigation } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { Lines } from "@/components/Lines";
 
 interface Run {
   id: string; ran_at: string; runner: string; mode: string; market_base: number | null; comp_n: number | null;
@@ -39,7 +40,7 @@ export function RunHistory() {
               {r.mode === "applied" ? ` · ${r.days_verified}/${r.days_written} days verified` : ""}
               {tripped.length ? ` · stopped by: ${tripped.join(", ")}` : ""}
             </p>
-            {r.notes && <p className="mt-1 line-clamp-2 text-xs text-white/60">{r.notes.replace(/^CRASH:.*/s, "Runner crashed (fixed Sept 22).")}</p>}
+            {r.notes && <p className="mt-1 text-xs text-white/60"><Lines>{r.notes.replace(/^CRASH:.*/s, "Runner crashed (fixed Sept 22).")}</Lines></p>}
           </li>
         );
       })}

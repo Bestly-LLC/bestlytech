@@ -8,6 +8,7 @@ import { fmtWhen, type Trip } from "./GuestExtras";
 import { TURO_TRIPS } from "./places";
 import { track } from "./track";
 import { ChargingCard, type Charging } from "./Charging";
+import { Lines } from "@/components/Lines";
 
 const ACCENT = "var(--trip-accent)";
 
@@ -38,7 +39,7 @@ export function TripDone({ trip, titleFont, charging, token }: { trip: Trip; tit
         {rows.map((r) => (
           <li key={r.title} className="flex items-start gap-3 py-3">
             <r.icon className="mt-0.5 h-5 w-5 shrink-0" style={{ color: ACCENT }} strokeWidth={1.75} aria-hidden />
-            <div className="min-w-0"><p className="text-[15px] font-semibold text-white">{r.title}</p><p className="mt-0.5 text-[14px] leading-snug text-white/75">{r.body}</p></div>
+            <div className="min-w-0"><p className="text-[15px] font-semibold text-white">{r.title}</p><p className="mt-0.5 text-[14px] leading-snug text-white/75"><Lines>{r.body}</Lines></p></div>
           </li>
         ))}
       </ol>
@@ -59,7 +60,7 @@ function ReviewAsk({ titleFont }: { titleFont?: string }) {
         ))}
       </span>
       <span className="mt-3 block text-[22px] font-bold leading-tight text-white" style={{ fontFamily: titleFont }}>Enjoyed the ride?</span>
-      <span className="mt-1.5 block text-[15px] leading-snug text-white/80">A 5-star review in Turo helps a lot. It takes 30 seconds.</span>
+      <span className="mt-1.5 block text-[15px] leading-snug text-white/80"><Lines>A 5-star review in Turo helps a lot. It takes 30 seconds.</Lines></span>
       <span className="mt-4 inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-white px-6 text-[16px] font-bold text-[#1A1140] shadow-lg shadow-black/30">
         <Star className="h-4 w-4 fill-[#FFB800] text-[#FFB800]" aria-hidden /> Leave a review in Turo
       </span>

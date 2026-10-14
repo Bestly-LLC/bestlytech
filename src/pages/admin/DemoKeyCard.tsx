@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CopyButton } from "@/components/CopyText";
 import { cn } from "@/lib/utils";
 import { Segmented, Switch, btnDestructivePlain, btnPlain, btnTinted, card, label, secondary, tertiary } from "./laxUi";
+import { Lines } from "@/components/Lines";
 
 type Driver = { share_user_id: string; name: string | null; accepted_at: string; remove_at: string; removed_at: string | null; last_error: string | null };
 type State = { enabled: boolean; pass: string; keep_minutes: number; status: string; invite_expires_at: string | null; last_error: string | null; drivers: Driver[]; busy: boolean };
@@ -37,7 +38,7 @@ export function DemoKeyCard() {
         <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
         <div className="min-w-0">
           <p className={cn("text-[15px] font-semibold", label)}>Real key on the demo</p>
-          <p className={cn("text-[13px]", secondary)}>Only you see it (signed in here, or with the host link below). Everyone else gets the pretend key. Whoever adds it is removed from Blue Steel automatically.</p>
+          <p className={cn("text-[13px]", secondary)}><Lines>Only you see it (signed in here, or with the host link below). Everyone else gets the pretend key. Whoever adds it is removed from Blue Steel automatically.</Lines></p>
         </div>
       </div>
       <Switch checked={s.enabled} onChange={(v) => run(v ? "on" : "off")} label="Real key on demo pages" detail={status} disabled={!!busy} />
@@ -49,7 +50,7 @@ export function DemoKeyCard() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="shrink-0 rounded-xl bg-white p-2"><QRCodeSVG value={link("home")} size={96} /></div>
         <div className="flex min-w-0 flex-col gap-2">
-          <p className={cn("text-[13px]", secondary)}>Host link: scan on the phone with the Tesla app. Don't send it to guests.</p>
+          <p className={cn("text-[13px]", secondary)}><Lines>Host link: scan on the phone with the Tesla app. Don't send it to guests.</Lines></p>
           <div className="flex flex-wrap gap-2">
             <CopyButton text={link("home")} label="Copy Home link" className={cn(btnTinted, "h-auto px-3")} />
             <CopyButton text={link("lax")} label="Copy LAX link" className={cn(btnTinted, "h-auto px-3")} />

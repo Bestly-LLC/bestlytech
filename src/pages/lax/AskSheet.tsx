@@ -320,18 +320,18 @@ function AddDriverChat({ token }: { token?: string }) {
   return (
     <div className="mt-2" aria-live="polite">
       {step === "turo" && (<>
-        <p className={bubble}><b>Want to add them now?</b> First: are they added in the Turo app, and did Turo approve them?</p>
+        <p className={bubble}><Lines><b>Want to add them now?</b> First: are they added in the Turo app, and did Turo approve them?</Lines></p>
         <div className="mt-2 flex flex-wrap gap-2">
           <button type="button" className={`${pill} text-[#1A1140]`} style={{ background: PEACH }} onClick={() => { setStep("terms"); track(token, "driver_open", { via: "helper" }); }}><CheckCircle2 className="h-4 w-4" aria-hidden />Yes, they're approved</button>
           <button type="button" className={`${pill} bg-white/10 text-white ring-1 ring-white/20`} onClick={() => setStep("how")}>How do I add them?</button>
         </div>
       </>)}
       {step === "how" && (<>
-        <p className={bubble}>In the <b>Turo app</b>: Trips → this trip → <b>Add driver</b>. Enter their email or phone. Turo texts them to verify their license. Once Turo says they're approved, come back and tap below.</p>
+        <p className={bubble}><Lines>In the <b>Turo app</b>: Trips → this trip → <b>Add driver</b>. Enter their email or phone. Turo texts them to verify their license. Once Turo says they're approved, come back and tap below.</Lines></p>
         <button type="button" className={`${pill} mt-2 text-[#1A1140]`} style={{ background: PEACH }} onClick={() => setStep("terms")}><CheckCircle2 className="h-4 w-4" aria-hidden />They're approved now</button>
       </>)}
       {step === "terms" && (<>
-        <p className={bubble}>Quick agreement: only Turo-approved drivers are covered by Turo's protection. Nobody else drives this car, and you're responsible if someone unapproved does.</p>
+        <p className={bubble}><Lines>Quick agreement: only Turo-approved drivers are covered by Turo's protection. Nobody else drives this car, and you're responsible if someone unapproved does.</Lines></p>
         <button type="button" className={`${pill} mt-2 text-[#1A1140]`} style={{ background: PEACH }} onClick={() => setStep("name")}>I agree</button>
       </>)}
       {step === "name" && (<>
@@ -344,27 +344,27 @@ function AddDriverChat({ token }: { token?: string }) {
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <UserPlus className="h-4 w-4" aria-hidden />}Add
           </button>
         </form>
-        {err && <p role="alert" className="mt-1 text-[13px] text-red-300">{err}</p>}
+        {err && <p role="alert" className="mt-1 text-[13px] text-red-300"><Lines>{err}</Lines></p>}
       </>)}
       {step === "done" && (<>
-        <p className={bubble}><CheckCircle2 className="mr-1 inline h-4 w-4 text-emerald-300" aria-hidden /><b>{name.trim()} is added.</b> Come back here once Turo confirms them. We'll have their own key ready for you to text them, right here.</p>
+        <p className={bubble}><Lines><CheckCircle2 className="mr-1 inline h-4 w-4 text-emerald-300" aria-hidden /><b>{name.trim()} is added.</b> Come back here once Turo confirms them. We'll have their own key ready for you to text them, right here.</Lines></p>
         {key?.state === "waiting" && key.suggest && (<>
-          <p className={bubble}>Turo approved a driver named <b>{key.suggest}</b>. Is that {name.trim()}?</p>
+          <p className={bubble}><Lines>Turo approved a driver named <b>{key.suggest}</b>. Is that {name.trim()}?</Lines></p>
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" disabled={busy} className={`${pill} text-[#1A1140]`} style={{ background: PEACH }} onClick={() => void confirm(true)}>{busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}Yes, that's them</button>
             <button type="button" className={`${pill} bg-white/10 text-white ring-1 ring-white/20`} onClick={() => void confirm(false)}>No</button>
           </div>
-          {err && <p role="alert" className="mt-1 text-[13px] text-red-300">{err}</p>}
+          {err && <p role="alert" className="mt-1 text-[13px] text-red-300"><Lines>{err}</Lines></p>}
         </>)}
-        {key?.state === "making" && <p className={bubble}><Loader2 className="mr-1 inline h-4 w-4 animate-spin" aria-hidden />Turo confirmed {name.trim()}. Making their key now…</p>}
+        {key?.state === "making" && <p className={bubble}><Lines><Loader2 className="mr-1 inline h-4 w-4 animate-spin" aria-hidden />Turo confirmed {name.trim()}. Making their key now…</Lines></p>}
         {key?.state === "ready" && key.link && (<>
-          <p className={bubble}><b>{name.trim()}&apos;s key is ready.</b> Text it to them. They tap it and the car is added to <i>their</i> Tesla app.</p>
+          <p className={bubble}><Lines><b>{name.trim()}&apos;s key is ready.</b> Text it to them. They tap it and the car is added to <i>their</i> Tesla app.</Lines></p>
           <a href={`sms:?&body=${encodeURIComponent(key.page ? `Hi ${name.trim()}! Here's your own Tesla key for our trip: ${key.page.replace(/^https:\/\//, "")} Open it and tap Add the car to my Tesla app.` : `Hi ${name.trim()}! Here's your own Tesla key for our trip. Open it on your phone and tap Accept, signed in to your Tesla app: ${key.link}`)}`}
             onClick={() => track(token, "driver_share", { via: "helper_sms" })}
             className={`${pill} mt-2 text-[#1A1140]`} style={{ background: PEACH }}><MessageSquare className="h-4 w-4" aria-hidden />Text {name.trim()} their key</a>
         </>)}
         {key?.state === "added" && <p className={bubble}><CheckCircle2 className="mr-1 inline h-4 w-4 text-emerald-300" aria-hidden />{name.trim()}&apos;s phone is set up as a key.</p>}
-        {key?.state === "problem" && <p className={bubble}>Something went wrong making {name.trim()}&apos;s key. Jared&apos;s been notified and will fix it.</p>}
+        {key?.state === "problem" && <p className={bubble}><Lines>Something went wrong making {name.trim()}&apos;s key. Jared&apos;s been notified and will fix it.</Lines></p>}
         {demo && <p className="mt-1.5 text-[12px] text-amber-200/80">Demo: acting as if Turo confirmed {name.trim()}.</p>}
       </>)}
     </div>
@@ -504,19 +504,19 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
     <TripSheet open={open} onClose={onClose} kicker="Trip helper" title="Talk to our team 24/7" footer={footer} bodyRef={body}>
       {urgent && (
         <div className="mb-3 rounded-xl bg-[#E4527A]/20 p-3 text-[14px] font-semibold leading-snug text-white ring-1 ring-[#E4527A]/50">
-          If anyone is hurt, call 911 first. Then use Roadside Assistance in the Turo app and message your host there.
+          <Lines>If anyone is hurt, call 911 first. Then use Roadside Assistance in the Turo app and message your host there.</Lines>
         </div>
       )}
       {demoLink && (
         <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-amber-300/10 px-3 py-2 text-[12px] text-amber-100 ring-1 ring-amber-300/30">
-          <span>Demo: the helper's fixes run on a pretend copy of the trip. Alerts to you still fire, marked DEMO.</span>
+          <span><Lines>Demo: the helper's fixes run on a pretend copy of the trip. Alerts to you still fire, marked DEMO.</Lines></span>
           <button type="button" onClick={async () => { await rpc("lax_demo_tool", { p_link: "d:" + demoLink, p_name: "reset", p_args: {} }); setMsgs([]); askedRef.current = ""; refreshChips(); }}
             className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-2.5 py-1.5 font-semibold text-white"><RotateCcw className="h-3.5 w-3.5" aria-hidden />Reset</button>
         </div>
       )}
       {msgs.length === 0 ? (
         <div>
-          <p className="text-[15px] leading-relaxed text-white/75">{driver ? "Ask anything about your phone key or getting into the car. I can check your key and send a fresh one if it's not working." : home ? "Ask anything about your phone key, finding the car, driving it, or returning it." : "Ask anything about getting to the garage, the lobby door, the car, or returning it."} Answers come from your trip guide.</p>
+          <p className="text-[15px] leading-relaxed text-white/75"><Lines>{driver ? "Ask anything about your phone key or getting into the car. I can check your key and send a fresh one if it's not working." : home ? "Ask anything about your phone key, finding the car, driving it, or returning it." : "Ask anything about getting to the garage, the lobby door, the car, or returning it."} Answers come from your trip guide.</Lines></p>
           <Chips list={chips} onPick={send} />
         </div>
       ) : (
@@ -540,8 +540,8 @@ export function AskSheet({ open, onClose, token, slug, home = false, driver = fa
         </>
       )}
       <p className="mt-5 text-[12px] leading-snug text-white/65">
-        Automated helper. It can make mistakes and can't change your trip. For anything else, message your host in the Turo app.
-        {left != null && left <= 5 ? ` ${left} question${left === 1 ? "" : "s"} left today.` : ""}
+        <Lines>Automated helper. It can make mistakes and can't change your trip. For anything else, message your host in the Turo app.</Lines>
+        <Lines>{left != null && left <= 5 ? ` ${left} question${left === 1 ? "" : "s"} left today.` : ""}</Lines>
       </p>
     </TripSheet>
   );

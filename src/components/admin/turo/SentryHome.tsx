@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { focusRing, text, tint } from "@/components/admin/ui";
+import { Lines } from "@/components/Lines";
 
 type SentryHome = {
   enabled: boolean; dry_run: boolean; zone: "home" | "away" | null; zone_since: string | null; override: string | null;
@@ -75,7 +76,7 @@ export function SentryHomeRow() {
             </>
           )}
         </div>
-        <p className={cn(text.detail, "mt-0.5 break-words", st.warn && tint.orange)}>{st.line}</p>
+        <p className={cn(text.detail, "mt-0.5 break-words", st.warn && tint.orange)}><Lines>{st.line}</Lines></p>
       </div>
       <Switch checked={s.enabled} disabled={busy} aria-labelledby="sentry-home-h" onCheckedChange={(v) => void set(v)} />
     </div>

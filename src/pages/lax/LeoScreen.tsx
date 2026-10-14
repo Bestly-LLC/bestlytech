@@ -35,6 +35,7 @@ import { MINIMIZE, askPage, emitLeoCar } from "./leoBridge";
 import { lockScroll } from "./TripSheet";
 import { useDemoOpen } from "./demoState";
 import { diag, tv, useLeoSession, type Any, type Card } from "./useLeoSession";
+import { Lines } from "@/components/Lines";
 
 const nw = (s: ReactNode) => <span className="whitespace-nowrap">{s}</span>;
 const money = (n: unknown) => `$${Number(n ?? 0).toFixed(2)}`;
@@ -273,7 +274,7 @@ export function LeoScreen({ token, context, home, look, pageOpen = true, onEnd }
             </div>
           )}
           {phase === "ended" && (
-            <p className="text-center text-[14px]" style={{ color: theme.subtle }}>Call ended. Type below or tap the mic to talk again.</p>
+            <p className="text-center text-[14px]" style={{ color: theme.subtle }}><Lines>Call ended. Type below or tap the mic to talk again.</Lines></p>
           )}
         </div>
       </div>
@@ -317,7 +318,7 @@ export function LeoScreen({ token, context, home, look, pageOpen = true, onEnd }
             <ArrowUp className="h-5 w-5" aria-hidden />
           </button>
         </form>
-        <p className="mt-2 text-center text-[12px]" style={{ color: theme.subtle }}>Leo is an AI helper. For emergencies, call 911.</p>
+        <p className="mt-2 text-center text-[12px]" style={{ color: theme.subtle }}><Lines>Leo is an AI helper. For emergencies, call 911.</Lines></p>
       </footer>
     </div>, document.body);
 }
@@ -385,7 +386,7 @@ function CardView({ card, theme, onAct, onPage, unlockable = false }: { card: Ca
         <Shell icon={<Thermometer className="h-4 w-4" aria-hidden />} title="Climate" demo={demo} theme={theme}>
           <p className="text-[20px] font-semibold leading-tight">{head}</p>
           <p className="mb-3 mt-1 text-[14px]" style={{ color: theme.subtle }}>
-            {card.pending ? "Sent. The car can take up to a minute." : on && card.until ? <>Turns off by itself at {nw(String(card.until))}</> : on ? "Turns off by itself after 20 minutes" : "Pick a setting to start it"}
+            <Lines>{card.pending ? "Sent. The car can take up to a minute." : on && card.until ? <>Turns off by itself at {nw(String(card.until))}</> : on ? "Turns off by itself after 20 minutes" : "Pick a setting to start it"}</Lines>
           </p>
           <ClimateButtons theme={theme} current={on ? mode : "off"} onAct={onAct} />
         </Shell>
@@ -453,7 +454,7 @@ function CardView({ card, theme, onAct, onPage, unlockable = false }: { card: Ca
       return (
         <Shell icon={<Navigation className="h-4 w-4" aria-hidden />} title="Navigation" demo={demo} theme={theme}>
           <p className="text-[18px] font-semibold leading-snug">{String(card.destination)}</p>
-          <p className="mt-1 text-[14px]" style={{ color: theme.subtle }}>{card.pending ? "Sent. It shows on the car's screen in a moment." : "It's on the car's screen."}</p>
+          <p className="mt-1 text-[14px]" style={{ color: theme.subtle }}><Lines>{card.pending ? "Sent. It shows on the car's screen in a moment." : "It's on the car's screen."}</Lines></p>
         </Shell>
       );
     case "charging": {
@@ -486,7 +487,7 @@ function CardView({ card, theme, onAct, onPage, unlockable = false }: { card: Ca
         : "Your key shows up here once Jared has checked your license and readied the car.";
       return (
         <Shell icon={<KeyRound className="h-4 w-4" aria-hidden />} title="Your Tesla key" theme={theme}>
-          <p className="mb-3 text-[16px] leading-snug">{line}</p>
+          <p className="mb-3 text-[16px] leading-snug"><Lines>{line}</Lines></p>
           {st === "ready" && card.link
             ? <a href={String(card.link)} className="flex min-h-[48px] items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold" style={{ background: theme.accent, color: theme.onAccent }}>
                 <KeyRound className="h-4 w-4" aria-hidden />Add the car to my Tesla app</a>
@@ -501,7 +502,7 @@ function CardView({ card, theme, onAct, onPage, unlockable = false }: { card: Ca
         : { t: "Pickup guide", d: "The garage, the elevator, and where the car is.", icon: <MapPin className="h-4 w-4" aria-hidden />, h: "#pickup" as const };
       return (
         <Shell icon={meta.icon} title={meta.t} theme={theme}>
-          <p className="mb-3 text-[15px] leading-snug" style={{ color: theme.subtle }}>{meta.d}</p>
+          <p className="mb-3 text-[15px] leading-snug" style={{ color: theme.subtle }}><Lines>{meta.d}</Lines></p>
           <div className="grid"><Btn theme={theme} primary onClick={() => onPage(meta.h)}>Show me</Btn></div>
           <p className="mt-2 text-[13px]" style={{ color: theme.subtle }}>Leo stays with you at the top of the screen.</p>
         </Shell>
@@ -514,7 +515,7 @@ function CardView({ card, theme, onAct, onPage, unlockable = false }: { card: Ca
             <QRCodeSVG value={String(card.payload)} size={240} level="M" className="mx-auto h-auto w-full max-w-[240px]" />
             {card.thru ? <p className="mt-3 text-[13px] font-medium text-[#1A1140]/70">{nw(`Good through ${String(card.thru)}`)}</p> : null}
           </div>
-          <p className="mt-3 text-[15px] leading-snug">Hold it up to the scanner by the lobby door. Turn your screen brightness up if it doesn't read.</p>
+          <p className="mt-3 text-[15px] leading-snug"><Lines>Hold it up to the scanner by the lobby door. Turn your screen brightness up if it doesn't read.</Lines></p>
         </Shell>
       );
     case "notice":

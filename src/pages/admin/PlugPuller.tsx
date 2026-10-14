@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { btnPrimary, btnTinted, card, field, label, pill, secondary, Segmented, Switch, tint } from "./laxUi";
+import { Lines } from "@/components/Lines";
 
 const rpc = (fn: string, args?: Record<string, unknown>) =>
   supabase.rpc(fn as never, args as never) as unknown as Promise<{ data: unknown; error: { message: string } | null }>;
@@ -71,7 +72,7 @@ export function PlugPuller() {
       {needLogin ? (
         <div className="mt-4 space-y-3">
           {s.signed_in === false && s.connected && !relogin && (
-            <p className={cn("flex items-start gap-1.5 text-[13px]", tint.orange)}><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />ChargePoint signed Plug Puller out. Paste a fresh cookie below.</p>
+            <p className={cn("flex items-start gap-1.5 text-[13px]", tint.orange)}><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /><span><Lines>ChargePoint signed Plug Puller out. Paste a fresh cookie below.</Lines></span></p>
           )}
           <ol className={cn("list-decimal space-y-1 pl-5 text-[13px] leading-snug", secondary)}>
             <li>Open <a href="https://driver.chargepoint.com" target="_blank" rel="noopener noreferrer" className={cn("inline-flex items-center gap-1", tint.blue)}>driver.chargepoint.com<ExternalLink className="h-3 w-3" /></a> in Chrome and log in.</li>
@@ -85,7 +86,7 @@ export function PlugPuller() {
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Save to Vault</button>
             {relogin && <button type="button" className={btnTinted} onClick={() => setRelogin(false)}>Cancel</button>}
           </div>
-          <p className={cn("text-xs", secondary)}>Saved write-only in Supabase Vault. It never shows here again.</p>
+          <p className={cn("text-xs", secondary)}><Lines>Saved write-only in Supabase Vault. It never shows here again.</Lines></p>
         </div>
       ) : (
         <div className="mt-4 space-y-3">
@@ -97,17 +98,17 @@ export function PlugPuller() {
               <Tile wrap k="Station" v={s.station ?? "ChargePoint"} sub={s.stop_tries ? `stop tries: ${s.stop_tries}` : ""} />
             </div>
           ) : (
-            <p className={cn("text-[13px]", secondary)}>No ChargePoint session right now. Plug in and it starts watching within 2 minutes.</p>
+            <p className={cn("text-[13px]", secondary)}><Lines>No ChargePoint session right now. Plug in and it starts watching within 2 minutes.</Lines></p>
           )}
           <div>
             <p className={cn("mb-1.5 text-[13px] font-medium", label)}>End the session at</p>
             <Segmented ariaLabel="Charge target" value={seg} onChange={(v) => void set(v === "car" ? { p_clear_target: true } : { p_target: Number(v) })}
               options={opts.map((o) => ({ value: o, label: o === "car" ? `Car limit${s.car_limit ? ` (${s.car_limit}%)` : ""}` : `${o}%` }))} />
-            <p className={cn("mt-1.5 text-xs", secondary)}>Car limit = whatever you set in the Tesla app. A % here is one-off: it resets after this charge.</p>
+            <p className={cn("mt-1.5 text-xs", secondary)}><Lines>Car limit = whatever you set in the Tesla app. A % here is one-off: it resets after this charge.</Lines></p>
           </div>
           <Switch checked={s.enabled} onChange={(v) => void set({ p_enabled: v })} label="Plug Puller on duty" detail="Off = it won't touch your sessions." />
           {s.last_stopped_summary && s.last_stopped_at && (
-            <p className={cn("flex items-start gap-1.5 text-[13px]", tint.green)}><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{when(s.last_stopped_at)}: {s.last_stopped_summary}</p>
+            <p className={cn("flex items-start gap-1.5 text-[13px]", tint.green)}><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /><span><Lines>{`${when(s.last_stopped_at)}: ${s.last_stopped_summary}`}</Lines></span></p>
           )}
           {s.log.length > 0 && (
             <ul className={cn("space-y-0.5 text-xs", secondary)}>

@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { demoPass } from "./demo";
+import { Lines } from "@/components/Lines";
 
 const rpc = supabase.rpc.bind(supabase) as unknown as (f: string, a?: object) => Promise<{ data: unknown }>;
 const NB = " ";
@@ -84,7 +85,7 @@ export function HostPanel({ token }: { token?: string }) {
       <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70"><ShieldCheck className="h-3.5 w-3.5" aria-hidden /> Host view · {guest}</p>
 
       {p.completed ? (
-        <p className="mt-3 flex items-center gap-2 text-[16px] font-semibold text-white"><CheckCircle2 className="h-5 w-5 text-emerald-300" aria-hidden /> Trip completed. The Live Activity is gone.</p>
+        <p className="mt-3 flex items-center gap-2 text-[16px] font-semibold text-white"><CheckCircle2 className="h-5 w-5 text-emerald-300" aria-hidden /><span><Lines> Trip completed. The Live Activity is gone.</Lines></span></p>
       ) : (
         <>
           <p className="mt-2 text-[20px] font-bold leading-tight text-white">{where}</p>
@@ -95,7 +96,7 @@ export function HostPanel({ token }: { token?: string }) {
               <p className="text-[15px] font-semibold text-white">{ph.battery}%{NB}now · {ph.pickup}%{NB}at pickup</p>
               {ph.short
                 ? <p className="mt-1 flex items-start gap-1.5 text-[14px] leading-snug text-[#FFD08A]"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> {Math.abs(ph.delta ?? 0)}{NB}points under pickup, more than the 10{NB}point limit.</p>
-                : <p className="mt-1 text-[14px] text-white/70">{(ph.delta ?? 0) >= 0 ? "At or above" : `${Math.abs(ph.delta ?? 0)}${NB}points under`} the pickup level. Within the 10{NB}point limit.</p>}
+                : <p className="mt-1 text-[14px] text-white/70"><Lines>{(ph.delta ?? 0) >= 0 ? "At or above" : `${Math.abs(ph.delta ?? 0)}${NB}points under`} the pickup level. Within the 10{NB}point limit.</Lines></p>}
             </div>
           )}
 
@@ -110,7 +111,7 @@ export function HostPanel({ token }: { token?: string }) {
             {busy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <CheckCircle2 className="h-5 w-5" aria-hidden />}
             {armed ? "Tap again to complete" : "Complete trip"}
           </button>
-          {err && <p role="alert" className="mt-2 text-[13px] text-[#FFB4A8]">{err}</p>}
+          {err && <p role="alert" className="mt-2 text-[13px] text-[#FFB4A8]"><Lines>{err}</Lines></p>}
         </>
       )}
     </section>

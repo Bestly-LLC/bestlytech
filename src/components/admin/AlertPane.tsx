@@ -7,6 +7,7 @@ import { CopyText } from "@/components/CopyText";
 import { copyText, formatForClaude } from "@/lib/copyForClaude";
 import { toast } from "sonner";
 import { FixLadder } from "@/components/admin/FixLadder";
+import { Lines } from "@/components/Lines";
 
 // Alerts store links both ways: "/admin/claims" and "https://bestly.tech/admin/claims". React Router treats a full URL
 // as a relative path (the "Go to the page" button went nowhere), so our own site becomes an in-app path and anything
@@ -125,7 +126,7 @@ export function AlertPane({ alert, onClose }: { alert: PaneAlert | null; onClose
           <p className="text-xs font-medium text-white/60">
             {alert.kindLabel} · {new Date(alert.created_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", dateStyle: "medium", timeStyle: "short" })}
           </p>
-          <SheetTitle className="mt-1 text-lg font-semibold leading-snug text-white">{alert.title}</SheetTitle>
+          <SheetTitle className="mt-1 text-lg font-semibold leading-snug text-white"><Lines>{alert.title}</Lines></SheetTitle>
           <SheetDescription className="sr-only">The full alert and suggested next steps for Scout.</SheetDescription>
         </div>
 

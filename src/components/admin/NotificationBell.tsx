@@ -20,6 +20,7 @@ function hhmm(t: string) {
 }
 import { copyForClaude } from "@/lib/copyForClaude";
 import { enablePush, disablePush, sendTestPush, syncPushOnLoad, type PushState } from "@/lib/webPush";
+import { Lines } from "@/components/Lines";
 
 /*
  * Header bell: admin_notifications, filled by database triggers (new leads from each funnel,
@@ -153,7 +154,7 @@ export function NotificationBell() {
         if (quietRef.current && !urgent) return;
         if (soundRef.current) playNotifySound();
         toast(n.title, {
-          description: n.body ?? undefined,
+          description: n.body ? <Lines>{n.body}</Lines> : undefined,
           action: n.url ? { label: "Open", onClick: () => go(n) } : undefined,
         });
       })
@@ -309,12 +310,12 @@ export function NotificationBell() {
 
         <div className="max-h-[min(28rem,70vh)] overflow-y-auto border-t border-white/[0.06]">
           {loadError ? (
-            <p className="px-4 py-6 text-sm text-red-200">Couldn't load notifications: {loadError}</p>
+            <p className="px-4 py-6 text-sm text-red-200"><Lines>{`Couldn't load notifications: ${loadError}`}</Lines></p>
           ) : shown.length === 0 ? (
             <div className="px-4 py-10 text-center">
               <BellOff className="h-6 w-6 text-white/60 mx-auto" aria-hidden="true" />
               <p className="mt-2 text-sm text-white/80">{filter === "unread" ? "All caught up" : "Nothing yet"}</p>
-              <p className="mt-1 text-xs text-white/60">New leads, deposits, intakes and messages show up here.</p>
+              <p className="mt-1 text-xs text-white/60"><Lines>New leads, deposits, intakes and messages show up here.</Lines></p>
             </div>
           ) : (
             <ul>
@@ -344,10 +345,10 @@ export function NotificationBell() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-start gap-2">
-                          <span className={cn("flex-1 text-sm leading-snug", n.read_at ? "text-white/75" : "font-semibold text-white")}>{n.title}</span>
+                          <span className={cn("flex-1 text-sm leading-snug", n.read_at ? "text-white/75" : "font-semibold text-white")}><Lines>{n.title}</Lines></span>
                           {!n.read_at && <span className="mt-1.5 h-2 w-2 flex-none rounded-full bg-cyan-400" aria-label="Unread" />}
                         </span>
-                        {n.body && <span className="mt-0.5 block text-xs text-white/60 line-clamp-2">{n.body}</span>}
+                        {n.body && <span className="mt-0.5 block text-xs text-white/60"><Lines>{n.body}</Lines></span>}
                         <span className="mt-1 block text-[0.6875rem] text-white/60">{k.label} · {ago(n.created_at)}</span>
                       </span>
                     </button>

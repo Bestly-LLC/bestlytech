@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { askScout } from "@/components/admin/scoutBus";
 import { cn } from "@/lib/utils";
 import { Disclosure, IconButton, LoadError, cardCls, divider, focusRing, hairline, inset, rowCls, text, tint } from "@/components/admin/ui";
+import { Lines } from "@/components/Lines";
 
 type State = "ok" | "flaky" | "late" | "bad" | "new" | "off";
 export type Check = {
@@ -48,10 +49,9 @@ function Row({ c, fix }: { c: Check; fix?: boolean }) {
     <li className={rowCls}>
       <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", DOT[c.state])} aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className={cn(text.title, "truncate")}>{c.name}</p>
-        <p className={cn(text.detail, "truncate")} title={c.detail ?? undefined}>
-          {c.state === "ok" ? `Ran ${when(c.last_run)}` : c.state === "new" || c.state === "off" ? WORD[c.state] : `${WORD[c.state]} · ran ${when(c.last_run)}`}
-          {c.detail && c.state !== "ok" ? ` · ${c.detail}` : ""}
+        <p className={cn(text.title, "break-words")}>{c.name}</p>
+        <p className={cn(text.detail, "break-words")} title={c.detail ?? undefined}>
+          <Lines>{`${c.state === "ok" ? `Ran ${when(c.last_run)}` : c.state === "new" || c.state === "off" ? WORD[c.state] : `${WORD[c.state]} · ran ${when(c.last_run)}`}${c.detail && c.state !== "ok" ? ` · ${c.detail}` : ""}`}</Lines>
         </p>
       </div>
       <span className="sr-only">{WORD[c.state]}</span>

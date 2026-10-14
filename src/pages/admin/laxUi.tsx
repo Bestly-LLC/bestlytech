@@ -7,6 +7,7 @@
  */
 import { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { Lines } from "@/components/Lines";
 
 /** A grouped card (iOS inset-grouped list cell). */
 export const card =
@@ -49,7 +50,7 @@ export function Section({ title, footer, id, className, children }: { title: str
     <section id={id} className={cn("scroll-mt-24 space-y-2", className)}>
       <h2 className={cn("px-4 text-[13px] font-semibold uppercase tracking-[0.02em]", secondary)}>{title}</h2>
       <div className="space-y-3">{children}</div>
-      {footer && <p className={cn("px-4 text-[13px] leading-snug", secondary)}>{footer}</p>}
+      {footer && <p className={cn("px-4 text-[13px] leading-snug", secondary)}><Lines>{footer}</Lines></p>}
     </section>
   );
 }
@@ -81,7 +82,7 @@ export function Switch({ checked, onChange, label: text, detail, disabled }: {
     <label className={cn("flex min-h-[44px] cursor-pointer items-center justify-between gap-4 py-2", disabled && "cursor-not-allowed opacity-50")}>
       <span className="min-w-0">
         <span className={cn("block text-[15px]", label)}>{text}</span>
-        {detail && <span className={cn("mt-0.5 block text-[13px] leading-snug", secondary)}>{detail}</span>}
+        {detail && <span className={cn("mt-0.5 block text-[13px] leading-snug", secondary)}><Lines>{detail}</Lines></span>}
       </span>
       <span className="relative inline-flex shrink-0">
         <input type="checkbox" role="switch" className="peer sr-only" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />

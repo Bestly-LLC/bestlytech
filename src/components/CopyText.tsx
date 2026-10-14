@@ -3,6 +3,7 @@ import { Check, Copy } from "lucide-react";
 import { copyText } from "@/lib/copyForClaude";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Lines } from "@/components/Lines";
 
 /**
  * Text Jared may need to paste somewhere, with ONE copy button.
@@ -65,7 +66,7 @@ export function CopyText({ text, className }: { text: string; className?: string
   const prose = cmd ? text.replace(/`([^`]+)`/g, "$1") : text;
   return (
     <div className={cn("space-y-2", className)}>
-      <p className="whitespace-pre-wrap break-words">{prose}</p>
+      <p className="whitespace-pre-wrap break-words"><Lines>{prose}</Lines></p>
       <div className="flex items-center gap-2">
         {cmd && (
           <code className="min-w-0 flex-1 select-all overflow-x-auto whitespace-pre rounded-lg bg-black/40 px-3 py-2 font-mono text-[13px] text-white bento:bg-[#F3F2EE]">

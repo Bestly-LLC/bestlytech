@@ -17,6 +17,7 @@ import {
   Gauge, Lock, MapPin, Plane, Thermometer, Unlock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Lines } from "@/components/Lines";
 
 export interface Trip {
   reservation_id: number; vin: string | null;
@@ -214,7 +215,7 @@ export function FleetNow({ trips, vehicle, guest, returnAt }: {
                 <div>
                   <p className={cn("text-[0.7rem] font-semibold uppercase tracking-wide", muted)}>Must come back at</p>
                   <p className={cn("mt-0.5 text-[1.6rem] font-bold leading-none tabular-nums", ink)}>{rc?.pct != null ? `${rc.pct}%+` : "Not set yet"}</p>
-                  <p className={cn("mt-1 text-xs", muted)}>{rc?.pct != null ? `The battery at the trip start${rc.at ? ` (${dayTime(rc.at)})` : ""}. Turo: same level back, or a recharge fee.` : "Set automatically from the battery at the trip start."}</p>
+                  <p className={cn("mt-1 text-xs", muted)}><Lines>{rc?.pct != null ? `The battery at the trip start${rc.at ? ` (${dayTime(rc.at)})` : ""}. Turo: same level back, or a recharge fee.` : "Set automatically from the battery at the trip start."}</Lines></p>
                 </div>
                 {rc?.pct != null && pct != null && (ok
                   ? <Flag tone="ok" icon={CheckCircle2}>{`Now ${pct}%: on track`}</Flag>

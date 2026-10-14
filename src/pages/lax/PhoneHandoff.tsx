@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Copy, Smartphone, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { track } from "./track";
+import { Lines } from "@/components/Lines";
 
 const ACCENT = "var(--trip-accent)";
 const isPhone = () => typeof navigator !== "undefined" && /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(navigator.userAgent);
@@ -44,7 +45,7 @@ export function PhoneHandoff({ token, keyReady }: { token: string; keyReady: boo
         </button>
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-full" style={{ background: ACCENT }}><Smartphone className="h-6 w-6 text-[#1A1140]" /></span>
         <h2 id="handoff-title" className="mt-3 text-[22px] font-bold leading-tight">Open this on your phone</h2>
-        <p className="mt-1.5 text-[15px] leading-snug text-white/80">Your phone is the car key. Scan this with the phone that has the Tesla app, then tap <b className="text-white">Add the car to my Tesla app</b>.</p>
+        <p className="mt-1.5 text-[15px] leading-snug text-white/80"><Lines>Your phone is the car key. Scan this with the phone that has the Tesla app, then tap <b className="text-white">Add the car to my Tesla app</b>.</Lines></p>
         <div className="mx-auto mt-4 w-fit rounded-2xl bg-white p-3 shadow-lg"><QRCodeSVG value={link} size={176} level="M" /></div>
         <button type="button" onClick={() => void copy()} className="mx-auto mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white/10 px-4 text-[14px] font-semibold text-white ring-1 ring-white/15">
           <Copy className="h-4 w-4" /> {copied ? "Copied" : link.replace("https://", "")}

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Section, btnPrimary, card, field, label, pill, secondary, tertiary } from "./laxUi";
+import { Lines } from "@/components/Lines";
 
 const rpc = supabase.rpc.bind(supabase) as unknown as (fn: string, args?: object) => Promise<{ data: unknown; error: { message: string } | null }>;
 
@@ -106,7 +107,7 @@ export function LeoSmsCard() {
             onChange={(e) => setEin(einFmt(e.target.value))}
             placeholder={a.ein_saved_at ? "Saved · type to replace" : "12-3456789"} />
           <span className={cn("mt-1.5 block text-[12px] leading-snug", tertiary)}>
-            Paste it once. It goes straight into Vault and is never shown again. Nothing is charged until Leo files.
+            <Lines>Paste it once. It goes straight into Vault and is never shown again. Nothing is charged until Leo files.</Lines>
           </span>
         </label>
 
