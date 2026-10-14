@@ -35,6 +35,7 @@ sys.path.insert(0, "/opt/bestly/montage")
 import lib  # noqa: E402
 import music  # noqa: E402
 import variety  # noqa: E402  (2026-10-12: unique-content system)
+import unit_moment  # noqa: E402  (2026-10-14: Bestly Cloud 3D unit rule)
 
 OM = "/mnt/ssd/apps/openmontage"
 OMPY = f"{OM}/.venv/bin/python"
@@ -634,10 +635,12 @@ def clips_for(job, script, jd, note):
     return out
 
 
-def check(out, total, script=None, minfo=None):
+def check(out, total, script=None, minfo=None, unit=None):
     """Our own gate on top of OpenMontage's review. Returns a list of problems. A video with no music bed, a near-silent bed, or a finished mix
     that is silent in the gaps between narration lines FAILS (rule of 2026-10-12: every video ships with a real music bed)."""
     e = music.bed_problems(out, script or {"scenes": [], "end": {}}, minfo)
+    if unit is not None:        # (public dir, props, required): a Bestly Cloud video with no 3D unit moment FAILS (rule of 2026-10-14)
+        e += unit_moment.problems(script or {}, unit[0], unit[1], unit[2])
     pr = probe(out)
     v = [s for s in pr["streams"] if s["codec_type"] == "video"]
     a = [s for s in pr["streams"] if s["codec_type"] == "audio"]
@@ -685,7 +688,7 @@ def _render(jd, job, jid):
 
 
 def _has_graphics(props):
-    return any(s.get("icon") or s.get("card") or s.get("layout") for s in props["scenes"]) or bool((props.get("end") or {}).get("chips")) or bool(props.get("look")) or \
+    return any(s.get("icon") or s.get("card") or s.get("layout") or s.get("unit") for s in props["scenes"]) or bool((props.get("end") or {}).get("unit")) or bool((props.get("end") or {}).get("chips")) or bool(props.get("look")) or \
         bool((props.get("brand") or {}).get("ambient")) or bool(((props.get("brand") or {}).get("end") or {}).get("heroLogo"))
 
 
@@ -800,11 +803,25 @@ def process(job):
             lib.rpc("montage_post", p_id=jid, body="The music library has a track for this brand now, so I am finishing this video.")
         except Exception as e:  # noqa: BLE001
             print("music resume post failed:", e, flush=True)
+    if getattr(brand, "REQUIRE_UNIT", False) and not script.get("unit"):
+        # a script written before the unit rule (a job that waited for b-roll or a held voice) still gets its moment: rotate like a new video
+        try:
+            cfgb = brand.CFG
+            mom = variety.pick_unit(cfgb, variety._recent(cfgb["slug"], variety.LAST_VIDEOS, exclude_item=job.get("parent_item_id")))
+            unit_moment.assign(script, mom, getattr(brand, "UNIT_KIT", unit_moment.KIT))
+            script.setdefault("look", {})["unit"] = script["unit"]
+            report(jid, script=script)
+            note(f"script had no 3D unit moment (written before the rule); added '{mom}'")
+        except Exception as e:  # noqa: BLE001  (check() will fail the video with the reason)
+            note(f"could not add the 3D unit moment: {str(e)[:160]}")
+    if script.get("unit"):        # the Bestly Cloud 3D unit: copy this video's moment (transparent WebP frames) into the render folder
+        note(f"3D unit moment '{script['unit']['moment']}' ({script['unit']['scene'] if script['unit']['scene'] == 'end' else 'scene ' + str(script['unit']['scene'] + 1)}), "
+             f"{unit_moment.stage(f'{jd}/public', script, getattr(brand, 'UNIT_KIT', unit_moment.KIT))} frames")
     clips = clips_for(job, script, jd, note) if (job.get("clips") or job.get("parent_job_id")) else {}
     props = {"theme": script["theme"],
              "scenes": [{**{k: s[k] for k in ("kicker", "line", "start", "end")}, **({"clip": clips[i]} if i in clips else {}),
                          **({"icon": s["icon"]} if s.get("icon") else {}), **({"card": s["card"]} if s.get("card") else {}),
-                         **{k: s[k] for k in ("layout", "big", "items") if s.get(k)}}
+                         **{k: s[k] for k in ("layout", "big", "items", "unit") if s.get(k)}}
                         for i, s in enumerate(script["scenes"])],
              "end": {k: v for k, v in script["end"].items() if k != "say"},
              "audio": {"narration": "narration.wav", "music": "music.wav", "musicVolume": 1.0}}   # music.wav is already ducked under the voice (music.py)
@@ -842,7 +859,7 @@ def process(job):
 
     if normalize(out, jid):
         note("re-encoded to the standard video format (yuv420p, tv range, bt709) so it plays in Safari")
-    problems = check(out, total, script, minfo)
+    problems = check(out, total, script, minfo, unit=(f"{jd}/public", props, bool(getattr(brand, "REQUIRE_UNIT", False))))
     if problems:
         raise RuntimeError("video failed the checks: " + "; ".join(problems))
     thumb = f"{jd}/thumb.jpg"
