@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
-import { Camera, CheckCircle2, Car, ChevronDown, KeyRound, Loader2, MapPin, Navigation, Phone, Send, Star, Undo2, Users, Lock } from "lucide-react";
+import { BellRing, Camera, Check, CheckCircle2, Car, ChevronDown, KeyRound, Loader2, MapPin, Navigation, Phone, Send, Star, Undo2, Users, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import "./delivery.css";
 import { tripTab } from "./TripSheet";
@@ -46,6 +46,22 @@ const android = () => typeof navigator !== "undefined" && /android/i.test(naviga
 const mapsHref = (q: string, lat?: number | null, lon?: number | null) => android()
   ? (lat != null ? `https://www.google.com/maps/search/?api=1&query=${lat},${lon}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`)
   : (lat != null ? `https://maps.apple.com/?ll=${lat},${lon}&q=${encodeURIComponent(q)}` : `https://maps.apple.com/?q=${encodeURIComponent(q)}`);
+/** Walking directions to a point: Apple Maps on iPhone, Google Maps on Android. */
+const walkHref = (lat: number, lon: number) => android()
+  ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=walking`
+  : `https://maps.apple.com/?daddr=${lat},${lon}&dirflg=w`;
+type Spot = { lat: number; lon: number; observed_at: string };
+/** Straight-line distance in US units: feet (to the nearest 10) under 0.1 mi, else miles. */
+function distLabel(a: { lat: number; lon: number }, b: { lat: number; lon: number }): string {
+  const r = (x: number) => (x * Math.PI) / 180, R = 6371000;
+  const h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lon - a.lon) / 2) ** 2;
+  const mi = (2 * R * Math.asin(Math.sqrt(h))) / 1609.34;
+  return mi < 0.1 ? `${Math.max(10, Math.round(mi * 5280 / 10) * 10)} ft` : `${mi.toFixed(1)} mi`;
+}
+const agoLabel = (iso: string, now: number) => {
+  const m = Math.max(0, Math.round((now - +new Date(iso)) / 60000));
+  return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} hr ago (${t12(iso)})`;
+};
 /** First name only if it is a clean short word (never cut it; drop it instead). */
 const cleanFirst = (f?: string | null) => { const w = (f ?? "").trim().split(/\s+/)[0] ?? ""; return /^[A-Za-zÀ-ÿ'-]{1,20}$/.test(w) && w.toLowerCase() !== "demo" ? w : ""; };
 const cityOf = (address: string, fallback: string) => { const p = address.split(",").map((x) => x.trim()); return p.length >= 3 ? p[p.length - 2] : fallback; };
@@ -203,6 +219,36 @@ function DeliveryCard({ d, info, token, demo, onSaved, askLeo }: { d: Delivery; 
       {st === "ok" && !form && <p role="status" className="sr-only">Sent to Jared.</p>}
     </Panel>
   );
+}
+
+// ---------- Where the Tesla is parked (revealed only after Jared's check-in, the same moment the key turns on) ----------
+function SpotCard({ spot, from, short, token, now, canHonk, honk }: { spot: Spot; from?: { lat: number; lon: number } | null; short: string; token: string; now: number; canHonk: boolean; honk: () => Promise<void> }) {
+  const [st, setSt] = useState<"idle" | "busy" | "done" | "err">("idle");
+  const go = async () => {
+    if (st === "busy") return;
+    setSt("busy"); track(token, "find_car", { via: "delivery", act: "honk" });
+    try { await honk(); setSt("done"); window.setTimeout(() => setSt("idle"), 2500); }
+    catch { setSt("err"); window.setTimeout(() => setSt("idle"), 5000); }
+  };
+  return (
+    <Panel id="spot" kicker="Your Tesla is parked here" title="Parked nearby">
+      {from && <p className="-mt-1 text-[17px] leading-snug" style={{ color: INK }}>About {nw(distLabel(from, spot))} from {short}.</p>}
+      <p className="mt-1 text-[15px] leading-snug" style={{ color: BODY }}>Updated {agoLabel(spot.observed_at, now)}</p>
+      <a href={walkHref(spot.lat, spot.lon)} onClick={() => track(token, "find_car", { via: "delivery", act: "walk" })} className={`${btnPrimary} mt-3 h-14 text-[17px]`}>
+        <Navigation className="h-5 w-5" aria-hidden />Walk me to it
+      </a>
+      {canHonk && (
+        <button type="button" onClick={() => void go()} disabled={st === "busy"} className={`${btnQuiet} mt-2 w-full disabled:opacity-60`} style={{ color: INK }}>
+          {st === "busy" ? <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden /> : st === "done" ? <Check className="h-5 w-5" aria-hidden /> : <BellRing className="h-5 w-5" aria-hidden />}
+          {st === "done" ? "Honked" : "Honk to find it"}
+        </button>
+      )}
+      {st === "err" && <p role="alert" className="mt-2 text-[14px] font-medium" style={{ color: "#B3261E" }}>Couldn't reach the car. Try again in a minute.</p>}
+    </Panel>
+  );
+}
+function SpotQuiet({ text }: { text: string }) {
+  return <p className="mt-5 flex items-start gap-2.5 px-1 text-[15px] leading-snug" style={{ color: BODY }}><MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />{text}</p>;
 }
 
 // ---------- How delivery works ----------
@@ -484,6 +530,16 @@ export default function DeliveryGuest({ pub, token, run, demoPage, reload }: { p
   const lat = d.lat ?? 34.0838, lon = d.lon ?? -118.3708;
   const city = useMemo(() => cityOf(d.address, d.short), [d.address, d.short]);
 
+  // ---- where the Tesla is parked: only once the key is no longer held (server: find_hold = license + Jared's check-in; we also wait out key "soon") ----
+  const keyHeld = !!pub.find_hold || (key?.state === "soon" && !pub.demo_open);
+  const spot: Spot | null = !keyHeld && !ended && !carConnected ? pub.spot ?? null : null;
+  const canHonk = (live && !!run) || !!demoPage;
+  const honkCar = useCallback(async () => { if (demoPage || !run) await new Promise((r) => setTimeout(r, 900)); else await run("honk"); }, [run, demoPage]);
+  const nudgeHonk = useCallback(async (): Promise<boolean> => { track(token, "find_car", { via: "delivery", act: "nudge" }); try { await honkCar(); return true; } catch { return false; } }, [honkCar, token]);
+  const spotQuiet = !ended && !carConnected && !spot
+    ? (!keyHeld && key && key.state !== "off" ? "Jared's check-in is done. The car's exact spot shows here as soon as its location updates." : `The exact spot shows here after Jared's check-in${key && key.state !== "off" ? ", along with your key" : ""}.`)
+    : null;
+
   // ---- mini Leo: is the big orb on screen, and which section is the guest reading? ----
   const [heroVisible, setHeroVisible] = useState(true);
   useEffect(() => {
@@ -496,7 +552,7 @@ export default function DeliveryGuest({ pub, token, run, demoPage, reload }: { p
   const [section, setSection] = useState<NudgeSection | null>(null);
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") return;
-    const els = (["delivery", "how", "key", "car", "charging", "return"] as NudgeSection[]).map((id) => document.getElementById(id)).filter((e): e is HTMLElement => !!e);
+    const els = (["delivery", "spot", "how", "key", "car", "charging", "return"] as NudgeSection[]).map((id) => document.getElementById(id)).filter((e): e is HTMLElement => !!e);
     // The "reading band" is the upper-middle of the screen. The section covering most of it is the one in view.
     const pick = () => {
       const H = window.innerHeight, top = H * 0.2, bot = H * 0.55;
@@ -508,12 +564,12 @@ export default function DeliveryGuest({ pub, token, run, demoPage, reload }: { p
     els.forEach((e) => io.observe(e));
     pick();
     return () => io.disconnect();
-  }, [ended, keyBlock, carConnected, !!trip]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ended, keyBlock, carConnected, !!trip, !!spot]); // eslint-disable-line react-hooks/exhaustive-deps
   const nudgeKey: NudgeKey | null = key ? (key.state === "soon" && key.hold ? "held" : key.state as NudgeKey) : null;
   const nudges = leoNudgeItems({
     now, startsAt: trip?.starts_at, endsAt: trip?.ends_at, ended, kind: d.kind, missing: pending, key: nudgeKey,
     cabinF: car?.inside_f ?? null, outsideF: (demoPage ? car?.outside_f : outsideF ?? car?.outside_f) ?? null, batteryPct: car?.battery ?? null, rangeMi: car?.range ?? null,
-    controlsOn: live || demoCar, section,
+    controlsOn: live || demoCar, section, spotShown: !!spot,
   });
 
   return (
@@ -544,8 +600,10 @@ export default function DeliveryGuest({ pub, token, run, demoPage, reload }: { p
         {ended && trip ? <>
           <TripDone trip={trip} charging={pub.charging} token={token} titleFont="'Josefin Sans', Futura, 'Avenir Next', sans-serif" />
         </> : <>
+          {spot && <SpotCard spot={spot} from={d.lat != null && d.lon != null ? { lat: d.lat, lon: d.lon } : null} short={d.short} token={token} now={now} canHonk={canHonk} honk={honkCar} />}
           {keyFirst && key && <KeyBlock k={key} token={token} d={d} hasApp={hasApp} onHasApp={markHasApp} onAdded={() => reload?.()} />}
           <AskChips where={d.short} onAsk={askLeo} />
+          {spotQuiet && <SpotQuiet text={spotQuiet} />}
           <DeliveryCard d={d} info={info} token={token} demo={isDemo} onSaved={tellLeoTyped} askLeo={() => { scrollTo("leo"); if (sess.phase !== "live") void sess.start(true); }} />
           <HowItWorks step={step} d={d} startsAt={trip?.starts_at} />
           {trip && <div id="charging" className="mt-5 scroll-mt-4"><TripCard trip={trip} theme="delivery" where={d.short} recap={pub.charging ? { charging: pub.charging.total, stops: pub.charging.count } : undefined} /><TripChanged at={pub.trip_changed_at} /></div>}
@@ -568,7 +626,7 @@ export default function DeliveryGuest({ pub, token, run, demoPage, reload }: { p
         <Footer />
         {!ended && <div className="trip-keep"><InstallToast token={token} kind="delivery" /></div>}
       </main>
-      <LeoDock sess={sess} token={token} heroVisible={heroVisible} nudges={nudges} section={section} />
+      <LeoDock sess={sess} token={token} heroVisible={heroVisible} nudges={nudges} section={section} onAct={nudgeHonk} />
     </div>
   );
 }

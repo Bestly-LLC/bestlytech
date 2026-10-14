@@ -15,7 +15,7 @@
  */
 import type { DeliveryKey } from "./places";
 
-export type NudgeSection = "delivery" | "how" | "key" | "car" | "charging" | "return";
+export type NudgeSection = "delivery" | "spot" | "how" | "key" | "car" | "charging" | "return";
 export type NudgeKey = "off" | "soon" | "held" | "making" | "ready" | "added" | "ended" | "problem";
 
 export type NudgeCtx = {
@@ -40,6 +40,8 @@ export type NudgeCtx = {
   controlsOn?: boolean;
   /** The page section on screen right now, if any. */
   section?: NudgeSection | null;
+  /** The parked-spot card is showing the car's exact spot (only true after Jared's check-in). */
+  spotShown?: boolean;
 };
 
 export type NudgeItem = {
@@ -47,6 +49,8 @@ export type NudgeItem = {
   /** What the guest asks Leo when they tap this bubble: their first message to him. */
   send: string;
   section?: NudgeSection;
+  /** Tapping the bubble does this directly instead of sending `send` to Leo (the page falls back to `send` if it fails). */
+  act?: "honk";
   score: number;
 };
 
@@ -72,7 +76,7 @@ export function leoNudgeItems(c: NudgeCtx): NudgeItem[] {
   const climateWindow = !ended && ((Number.isFinite(minToStart) && minToStart <= CLIMATE_LEAD_MIN) || onTrip) && (!Number.isFinite(minToEnd) || minToEnd > 0);
 
   const out: NudgeItem[] = [];
-  const add = (text: string, send: string, score: number, section?: NudgeSection) => out.push({ text, send, score, section });
+  const add = (text: string, send: string, score: number, section?: NudgeSection, act?: "honk") => out.push({ text, send, score, section, act });
 
   if (ended) {
     add("Left something in the car? Tell me.", "I think I left something in the car.", 80);
@@ -97,6 +101,9 @@ export function leoNudgeItems(c: NudgeCtx): NudgeItem[] {
       case "soon": add("Your key turns on after Jared's check-in.", "When does my key turn on?", 55, "key"); break;
       case "problem": add("Trouble with your key? I can fix it.", "My phone key isn't working. Can you help?", 85, "key"); break;
     }
+
+    // 2b. The car's exact spot is on the page and the guest hasn't started driving: offer to honk it (needs the A/C and honk buttons to work).
+    if (c.spotShown && c.controlsOn && beforeHandoff) add("Can't spot the car? I'll honk it for you.", "Please honk my car. I can't find it.", 95, "spot", "honk");
 
     // 3. Climate: only about an hour before pickup, or during the trip, and only when the A/C buttons work.
     if (c.controlsOn && climateWindow && c.cabinF != null) {

@@ -114,7 +114,7 @@ function useKeyboardInset(on: boolean) {
   return inset;
 }
 
-export function LeoDock({ sess, token, heroVisible, nudges, section }: { sess: Sess; token: string; heroVisible: boolean; nudges: NudgeItem[]; section: string | null }) {
+export function LeoDock({ sess, token, heroVisible, nudges, section, onAct }: { sess: Sess; token: string; heroVisible: boolean; nudges: NudgeItem[]; section: string | null; onAct?: (a: "honk") => Promise<boolean> }) {
   const [open, setOpen] = useState(false);
   const inUse = sess.phase === "live" || sess.phase === "connecting";
   const miniShow = !heroVisible && !open;
@@ -146,8 +146,9 @@ export function LeoDock({ sess, token, heroVisible, nudges, section }: { sess: S
   const tapBubble = () => {
     if (!current) return;
     track(token, "leo_nudge_tap", { text: current.text, section });
-    openPanel();
-    void sess.send(current.send);
+    const ask = () => { openPanel(); void sess.send(current.send); };
+    if (current.act && onAct) { void onAct(current.act).then((ok) => { if (!ok) ask(); }, ask); return; }
+    ask();
   };
 
   const status = wait ? "Connecting" : live ? (sess.voice ? (sess.speaking ? "Leo is talking" : sess.muted ? "Muted" : "Listening") : "Chatting") : "Your trip helper";
