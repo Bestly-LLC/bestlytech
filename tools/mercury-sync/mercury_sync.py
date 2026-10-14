@@ -31,6 +31,7 @@ import argparse
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -132,6 +133,30 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 _OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+class force_ipv4(object):
+    """Make outbound connections use IPv4 for the duration of the block.
+
+    Mercury allowlists a token by source address. The Pi has both an IPv4
+    address and a SLAAC IPv6 address, and left alone it reaches
+    api.mercury.com over IPv6 -- so Mercury sees an address nobody
+    allowlisted, and the privacy-extension suffix rotates, so allowlisting
+    it once would not hold either. The IPv4 address is the stable one.
+    """
+
+    def __enter__(self):
+        self._real = socket.getaddrinfo
+
+        def ipv4_only(host, port, family=0, *args, **kwargs):
+            return self._real(host, port, socket.AF_INET, *args, **kwargs)
+
+        socket.getaddrinfo = ipv4_only
+        return self
+
+    def __exit__(self, *exc):
+        socket.getaddrinfo = self._real
+        return False
 
 
 def http(method, url, headers=None, body=None, timeout=60):
@@ -270,6 +295,11 @@ def classify_mercury_error(status, body):
 
 
 def fetch_customers(token):
+    with force_ipv4():
+        return _fetch_customers(token)
+
+
+def _fetch_customers(token):
     """All Mercury Invoicing customers as [{'id','name','email'}]. GET only.
     Raises Skip when the token cannot list them."""
     headers = {"Authorization": "Bearer " + token, "Accept": "application/json",
