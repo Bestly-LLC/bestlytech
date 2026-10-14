@@ -12,9 +12,11 @@ import { cn } from "@/lib/utils";
 import { LoadError, SectionHeader, cardCls, text } from "@/components/admin/ui";
 import { Lines } from "@/components/Lines";
 
-type Row = { scanned_at: string; signed_in_at: string | null; kind: string; device: string | null; src: string; reservation_id: number | null; guest_first: string | null };
-type Data = { week: number; month: number; all: number; signed: number; trips: number; last: string | null; cleared_at?: string | null; recent: Row[] };
+type Row = { scanned_at: string; signed_in_at: string | null; kind: string; device: string | null; src: string; reservation_id: number | null; guest_first: string | null; type?: "home" | "lax" | "delivery" | null };
+type Data = { week: number; month: number; all: number; signed: number; trips: number; last: string | null; cleared_at?: string | null; by_type?: Record<"home" | "lax" | "delivery", { scans: number; signed: number }>; recent: Row[] };
 
+const TYPES: ["home" | "lax" | "delivery", string][] = [["home", "Home"], ["lax", "LAX"], ["delivery", "Delivery"]];
+const TYPE_NAME: Record<string, string> = { home: "Home", lax: "LAX", delivery: "Delivery" };
 const at12 = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" });
 
 export function CardScans() {
@@ -66,6 +68,22 @@ export function CardScans() {
                   </div>
                 ))}
               </div>
+              {d.by_type && (
+                <div className="grid grid-cols-3 divide-x divide-white/[0.06] border-b border-white/[0.06]">
+                  {TYPES.map(([k, label]) => {
+                    const t = d.by_type![k];
+                    return (
+                      <div key={k} className="px-4 py-2.5 sm:px-5">
+                        <p className={cn(text.meta, "uppercase tracking-wide")}>{label} card</p>
+                        <p className="mt-0.5 whitespace-nowrap text-[15px] tabular-nums text-white">
+                          {t.scans} {t.scans === 1 ? "scan" : "scans"}
+                          {t.scans > 0 && <span className="text-white/50"> · {t.signed} in</span>}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               {d.recent.length === 0
                 ? <p className={cn(text.detail, "px-4 py-5 sm:px-5")}><Lines>{d.cleared_at ? `No scans since you cleared the list on ${at12(d.cleared_at)}. New ones show up here the moment a guest scans the card in the car.` : "No scans yet. They show up here the moment a guest scans the card in the car."}</Lines></p>
                 : (
@@ -77,8 +95,8 @@ export function CardScans() {
                         <li key={r.scanned_at + (r.device ?? "")} className="flex min-h-[48px] items-center gap-3 px-4 py-2 sm:px-5">
                           <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", host ? "bg-white/30" : r.signed_in_at ? "bg-[#30D158]" : "bg-[#FFD60A]")} aria-hidden />
                           <span className="min-w-0 flex-1 text-[15px] text-white">{who}
-                            {r.device && <span className="text-white/50"> · {r.device}</span>}
-                            {r.src === "delivery" ? <span className="text-white/50"> · Delivery</span> : r.kind === "lax" && <span className="text-white/50"> · LAX</span>}</span>
+                            {(r.type ?? (host ? null : r.src === "delivery" ? "delivery" : r.kind === "lax" ? "lax" : "home")) && <span className="text-white/50"> · {TYPE_NAME[r.type ?? (r.src === "delivery" ? "delivery" : r.kind === "lax" ? "lax" : "home")]} card</span>}
+                            {r.device && <span className="text-white/50"> · {r.device}</span>}</span>
                           <span className="shrink-0 whitespace-nowrap text-[13px] tabular-nums text-white/50">{at12(r.scanned_at)}</span>
                         </li>
                       );
