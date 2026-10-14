@@ -12,6 +12,10 @@
 // 2026-10-13 (unique content, docs/studio-unique-content-opusplan.md): every video gets its own LOOK from the worker (variety.py).
 // Scene templates (stack, center, split, stat, steps), three icon styles (orbit, badge, rings), three closing-card layouts (list, claim, qa),
 // an accent override per video (props.look), a subtle series tag ("Tip 3 of 8") and a "Next:" tease + follow line on the closing card.
+// 2026-10-14 (Bestly Cloud 3D unit, standing brand rule): `unit` on a scene or on the closing card plays a pre-rendered transparent frame sequence of
+// the Bestly Cloud unit (the real 3D model from bestly.tech, rendered once by tools/montage/unit3d): moments reveal (the lid lifts off, in a
+// split scene), turn (slow turn behind a headline), glimpse (corner), hero (closing card). Frames are WebP with alpha, so the unit has no box
+// around it; everything around it is a feathered glow. Also: the price tag icon lost its stray dot.
 // Every new prop is optional: props without them draw exactly what this file drew before.
 import React, {useEffect, useState} from 'react';
 import {
@@ -21,11 +25,12 @@ import {
 
 export type CallCard = {kind: 'missed' | 'answered'; name: string; place: string; photo?: string; logo?: string};
 export type Layout = 'stack' | 'center' | 'split' | 'stat' | 'steps' | 'card';
+export type UnitMoment = {moment: 'reveal' | 'turn' | 'glimpse' | 'hero'; dir: string; count: number; fps?: number};
 export type Scene = {kicker?: string; line: string; sub?: string; start: number; end: number; clip?: string; icon?: string; card?: CallCard;
-                     layout?: Layout; big?: string; items?: string[]};
+                     layout?: Layout; big?: string; items?: string[]; unit?: UnitMoment};
 export type Chip = {icon: string; text: string};
 export type EndCard = {title: string; sub?: string; cta: string; start: number; end: number; chips?: Chip[];
-                       layout?: 'list' | 'claim' | 'qa'; recap?: {q: string; a: string}; tease?: string; follow?: string};
+                       layout?: 'list' | 'claim' | 'qa'; recap?: {q: string; a: string}; tease?: string; follow?: string; unit?: UnitMoment};
 export type Look = {iconStyle?: 'orbit' | 'badge' | 'rings'; accent?: string | null; accent2?: string | null; series?: string | null};
 export type Theme = {bg: string; veil: string; ink: string; dim: string; accent: string; accent2?: string; head?: string};
 export type Brand = {
@@ -104,7 +109,8 @@ const rr = (x: number, y: number, w: number, h: number, r: number) =>
 
 export const ICONS: Record<string, Seg[]> = {
   phone: [at(F(FPHONE), 3.5, 8.5, 8.5), at(S(FPHONE), 3.5, 8.5, 8.5)],
-  pricetag: [F(TAG), S(TAG), H(circle(72, 28, 5)), D(60, 60, 3.6, true)],
+  // 2026-10-14 (Jared, Bestly Agent): the price tag lost its two lone dots (the hole at the corner and the dot in the body); a "$" in the body says "price" instead
+  pricetag: [F(TAG), S(TAG), H('M52 31 V69'), H('M61 42 C61 35 43 35 43 43 C43 51 61 49 61 57 C61 65 43 65 43 58')],
   missedcall: [at(F(FPHONE), 3.1, 6, 18), at(S(FPHONE), 3.1, 6, 18), at(H('M23 1l-6 6'), 3.1, 6, 18), at(H('M17 1l6 6'), 3.1, 6, 18)],
   globe: [F(circle(50, 50, 36)), S(circle(50, 50, 36)), H('M14 50 H86'), at(H(FGLOBE_MERIDIAN), 3.0, 14, 14), D(50, 50, 3.4, true)],
   apps: [F(rr(16, 16, 30, 30, 9)), S(rr(16, 16, 30, 30, 9)), S(rr(54, 16, 30, 30, 9)), S(rr(16, 54, 30, 30, 9)), F(rr(54, 54, 30, 30, 9)),
@@ -170,6 +176,37 @@ const Icon: React.FC<{name?: string; t: Theme; draw: number; size: number}> = ({
                      stroke={sg.k === 'h' ? t.ink : t.accent} strokeWidth={(sg.k === 'h' ? 3.4 : 4.2) / kw} opacity={Math.min(1, q * 3)} />;
       })}
     </svg>
+  );
+};
+
+
+// The Bestly Cloud unit: a pre-rendered transparent WebP frame sequence (tools/montage/unit3d). Placed per moment by the callers below.
+//   fit  (reveal)  : the whole clip plays across the scene, then holds
+//   hold (glimpse, hero): plays at its own speed, then holds the last pose
+//   loop (turn)    : a full turn every 10 seconds, endless
+const unitIndex = (u: UnitMoment, f: number, dur: number) => {
+  const n = Math.max(1, u.count);
+  const rate = (u.fps ?? 30) / 30;
+  let i = 0;
+  if (u.moment === 'reveal') i = Math.floor(interpolate(f, [4, Math.max(8, dur - 14)], [0, n - 1], clamp));
+  else if (u.moment === 'turn') i = Math.floor((f * n) / 300) % n;
+  else i = Math.min(n - 1, Math.floor(f * rate));
+  return Math.max(0, Math.min(n - 1, i));
+};
+
+const UnitView: React.FC<{u: UnitMoment; t: Theme; dur: number; size: number; style?: React.CSSProperties; glow?: number; holdEnd?: boolean; alpha?: number}> = ({u, t, dur, size, style, glow = 1, holdEnd, alpha = 1}) => {
+  const f = useCurrentFrame();
+  const i = unitIndex(u, f, dur);
+  const op = interpolate(f, holdEnd ? [0, 14] : [0, 14, dur - 12, dur], holdEnd ? [0, 1] : [0, 1, 1, 0], clamp);
+  const float = Math.sin(f / 30) * size * 0.008;
+  const a2 = t.accent2 || t.accent;
+  return (
+    <div style={{position: 'relative', width: size, height: size, opacity: op * alpha, ...style}}>
+      <div style={{position: 'absolute', inset: -size * 0.2, opacity: glow,
+                   background: `radial-gradient(circle at 50% 52%, ${rgba(t.accent, 0.3)} 0%, ${rgba(a2, 0.1)} 38%, ${rgba(a2, 0)} 66%)`}} />
+      <Img src={staticFile(`${u.dir}/f${String(i).padStart(3, '0')}.webp`)}
+           style={{position: 'absolute', inset: 0, width: size, height: size, transform: `translateY(${float}px)`}} />
+    </div>
   );
 };
 
@@ -482,7 +519,8 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
   const drift = interpolate(f, [0, dur], [0, -16]);                  // slow upward drift keeps a still card alive
   const hasCard = !!s.card;
   const hasIcon = !hasCard && !!(s.icon && ICONS[s.icon]);
-  const lay: Layout = hasCard ? 'card' : (s.layout as Layout) || 'stack';
+  const um = s.unit && !hasCard ? s.unit.moment : null;
+  const lay: Layout = hasCard ? 'card' : um === 'reveal' ? 'split' : (s.layout as Layout) || 'stack';
   // b-roll: dissolves in and out through the card color, under a veil of it so the line always reads
   const clipIn = interpolate(f, [0, 8, dur - 8, dur], [0, 1, 1, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
   const zoom = interpolate(f, [0, dur], [1.0, 1.06]);
@@ -493,12 +531,24 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
       <AbsoluteFill style={{background: `linear-gradient(180deg, ${t.veil}6B 0%, ${t.veil}C2 40%, ${t.veil}C2 62%, ${t.veil}85 100%)`}} />
     </AbsoluteFill>
   ) : null;
-  const emblem = hasIcon ? <Emblem name={s.icon as string} t={t} size={s.kicker ? 400 : 440} dur={dur} /> : null;
+  const emblem = um === 'reveal' ? <UnitView u={s.unit as UnitMoment} t={t} dur={dur} size={820} style={{marginBottom: -70}} />
+    : hasIcon && !um ? <Emblem name={s.icon as string} t={t} size={s.kicker ? 400 : 440} dur={dur} /> : null;
+  // turn and glimpse sit BEHIND the text (drawn first); the icon stays out of their way
+  const unitLayer = um === 'turn' ? (
+    <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center'}}>
+      <UnitView u={s.unit as UnitMoment} t={t} dur={dur} size={1500} glow={0.9} alpha={0.55} style={{marginTop: 60}} />
+      <AbsoluteFill style={{background: `radial-gradient(circle at 50% 50%, ${rgba(t.veil, 0.62)} 0%, ${rgba(t.veil, 0.38)} 40%, ${rgba(t.veil, 0)} 78%)`}} />
+    </AbsoluteFill>
+  ) : um === 'glimpse' ? (
+    <AbsoluteFill>
+      <UnitView u={s.unit as UnitMoment} t={t} dur={dur} size={820} style={{position: 'absolute', right: -250, bottom: -190}} />
+    </AbsoluteFill>
+  ) : null;
 
   if (lay === 'center') {
     return (
       <AbsoluteFill>
-        {bg}
+        {bg}{unitLayer}
         <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center', alignItems: 'center'}}>
           <div style={{transform: `translateY(${drift}px)`, marginTop: hasIcon ? -30 : -100, display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
             {emblem ? <div style={{marginBottom: 54}}>{emblem}</div> : null}
@@ -514,7 +564,7 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
     const hair = interpolate(spring({frame: f - 4, fps: 30, config: {damping: 200, stiffness: 50}}), [0, 1], [0, 1]);
     return (
       <AbsoluteFill>
-        {bg}
+        {bg}{unitLayer}
         <AbsoluteFill style={{padding: '0 96px', justifyContent: 'flex-start'}}>
           <div style={{transform: `translateY(${drift}px)`, marginTop: 330}}>
             <KickerBlock s={s} b={b} t={t} dur={dur} />
@@ -537,7 +587,7 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
   if (lay === 'stat' && s.big) {
     return (
       <AbsoluteFill>
-        {bg}
+        {bg}{unitLayer}
         <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center'}}>
           <div style={{transform: `translateY(${drift}px)`, marginTop: -80}}>
             {hasIcon ? <div style={{marginBottom: 56}}><MiniIcon name={s.icon} t={t} size={150} dur={dur} /></div> : null}
@@ -554,7 +604,7 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
   if (lay === 'steps' && s.items && s.items.length >= 2) {
     return (
       <AbsoluteFill>
-        {bg}
+        {bg}{unitLayer}
         <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center'}}>
           <div style={{transform: `translateY(${drift}px)`, marginTop: -70}}>
             {hasIcon ? <div style={{marginBottom: 50}}><MiniIcon name={s.icon} t={t} size={130} dur={dur} /></div> : null}
@@ -571,7 +621,7 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
   // stack (and the call card): the original template, unchanged
   return (
     <AbsoluteFill>
-      {bg}
+      {bg}{unitLayer}
       <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center'}}>
         <div style={{transform: `translateY(${drift}px)`, marginTop: hasIcon ? -30 : hasCard ? 0 : -100}}>
           {hasCard ? (
@@ -691,7 +741,10 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number; compact?: 
                              width: r * 2, height: r * 2, opacity: Math.min(1, logo) * (0.35 + 0.45 * Math.sin(f / (18 + i * 3) + i * 2) ** 2),
                              background: `radial-gradient(circle, ${rgba(t.accent, 0.85)} 0%, ${rgba(t.accent, 0.22)} 42%, ${rgba(t.accent, 0)} 72%)`}} />
       ))}
-      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: tz ? 0 : compact ? 60 : 90}}>
+      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: tz ? 0 : compact ? (e.unit ? 0 : 60) : 90}}>
+        {e.unit ? (
+          <UnitView u={e.unit} t={t} dur={dur} size={tz ? 560 : 680} holdEnd glow={1} style={{marginTop: tz ? -60 : -110, marginBottom: tz ? -150 : -190}} />
+        ) : null}
         {b.end.orb ? (
           <div style={{marginBottom: tz ? 40 : 56, opacity: Math.min(1, logo), transform: `scale(${0.6 + 0.4 * logo})`}}><Orb size={tz ? 150 : 190} t={t} /></div>
         ) : null}
@@ -766,7 +819,7 @@ const EndQA: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b, t
 const EndView: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = (p) => {
   if (p.e.layout === 'qa' && p.e.recap && p.e.recap.q && p.e.recap.a) return <EndQA {...p} />;
   const claim = p.e.layout === 'claim';
-  return (p.e.chips && p.e.chips.length) || p.b.end.heroLogo || p.b.end.orb ? <EndRich {...p} compact={claim} /> : <EndPlain {...p} flip={claim} />;
+  return (p.e.chips && p.e.chips.length) || p.b.end.heroLogo || p.b.end.orb ? <EndRich {...p} compact={claim || !!p.e.unit} /> : <EndPlain {...p} flip={claim} />;
 };
 
 const Logo: React.FC<{b: Brand; opacity?: number}> = ({b, opacity = 1}) => {

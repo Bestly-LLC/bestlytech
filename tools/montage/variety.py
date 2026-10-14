@@ -13,6 +13,9 @@ What it does, in order, for every video a brand module writes (brands/_common.wr
             alerts (montage.variety, info, no push).
   record    studio_look_ledger keeps the fingerprint per job; the music track is added after the picker ran; the DB trigger marks it filed.
 Nothing here spends money. Everything is free-AI text and DB reads.
+2026-10-14: a brand with CFG["unit_moments"] (Bestly Cloud) gets a seventh look dimension, "unit": which moment of the 3D unit this video shows
+(reveal / turn / glimpse / hero, see unit_moment.py). make_plan rotates them (never the last video's, then the one used longest ago), the gate
+refuses a repeat of the last video's moment, and decorate puts the moment on a scene or the closing card.
 """
 import difflib
 import random
@@ -21,6 +24,7 @@ import sys
 
 sys.path.insert(0, "/opt/bestly/cron")
 import lib  # noqa: E402
+import unit_moment  # noqa: E402  (2026-10-14: the Bestly Cloud 3D unit moments, rotated like the other look dimensions)
 
 LAYOUT_SETS = {          # scene templates in order (the video uses the first 4 or 5)
     "L1": ["stack", "center", "split", "stat", "steps"],
@@ -128,6 +132,8 @@ def dims_for(cfg, brand=None):
     d = ["layout", "hook", "accent", "track", "end"]
     if cfg.get("icons") or cfg.get("icon_styles"):
         d.append("icon")
+    if cfg.get("unit_moments"):
+        d.append("unit")
     return d
 
 
@@ -154,6 +160,25 @@ def _diff(fp, row_fp, dims):
         if a in (None, "", "unknown", "legacy") or b in (None, "", "unknown", "legacy") or a != b:
             n += 1
     return n
+
+
+def pick_unit(cfg, recent, forced=None):
+    """Which unit moment this video shows. Only moments whose frames are on disk; never the one the last video used; then the one used longest
+    ago (a moment not seen in the last 8 videos comes first). forced pins it (tests, Spark: [look:unit=turn])."""
+    kit = cfg.get("unit_kit") or unit_moment.KIT
+    have = [m for m in cfg["unit_moments"] if m in unit_moment.available(kit)]
+    if not have:
+        raise RuntimeError(f"{cfg['name']} needs the 3D unit but no frames are installed in {kit} (python3 tools/montage/unit3d: see README)")
+    if forced in have:
+        return forced
+    seen = [(r.get("fingerprint") or {}).get("unit") for r in recent]
+    last = seen[0] if seen else None
+    pool = [m for m in have if m != last] or have
+
+    def rank(m):          # 0 = used by the last video, 99 = not used in the last 8
+        return seen.index(m) if m in seen else 99
+    top = max(rank(m) for m in pool)
+    return random.choice([m for m in pool if rank(m) == top])
 
 
 def make_plan(cfg, job, theme, parent_look=None, forced=None, tried=None):
@@ -183,12 +208,15 @@ def make_plan(cfg, job, theme, parent_look=None, forced=None, tried=None):
     layouts = [forced["layout"]] if forced.get("layout") in LAYOUT_SETS else list(LAYOUT_SETS)
     ends = [forced["end"]] if forced.get("end") in END_LAYOUTS else list(cfg.get("end_layouts", END_LAYOUTS))
     icons = ([forced["icon"]] if forced.get("icon") in ICON_STYLES else list(ICON_STYLES)) if has_icon else ["none"]
+    unit = pick_unit(cfg, recent, forced.get("unit")) if cfg.get("unit_moments") else None
     acc = accent_options(cfg, theme) or [(None, None)]
     if forced.get("accent", "").isdigit() and int(forced["accent"]) < len(acc):
         acc = [acc[int(forced["accent"])]]
     best, best_score = [], None
     for _ in range(260):
         c = {"layout": random.choice(layouts), "hook": random.choice(hook_pool), "end": random.choice(ends), "icon": random.choice(icons)}
+        if unit:
+            c["unit"] = unit
         a = random.choice(acc)
         c["accent"] = _accent_value(theme, a[0]) if a[0] else theme
         key = "|".join(str(c[d]) for d in dims if d in c)
@@ -206,13 +234,16 @@ def make_plan(cfg, job, theme, parent_look=None, forced=None, tried=None):
         raise VarietyHold("no look left to try")
     c, a = random.choice(best)
     plan = {"layout": c["layout"], "templates": list(LAYOUT_SETS[c["layout"]]), "hook": c["hook"], "end": c["end"], "icon": c["icon"],
-            "accent": c["accent"], "accent_hex": a[0], "accent2": a[1], "segment": seg, "key": "|".join(str(c[d]) for d in dims if d in c)}
+            "accent": c["accent"], "accent_hex": a[0], "accent2": a[1], "segment": seg, "key": "|".join(str(c[d]) for d in dims if d in c),
+            **({"unit": unit} if unit else {})}
     plan["min_diff_planned"] = min(_diff(c, r.get("fingerprint"), dims) for r in recent) if recent else None
     return plan
 
 
 def fingerprint(plan, theme=None):
     fp = {"layout": plan["layout"], "hook": plan["hook"], "accent": plan["accent"], "end": plan["end"], "icon": plan["icon"], "track": None}
+    if plan.get("unit"):
+        fp["unit"] = plan["unit"]
     return fp
 
 
@@ -360,6 +391,12 @@ def gate(cfg, job, plan, out, opening_check=True):
     fp = fingerprint(plan)
     recent = _recent(brand, LAST_OPENINGS, exclude_item=job.get("parent_item_id"))
     why = []
+    if cfg.get("unit_moments"):        # the unit moment is counted: it must be one of the brand's moments and not a repeat of the last video's
+        last = ((recent[0].get("fingerprint") or {}).get("unit") if recent else None)
+        if plan.get("unit") not in cfg["unit_moments"]:
+            why.append(f"no valid 3D unit moment in the plan ({plan.get('unit')})")
+        elif plan.get("unit") == last and len(cfg["unit_moments"]) > 1:
+            why.append(f"3D unit moment '{plan.get('unit')}' repeats the last video's")
     for r in recent[:LAST_VIDEOS]:
         d = _diff(fp, r.get("fingerprint"), dims)
         if d < MIN_DIFF:
@@ -458,4 +495,8 @@ def decorate(cfg, out, plan, series, tease, p, caption_core, scene_count=None):
                    "end": e["layout"], "icon": plan["icon"], "segment": (seg or {}).get("key"), "question": q,
                    "series": ({"ep": series["ep"], "total": series["total"], "label": series["label"], "name": series["name"]} if series else None),
                    "tease": tease, "templates": [s["layout"] for s in out["scenes"]]}
+    if plan.get("unit"):       # the Bestly Cloud 3D unit moment (unit_moment.py): on a scene or the closing card
+        where = unit_moment.assign(out, plan["unit"], cfg.get("unit_kit") or unit_moment.KIT)
+        out["look"]["unit"] = where
+        out["look"]["templates"] = [s["layout"] for s in out["scenes"]]
     return out
