@@ -23,7 +23,8 @@ code{font:14px ui-monospace,Menlo,monospace;background:#fff;padding:2px 6px;bord
 
 </head><body><main><div class="eb">Bestly Studio</div><div id="out"><h1>One moment.</h1></div></main>
 <script>
-// Connect a client's LinkedIn COMPANY PAGE to Bestly Studio so the posts they approve also go to the Page.
+// Connect a client's LinkedIn profile to Bestly Studio so the posts they approve also go to LinkedIn.
+// (Company Page mode still works if the app's scopes are switched to Community Management.)
 // Talks to the studio-social function; the LinkedIn token never reaches this page.
 const API = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/studio-social";
 const out = document.getElementById("out");
@@ -31,7 +32,7 @@ const q = new URLSearchParams(location.search);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const WHY = {
   link_not_found: "This link isn't valid. Ask your Bestly contact for a new one.",
-  link_used: "This link was already used, so your Page is connected. If you need to reconnect, ask for a new link.",
+  link_used: "This link was already used, so your LinkedIn is connected. If you need to reconnect, ask for a new link.",
   link_expired: "This link has expired. Ask your Bestly contact for a new one.",
   wrong_platform: "This link is for a different account. Ask your Bestly contact for a LinkedIn one.",
   not_set_up: "Bestly is finishing setup. Try this link again later today.",
@@ -47,8 +48,8 @@ async function call(body){
   return r.json().catch(() => ({ ok: false, error: "unreachable" }));
 }
 function done(r){
-  say("Connected.", `<p><b>${esc(r.handle || "Your Page")}</b> is now connected to Bestly Studio${r.client ? " for " + esc(r.client) : ""}.</p>
-    <p class="mute">Posts you approve will go to this LinkedIn Page as soon as posting to LinkedIn is switched on. Bestly handles that for you. You can disconnect any time from your board.</p>
+  say("Connected.", `<p><b>${esc(r.handle || "Your LinkedIn")}</b> is now connected to Bestly Studio${r.client ? " for " + esc(r.client) : ""}.</p>
+    <p class="mute">Posts you approve will go to your LinkedIn profile at the time on your calendar. Every 2 months LinkedIn asks you to tap Reconnect on your board, and we&rsquo;ll remind you there. You can disconnect any time from your board.</p>
     <p class="mute">You can close this tab and go back to your board.</p>`);
 }
 function fail(r, k){
@@ -78,8 +79,8 @@ function fail(r, k){
   const r = await call({ op: "li_start", k });
   if (!r.ok) return say(r.error === "link_used" ? "Already connected." : "Can't connect yet.", `<p>${esc(WHY[r.error] || r.error)}</p>`);
   say(`Connect LinkedIn${r.client ? " for " + esc(r.client) : ""}`,
-    `<p>Bestly Studio will post the content you approve to your LinkedIn Company Page, at the time on your calendar. You stay in control: you can pause or disconnect any time from your board.</p>
-     <p class="mute">Log in to LinkedIn with the account that manages your Company Page. This is for a Company Page, not your personal profile. Tap Allow when LinkedIn asks.</p><hr>
+    `<p>Bestly Studio will post the content you approve to your LinkedIn profile, at the time on your calendar. You stay in control: you can pause or disconnect any time from your board.</p>
+     <p class="mute">Log in to LinkedIn with your own account, then tap Allow when LinkedIn asks.</p><hr>
      <p><a class="btn" href="${esc(r.authorize_url)}">Continue to LinkedIn</a></p>`);
 })();
 </script></body></html>
