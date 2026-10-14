@@ -9,6 +9,7 @@
  */
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import { Lines } from "./lax/Lines";
 import { Car, Check, ChevronRight, ExternalLink, KeyRound, Loader2, MapPin, Navigation, ShieldCheck } from "lucide-react";
 
 const API = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/trip-gate";
@@ -283,8 +284,8 @@ export default function HostGate() {
                   <span className="relative grid h-11 w-11 place-items-center rounded-full" style={{ background: `${color}2E`, color }}><Icon className="h-6 w-6" /></span>
                 </div>
                 <div className="min-w-0 flex-1" style={{ marginLeft: 2 }}>
-                  <p className="break-words text-[17px] font-semibold leading-snug">{text}</p>
-                  {more && <p className="break-words text-[13px]" style={{ color: C.sec }}>{more}</p>}
+                  <p className="break-words text-[17px] font-semibold leading-snug"><Lines>{text}</Lines></p>
+                  {more && <p className="break-words text-[13px]" style={{ color: C.sec }}><Lines>{more}</Lines></p>}
                 </div>
               </div>
             </Card>
@@ -322,7 +323,7 @@ export default function HostGate() {
                 <div className="min-w-0 flex-1 py-px">
                   <div className="break-words text-[17px] font-semibold leading-snug">{where}</div>
                   {fullAddr && <div className="break-words text-[13px] leading-snug" style={{ color: C.sec }}>{fullAddr}</div>}
-                  {notes && <div className="mt-1 break-words text-[13px] leading-snug [text-wrap:pretty]" style={{ color: C.sec }}>{notes}</div>}
+                  {notes && <div className="mt-1 break-words text-[13px] leading-snug [text-wrap:pretty]" style={{ color: C.sec }}><Lines>{notes}</Lines></div>}
                 </div>
                 {mapsAddr && (
                   <a href={`https://maps.apple.com/?q=${encodeURIComponent(mapsAddr)}`} className="-my-1 flex min-h-[44px] flex-none items-center px-2 text-[15px] font-medium active:opacity-60" style={{ color: C.blue }}>Maps</a>
@@ -351,7 +352,7 @@ export default function HostGate() {
                     <Navigation className="h-5 w-5 flex-none" style={{ color: disabled ? C.mute : C.blue }} />
                     <span className="min-w-0 flex-1">
                       <span className="block break-words text-[17px] font-semibold leading-snug" style={{ color: dimmed ? C.sec : C.label }}>{title}</span>
-                      <span className="block break-words text-[13px] leading-snug" style={{ color: subColor }}>{sub}</span>
+                      <span className="block break-words text-[13px] leading-snug" style={{ color: subColor }}><Lines>{sub}</Lines></span>
                     </span>
                     {sending || navBusy ? <Loader2 className="h-5 w-5 flex-none animate-spin" style={{ color: C.sec }} />
                       : st === "sent" && !there ? <Check className="h-5 w-5 flex-none" strokeWidth={3} style={{ color: C.green }} /> : null}
@@ -361,7 +362,7 @@ export default function HostGate() {
             </Card>
 
             {(flash || err) && (
-              <p className="px-1 text-[13px] font-semibold" style={{ color: err ? C.red : C.green }} role="status">{err || flash}</p>
+              <p className="px-1 text-[13px] font-semibold" style={{ color: err ? C.red : C.green }} role="status"><Lines>{err || flash}</Lines></p>
             )}
 
             <Card>
