@@ -47,12 +47,11 @@ export function CardScans() {
     <section aria-labelledby="card-scans-title" id="card-scans" className="scroll-mt-24">
       <SectionHeader id="card-scans-title" title="In-car card" icon={<QrCode className="h-3.5 w-3.5" aria-hidden />} aside={<>
         <span>{d?.last ? `Last scan ${at12(d.last)}` : "QR scans"}</span>
-        {d && d.recent.length > 0 && (
-          <button type="button" onClick={() => void clear()} disabled={clearing}
-            className="-my-2 ml-2 min-h-[44px] rounded-full px-2 text-[13px] font-semibold text-[#0A84FF] disabled:opacity-50">
-            {clearing ? "Clearing…" : "Clear"}
-          </button>
-        )}
+        <button type="button" onClick={() => void clear()} disabled={clearing || !d || d.recent.length === 0}
+          title={d && d.recent.length === 0 ? "Nothing to clear" : "Clear all card scans"}
+          className="-my-2 ml-2 min-h-[44px] rounded-full px-2 text-[13px] font-semibold text-[#0A84FF] disabled:text-white/30">
+          {clearing ? "Clearing…" : "Clear"}
+        </button>
       </>} />
       <div className={cn(cardCls, "overflow-hidden")}>
         {failed ? <div className="p-4 sm:p-6"><LoadError label="card scans" onRetry={load} /></div>
