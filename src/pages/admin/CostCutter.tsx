@@ -3,18 +3,20 @@
  * Penny finds money Bestly pays for and does not use. She pauses and flags, she never cancels or deletes on her own.
  *   Question    the one thing she is asking right now: Keep it, Cut it, or Not sure (cost_cutter_answer)
  *   Findings    open savings she found, each one tap to mark done, park or "not useful" (she learns from that)
- *   Bank feed   the read-only Mercury token. Write-only field: saved to the Vault, only "saved at" ever comes back
+ *   Bank feed   feed status for the read-only Mercury token (the paste box is MercuryTokensCard, below it)
+ *   Mercury tokens  business + optional personal token, write-only into the Vault (MercuryTokensCard.tsx)
  *   Services    every merchant she watches and what you told her about it
  *   Settings    the smallest monthly charge worth a question, and the savings size worth a push
  * Data: cost_cutter_admin() (admin only). Migration 20261011070200_penny_admin_and_mercury_token.sql.
  */
 import { Lines } from "@/components/Lines";
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Check, CircleAlert, Landmark, Loader2, Lock, Scissors } from "lucide-react";
+import { Check, CircleAlert, Landmark, Loader2, Scissors } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { cn } from "@/lib/utils";
 import { btnPlain, btnPrimary, btnTinted, card, field, label, pill, secondary, Section, separator, tertiary, tint } from "./laxUi";
+import { MercuryTokensCard } from "./MercuryTokensCard";
 import { rpc, shortDay, shortTime } from "./settlementsShared";
 
 type Question = { id: string; merchant: string; question: string; options: string[]; asked_at: string; est_monthly_usd: number | null; guess: string | null };
@@ -60,8 +62,6 @@ export default function CostCutter() {
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [reason, setReason] = useState("");
-  const [token, setToken] = useState("");
-  const [replacing, setReplacing] = useState(false);
   const [floor, setFloor] = useState("");
   const [pushMin, setPushMin] = useState("");
 
@@ -92,10 +92,6 @@ export default function CostCutter() {
       option.toLowerCase().startsWith("cut") ? `Got it. Penny adds a cancel to-do for ${q.merchant}.` : `Got it. Penny filed ${q.merchant}.`)) setReason("");
   };
 
-  const saveToken = async () => {
-    if (await run("token", "mercury_token_save", { p_value: token.trim() }, "Saved. Penny and Bank Watch pick it up on their next run.")) { setToken(""); setReplacing(false); }
-  };
-
   if (failed && !d) {
     return (
       <div className="mx-auto max-w-4xl px-4 pb-16 sm:px-6">
@@ -116,7 +112,6 @@ export default function CostCutter() {
   const watched = d.merchants.filter((m) => m.status !== "cut");
   const watchedTotal = watched.reduce((n, m) => n + (m.est_monthly_usd ?? 0), 0);
   const needToken = !d.token.saved;
-  const showTokenField = needToken || replacing;
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 px-4 pb-16 sm:px-6">
@@ -180,7 +175,7 @@ export default function CostCutter() {
       )}
 
       <Section id="bank-feed" title="Bank feed"
-        footer="Create the token in Mercury under Settings, API tokens, and choose Read only. It is saved write-only in the Vault: this page can replace it but never shows it again. Penny and Bank Watch (the Settlements bank matcher) both use it. Only totals per merchant are kept, never raw transactions or account numbers.">
+        footer="The token is pasted in the Mercury tokens card below. Penny and Bank Watch (the Settlements bank matcher) both use it. Only totals per merchant are kept, never raw transactions or account numbers.">
         <div className={card}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -194,19 +189,6 @@ export default function CostCutter() {
               {needToken ? <CircleAlert className="h-3.5 w-3.5" aria-hidden /> : <Check className="h-3.5 w-3.5" aria-hidden />}{needToken ? "Needs a token" : "Connected"}
             </span>
           </div>
-          {showTokenField ? (
-            <div className="mt-4 space-y-3">
-              <input className={field} type="password" autoComplete="off" spellCheck={false} placeholder="Paste the read-only Mercury token" value={token} onChange={(e) => setToken(e.target.value)} aria-label="Mercury read-only token" />
-              <div className="flex flex-wrap gap-2">
-                <button type="button" className={btnPrimary} disabled={busy !== null || token.trim().length < 20} onClick={() => void saveToken()}>
-                  {busy === "token" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Lock className="h-4 w-4" aria-hidden />}Save to Vault
-                </button>
-                {replacing && <button type="button" className={btnTinted} onClick={() => { setReplacing(false); setToken(""); }}>Cancel</button>}
-              </div>
-            </div>
-          ) : (
-            <div className="mt-3"><button type="button" className={btnPlain} onClick={() => setReplacing(true)}>Replace token</button></div>
-          )}
           {d.feed.job && (
             <p className={cn("mt-4 text-[13px] leading-snug", d.feed.job.ok ? secondary : tint.orange)}>
               Last run {stamp(d.feed.job.last_run_at)}: {d.feed.job.summary ?? (d.feed.job.ok ? "ok" : "problem")}
@@ -214,6 +196,8 @@ export default function CostCutter() {
           )}
         </div>
       </Section>
+
+      <MercuryTokensCard />
 
       <Section title="Services Penny watches" footer="Services paid for inside Bestly (AI, phones, video) are checked against their own usage. Bank charges appear here once the feed is connected.">
         <div className={cn(card, "divide-y p-0", separator)}>
