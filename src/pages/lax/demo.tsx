@@ -203,7 +203,9 @@ export function demoPub(kind: DemoKind, stage: string): any {
   if (kind === "delivery") {
     // The server keeps kind "home" for delivery trips (so older pages keep working) and adds place + delivery.
     return {
-      ...base, kind: "home", place: "delivery", spot: null, key,
+      ...base, kind: "home", place: "delivery", key,
+      // Jared parks near the hotel; the spot is public from 2 h before pickup, and the page itself hides it until the key is released.
+      spot: open || (stage !== "held" && now >= s - 2 * H && now < e) ? { lat: DEMO_DELIVERY.lat - 0.0006, lon: DEMO_DELIVERY.lon - 0.0009, observed_at: iso(now - 4 * 60e3) } : null,
       delivery: { ...DEMO_DELIVERY, info: stage === "info-done" ? { ...DEMO_DELIVERY.info, room: "214", front_desk: "Self-park in the back lot, $25 a night", reported_at: iso(now - 20 * 60e3), via: "leo" } : DEMO_DELIVERY.info,
         ask: stage === "info-done" ? [] : DEMO_DELIVERY.ask },
     };
