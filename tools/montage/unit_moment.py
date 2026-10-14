@@ -7,7 +7,7 @@ Every render only composites them (comp/brand: Scene.unit / EndCard.unit), so a 
 
 Four moments, ONE per video (variety.py rotates them: never the same as the last Bestly Cloud video):
   reveal   the lid floats off and the camera swings over the open internals (a "split" scene: text on top, the unit below)
-  turn     a slow turn of the closed unit in the free band under a scene's text (never behind a line)
+  turn     a slow turn of the closed unit under the headline (a "split" scene like reveal: text on top, the unit below, never behind a line)
   glimpse  the closed unit in the bottom-right corner of a scene, half out of frame
   hero     the closing card: the closed unit powers on above the name and the benefit chips
 
@@ -46,6 +46,10 @@ def spec(moment, kit=KIT):
     return {"moment": moment, "dir": f"unit/{moment}", "count": int(m.get("count") or 0), "fps": int(m.get("fps") or 30)}
 
 
+def s_big(s):
+    return bool(s.get("big") or s.get("items"))
+
+
 def _scene_for(moment, scenes):
     """Index of the scene that carries the moment, or "end" for the closing card."""
     n = len(scenes)
@@ -55,7 +59,8 @@ def _scene_for(moment, scenes):
     if moment == "reveal":
         return 1 if n > 1 else 0          # the second scene: "what it is" has been said, now show it
     if moment == "turn":
-        return (ok or [0])[0]             # first scene with room; the unit sits in the band under the text
+        plain = [i for i in ok if not s_big(scenes[i])]
+        return (plain or ok or [0])[0]    # first scene with room (one without a big number / list, which the split layout does not draw)
     # glimpse: a later scene (the third), so the first two stay clean
     later = [i for i in ok if i >= 2] or ok or [min(1, n - 1)]
     return later[0]
@@ -71,7 +76,7 @@ def assign(out, moment, kit=KIT):
         out["end"]["unit"] = u
     else:
         out["scenes"][where]["unit"] = u
-        if moment == "reveal":
+        if moment in ("reveal", "turn"):
             out["scenes"][where]["layout"] = "split"       # text on top, the unit under the hairline
     out["unit"] = {"moment": moment, "scene": where}
     return out["unit"]
