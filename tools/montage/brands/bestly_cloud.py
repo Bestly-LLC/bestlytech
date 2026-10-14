@@ -4,7 +4,10 @@ writer and checks are in _common.py. Design: comp/brand (BrandShort) in the Best
 The closing card shows bestly.tech, the same line every Bestly card carries in its footer.
 2026-10-12: scenes carry one of ICONS (drawn as motion graphics by comp/brand), scene 1 says plainly what the product is (explain_first),
 and the closing card is a rich one: hero logo, one plain line, three benefit chips with icons, glowing bestly.tech button. A re-cut whose note
-mentions the end card may propose the sub line and chips (claim-checked); this default is the fallback. Chips must pass _common.chip_problems (concrete, icon matches meaning)."""
+mentions the end card may propose the sub line and chips (claim-checked); this default is the fallback. Chips must pass _common.chip_problems (concrete, icon matches meaning).
+2026-10-14 (Jared, 12:53 AM, standing note on client bestly-cloud): EVERY Bestly Cloud video shows the 3D unit (the box), "or teased a little". CFG["unit_moments"]
+turns it on: variety.py picks one moment per video (reveal / turn / glimpse / hero, rotating, never the last video's), decorate puts it on a scene or the
+closing card, REQUIRE_UNIT makes worker.check fail a video without it. Frames: UNIT_KIT (rendered once from the site's GLB, see unit_moment.py + unit3d/)."""
 import sys
 
 sys.path.insert(0, "/opt/bestly/cron")
@@ -20,6 +23,7 @@ ICONS = ["files", "lock", "box", "people", "calendar", "chat", "key", "check", "
 CFG = {
     "slug": "bestly-cloud", "name": NAME, "claim": "bestly-cloud", "about": bs.PRODUCT, "lessons_brand": None,
     "mood": "confident",   # music bed fallback when the writer gives none (music.py)
+    "unit_moments": ["reveal", "turn", "glimpse", "hero"], "unit_kit": "/opt/bestly/social-kit/unit3d",   # the 3D unit rule (unit_moment.py)
     "themes": THEMES, "tail": "", "name_patterns": [r"\bbestly\b"], "icons": ICONS, "explain_first": True, "no_absolutes": True,
     "shot_brand": ("A small business at work, seen from behind or in close-up: a workshop bench, a shop counter, a studio desk, "
                    "a shelf with one small box with a softly glowing light, cables tidied. Never a readable screen or label."),
@@ -35,6 +39,8 @@ CFG = {
                       {"icon": "box", "text": "A box you own"}]},
 }
 END = CFG["end"]
+REQUIRE_UNIT = True                                  # worker.check fails a Bestly Cloud video that has no 3D unit moment
+UNIT_KIT = CFG["unit_kit"]
 BRAND = {
     "fonts": [{"family": "BestlySerif", "file": "fonts/serif700.woff2", "weight": "700"},
               {"family": "BestlySerif", "file": "fonts/serif600.woff2", "weight": "600"},

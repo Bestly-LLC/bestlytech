@@ -27,7 +27,7 @@ Allowed per client by `montage_brand_policy.montage_ok` (read by `montage_quote`
 | `hoku` | `brands/hoku.py` | `jobs/hoku_maker.py` (ABOUT, claim_check, fact check) | `comp/hoku` (HokuShort) |
 | `inventoryproof` | `brands/inventoryproof.py` | `jobs/brand_maker.py` BRANDS['inventoryproof'], claim slug `inventoryproof` | `comp/brand` (BrandShort): Manrope, card grounds + accents, Proofy on the closing card |
 | `cookie-yeti` | `brands/cookie_yeti.py` | `jobs/brand_maker.py` BRANDS['cookieyeti'], claim slug `cookie-yeti` | `comp/brand`: Inter Tight, plum/teal card grounds, app icon on the closing card |
-| `bestly-cloud` | `brands/bestly_cloud.py` | `jobs/bestly_social.py` PRODUCT, `claim_check('bestly-cloud')` (severity `setup` = no rules yet = house rules only) | `comp/brand`: Bestly card kit colors/type, the real pill logo, scene icons, rich closing card |
+| `bestly-cloud` | `brands/bestly_cloud.py` | `jobs/bestly_social.py` PRODUCT, `claim_check('bestly-cloud')` (severity `setup` = no rules yet = house rules only) | `comp/brand`: Bestly card kit colors/type, the real pill logo, scene icons, rich closing card; every video shows the 3D unit (`unit_moment.py`, see below) |
 | `bestly-studio` | `brands/bestly_studio.py` | `jobs/bestly_social.py` PRODUCT_STUDIO, `claim_check('bestly-studio')` (rules start unapproved), `docs/studio-promo/claims.md`; text only, one posting tip per video, filed to Drafts > To review (Friday rotation of `bestly_social studio`) | `comp/brand`: same as bestly-cloud, closing card says bestly.tech/studio |
 | `bestly-agent` | `brands/bestly_agent.py` | facts in the module, hand-written ads selected by `[ad:missed-call]` / `[ad:what-she-does]` in the brief (a re-cut marked `[recut-ad]` keeps the script), `claim_check('bestly-agent')` (13 rules, unapproved), number guard (`extra_check`); `docs/bestly-agent-ad-opusplan.md` | `comp/brand`: indigo ground, orchid second glow, Inter, Maya's orb on the closing card, phone call card (fictional caller, made-up business), prices in the accent; music borrowed from the other Bestly brands |
 
@@ -40,6 +40,29 @@ Brand files the videos use: `fetch-assets.sh` downloads Cookie Yeti and Inventor
 3. Add a `montage_brand_policy` row (montage_ok false until a test video has been looked at), then flip it to true.
 4. Render one free text-only job through `montage_start`, look at frames, then name the brand in `make_montage`'s description in `studio-chat`.
 (`comp/<slug>` is still supported: leave `COMP_DIR` unset and om_render copies `comp/<slug>`.)
+
+## Bestly Cloud 3D unit (2026-10-14, Jared's standing note on client `bestly-cloud`)
+Rule: **every Bestly Cloud video shows the 3D render of the unit (the box)**, "or teased a little". A reveal, a slow turn or a glimpse is enough.
+The Bestly Agent price-tag icon lost its stray dots the same night (see below).
+- **How it is made.** `unit3d/` renders the real bestly.tech model (`public/models/device-web-split.glb`, three 0.160.1, same ACES tone mapping, RoomEnvironment, key/fill/rim lights and
+  camera maths as `CloudScrollHero.tsx`, plus an indigo kicker light so the gunmetal reads on the night ground) ONCE, in headless Chromium (SwiftShader, any machine with Node + Playwright;
+  about 4 s a frame on 2 cores), into transparent PNGs, then `unit3d/frames.py` turns them into WebP with alpha + `manifest.json`. They live on the Pi in
+  `/opt/bestly/social-kit/unit3d/<moment>/fNNN.webp` (1200x1200, 30 fps, about 20 MB in all; repo copy: `unit3d/bestly-unit-frames.tar`, install: `unit3d/install_on_pi.sh`).
+  A video costs nothing extra: `comp/brand` only composites them (`Scene.unit` / `EndCard.unit`, `UnitView`). No WebGL on the Pi, no b-roll, no LTX, no voice.
+- **Four moments, one per video** (`unit_moment.py`): `reveal` (the lid floats off and the camera swings over the open internals, in a split scene: text on top, unit below; scene 2),
+  `turn` (a full slow turn of the closed unit, big and soft behind a scene's headline, under a feathered veil), `glimpse` (the closed unit half out of the bottom-right corner of a later scene),
+  `hero` (the closing card: the unit powers on above the name; the chips go compact). Every glow is a radial gradient that fades out; the frames carry only the unit's own silhouette.
+- **How it rotates.** `variety.pick_unit` (called by `make_plan`) offers only moments whose frames are on disk, never the last Bestly Cloud video's moment, then the one used longest ago
+  (a moment not seen in the last 8 videos first). `unit` is a seventh look dimension (`fingerprint.unit` in `studio_look_ledger`), `variety.gate` counts it and refuses a repeat
+  (a miss re-rolls like any look miss), `variety.decorate` puts the moment on a scene or the end card via `unit_moment.assign`. Force one with `[look:unit=turn]` in a brief or note.
+- **The rule is enforced.** `brands/bestly_cloud.py`: `CFG["unit_moments"]`, `REQUIRE_UNIT = True`, `UNIT_KIT`. `worker.process` stages the chosen frames into the job's `public/unit/<moment>`
+  (a script written before the rule, e.g. one that waited for b-roll, gets a moment added), `worker.check` FAILS a video of a unit-required brand with no unit moment, two moments, frames
+  missing, or props that lost it (`unit_moment.problems`). The plain-cards self-heal keeps the unit. Other brands are untouched.
+- **Re-rendering the frames** (only if the model or the look changes): `cd tools/montage/unit3d && sh build.sh` (needs Node 22, `npm i three@0.160.1 playwright`, `npx playwright install chromium`).
+  Test: `python3 /opt/bestly/montage/tests/unit3d_rule.py` (rotation, placement, gate, check; writes props for stills).
+- **Price-tag icon.** `ICONS.pricetag` (Bestly Agent's "From $49 a month") had two lone dots, the hole at the corner and a dot in the body. Both are gone; the tag now carries a "$".
+  Audit of the other icons: only `pricetag` was the defect. `tag` (Bestly Cloud chip "No per-person fees") keeps its corner hole because the slash balances it (one-line change if Jared wants it gone: drop `H(circle(72, 28, 5))` from `ICONS.tag`).
+- Rollback: copy `*.bak_3dunit_20261014` back next to worker.py / variety.py / brands/bestly_cloud.py / comp/brand/BrandShort.tsx / README.md, delete `unit_moment.py`, restart `bestly-montage`.
 
 ## Music (every video ships with a real music bed, Jared 2026-10-12)
 Rule: `bestly_memory` `studio/rule-music-every-video`. The old synthesized pad (10 percent volume) is gone.
