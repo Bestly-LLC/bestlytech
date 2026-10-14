@@ -732,7 +732,7 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number; compact?: 
   const tz = !!e.tease;                                   // a Next tease sits at the foot: the stack is top-aligned and tighter so nothing touches it
   const sparks = [[170, 430, 34], [905, 360, 26], [110, 1130, 22], [965, 980, 30], [210, 1610, 28], [880, 1590, 24], [560, 270, 20]];
   return (
-    <AbsoluteFill style={{alignItems: 'center', justifyContent: tz ? 'flex-start' : 'center', padding: tz ? '250px 90px 0' : '0 90px'}}>
+    <AbsoluteFill style={{alignItems: 'center', justifyContent: tz ? 'flex-start' : 'center', padding: tz ? (e.unit ? '215px 90px 0' : '250px 90px 0') : '0 90px'}}>
       <div style={{position: 'absolute', left: 540 - 760, top: 780 - 760, width: 1520, height: 1520,
                    background: `radial-gradient(circle, ${rgba(t.accent, 0.2 + 0.04 * pulse)} 0%, ${rgba(t.accent, 0.07)} 38%, ${rgba(t.accent, 0)} 68%)`,
                    opacity: Math.min(1, logo)}} />
@@ -741,14 +741,14 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number; compact?: 
                              width: r * 2, height: r * 2, opacity: Math.min(1, logo) * (0.35 + 0.45 * Math.sin(f / (18 + i * 3) + i * 2) ** 2),
                              background: `radial-gradient(circle, ${rgba(t.accent, 0.85)} 0%, ${rgba(t.accent, 0.22)} 42%, ${rgba(t.accent, 0)} 72%)`}} />
       ))}
-      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: tz ? 0 : compact ? (e.unit ? 0 : 60) : 90}}>
+      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: tz ? 0 : compact ? 60 : (e.unit ? 40 : 90)}}>
         {e.unit ? (
-          <UnitView u={e.unit} t={t} dur={dur} size={tz ? 560 : 680} holdEnd glow={1} style={{marginTop: tz ? -60 : -110, marginBottom: tz ? -150 : -190}} />
+          <UnitView u={e.unit} t={t} dur={dur} size={tz ? 500 : 700} holdEnd glow={1} style={{marginTop: tz ? -80 : -130, marginBottom: tz ? -120 : -190}} />
         ) : null}
         {b.end.orb ? (
           <div style={{marginBottom: tz ? 40 : 56, opacity: Math.min(1, logo), transform: `scale(${0.6 + 0.4 * logo})`}}><Orb size={tz ? 150 : 190} t={t} /></div>
         ) : null}
-        {b.end.heroLogo && b.logo.image ? (
+        {b.end.heroLogo && b.logo.image && !e.unit ? (
           <Img src={staticFile(b.logo.image)} style={{height: tz ? 118 : 150, mixBlendMode: (b.logo.blend as any) || 'normal', opacity: Math.min(1, logo),
                                                       transform: `scale(${0.7 + 0.3 * logo})`, marginBottom: tz ? 22 : 34}} />
         ) : null}
@@ -819,7 +819,7 @@ const EndQA: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b, t
 const EndView: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = (p) => {
   if (p.e.layout === 'qa' && p.e.recap && p.e.recap.q && p.e.recap.a) return <EndQA {...p} />;
   const claim = p.e.layout === 'claim';
-  return (p.e.chips && p.e.chips.length) || p.b.end.heroLogo || p.b.end.orb ? <EndRich {...p} compact={claim || !!p.e.unit} /> : <EndPlain {...p} flip={claim} />;
+  return (p.e.chips && p.e.chips.length) || p.b.end.heroLogo || p.b.end.orb ? <EndRich {...p} compact={claim} /> : <EndPlain {...p} flip={claim} />;
 };
 
 const Logo: React.FC<{b: Brand; opacity?: number}> = ({b, opacity = 1}) => {
@@ -856,7 +856,7 @@ export const BrandShort: React.FC<BrandProps> = (p) => {
   const fr = (sec: number) => Math.round(sec * fps);
   const rich = !!(p.end && ((p.end.chips && p.end.chips.length) || b.end.heroLogo || b.end.orb));
   // the small corner logo steps aside when the closing card shows its own big one
-  const logoOp = rich && b.end.heroLogo && p.end ? interpolate(f, [fr(p.end.start), fr(p.end.start) + 9], [1, 0], clamp) : 1;
+  const logoOp = rich && b.end.heroLogo && p.end && !p.end.unit ? interpolate(f, [fr(p.end.start), fr(p.end.start) + 9], [1, 0], clamp) : 1;
   const tagOp = p.end ? interpolate(f, [fr(p.end.start) - 6, fr(p.end.start)], [1, 0], clamp) : 1;
   return (
     <LookCtx.Provider value={look}>
