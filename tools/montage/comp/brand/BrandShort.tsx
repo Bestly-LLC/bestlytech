@@ -14,7 +14,7 @@
 // an accent override per video (props.look), a subtle series tag ("Tip 3 of 8") and a "Next:" tease + follow line on the closing card.
 // 2026-10-14 (Bestly Cloud 3D unit, standing brand rule): `unit` on a scene or on the closing card plays a pre-rendered transparent frame sequence of
 // the Bestly Cloud unit (the real 3D model from bestly.tech, rendered once by tools/montage/unit3d): moments reveal (the lid lifts off, in a
-// split scene), turn (slow turn behind a headline), glimpse (corner), hero (closing card). Frames are WebP with alpha, so the unit has no box
+// split scene), turn (slow turn in the free band under the headline), glimpse (corner), hero (closing card). Frames are WebP with alpha, so the unit has no box
 // around it; everything around it is a feathered glow. Also: the price tag icon lost its stray dot.
 // Every new prop is optional: props without them draw exactly what this file drew before.
 import React, {useEffect, useState} from 'react';
@@ -533,11 +533,11 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
   ) : null;
   const emblem = um === 'reveal' ? <UnitView u={s.unit as UnitMoment} t={t} dur={dur} size={820} style={{marginBottom: -70}} />
     : hasIcon && !um ? <Emblem name={s.icon as string} t={t} size={s.kicker ? 400 : 440} dur={dur} /> : null;
-  // turn and glimpse sit BEHIND the text (drawn first); the icon stays out of their way
+  // turn sits in the free band below the text, glimpse in the corner (both drawn first); the icon stays out of their way
   const unitLayer = um === 'turn' ? (
+    // the free band under the text block (text sits in the upper two thirds): small, low, never behind a line (Opus review 2026-10-14)
     <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center'}}>
-      <UnitView u={s.unit as UnitMoment} t={t} dur={dur} size={1220} glow={1} alpha={0.9} style={{marginTop: 180}} />
-      <AbsoluteFill style={{background: `radial-gradient(ellipse 62% 30% at 50% 48%, ${rgba(t.veil, 0.5)} 0%, ${rgba(t.veil, 0.24)} 55%, ${rgba(t.veil, 0)} 100%)`}} />
+      <UnitView u={s.unit as UnitMoment} t={t} dur={dur} size={880} glow={1} alpha={0.96} style={{marginTop: 640}} />
     </AbsoluteFill>
   ) : um === 'glimpse' ? (
     <AbsoluteFill>

@@ -7,7 +7,7 @@ Every render only composites them (comp/brand: Scene.unit / EndCard.unit), so a 
 
 Four moments, ONE per video (variety.py rotates them: never the same as the last Bestly Cloud video):
   reveal   the lid floats off and the camera swings over the open internals (a "split" scene: text on top, the unit below)
-  turn     a slow turn of the closed unit behind a scene's headline, big and soft
+  turn     a slow turn of the closed unit in the free band under a scene's text (never behind a line)
   glimpse  the closed unit in the bottom-right corner of a scene, half out of frame
   hero     the closing card: the closed unit powers on above the name and the benefit chips
 
@@ -55,7 +55,7 @@ def _scene_for(moment, scenes):
     if moment == "reveal":
         return 1 if n > 1 else 0          # the second scene: "what it is" has been said, now show it
     if moment == "turn":
-        return (ok or [0])[0]             # behind the first headline that has room
+        return (ok or [0])[0]             # first scene with room; the unit sits in the band under the text
     # glimpse: a later scene (the third), so the first two stay clean
     later = [i for i in ok if i >= 2] or ok or [min(1, n - 1)]
     return later[0]
