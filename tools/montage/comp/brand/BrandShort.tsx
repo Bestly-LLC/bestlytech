@@ -541,7 +541,7 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
     </AbsoluteFill>
   ) : um === 'glimpse' ? (
     <AbsoluteFill>
-      <UnitView u={s.unit as UnitMoment} t={t} dur={dur} size={820} style={{position: 'absolute', right: -250, bottom: -190}} />
+      <UnitView u={s.unit as UnitMoment} t={t} dur={dur} size={820} style={{position: 'absolute', right: -160, bottom: -90}} />
     </AbsoluteFill>
   ) : null;
 
