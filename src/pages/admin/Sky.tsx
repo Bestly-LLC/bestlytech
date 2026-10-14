@@ -600,11 +600,21 @@ export default function Sky() {
               let ux = 0;
               while (ux < 600 * u && hit(carBoxes(ux, 0), homeBoxes)) ux += u;
               const d = Math.hypot(sx, sy);
-              const w = hit(carBoxes(sx, sy), homeBoxes) || feetBetween(HOME, [car.lat, car.lon]) <= 150 ? 1 : Math.max(0, Math.min(1, (ux + 60 * u - d) / (60 * u)));
-              if (w > 0) {
-                const tx = sx + w * (ux - sx), ty = sy + w * (0 - sy);   // blend toward "right of Home"
+              // Beside-Home placement only within 1,200 ft of the Home pin or the garage spot; farther out the car keeps its true direction.
+              const nearHome = feetBetween(HOME, [car.lat, car.lon]) <= 1200 || feetBetween(PARK, [car.lat, car.lon]) <= 1200;
+              if (nearHome) {
+                const w = hit(carBoxes(sx, sy), homeBoxes) || feetBetween(HOME, [car.lat, car.lon]) <= 150 ? 1 : Math.max(0, Math.min(1, (ux + 60 * u - d) / (60 * u)));
+                if (w > 0) {
+                  const tx = sx + w * (ux - sx), ty = sy + w * (0 - sy);   // blend toward "right of Home"
+                  cx = hx + tx * Math.cos(m) + ty * Math.sin(m); cy = hy - tx * Math.sin(m) + ty * Math.cos(m);
+                  inside = fresh;
+                }
+              } else if (d > 0.5 && hit(carBoxes(sx, sy), homeBoxes)) {
+                // Radial nudge: push straight outward along the true direction from Home until the marker is clear.
+                let rr = d;
+                while (rr < d + 600 * u && hit(carBoxes((sx * rr) / d, (sy * rr) / d), homeBoxes)) rr += u;
+                const tx = (sx * rr) / d, ty = (sy * rr) / d;
                 cx = hx + tx * Math.cos(m) + ty * Math.sin(m); cy = hy - tx * Math.sin(m) + ty * Math.cos(m);
-                inside = fresh;
               }
             }
             const hw = homeShown ? Math.max(0, Math.min(1, (550 - feetBetween(PARK, [car.lat, car.lon])) / 150)) : 0;
