@@ -580,7 +580,9 @@ export default function Wall() {
 
   const nudge = (dx: number, dy: number) => {
     const px = fine ? 1 : 10;
-    move(sel, (dx * px) / 1920, (dy * px) / 1080, "now");
+    // "Move everything together" on: the arrows slide every area, whichever dot is picked
+    const n = (tool === "mask" ? S.current?.mask?.length : quad?.length) ?? 0;
+    move(linkAll && n ? n : sel, (dx * px) / 1920, (dy * px) / 1080, "now");
   };
 
   /** Resize the strip without changing its shape: scale all 4 corners around their center. */
@@ -1389,7 +1391,7 @@ export default function Wall() {
               <Row label="Alignment grid" detail="Fills the projector with a labeled grid. While you adjust, the block you picked below glows on the wall." htmlFor="wall-cal">
                 <Switch className={swHit} id="wall-cal" checked={!!s.calGrid} onCheckedChange={(v) => change({ calGrid: v })} />
               </Row>
-              <Row label="Move everything together" detail="Bumped the projector? Drag the blue dot and every area slides as one." htmlFor="wall-link">
+              <Row label="Move everything together" detail="Bumped the projector? The arrows (or the blue dot) slide the strip, blocked area, sign wall and sky as one." htmlFor="wall-link">
                 <Switch className={swHit} id="wall-link" checked={linkAll} onCheckedChange={setLinkAll} />
               </Row>
               <Row label="Show guides on the wall" detail="Outlines the strip and blocked area so you can line them up." htmlFor="wall-guides">
