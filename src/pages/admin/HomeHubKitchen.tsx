@@ -47,10 +47,10 @@ const LOCS: { key: Loc; label: string; icon: LucideIcon }[] = [
 
 const STATUS_WORD: Record<Status, string> = { have: "in stock", low: "low", out: "used up", arriving: "on the way" };
 
-const SETTABLE: { key: Exclude<Status, "arriving">; label: string; on: string }[] = [
-  { key: "have", label: "Have", on: "bg-white/[0.14] text-white" },
-  { key: "low", label: "Low", on: "bg-amber-500/20 text-amber-200" },
-  { key: "out", label: "Out", on: "bg-red-500/20 text-red-200" },
+const SETTABLE: { key: Exclude<Status, "arriving">; label: string; thumb: string; ink: string }[] = [
+  { key: "have", label: "Have", thumb: "bg-white/[0.14]", ink: "text-white" },
+  { key: "low", label: "Low", thumb: "bg-amber-500/25", ink: "text-amber-200" },
+  { key: "out", label: "Out", thumb: "bg-red-500/25", ink: "text-red-200" },
 ];
 
 const SUFFIX_S = /[^s]s$/i;
@@ -72,6 +72,25 @@ export default function HomeHubKitchen() {
   const [statusFilter, setStatusFilter] = useState<Status | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [undoing, setUndoing] = useState<number | null>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+
+  // The search bar only turns into a material once the list is scrolling under it (scroll edge effect).
+  useEffect(() => {
+    let raf = 0;
+    const check = () => {
+      raf = 0;
+      const el = barRef.current;
+      if (!el) return;
+      const top = parseFloat(getComputedStyle(el).top) || 0;
+      setStuck(el.getBoundingClientRect().top <= top + 1 && window.scrollY > 0);
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(check); };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    check();
+    return () => { window.removeEventListener("scroll", onScroll); window.removeEventListener("resize", onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, [loaded]);
 
   const load = useCallback(async () => {
     const { data: d, error: e } = await rpc("basil_kitchen");
@@ -114,6 +133,7 @@ export default function HomeHubKitchen() {
     const eventId = (res as { event_id?: number } | null)?.event_id;
     const verb = status === "low" || !SUFFIX_S.test(item.name) ? "is" : "are";
     toast.success(`${item.name} ${verb} ${STATUS_WORD[status]}`, eventId ? {
+      duration: 6000,
       action: { label: "Undo", onClick: () => undo(eventId, item.name) },
     } : undefined);
     load();
@@ -192,7 +212,14 @@ export default function HomeHubKitchen() {
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
             <Panel className="min-w-0">
-              <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <div
+                ref={barRef}
+                className={cn(
+                  "sticky top-12 sm:top-14 bento:top-16 z-20 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 mb-4 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 flex flex-col sm:flex-row gap-3 rounded-t-2xl border-b",
+                  "motion-safe:transition-[background-color,border-color] motion-safe:duration-200",
+                  stuck ? "bg-black/85 backdrop-blur-xl backdrop-saturate-150 border-white/[0.08]" : "bg-transparent border-transparent",
+                )}
+              >
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/45" aria-hidden />
                   <Input
@@ -203,6 +230,7 @@ export default function HomeHubKitchen() {
                 </div>
                 <Segmented
                   label="Where"
+                  dense
                   className="w-full sm:w-auto"
                   value={loc}
                   onChange={(v) => setLoc(v as Loc | "all")}
@@ -210,6 +238,9 @@ export default function HomeHubKitchen() {
                 />
               </div>
 
+              <p className="sr-only" aria-live="polite">
+                {filtering ? `${filtered.length} ${filtered.length === 1 ? "item" : "items"} shown` : ""}
+              </p>
               {groups.length === 0 ? (
                 <EmptyState
                   compact icon={ChefHat}
@@ -221,12 +252,12 @@ export default function HomeHubKitchen() {
                 <div className="space-y-6">
                   {groups.map((g) => (
                     <section key={g.key} aria-label={g.label}>
-                      <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60 mb-1">
+                      <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60 mb-1">
                         <g.icon className="h-3.5 w-3.5" aria-hidden />
                         {g.label}
                         <span className="tabular-nums font-normal">{g.items.length}</span>
-                      </h3>
-                      <ul className="divide-y divide-white/[0.05]">
+                      </h2>
+                      <ul className="divide-y divide-white/[0.05] [&_button]:scroll-mt-48 [&_button]:scroll-mb-24">
                         {g.items.map((item) => (
                           <ItemRow key={item.id} item={item} onStatus={setStatus} onEdit={edit} />
                         ))}
@@ -320,19 +351,41 @@ function StatTile({ label, value, tone, icon: Icon, active, onClick }: {
   );
 }
 
-function Segmented({ label, value, onChange, options, className }: {
-  label: string; value: string; onChange: (v: string) => void; options: { key: string; label: ReactNode; on?: string }[]; className?: string;
+/** Segmented control with a sliding thumb: equal columns, so the thumb moves by whole widths. The thumb only moves
+ * because a choice changed; reduced motion snaps it. A value outside the options (an item that is "on the way") hides it. */
+function Segmented({ label, value, onChange, options, className, dense }: {
+  label: string; value: string; onChange: (v: string) => void;
+  options: { key: string; label: ReactNode; thumb?: string; ink?: string }[]; className?: string;
+  /** Five-up controls on a phone: a step smaller so every label fits its column. */
+  dense?: boolean;
 }) {
+  const idx = options.findIndex((o) => o.key === value);
+  const sel = idx >= 0 ? options[idx] : null;
   return (
-    <div role="group" aria-label={label} className={cn("flex sm:inline-flex rounded-xl bg-white/[0.05] p-1", className)}>
+    <div
+      role="group" aria-label={label}
+      className={cn("relative grid sm:inline-grid rounded-xl bg-white/[0.05] p-1", className)}
+      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "absolute top-1 bottom-1 left-1 rounded-lg shadow-sm",
+          "motion-safe:transition-[transform,background-color,opacity] motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.32,0.72,0,1)]",
+          sel?.thumb ?? "bg-white/[0.14]", sel ? "opacity-100" : "opacity-0",
+        )}
+        style={{ width: `calc((100% - 0.5rem) / ${options.length})`, transform: `translateX(${Math.max(idx, 0) * 100}%)` }}
+      />
       {options.map((o) => {
         const on = o.key === value;
         return (
           <button
             key={o.key} type="button" aria-pressed={on} onClick={() => onChange(o.key)}
             className={cn(
-              "flex-1 sm:flex-none min-h-11 sm:min-h-8 px-2 sm:px-3 rounded-lg text-sm font-medium whitespace-nowrap motion-safe:transition-colors motion-safe:active:scale-[0.96]", TAP,
-              on ? (o.on ?? "bg-white/[0.14] text-white") : "text-white/60 hover:text-white",
+              "relative min-h-11 sm:min-h-8 rounded-lg font-medium whitespace-nowrap",
+              dense ? "px-1 sm:px-3 text-[0.8125rem] sm:text-sm" : "px-2 sm:px-3 text-sm",
+              "motion-safe:transition-[color,transform] motion-safe:duration-150 motion-safe:active:scale-[0.96]", TAP,
+              on ? (o.ink ?? "text-white") : "text-white/60 hover:text-white",
             )}
           >
             {o.label}
@@ -367,12 +420,12 @@ function ItemRow({ item, onStatus, onEdit }: {
         )}
         {detail && <p className="text-xs text-white/55 mt-0.5">{detail}</p>}
       </div>
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         <Segmented
           label={`${item.name} status`}
           value={item.status}
           onChange={(v) => onStatus(item, v as Status)}
-          options={SETTABLE.map((s) => ({ key: s.key, label: s.label, on: s.on }))}
+          options={SETTABLE}
         />
         <ActionMenu
           label={`More for ${item.name}`}
