@@ -95,3 +95,9 @@ Implementation.
 - Verified with `/api/template`: Costco renders `Costco Delivery at the Door | Grocery Delivery | (empty) | Groceries`, Chipotle renders `Food's at the door | Chipotle | Scout | Food`. The `runjob.py doordash_pickup --dry` run is clean. No test event, no HA test run.
 
 Undo: `sudo cp -p <file>.bak_costco2_202610141858 <file>` for the three files, then reload `script` and `automation` in HA.
+
+## Title + icon (Costco, 2026-10-14 7:09 PM)
+
+- Title `Costco Delivery at the Door` -> `Costco Delivered` (push, Live Activity, away push, wall banner). Backups `.bak_costco3_202610141908` (both YAML copies + job).
+- Live Activity icon for Costco: `mdi:cart`, icon + progress bar Costco red `#E31837` (DoorDash keeps `mdi:food` orange). Backups `.bak_costco4_202610141909` (both YAML copies).
+- `check_config` passed both times; scripts/automations reloaded; the running nag was restarted.
