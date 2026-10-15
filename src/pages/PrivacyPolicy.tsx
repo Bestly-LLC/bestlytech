@@ -373,9 +373,9 @@ export default function PrivacyPolicy() {
           <a href="https://policies.google.com/privacy" className="text-foreground underline" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>.
         </p>
         <p className="text-muted-foreground leading-relaxed">
-          You can disconnect at any time. Remove Bestly Studio in your{" "}
-          <a href="https://security.google.com/settings/security/permissions" className="text-foreground underline" target="_blank" rel="noopener noreferrer">Google Account permissions</a>,
-          or email privacy@bestly.tech. We then delete the stored token and channel details, within 30 days. Videos already posted stay on your channel until you delete them there.
+          You can disconnect at any time from your Bestly portal, which stops all posting to your channel right away. You can also remove Bestly Studio in your{" "}
+          <a href="https://security.google.com/settings/security/permissions" className="text-foreground underline" target="_blank" rel="noopener noreferrer">Google Account permissions</a>.
+          To have us delete the stored token and channel details, email privacy@bestly.tech; we delete them within 30 days and confirm by reply. Videos already posted stay on your channel until you delete them there.
         </p>
       </>
     )},
