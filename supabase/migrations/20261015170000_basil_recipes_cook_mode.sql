@@ -339,3 +339,18 @@ begin
   if d !~ 'pantry_dinner_ideas_ex' then raise exception 'basil_kitchen patch incomplete'; end if;
   execute d;
 end $$;
+
+-- Copy fixes after the first preview: a bolded ingredient is followed by its amount, so "of the coconut milk" /
+-- "the rest of the" after a token read twice. The token's amount says it instead.
+update pantry_recipes set
+  steps = replace(replace(replace(replace(replace(steps::text,
+            'warm {garlic} in {coconut|2 tbsp} of the coconut milk for 1 minute', 'warm {garlic} in {coconut|2 tbsp} for 1 minute'),
+            'Add the rest of the {coconut} and the {fish}', 'Add the {coconut|rest of the can} and the {fish}'),
+            'Add the rest of the {coconut|the rest} and the {fish}', 'Add the {coconut|rest of the can} and the {fish}'),
+            'Brush on the rest of the {chili}', 'Brush on the {chili|the rest}'),
+            'Brush on the rest of the {chili|the rest}', 'Brush on the {chili|the rest}')::jsonb,
+  omni_steps = case when omni_steps is null then null else replace(replace(replace(omni_steps::text,
+            'Add {garlic} and {coconut|2 tbsp} of the coconut milk to the bowl.', 'Add {garlic} and {coconut|2 tbsp} to the bowl.'),
+            'Add the rest of the {coconut} and the {fish}', 'Add the {coconut|rest of the can} and the {fish}'),
+            'Add the rest of the {coconut|the rest} and the {fish}', 'Add the {coconut|rest of the can} and the {fish}')::jsonb end
+where name in ('Coconut garlic shrimp', 'Sweet chili salmon and rice');
