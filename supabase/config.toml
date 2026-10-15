@@ -157,3 +157,6 @@ project_id = "rcqfqhguwpmaarseifqg"
 
 [functions.card-scan]
   verify_jwt = false
+
+[functions.basil-chef]
+    verify_jwt = false
