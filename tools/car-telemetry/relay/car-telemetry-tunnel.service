@@ -1,0 +1,23 @@
+# Blue Steel live location: reverse SSH tunnel from the Pi to the AWS relay (bestly-telemetry-relay, 44.241.28.216).
+# The relay's port 443 (telemetry.bestly.tech) is passed to 127.0.0.1:9444 there, which this tunnel carries to the
+# receiver on the Pi's 127.0.0.1:8444. The relay account can only open that one forward (no shell, no TTY).
+[Unit]
+Description=Car telemetry tunnel to the AWS relay
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+ExecStart=/usr/bin/ssh -N -T \
+  -i /opt/bestly/telemetry/relay/id_ed25519 \
+  -o UserKnownHostsFile=/opt/bestly/telemetry/relay/known_hosts -o StrictHostKeyChecking=yes \
+  -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -o ConnectTimeout=15 \
+  -R 127.0.0.1:9444:127.0.0.1:8444 tunnel@44.241.28.216
+Restart=always
+RestartSec=15
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

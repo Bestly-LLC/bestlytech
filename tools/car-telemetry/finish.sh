@@ -1,48 +1,52 @@
 #!/bin/bash
-# finish.sh - the last step of Blue Steel live location. Run it ONLY after the public entrance is open:
+# finish.sh - the last step of Blue Steel live location. Run it ONLY after the relay route is up:
 #
-#     sudo tailscale funnel --bg --tcp=8443 tcp://127.0.0.1:8444
+#     car -> telemetry.bestly.tech:443 (DNS-only A record -> AWS relay 44.241.28.216)
+#         -> reverse SSH tunnel opened by the Pi (car-telemetry-tunnel.service) -> receiver on 127.0.0.1:8444
 #
-# (public port 8443 -> the receiver on 127.0.0.1:8444; NOT 8443 locally, that is Pi-hole's admin page).
+# (The Tailscale Funnel route was dropped on 2026-10-14: Tesla only sends to a hostname under the partner domain
+#  bestly.tech, and a Funnel can only serve *.ts.net names. See relay/README.md.)
 # What it does, in order, stopping at the first thing that is wrong:
-#   1. Confirms the Funnel points at 127.0.0.1:8444 (aborts if it points at 8443) and the old /v1 entrance is untouched.
-#   2. Confirms the public side presents OUR certificate (issuer "Bestly Telemetry CA"), reached the way the car will reach it.
+#   1. Confirms the receiver container and the tunnel service are running, and the old Funnel on tcp 8443 is off.
+#   2. Confirms telemetry.bestly.tech resolves (via 1.1.1.1) to the relay and the public side presents OUR certificate.
 #   3. Switches streaming on and queues telemetry_push, then telemetry_check (database function, authorized by the ingest token).
 #      It refuses if Tesla's grant lacks the vehicle_location scope (FORCE=1 overrides).
 #   4. Waits for both jobs and prints what Tesla said.
-# Undo: sudo tailscale funnel --tcp=8443 tcp://127.0.0.1:8444 off ; then ask Claude to queue telemetry_delete.
+# Undo: sudo systemctl disable --now car-telemetry-tunnel ; then ask Claude to queue telemetry_delete.
 # Secrets: reads the ingest token from /opt/bestly/telemetry/.env (root 0600). Never prints it.
 set -uo pipefail
 [ "$(id -u)" = 0 ] || exec sudo -E bash "$0" "$@"
 D=/opt/bestly/telemetry
-HOST=bestly-pi.taile42611.ts.net
+HOST=telemetry.bestly.tech
+PORT=443
+RELAY_IP=44.241.28.216
 SB=https://rcqfqhguwpmaarseifqg.supabase.co
 set -a; . "$D/.env"; set +a
 die() { echo "STOP: $*" >&2; exit 1; }
 say() { printf '%s  %s\n' "$(date '+%I:%M:%S %p')" "$*"; }
 
-say "1/4 checking the Funnel"
-FS=$(tailscale funnel status 2>&1) || die "could not read 'tailscale funnel status'"
-echo "$FS" | sed 's/^/      /'
-echo "$FS" | grep -Eq '(127\.0\.0\.1|localhost):8443' && die "the Funnel points at local port 8443 (Pi-hole's admin page). Turn it off and use 127.0.0.1:8444."
-echo "$FS" | grep -Eq '(127\.0\.0\.1|localhost):8444' || die "no Funnel to 127.0.0.1:8444 yet. Run: sudo tailscale funnel --bg --tcp=8443 tcp://127.0.0.1:8444"
-echo "$FS" | grep -q '/v1' || die "the existing /v1 entrance is missing from the Funnel status; not continuing"
+say "1/4 checking the receiver and the tunnel"
 DP=$(docker ps --format '{{.Names}} {{.Status}}')
 echo "$DP" | grep -q 'car-telemetry-fleet-telemetry-1 Up' || die "the receiver container is not running"
+systemctl is-active --quiet car-telemetry-tunnel || die "the tunnel to the relay is not running: journalctl -u car-telemetry-tunnel -n 30"
+tailscale funnel status 2>/dev/null | grep -q 'tcp://.*:8443' && die "the old Funnel on tcp 8443 is still on. Run: sudo tailscale funnel --tcp=8443 off"
+say "      receiver up, tunnel up, old Funnel off"
 
 say "2/4 checking what the public side presents"
 IP=$(dig +short @1.1.1.1 "$HOST" 2>/dev/null | grep -E '^[0-9.]+$' | head -1)
-TARGET="${IP:-$HOST}"
-[ -n "$IP" ] && say "      public address $IP (via 1.1.1.1), the path the car uses" || say "      no public lookup available; using the tailnet name instead (weaker check)"
-CERT=$(echo | timeout 15 openssl s_client -connect "$TARGET:8443" -servername "$HOST" 2>/dev/null | openssl x509 2>/dev/null)
-[ -n "$CERT" ] || die "no certificate came back from $TARGET:8443"
+[ -n "$IP" ] || die "$HOST does not resolve yet. Add the Cloudflare record: A telemetry -> $RELAY_IP, DNS only (grey cloud)"
+[ "$IP" = "$RELAY_IP" ] || die "$HOST resolves to $IP, not the relay $RELAY_IP. The Cloudflare record must be DNS only (grey cloud), not proxied"
+say "      $HOST -> $IP (via 1.1.1.1), the path the car uses"
+CERT=$(echo | timeout 15 openssl s_client -connect "$IP:$PORT" -servername "$HOST" 2>/dev/null | openssl x509 2>/dev/null)
+[ -n "$CERT" ] || die "no certificate came back from $HOST:$PORT (relay up? tunnel connected?)"
 ISS=$(echo "$CERT" | openssl x509 -noout -issuer)
 echo "      $ISS"
-echo "$ISS" | grep -q 'Bestly Telemetry CA' || die "the certificate is not ours. Something else answers on 8443. Turn the Funnel off."
+echo "$ISS" | grep -q 'Bestly Telemetry CA' || die "the certificate is not ours. Something else answers on $HOST:$PORT"
+echo "$CERT" | openssl x509 -noout -ext subjectAltName 2>/dev/null | grep -q "DNS:$HOST" || die "our certificate does not name $HOST. Run: sudo $D/certs.sh"
 A=$(echo "$CERT" | openssl x509 -noout -fingerprint -sha256)
 B=$(openssl x509 -in "$D/pub/server.crt" -noout -fingerprint -sha256)
 [ "$A" = "$B" ] || die "the certificate differs from /opt/bestly/telemetry/pub/server.crt"
-say "      ours, fingerprint matches"
+say "      ours, names $HOST, fingerprint matches"
 
 say "3/4 switching streaming on and queuing the settings push"
 FORCE_JSON=false; [ "${FORCE:-0}" = 1 ] && FORCE_JSON=true
