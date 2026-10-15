@@ -72,8 +72,10 @@ export default function TuroEntry({ kind }: { kind: Kind }) {
   useEffect(() => {
     const src = new URLSearchParams(window.location.search).get("src");
     if (!src || !/^[a-z0-9-]{1,24}$/.test(src)) return;
-    scanRef.current = ((supabase.rpc as any)("card_scan_log", { p_src: isHostDevice() ? "host" : src, p_kind: kind, p_device: device(), p_device_id: deviceId() }) as Promise<{ data: string | null }>) // eslint-disable-line @typescript-eslint/no-explicit-any
-      .then(({ data }) => data ?? null, () => null);
+    // Goes through the card-scan edge function (rate limited, service-role insert), not a public RPC. A failed log never blocks the page.
+    scanRef.current = supabase.functions
+      .invoke("card-scan", { body: { src: isHostDevice() ? "host" : src, kind, device: device(), device_id: deviceId() } })
+      .then(({ data, error }: { data: { id?: string | null } | null; error: unknown }) => (error ? null : data?.id ?? null), () => null);
     const u = new URL(window.location.href); u.searchParams.delete("src");
     window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
   }, [kind]);
