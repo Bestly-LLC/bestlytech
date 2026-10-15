@@ -423,6 +423,48 @@ def vercel_env_check(project, keys):
                 evidence={"names": bad})
 
 
+FP_ALGO = 2     # must match scripts/security-audit/web_checks.py; older hashes are re-baselined silently
+
+
+def fingerprint_step(host, prev, cur, monitored):
+    """Decide what tonight's homepage fingerprint means. Returns (stored_fp, status).
+
+    stored_fp is what goes into inventory.fingerprints (baseline in text_sha256, a not-yet-confirmed
+    change in pending_sha256). status is one of:
+      None        host not fetched tonight (fetch error): keep last baseline, no verdict
+      unchecked   non-200 / empty body: keep last baseline, no verdict, no hash update
+      redirect    host redirects to another monitored host: no baseline of its own, no verdict
+      baseline    nothing to compare against yet (first run, or hash algorithm changed)
+      same        unchanged (any pending change is dropped)
+      pending     changed once; needs the same new hash on the next run before it counts
+      changed     the same new hash on 2 consecutive runs: a real change
+    """
+    prev = prev or {}
+    keep = {k: prev[k] for k in ("title", "status", "text_sha256", "algo", "pending_sha256", "final_host") if k in prev}
+    if cur is None:
+        return keep, None
+    final = (cur.get("final_host") or "").lower()
+    if final and final != host and final in monitored:
+        return {"title": cur.get("title", ""), "status": cur.get("status"), "text_sha256": None,
+                "algo": FP_ALGO, "final_host": final, "redirect_to": final}, "redirect"
+    sha = cur.get("text_sha256")
+    if sha is None or cur.get("status") != 200:
+        keep["last_unchecked"] = cur.get("unchecked") or "http %s" % cur.get("status")
+        return keep, "unchecked"
+    new = {"title": cur.get("title", ""), "status": 200, "text_sha256": sha, "algo": FP_ALGO, "final_host": final}
+    base = prev.get("text_sha256") if prev.get("algo") == FP_ALGO else None
+    if base is None:
+        return new, "baseline"
+    if sha == base:
+        return new, "same"
+    if prev.get("pending_sha256") == sha:
+        return new, "changed"                       # baseline moves to the confirmed hash
+    new["text_sha256"] = base                       # hold the old baseline until confirmed
+    new["pending_sha256"] = sha
+    new["title"] = prev.get("title", new["title"])
+    return new, "pending"
+
+
 def content_check(host, cur_sha, prev_sha, deployed):
     """deployed: True / False / None (unknown). Returns a check dict or None (nothing to compare)."""
     key = "web:%s:content_changed" % host
@@ -633,7 +675,8 @@ def split_web_items(items):
             if str(it.get("key", "")).startswith("fingerprint:"):
                 ev = it.get("evidence") or {}
                 fps[it["key"].split(":", 1)[1]] = {"title": ev.get("title", ""), "status": ev.get("status"),
-                                                   "text_sha256": ev.get("text_sha256")}
+                                                   "text_sha256": ev.get("text_sha256"), "algo": ev.get("algo"),
+                                                   "final_host": ev.get("final_host"), "unchecked": ev.get("unchecked")}
             continue
         if it.get("result") in ("pass", "red", "yellow", "skip"):
             checks.append(it)
@@ -850,7 +893,7 @@ def run_audit(ctx, args, live, state):
 
     try:
         # ---- STEP 3: web checks -------------------------------------------------
-        fps, web_error = {}, None
+        fps, fp_status, web_error = {}, {}, None
         if args.no_web:
             web_error = "skipped by --no-web"
         else:
@@ -861,8 +904,13 @@ def run_audit(ctx, args, live, state):
                     log("git clone failed; the code checks will record skip")
                 items, web_error = ctx.web(hosts, apexes, MAIL_DOMAINS, repo)
                 if not web_error:
-                    web_checks, fps = split_web_items(items)
+                    web_checks, fetched = split_web_items(items)
                     checks.extend(web_checks)
+                    monitored = set(hosts)
+                    fps, fp_status = {}, {}
+                    for h in sorted(monitored | set(prev_fps) | set(fetched)):
+                        fps[h], fp_status[h] = fingerprint_step(h, prev_fps.get(h), fetched.get(h), monitored)
+                    fps = {h: v for h, v in fps.items() if v}
             finally:
                 shutil.rmtree(tmp, ignore_errors=True)
         if web_error:
@@ -966,19 +1014,26 @@ def run_audit(ctx, args, live, state):
             for host, fp in sorted(fps.items()):
                 if host in NON_VERCEL_HOSTS or host not in by_host:
                     continue
-                prev = (prev_fps.get(host) or {}).get("text_sha256")
-                cur = fp.get("text_sha256")
-                deployed = None
-                if prev is not None and cur != prev:
+                st = fp_status.get(host)
+                if st in (None, "unchecked", "redirect"):
+                    why = {None: "the homepage was not fetched tonight", "unchecked": "the homepage fetch did not return a normal page (%s)" % fp.get("last_unchecked"),
+                           "redirect": "the host redirects to %s, which has its own check" % fp.get("redirect_to")}[st]
+                    checks.add("web:%s:content_changed" % host, "skip", "Websites", host, "content_changed",
+                               "Not checked: %s" % host, why.capitalize() + ". The old baseline is kept and nothing is raised.")
+                    continue
+                if st == "pending":
+                    continue    # first sighting of a change: no verdict either way until tomorrow
+                if st == "changed":
                     pid = by_host[host]["id"]
                     if pid not in deployed_cache:
-                        st, dd = vc.get("/v7/deployments", projectId=pid, target="production", state="READY",
-                                        since=since_ms, limit=1)
-                        deployed_cache[pid] = (len((dd or {}).get("deployments", [])) > 0) if st == 200 else None
+                        since_st, dd = vc.get("/v7/deployments", projectId=pid, target="production", state="READY",
+                                              since=since_ms, limit=1)
+                        deployed_cache[pid] = (len((dd or {}).get("deployments", [])) > 0) if since_st == 200 else None
                     deployed = deployed_cache[pid]
+                    prev = (prev_fps.get(host) or {}).get("text_sha256")
                 else:
-                    deployed = False
-                c = content_check(host, cur, prev, deployed)
+                    deployed, prev = False, fp.get("text_sha256")
+                c = content_check(host, fp.get("text_sha256"), prev, deployed)
                 if c:
                     checks.add(**c)
         else:

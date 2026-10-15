@@ -126,10 +126,50 @@ def check_host(host):
         add(f"web:{host}:exposed_files", "skip", "Websites", asset, "exposed_files", detail=str(e)[:200])
 
     # 3. content fingerprint for defacement comparison (compared by the nightly task, not here)
-    text = re.sub(r"\s+", " ", re.sub(r"<script.*?</script>|<[^>]+>", " ", body, flags=re.S)).strip()
+    # Only a real page counts: HTTP 200 with a non-empty body. Anything else is "could not check"
+    # (text_sha256 None) so the nightly job keeps the old baseline and raises nothing.
     out.append(dict(key=f"fingerprint:{host}", result="info", layer="Websites", asset=asset, check="fingerprint",
-                    evidence={"final_url": final, "status": r.status_code, "text_sha256": hashlib.sha256(text.encode()).hexdigest(),
-                              "title": (re.search(r"<title>(.*?)</title>", body, re.S) or [None, ""])[1][:120]}))
+                    evidence=content_fingerprint(r.status_code, body, final)))
+
+ASSET_RE = re.compile(r"""/assets/[^"'\s>)]*-[A-Za-z0-9_-]{6,}\.(?:js|css)""")
+NONCE_RE = re.compile(r"""\s(?:nonce|integrity)=("[^"]*"|'[^']*')""", re.I)
+FP_ALGO = 2
+
+def _meta(body, attr, name):
+    for m in re.finditer(r"<meta\b[^>]*>", body, re.I):
+        tag = m.group(0)
+        if re.search(attr + r"""\s*=\s*["']""" + re.escape(name) + r"""["']""", tag, re.I):
+            c = re.search(r"""content\s*=\s*("([^"]*)"|'([^']*)')""", tag, re.I)
+            if c:
+                return (c.group(2) if c.group(2) is not None else c.group(3)).strip()
+    return ""
+
+def content_fingerprint(status, body, final):
+    """Normalized hash. Hashed asset names, nonces and whitespace never count. A SPA shell with almost
+    no visible text is hashed on <title> + meta description + og:title only."""
+    t = re.search(r"<title[^>]*>(.*?)</title>", body or "", re.S | re.I)
+    title = re.sub(r"\s+", " ", t.group(1)).strip() if t else ""
+    ev = {"final_url": final, "final_host": (urllib.parse.urlparse(final).hostname or "").lower(),
+          "status": status, "title": title[:120], "algo": FP_ALGO, "text_sha256": None, "mode": None}
+    if status != 200 or not (body or "").strip():
+        ev["unchecked"] = "http %s" % status if status != 200 else "empty body"
+        return ev
+    cleaned = ASSET_RE.sub("/assets/X", body)
+    cleaned = NONCE_RE.sub("", cleaned)
+    visible = re.sub(r"<(script|style|noscript)\b.*?</\1>|<!--.*?-->|<[^>]+>", " ", cleaned, flags=re.S | re.I)
+    visible = re.sub(r"\s+", " ", visible).strip()
+    if len(visible) < 200:   # client-rendered shell: empty #root
+        basis = "|".join([title, _meta(body, "name", "description"), _meta(body, "property", "og:title")])
+        basis = re.sub(r"\s+", " ", basis).strip()
+        ev["mode"] = "shell"
+        if not title and basis.strip("|") == "":
+            ev["unchecked"] = "shell with no title or description"
+            return ev
+    else:
+        basis = visible
+        ev["mode"] = "text"
+    ev["text_sha256"] = hashlib.sha256(basis.encode()).hexdigest()
+    return ev
 
 def certspotter_not_after(domain):
     """Fallback CT source when crt.sh is down or 404s (it did for eldoraluxe.com on 2026-09-22)."""
