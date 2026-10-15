@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { AnimatedSection } from "@/components/AnimatedSection";
 
 export default function PrivacyPolicy() {
-  const lastUpdated = "October 11, 2026";
+  const lastUpdated = "October 15, 2026";
 
   const sections = [
     { id: "1", title: "1. Introduction", content: (
@@ -345,6 +345,40 @@ export default function PrivacyPolicy() {
         </p>
       </>
     )},
+    { id: "16c", title: "Bestly Studio: Connected YouTube Channels", content: (
+      <>
+        <p className="text-muted-foreground leading-relaxed mb-4">
+          Bestly Studio can post the short videos a client approves to the client's own YouTube channel. A client connects the channel by signing in with Google and allowing access. We ask for two Google permissions:
+        </p>
+        <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
+          <li><strong className="text-foreground">youtube.upload:</strong> to upload a video the client has approved to their own channel.</li>
+          <li><strong className="text-foreground">youtube.readonly:</strong> to read the connected channel's name and ID, so the client can see which channel is connected, and to confirm that an approved post went live.</li>
+        </ul>
+        <p className="text-muted-foreground leading-relaxed mb-4">
+          What we store: an encrypted refresh token (kept in a secrets vault, never shown in the app) and the channel ID and channel title. We do not read, copy or keep your other YouTube videos, comments, subscribers, analytics or private data. We only upload a video after the client approves that post in Bestly Studio.
+        </p>
+        <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
+          <li>We do not sell YouTube or Google user data, share it with anyone else, or use it for advertising.</li>
+          <li>We do not use it to train AI or machine-learning models.</li>
+          <li>Only the people at Bestly who run the client's account can see the connection, and only to operate it.</li>
+        </ul>
+        <p className="text-muted-foreground leading-relaxed mb-4">
+          Bestly's use and transfer to any other app of information received from Google APIs will adhere to the{" "}
+          <a href="https://developers.google.com/terms/api-services-user-data-policy" className="text-foreground underline" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>, including the Limited Use requirements.
+        </p>
+        <p className="text-muted-foreground leading-relaxed mb-4">
+          Bestly Studio uses YouTube API Services. By connecting a channel you also agree to be bound by the{" "}
+          <a href="https://www.youtube.com/t/terms" className="text-foreground underline" target="_blank" rel="noopener noreferrer">YouTube Terms of Service</a>.
+          Google's handling of your data is described in the{" "}
+          <a href="https://policies.google.com/privacy" className="text-foreground underline" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>.
+        </p>
+        <p className="text-muted-foreground leading-relaxed">
+          You can disconnect at any time. Remove Bestly Studio in your{" "}
+          <a href="https://security.google.com/settings/security/permissions" className="text-foreground underline" target="_blank" rel="noopener noreferrer">Google Account permissions</a>,
+          or email privacy@bestly.tech. We then delete the stored token and channel details, within 30 days. Videos already posted stay on your channel until you delete them there.
+        </p>
+      </>
+    )},
     { id: "17", title: "17. Changes to This Policy", content: (
       <p className="text-muted-foreground leading-relaxed">
         We may update this Privacy Policy from time to time. We will notify you of any material 
@@ -387,7 +421,7 @@ export default function PrivacyPolicy() {
         <div className="prose prose-neutral dark:prose-invert max-w-none">
           {sections.map((section, index) => (
             <AnimatedSection key={section.id} delay={Math.min(index * 60, 300)}>
-              <section className="mb-12">
+              <section id={`s-${section.id}`} className="mb-12">
                 <h2 className="text-2xl font-semibold text-foreground mb-4">{section.title}</h2>
                 {section.content}
               </section>
