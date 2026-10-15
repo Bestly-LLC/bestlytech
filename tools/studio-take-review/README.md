@@ -11,3 +11,7 @@ Live row b3882262-b1f2-4d94-ae61-ecacecf99563; rollback row 61a79457-5806-44a3-a
 ## Follow-up 2026-10-15: Your call on a take + Production door
 `patch_index3.py` (exact-once on index 72bba43e17). Migration `20261015170000_studio_take_decisions.sql`.
 Live row cea68817-b0a9-48fb-aded-0531fceb8452; rollback row b3882262-b1f2-4d94-ae61-ecacecf99563.
+
+## Follow-up 2026-10-15: sent-back posts parked off the Queue
+`patch_index4.py` (exact-once on index 1b58a21a3b). Migration `20261015190000_studio_park_sent_back_posts.sql`.
+Live row 36936e63-c6b8-4877-8145-7ff1ee2442a9; rollback row cea68817-b0a9-48fb-aded-0531fceb8452. Memory: studio/take-park-2026-10-15.
