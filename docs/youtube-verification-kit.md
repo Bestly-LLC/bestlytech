@@ -77,38 +77,41 @@ Pre-filled answers (edit if a field differs):
 - **YouTube ToS notice:** the privacy policy tells users they are bound by the YouTube Terms of Service (https://www.youtube.com/t/terms) and links the Google Privacy Policy.
 When both reviews pass, a session runs `studio_yt_live_set(true)` and decides what to do with stale queued posts.
 
-## 5. Demo video
+## 5. Demo video (v2: three clips, one file; plan `docs/youtube-demo-v2-opusplan.md`)
+The v1 agent clip showed YouTube already Connected, then was cut to skip the portal. Both were wrong. v2 shows the reviewer the real journey in order: app and privacy policy, the client portal dashboard, an approved video post, the YouTube tile NOT connected, tap Connect, Google consent (both scopes), Connected, the private test video, the tile now Connected.
 
-### What is already recorded (agent part, about 90 seconds, 1280x720)
-Local copy: `/tmp/claude-0/-home-user-bestlytech/85d97aee-caab-5c44-9352-d85e9756e44f/scratchpad/vid/bestly-part.mp4`
-Stable link: `https://www.bestly.tech/youtube-verification/bestly-part.mp4` (committed to the repo under `public/`; the Storage upload could not be done, see "Not done" in the report).
-Script: `tools/youtube-verification/record-bestly-part.cjs`. It shows, in order:
-1. Title card: Bestly Studio and its one-sentence purpose.
-2. The bestly.tech home page, scrolled to the footer with the Privacy Policy link.
-3. The privacy policy, scrolled to the YouTube section (limited use, stored data, deletion).
-4. The client portal for the sandbox client, Settings, Your accounts, the YouTube tile showing the connected channel ("Jared") and "Nothing has gone out yet."
-5. The connect page and the click on "Continue to Google", stopping at Google's sign-in page ("Sign in to continue to Bestly Studio").
-No tokens, secrets or real client data appear. The portal page URL (which holds a token) is not on screen because the recording is the page only.
+Sandbox client: `bestly-test` ("Bestly Test"). Never Centering YOU.
 
-Not in the agent part, on purpose (so the video stays honest): a client post being approved for YouTube, and a post showing "Posted on YouTube". The sandbox client has no approved video post, no upload has run, and the gate is closed. Jared's step 6 covers the upload.
+### Clip A (agent, about 105 seconds, 1280x720): already recorded
+Stable link: `https://www.bestly.tech/youtube-verification/bestly-part-a.mp4` (under `public/`). Script: `tools/youtube-verification/record-bestly-part.cjs A <outDir> <portalUrlFile>`. Shows, in order:
+1. Title card (part 1 of 3).
+2. bestly.tech home, scrolled to the footer Privacy Policy link.
+3. /privacy-policy scrolled to the YouTube section.
+4. The Bestly Test client portal dashboard.
+5. All posts, Scheduled: a video post (#BT01) for YouTube marked Approved. Caption: "Posts go out only after the client approves them."
+6. Settings, Your accounts: the YouTube tile "Waiting on you" with the Connect YouTube button (not connected).
+7. Tap Connect: the Bestly connect page ("Connect YouTube for Bestly Test", Continue to Google). Ends there. It does not click Continue, so the one-time link stays unused.
+No URL bar, no tokens, no other client names.
 
-### Jared's part (about 60 to 90 seconds, QuickTime on his Mac)
-Start: QuickTime Player, File, **New Screen Recording**, record the whole screen with the browser URL bar visible. Use a window where the URL bar is easy to read. Set the Google language (bottom left of the consent screen) to **English**.
-Start URL (test client, valid until Oct 29 2026): **https://www.bestly.tech/c/qs77sebp**
-1. Open the start URL. Click **Continue to Google**.
-2. Google account chooser: pick the account that owns the channel. (He can blur nothing; just do not show the password field.)
-3. **Consent screen.** Hold 3 seconds on the URL bar so `client_id` shows, then hold 3 seconds on the app name "Bestly Studio" and both permission lines (upload videos, view your account). Scroll if needed so both scopes are on screen.
-4. Click **Continue** / **Allow**.
-5. Back on Bestly: the "Connected" page naming the channel. Hold 3 seconds.
-6. The private test upload (`bestly-yt-poster` action `test`, from his to-do #1), then YouTube Studio, Content, showing the new video as **Private**. Hold 3 seconds on its title and visibility. (If the test upload is not ready, record steps 1 to 5 and say so in the submission note; do not fake it.)
-Stop the recording, save it to the Desktop.
+### Clip B (Jared, QuickTime on his Mac, about 60 to 90 seconds)
+Record the whole screen with the browser URL bar visible. Set Google's language (bottom left) to English.
+1. Open the connect link (the message to Jared has it; it works once, until Oct 29 2026) and click **Continue to Google**.
+2. Account chooser: pick the account that owns the test channel.
+3. **Consent screen**: hold 3 seconds on the URL bar (client_id), then on "Bestly Studio" and both permission lines. Scroll so both scopes show.
+4. Click **Continue / Allow**.
+5. Bestly "Connected" page: hold 3 seconds.
+6. Open studio.youtube.com, Content: the private test video (Shorts YmV7hadogPg). Hold 3 seconds on its title and "Private".
+Stop, save to the Desktop. Then tell the agent "connected" so clip C can be filmed.
+
+### Clip C (agent, after Jared connects)
+`node record-bestly-part.cjs C <outDir> <portalUrlFile>`: the same portal, YouTube tile Connected with the channel name, then a closing card ("Uploads use youtube.upload only for approved posts; channel name via youtube.readonly."). Published as `bestly-part-c.mp4`.
 
 ### Stitch (one paste, Mac Terminal)
-`ffmpeg` joins the two parts into one 1080p mp4. If `ffmpeg` is missing, run `brew install ffmpeg` first.
+Joins A + his newest "Screen Recording ... .mov" on the Desktop + C into one 1920x1080 mp4. If `ffmpeg` is missing, `brew install ffmpeg` first. Needs `bestly-part-c.mp4` to be live (clip C recorded).
 ```
-cd ~/Desktop && curl -fLo bestly-part.mp4 https://www.bestly.tech/youtube-verification/bestly-part.mp4 && ffmpeg -y -i bestly-part.mp4 -i "$(ls -t ~/Desktop/Screen\ Recording*.mov | head -1)" -filter_complex "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,fps=30,setsar=1[a];[1:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,fps=30,setsar=1[b];[a][b]concat=n=2:v=1:a=0[v]" -map "[v]" -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart bestly-google-oauth-demo.mp4 && open .
+cd ~/Desktop && curl -fLo bestly-part-a.mp4 https://www.bestly.tech/youtube-verification/bestly-part-a.mp4 && curl -fLo bestly-part-c.mp4 https://www.bestly.tech/youtube-verification/bestly-part-c.mp4 && ffmpeg -y -i bestly-part-a.mp4 -i "$(ls -t ~/Desktop/Screen\ Recording*.mov | head -1)" -i bestly-part-c.mp4 -filter_complex "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,fps=30,setsar=1[a];[1:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,fps=30,setsar=1[b];[2:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,fps=30,setsar=1[c];[a][b][c]concat=n=3:v=1:a=0[v]" -map "[v]" -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart bestly-google-oauth-demo.mp4 && open .
 ```
-It picks his newest "Screen Recording ... .mov" on the Desktop. Result: `~/Desktop/bestly-google-oauth-demo.mp4` (tested here with a synthetic recording; output was 1920x1080).
+Result: `~/Desktop/bestly-google-oauth-demo.mp4`. Tested here with a synthetic middle clip (output 1920x1080). The old `bestly-part.mp4` is kept for now and is removed in a later commit once this command is confirmed.
 
 ### Upload the demo to YouTube (unlisted) and where to paste the link
 1. youtube.com, Create, Upload videos, pick `bestly-google-oauth-demo.mp4`.
@@ -145,3 +148,20 @@ Undo, after Jared films step 5 (run in the SQL editor, small statements):
 update approval_clients set active=false, access_token='retired-214b36c952514f9e66a4ade1a765879d' where slug='zz-connect-test';
 update social_brand_settings set platforms = platforms - 'youtube_offered' where brand='zz-connect-test';
 ```
+
+## 10. Sandbox state for demo v2 (undo only after Jared has submitted)
+Client `bestly-test` (id 002bb43c-a311-410d-9e20-de08033de4e4, sandbox). Changes made:
+- `approval_clients.social_brand` was null, set to `bestly-test`.
+- New `social_brand_settings` row brand `bestly-test` (enabled false, slot_utc 17:00, platforms `{"youtube_offered": true}`).
+- Approved video item BT01 (id 5dc0657d-73cf-40c2-8c90-86f371a57474): platform tiktok -> youtube; title was "VIDEO — a real mp4 in the player", caption was "This is a 6-second vertical test clip so we can see exactly how a recorded video presents on her board before she records a real one."; now retitled "Bestly test video for YouTube" and re-approved.
+- One YouTube connect link minted (short code rvhk57nj, expires Oct 29). After Jared connects, a youtube `social_accounts` row exists for brand `bestly-test` (his test channel).
+- The portal token was not changed.
+Undo:
+```
+update social_brand_settings set platforms = platforms - 'youtube_offered' where brand='bestly-test';
+update approval_items set platform='tiktok', title='VIDEO — a real mp4 in the player', caption='This is a 6-second vertical test clip so we can see exactly how a recorded video presents on her board before she records a real one.' where id='5dc0657d-73cf-40c2-8c90-86f371a57474';
+update social_connect_links set expires_at=now() where client_id='002bb43c-a311-410d-9e20-de08033de4e4' and used_at is null;
+delete from social_accounts where brand='bestly-test' and platform='youtube';  -- the test channel connection (the refresh token also sits in Vault)
+update approval_clients set social_brand=null where id='002bb43c-a311-410d-9e20-de08033de4e4';
+```
+Also revoke the app at https://myaccount.google.com/permissions on the test channel's Google account.
