@@ -41,3 +41,23 @@ Approved posts go out everywhere (one post per item per platform).
 - Every alert goes through Scout, signed by Studio Watch. Times 12-hour. No "..." truncation. Short links only for clients.
 - Commit + push to main without asking (see CLAUDE.md).
 - Log decisions back to `bestly_memory` before finishing.
+
+## YouTube (added 2026-10-15)
+Plan: `bestly_memory` keys `studio/youtube-connect-2026-10-15`, `studio/youtube-live-gate-2026-10-15`.
+- **Built + live:** migrations `20261015120000`..`120300`, `studio-social` v11 (`yt_setup`/`yt_start`/`yt_finish`),
+  `bestly-yt-poster` v2 (drain held until `studio_yt_live()`, check, me, dryrun, private `test`), crons `social-drain-youtube`,
+  `social-check-youtube`, pages `public/connect/youtube.html` + `youtube-setup.html`, portal help copy, `youtube_offered` = true for
+  `client-centering-you`. Video only; vertical and 180 s or less posts as a Short.
+- **Google:** project `bestly-studio`, YouTube Data API v3 on, OAuth External, In production (unverified), scopes youtube.upload +
+  youtube.readonly, web client with redirect `https://www.bestly.tech/connect/youtube.html`. Client ID + rotated secret saved in Vault
+  (`studio_yt_ready()` = true). Support email on the consent screen is jareds.mac for now.
+- **Verified:** Jared's channel "Jared" connected on `zz-connect-test`; `check` refresh + channels.list OK. Upload never run against Google.
+- **Elizabeth:** her YouTube tile now shows Connect (uploads stay held until live).
+
+### YouTube to do
+1. Private test upload to Jared's channel (`bestly-yt-poster` action `test`, `{account_id, item_id}`), on Jared's to-do list.
+2. Google review: verify bestly.tech in Search Console (branding), record a demo video (connect + upload), write scope justifications, submit.
+   Then the YouTube API Services audit form. When both pass: `studio_yt_live_set(true)`; decide whether to drop stale queued posts first.
+3. Make `support@bestly.tech` a Google sign-in (needs a real mobile number; Jared's and Maya's Telnyx number were refused), add it as
+   project Owner, swap it in as the consent-screen support email before submitting.
+4. Maya's (213) line can now text: Telnyx profile "Maya texts" ($1/day cap), edge fn `maya-text` (status/attach/send). No 10DLC campaign.
