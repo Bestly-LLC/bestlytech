@@ -9,7 +9,6 @@
 // worker downloads/uploads on signed URLs. This function only moves state.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -43,10 +42,11 @@ async function okWorkerKey(k: string | null | undefined): Promise<boolean> {
   return false;
 }
 
-const CORS = corsWith({
-  headers: "authorization, content-type, x-worker-key, apikey",
-  methods: "POST, OPTIONS"
-});
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type, x-worker-key, apikey",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 const J = (o: unknown, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 
@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { /* handled per action */ }
   const action = String(body.action ?? "");
 
-  // ── client: upload finished ──────────────────────────────────────
+  // ── client: upload finished ────────────────────────────────────────────
   if (action === "done") {
     const token = String(body.token ?? ""), upload = String(body.upload_id ?? "");
     if (!token || !upload) return J({ ok: false, error: "token and upload_id required" }, 400);
@@ -91,28 +91,51 @@ Deno.serve(async (req) => {
     const parts = Math.max(1, Number(body.parts ?? 1) || 1);
     const { data, error } = await db.rpc("client_upload_done", { p_token: token, p_upload: upload, p_duration: dur, p_parts: parts });
     if (error) return J({ ok: false, error: error.message }, 500);
-    if (data?.ok && !data.already) {
+    // A file or voice memo for "Send us an idea" is announced by client_brief_send
+    // once she presses Send (2026-10-06) — before, it posted 'a recording for "undefined"'.
+    if (data?.ok && !data.already && data.purpose !== "research") {
       // one line per thing that arrived, worded for what it actually is
       const msg = data.purpose === "brand_guide"
         ? (String(body.mime ?? "").startsWith("image/")
             ? `🖼 ${data.client} added a file to their brand guide (${data.question})${fmtMB(data.bytes)}.`
             : `🎙 ${data.client} recorded an answer in their brand guide (${data.question})${fmtDur(dur)}.`)
-        : `🎥 ${data.client} sent a recording for "${data.ask_title}"${fmtDur(dur)}${fmtMB(data.bytes)}. It is transcoding; attach it from /studio.`;
+        // 2026-10-15: a take no longer goes straight to the editor. A person approves it, or sends it back.
+        : `🎥 ${data.client} sent Take ${data.take_no ?? 1} for "${data.ask_title}"${fmtDur(dur)}${fmtMB(data.bytes)}. It is transcoding. Review it in Studio > Asks: approve it, or send it back.`;
       data.notified = await talk(msg);
     }
     return J(data);
   }
 
   // ── staff: playback URL for a raw recording ───────────────────────────
+  // A recording over the part size is stored as <path>.part0, .part1, ... (byte
+  // slices of one file). Signing <path> itself answered "Object not found", which
+  // is why "Play original" never played (Jared + Eli, 2026-10-06). With `parts`
+  // (or when <path> is missing) this returns one URL per part, in order, and the
+  // page joins them. The staff member's client scope applies here too: the first
+  // path segment is the client's slug.
   if (action === "sign") {
     const token = String(body.staff_token ?? ""), path = safePath(String(body.path ?? ""));
     if (!token || !path) return J({ ok: false, error: "staff_token and path required" }, 400);
     const { data: s, error } = await db.rpc("studio_resolve_staff", { p_token: token });
     const staff = Array.isArray(s) ? s[0] : s;
     if (error || !staff?.id) return J({ ok: false, error: "not_found" }, 401);
-    const { data, error: e2 } = await db.storage.from(RAW_BUCKET).createSignedUrl(path, 3600);
-    if (e2) return J({ ok: false, error: e2.message }, 500);
-    return J({ ok: true, url: data.signedUrl, expires_in: 3600 });
+    const slug = path.split("/")[0];
+    const { data: may } = await db.rpc("staff_may_see_slug", { p_staff: staff.id, p_slug: slug });
+    if (may === false) return J({ ok: false, error: "not_permitted" }, 403);
+    let parts = Math.max(0, Math.min(64, Number(body.parts ?? 0) || 0));
+    if (parts <= 1) {
+      const { data, error: e2 } = await db.storage.from(RAW_BUCKET).createSignedUrl(path, 3600);
+      if (!e2 && data?.signedUrl) return J({ ok: true, url: data.signedUrl, urls: [data.signedUrl], parts: 1, expires_in: 3600 });
+      // not there as one file: look for its parts before giving up
+      const dir = path.split("/").slice(0, -1).join("/"), base = path.split("/").pop() ?? "";
+      const { data: ls } = await db.storage.from(RAW_BUCKET).list(dir, { search: base + ".part", limit: 100 });
+      parts = (ls ?? []).filter((o) => new RegExp("^" + base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\.part\\d+$").test(o.name)).length;
+      if (!parts) return J({ ok: false, error: e2?.message ?? "Object not found" }, 404);
+    }
+    const names = Array.from({ length: parts }, (_, i) => `${path}.part${i}`);
+    const { data: urls, error: e3 } = await db.storage.from(RAW_BUCKET).createSignedUrls(names, 3600);
+    if (e3 || !urls || urls.some((u) => !u.signedUrl)) return J({ ok: false, error: e3?.message ?? "a part is missing" }, 404);
+    return J({ ok: true, url: urls[0].signedUrl, urls: urls.map((u) => u.signedUrl), parts, expires_in: 3600 });
   }
 
   // ── staff: a place to put a picture for a new post ───────────────────────
