@@ -345,7 +345,9 @@ export default function Wall() {
   const [sheepMusic, setSheepMusic] = useState(true);
   const [, setSheepTick] = useState(0);
   useEffect(() => { const t = setInterval(() => setSheepTick((n) => n + 1), 15000); return () => clearInterval(t); }, []);
-  const [sel, setSel] = useState(0);
+  /** Picked handle; ALL (the default) = the blue dot, so the arrows move the whole area unless a dot is tapped. */
+  const ALL = -1;
+  const [sel, setSel] = useState(ALL);
   const [fine, setFine] = useState(true);
   /** Layout undo history (DB keeps it for every writer) and the edit lock that stops stray swipes. */
   const [geoHist, setGeoHist] = useState<GeoStep[]>([]);
@@ -487,7 +489,7 @@ export default function Wall() {
       }
       sendLive({ mask: null, ...geo });
       if (!geo.mask) setTool((t) => (t === "mask" ? "corners" : t));
-      setSel(0);
+      setSel(ALL);
       const other = dir === "undo" ? "redo" : "undo";
       toast.success(`${dir === "undo" ? "Undone" : "Redone"}: ${d.reason ?? "layout change"}`, {
         id: "wall-geo",
@@ -582,7 +584,7 @@ export default function Wall() {
     const px = fine ? 1 : 10;
     // "Move everything together" on: the arrows slide every area, whichever dot is picked
     const n = (tool === "mask" ? S.current?.mask?.length : quad?.length) ?? 0;
-    move(linkAll && n ? n : sel, (dx * px) / 1920, (dy * px) / 1080, "now");
+    move((linkAll || sel === ALL) && n ? n : sel, (dx * px) / 1920, (dy * px) / 1080, "now");
   };
 
   /** Resize the strip without changing its shape: scale all 4 corners around their center. */
@@ -623,7 +625,7 @@ export default function Wall() {
     const c = S.current?.corners ?? DEFAULT_CORNERS;
     const [tr, br] = [c[1], c[2]];
     const mask: Pt[] = [[br[0] - 0.12, br[1] + 0.02], [tr[0] + 0.02, tr[1] + (br[1] - tr[1]) * 0.35], [br[0] + 0.02, br[1] + 0.02]];
-    setTool("mask"); setSel(0);
+    setTool("mask"); setSel(ALL);
     change({ mask, mapping: true });
   };
 
@@ -1434,7 +1436,7 @@ export default function Wall() {
                   onChange={(t) => {
                     if (t === "mask" && !s.mask) {
                       if (editing) addMask(); else toast("Tap Edit layout first, then add the blocked area.", { id: "wall-act" });
-                    } else { setTool(t); setSel(0); }
+                    } else { setTool(t); setSel(ALL); }
                   }}
                   options={[{ id: "corners", label: "Strip" }, { id: "mask", label: <><Triangle className="h-4 w-4" aria-hidden /> Blocked</> }, { id: "wing", label: <><PenLine className="h-4 w-4" aria-hidden /> Sign</> }, { id: "air", label: <><Plane className="h-4 w-4" aria-hidden /> Sky</> }]} />
               <div ref={padRef} className={cn("relative aspect-video w-full select-none overflow-hidden rounded-xl ring-1 ring-white/15", editing ? "touch-none" : "touch-pan-y")} style={{ background: "#000" }}>
@@ -1478,7 +1480,7 @@ export default function Wall() {
                   return (
                     <button key={`${tool}-${i}`} type="button" disabled={!editing}
                       aria-label={isAll ? "Move the whole shape" : `${tool === "mask" ? "Blocked area" : tool === "wing" ? "Sign wall" : tool === "air" ? "Sky" : "Corner"} point ${i + 1}`}
-                      aria-pressed={sel === i}
+                      aria-pressed={sel === i || (isAll && sel === ALL)}
                       onPointerDown={startDrag(i)} onFocus={() => setSel(i)}
                       onKeyDown={(e) => {
                         const k: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
@@ -1489,7 +1491,7 @@ export default function Wall() {
                       <span className={cn(
                         "block h-5 w-5 rounded-full border-[2.5px] shadow-[0_0_0_2px_rgba(0,0,0,0.55)] transition-transform duration-100",
                         isAll ? "border-white bg-sky-400" : tool === "mask" ? "border-white bg-orange-400" : tool === "wing" ? "border-black bg-[#64D2FF]" : tool === "air" ? "border-black bg-[#BF5AF2]" : "border-black bg-[#FFF8EC]",
-                        sel === i && "scale-125 ring-4 ring-sky-400/70",
+                        (sel === i || (isAll && sel === ALL)) && "scale-125 ring-4 ring-sky-400/70",
                       )} />
                     </button>
                   );
@@ -1507,7 +1509,7 @@ export default function Wall() {
                   <button type="button" disabled={!editing} aria-label="Nudge up" className={cn(btn, "w-11 px-0")} onClick={() => nudge(0, -1)}><ArrowUp className="h-5 w-5" /></button>
                   <span />
                   <button type="button" disabled={!editing} aria-label="Nudge left" className={cn(btn, "w-11 px-0")} onClick={() => nudge(-1, 0)}><ArrowLeft className="h-5 w-5" /></button>
-                  <span className="flex h-11 w-11 items-center justify-center text-[12px] text-white/45">{sel >= EDGE ? ["Top", "Right", "Bottom", "Left"][sel - EDGE] : sel === handles.length - 1 ? "All" : sel + 1}</span>
+                  <span className="flex h-11 w-11 items-center justify-center text-[12px] text-white/45">{sel >= EDGE ? ["Top", "Right", "Bottom", "Left"][sel - EDGE] : sel === ALL || sel === handles.length - 1 ? "All" : sel + 1}</span>
                   <button type="button" disabled={!editing} aria-label="Nudge right" className={cn(btn, "w-11 px-0")} onClick={() => nudge(1, 0)}><ArrowRight className="h-5 w-5" /></button>
                   <span />
                   <button type="button" disabled={!editing} aria-label="Nudge down" className={cn(btn, "w-11 px-0")} onClick={() => nudge(0, 1)}><ArrowDown className="h-5 w-5" /></button>
@@ -1538,7 +1540,7 @@ export default function Wall() {
                           change({ mask: [...m, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]] });
                         }}>Add point</button>
                       )}
-                      <button type="button" disabled={!editing} className={cn(btn, "flex-1 text-red-400")} onClick={() => { change({ mask: null }); setTool("corners"); setSel(0); }}>
+                      <button type="button" disabled={!editing} className={cn(btn, "flex-1 text-red-400")} onClick={() => { change({ mask: null }); setTool("corners"); setSel(ALL); }}>
                         <Trash2 className="h-4 w-4" aria-hidden /> Remove
                       </button>
                     </div>
