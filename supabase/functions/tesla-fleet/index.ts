@@ -20,8 +20,9 @@ const DOMAIN = "www.bestly.tech";
 const REDIRECT = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/tesla-fleet/callback";
 const ADMIN = "https://www.bestly.tech/admin/turo/lax-pass";
 const SCOPES = "openid offline_access vehicle_device_data vehicle_cmds";
-// Guest sign-in (authorize) also asks for charging history, so trip pages can show billed Supercharger costs.
-const USER_SCOPES = `${SCOPES} vehicle_charging_cmds`;
+// Guest sign-in (authorize) also asks for charging history, so trip pages can show billed Supercharger costs,
+// and for location, which Fleet Telemetry needs to stream Location (car_telemetry_start refuses without it).
+const USER_SCOPES = `${SCOPES} vehicle_charging_cmds vehicle_location`;
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, SB_SECRET, { auth: { persistSession: false } });
 const cors = corsWith({
