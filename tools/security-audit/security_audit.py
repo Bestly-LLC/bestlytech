@@ -13,7 +13,7 @@ raises the alerts through the monitor pipeline under Ares's `security` prefix.
             python3 /opt/bestly/cron/jobs/security_audit.py --live --force
 
 Order, exactly as the Claude task did it:
-  1. inventory (Vercel + Supabase APIs; last night's inventory when a token is missing)
+  1. inventory (Vercel + Supabase + Cloudflare APIs; last night's inventory when a token is missing)
   2. security_run_start
   3. scripts/security-audit/web_checks.py (reused unchanged, run as a subprocess)
   4. platform checks
@@ -24,8 +24,9 @@ Order, exactly as the Claude task did it:
      "Last run failed" instead of silence)
 
 Safety rails, in order of importance:
-  * READ-ONLY toward everything it audits. Only GETs go to Vercel / Supabase Management / the
-    sites. Env var VALUES are discarded the moment they arrive and are never requested decrypted.
+  * READ-ONLY toward everything it audits. Only GETs go to Vercel / Supabase Management / Cloudflare /
+    the sites (the one exception is Cloudflare's GraphQL endpoint, which takes a read-only query by POST).
+    Env var VALUES are discarded the moment they arrive and are never requested decrypted.
   * A check that did not run is recorded as `skip`, never `pass` (a pass would close a real finding).
     A missing or rejected token skips the checks that need it and still lets the run succeed.
   * No credential is printed, logged, or written to disk. Tokens live in Vault.
@@ -39,13 +40,16 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, "/opt/bestly/cron")
@@ -57,14 +61,29 @@ OWNER = "Ares (security)"
 TEAM_ID = "team_Kwxz5PIgolwApAnbC131PCDd"
 VERCEL_API = "https://api.vercel.com"
 SUPABASE_API = "https://api.supabase.com"
+CF_API = "https://api.cloudflare.com"
 BESTLY_REF = "rcqfqhguwpmaarseifqg"
 REPO_URL = "https://github.com/Bestly-LLC/bestlytech.git"
 REPO_NAME = "bestlytech"
 
 VERCEL_SERVICE, VERCEL_ACCOUNT = "vercel", "api_token"                 # Vault pi:vercel:api_token
 SUPABASE_SERVICE, SUPABASE_ACCOUNT = "supabase", "management_token"    # Vault pi:supabase:management_token
+CLOUDFLARE_SERVICE, CLOUDFLARE_ACCOUNT = "cloudflare", "api_token"     # Vault pi:cloudflare:api_token
 VERCEL_VAULT_NAME = "pi:vercel:api_token"
 SUPABASE_VAULT_NAME = "pi:supabase:management_token"
+CLOUDFLARE_VAULT_NAME = "pi:cloudflare:api_token"
+
+CF_LAYER = "Edge (Cloudflare)"
+CF_FREE_CAP = 100000          # Workers FREE plan: requests a day, shared by every Worker on the account
+CF_PAUSE_S = 0.05             # politeness between calls (selftest sets it to 0)
+CF_WORKER_OWNERS = {          # every Worker on the account needs an owner; add new ones here
+    "bestly-site-outage-splash": "edge-guard",
+    "bestly-cloud-maintenance-splash": "edge-guard",
+    "bestly-studio-mail": "studio",
+}
+CF_TAKEOVER_SUFFIXES = ("vercel-dns.com", "vercel.app", "github.io", "herokuapp.com", "azurewebsites.net",
+                        "cloudfront.net", "netlify.app", "pages.dev", "workers.dev")   # S3 is matched in cf_takeover_prone
+CF_OUTAGE_WINDOW_HOURS = 2    # Edge Guard "down" row this recent = a splash route is expected
 
 EXTRA_HOSTS = ["cloud.bestly.tech"]          # not on Vercel, still audited
 NON_VERCEL_HOSTS = {"cloud.bestly.tech"}     # no defacement/deploy comparison for these
@@ -284,7 +303,8 @@ def skip_missing_token(checks, which, key, layer, asset, check, not_run):
     `<key>:unreachable` finding, and a dozen of those would page Ares's Auto-Fixer for nothing.
     The key is a real key, so it closes by itself the first night the check runs for real."""
     token = {"vercel": ("the Vercel API token", VERCEL_VAULT_NAME),
-             "supabase": ("the Supabase Management API token", SUPABASE_VAULT_NAME)}[which]
+             "supabase": ("the Supabase Management API token", SUPABASE_VAULT_NAME),
+             "cloudflare": ("the Cloudflare API token", CLOUDFLARE_VAULT_NAME)}[which]
     checks.add(key, "skip", layer, asset, check,
                "Not checked: %s is missing" % token[0],
                "These checks did not run tonight because %s is not saved. Not run: %s. "
@@ -480,6 +500,558 @@ def content_check(host, cur_sha, prev_sha, deployed):
                        "An instant rollback also looks like this." % DEPLOY_WINDOW_HOURS,
                 fix="Open %s and read the page. If you did not change it, check Vercel > project > Deployments and the DNS records for the host." % host,
                 evidence={"previous_sha256": prev_sha, "current_sha256": cur_sha})
+
+
+# -------------------------------------------------------------- Cloudflare
+
+class Cloudflare:
+    """Read-only. Every call is a GET except graphql(), which POSTs a read-only query."""
+
+    def __init__(self, token, api=http_json):
+        self.token, self.api = token, api
+
+    def _url(self, path, params):
+        url = "%s/client/v4%s" % (CF_API, path)
+        return url + ("?" + urllib.parse.urlencode(params) if params else "")
+
+    def get(self, path, **params):
+        time.sleep(CF_PAUSE_S)
+        return self.api("GET", self._url(path, params), {"Authorization": "Bearer " + self.token}, None, 60, 3)
+
+    def one(self, path, **params):
+        """The `result` of one GET (an object or a list). 401/403 -> TokenProblem, anything else odd -> ApiError."""
+        status, data = self.get(path, **params)
+        if status in (401, 403):
+            raise TokenProblem("HTTP %d" % status)
+        if status != 200 or not isinstance(data, dict) or data.get("success") is False:
+            raise ApiError("Cloudflare %s: HTTP %d" % (path, status))
+        return data.get("result")
+
+    def paged(self, path, per_page=50, max_pages=40, keep=None, **params):
+        """Every row across pages (page / per_page, result_info.total_pages). `keep` shrinks each row the
+        moment it arrives, so fields the audit must not hold (member emails, account names) are dropped."""
+        out = []
+        for page in range(1, max_pages + 1):
+            status, data = self.get(path, per_page=per_page, page=page, **params)
+            if status in (401, 403):
+                raise TokenProblem("HTTP %d" % status)
+            if status != 200 or not isinstance(data, dict) or data.get("success") is False:
+                raise ApiError("Cloudflare %s: HTTP %d" % (path, status))
+            rows = data.get("result") or []
+            if not isinstance(rows, list):
+                raise ApiError("Cloudflare %s: unexpected answer" % path)
+            out.extend(keep(r) for r in rows) if keep else out.extend(rows)
+            if not rows or page >= int((data.get("result_info") or {}).get("total_pages") or 1):
+                break
+        else:
+            raise ApiError("Cloudflare %s: more than %d pages" % (path, max_pages))   # never a silent partial list
+        return out
+
+    def graphql(self, query, variables):
+        """The one POST. Read-only: refuses anything that is not a plain `query`."""
+        q = query.lstrip()
+        if not q.startswith("query") or re.search(r"\bmutation\b", q):
+            raise ValueError("Cloudflare graphql() only sends read-only queries")
+        time.sleep(CF_PAUSE_S)
+        body = json.dumps({"query": query, "variables": variables}).encode()
+        return self.api("POST", self._url("/graphql", {}),
+                        {"Authorization": "Bearer " + self.token, "Content-Type": "application/json"}, body, 60, 1)
+
+
+def gather_cloudflare(cf):
+    """Discovery. Returns {accounts, account, zones, workers, zones_error, workers_error}.
+    The accounts call is the token test: 401/403 there raises TokenProblem (token rejected). Later denials
+    only blank that part (None) so the checks that need it record skip naming the permission."""
+    accounts = cf.paged("/accounts", keep=lambda a: {"id": a.get("id")})      # account names can be emails: dropped
+    acct = accounts[0]["id"] if accounts else None
+    out = {"accounts": len(accounts), "account": acct, "zones": None, "workers": None,
+           "zones_error": None, "workers_error": None}
+    try:
+        out["zones"] = cf.paged("/zones", per_page=50, keep=lambda z: {"id": z.get("id"), "name": z.get("name")})
+    except (TokenProblem, ApiError) as exc:
+        out["zones_error"] = exc
+    if acct:
+        try:
+            rows = cf.one("/accounts/%s/workers/scripts" % acct)
+            if not isinstance(rows, list):
+                raise ApiError("Cloudflare workers/scripts: unexpected answer")
+            out["workers"] = sorted(str(r.get("id") or r.get("name")) for r in rows if isinstance(r, dict) and (r.get("id") or r.get("name")))
+        except (TokenProblem, ApiError) as exc:
+            out["workers_error"] = exc
+    return out
+
+
+def cf_inventory(cinv):
+    return {"account": cinv["account"], "zones": [z["name"] for z in cinv["zones"] or []],
+            "workers": cinv["workers"] or []}
+
+
+def cf_skip(checks, key, asset, check, what, exc, perm):
+    """A call failed: record skip (never pass), naming the permission when Cloudflare refused it."""
+    if isinstance(exc, TokenProblem):
+        why = "Cloudflare refused the call (%s). The audit token needs: %s." % (exc, perm)
+        fix = "Edit the Cloudflare token to add %s (read only) or create a new token with the list in the README, then paste it on /admin/security." % perm
+        reason = "permission_missing"
+    else:
+        why, fix, reason = "The Cloudflare API call failed (%s)." % exc, None, "api_error"
+    checks.add(key, "skip", CF_LAYER, asset, check, "Not checked: %s" % what,
+               why + " No finding was closed or changed by this.", fix, {"reason": reason, "permission": perm})
+
+
+def cf_route_host(pattern):
+    return (pattern or "").split("/", 1)[0].strip().lower()
+
+
+def cf_route_covered(pattern, down_sites):
+    """True when Edge Guard says a site this route covers is in an outage. Wildcard hosts never count."""
+    host = cf_route_host(pattern)
+    if not host or "*" in host:
+        return False
+    return any(host == s or host == "www." + s or "www." + host == s for s in down_sites)
+
+
+def cf_down_sites(rows):
+    """edge_guard_log rows (newest first). A site is in an outage when its newest row says `down`
+    (Edge Guard states: ok | down | quota | recovered | repaired | token | error)."""
+    seen, down = set(), set()
+    for r in rows:
+        site = r.get("site")
+        if site in seen:
+            continue
+        seen.add(site)
+        if r.get("state") == "down":
+            down.add(site)
+    return down
+
+
+def cf_route_check(zone, routes, down_sites):
+    base = dict(key="cf:%s:worker_routes" % zone, layer=CF_LAYER, asset=zone, check="worker_routes")
+    if not routes:
+        return dict(base, result="pass")
+    shown = [{"pattern": r.get("pattern"), "script": r.get("script"),
+              "request_limit_fail_open": r.get("request_limit_fail_open")} for r in routes]
+    closed = [r for r in shown if r["request_limit_fail_open"] is not True]
+    uncovered = [r for r in shown if not cf_route_covered(r["pattern"], down_sites)]
+    ev = {"routes": shown, "edge_guard_outage_sites": sorted(down_sites)}
+    listed = "; ".join("%s -> %s%s" % (r["pattern"], r["script"] or "?",
+                                       "" if r["request_limit_fail_open"] is True else " (FAIL CLOSED)") for r in shown[:5])
+    if not closed and not uncovered:
+        return dict(base, result="yellow", title="%s: Splash route on during an outage" % zone,
+                    detail="Edge Guard logged this site as down in the last %d hours, so its splash route is expected: %s. "
+                           "It should come off by itself after 3 healthy checks." % (CF_OUTAGE_WINDOW_HOURS, listed),
+                    fix="Nothing to do while the outage lasts. If this is still here after the site is healthy, Edge Guard (Mac mini) is not removing it.",
+                    evidence=ev)
+    why = []
+    if closed:
+        why.append("%d of them fail closed, so when the free plan's %s requests a day run out the whole site goes down" % (len(closed), format(CF_FREE_CAP, ",")))
+    if uncovered:
+        why.append("%d of them are on while Edge Guard reports no outage for that host" % len(uncovered))
+    return dict(base, result="red", title="%s: %s on a zone that should have none" % (zone, plural(len(routes), "Worker route")),
+                detail="Normal traffic must use zero Worker requests (error 1027 took bestly.tech and cloud.bestly.tech down on 2026-10-05). Routes: %s. %s." % (listed, "; ".join(why)),
+                fix="Cloudflare > %s > Workers Routes: delete the route (Edge Guard attaches its own only during an outage). "
+                    "If something else needs a route, set request_limit_fail_open to true on it first." % zone,
+                evidence=ev)
+
+
+def cf_usage_check(total, per_script, day, cap=CF_FREE_CAP):
+    base = dict(key="cf:account:workers_usage", layer=CF_LAYER, asset="Cloudflare account", check="workers_usage")
+    top = sorted(per_script.items(), key=lambda kv: (-kv[1], kv[0]))[:3]
+    pct = round(100.0 * total / cap, 1)
+    ev = {"day": day, "requests": total, "cap": cap, "percent_of_cap": pct,
+          "top_scripts": [{"script": n, "requests": c} for n, c in top]}
+    top_text = ", ".join("%s %s" % (n, format(c, ",")) for n, c in top) or "none"
+    if total < cap * 0.5:
+        return dict(base, result="pass", evidence=ev)
+    detail = ("Workers made %s requests on %s UTC, %s%% of the free plan's %s a day (shared by every Worker). Top: %s. "
+              "At 100%% every Worker route stops working." % (format(total, ","), day, pct, format(cap, ","), top_text))
+    fix = "Find what is calling the top Worker (Cloudflare > Workers > its Metrics), stop it or delete the Worker, and make sure no always-on route exists."
+    if total < cap * 0.8:
+        return dict(base, result="yellow", title="Workers used %s%% of the free daily cap on %s" % (pct, day), detail=detail, fix=fix, evidence=ev)
+    return dict(base, result="red", title="Workers used %s%% of the free daily cap on %s" % (pct, day), detail=detail, fix=fix, evidence=ev)
+
+
+CF_USAGE_QUERY = """query workersUsage($acct: String!, $since: Time!, $until: Time!) {
+  viewer {
+    accounts(filter: {accountTag: $acct}) {
+      workersInvocationsAdaptive(limit: 10000, filter: {datetime_geq: $since, datetime_lt: $until}) {
+        sum { requests }
+        dimensions { scriptName }
+      }
+    }
+  }
+}"""
+
+
+def cf_workers_usage(cf, acct, since, until):
+    """{script name: requests} for [since, until). Read-only GraphQL. Denied -> TokenProblem."""
+    status, data = cf.graphql(CF_USAGE_QUERY, {"acct": acct, "since": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                               "until": until.strftime("%Y-%m-%dT%H:%M:%SZ")})
+    if status in (401, 403):
+        raise TokenProblem("HTTP %d" % status)
+    if status != 200 or not isinstance(data, dict):
+        raise ApiError("Cloudflare graphql: HTTP %d" % status)
+    errs = [e for e in (data.get("errors") or []) if isinstance(e, dict)]
+    if errs:
+        msg = " ".join(str(e.get("message", "")) for e in errs).lower()
+        if re.search(r"authori|permission|not allowed|access", msg):
+            raise TokenProblem("GraphQL refused")
+        raise ApiError("Cloudflare graphql: %s" % msg[:120])
+    accts = (((data.get("data") or {}).get("viewer") or {}).get("accounts")) or []
+    if not accts:
+        raise ApiError("Cloudflare graphql: no account in the answer")
+    out = {}
+    for r in accts[0].get("workersInvocationsAdaptive") or []:
+        name = (r.get("dimensions") or {}).get("scriptName") or "(unknown)"
+        out[name] = out.get(name, 0) + int((r.get("sum") or {}).get("requests") or 0)
+    return out
+
+
+def cf_worker_check(name, requests_7d=None, has_cron=None):
+    """Owned -> pass under the same key, so a finding closes the night an owner is added."""
+    base = dict(key="cf:worker:%s:orphan" % name, layer=CF_LAYER, asset="Worker %s" % name, check="worker_owner")
+    owner = CF_WORKER_OWNERS.get(name)
+    if owner:
+        return dict(base, result="pass", evidence={"owner": owner})
+    reqs = "unknown (Account Analytics not readable)" if requests_7d is None else format(requests_7d, ",")
+    cron = "unknown" if has_cron is None else ("yes" if has_cron else "no")
+    return dict(base, result="yellow", title="Worker with no owner: %s" % name,
+                detail="The Cloudflare Worker %s is deployed and nothing in the audit's owner list claims it. Requests in the last 7 days: %s. Has a cron schedule: %s."
+                       % (name, reqs, cron),
+                fix="Find out what it is for. If nothing uses it, delete it (Cloudflare > Workers & Pages). If it is wanted, add it to CF_WORKER_OWNERS in "
+                    "tools/security-audit/security_audit.py with its owner, and add that owner to the Worker's notes.",
+                evidence={"worker": name, "requests_7d": requests_7d, "cron": has_cron})
+
+
+def cf_gone_worker_passes(workers, prior_open_keys):
+    """A Worker that was deleted closes its own finding."""
+    out = []
+    for key in sorted(prior_open_keys):
+        if key.startswith("cf:worker:") and key.endswith(":orphan") and key[len("cf:worker:"):-len(":orphan")] not in workers:
+            out.append(dict(key=key, result="pass", layer=CF_LAYER, asset="Worker %s" % key.split(":")[2], check="worker_owner"))
+    return out
+
+
+def cf_takeover_prone(target):
+    t = target.lower().rstrip(".")
+    if any(t == s or t.endswith("." + s) for s in CF_TAKEOVER_SUFFIXES):
+        return True
+    return t.endswith("amazonaws.com") and re.search(r"(^|[.-])s3([.-]|$)", t) is not None   # s3 and s3-website
+
+
+def dns_state(host, timeout=5.0):
+    """'ok' | 'nxdomain' | 'temp'. getaddrinfo has no timeout of its own, so it runs in a daemon thread."""
+    box = {}
+
+    def work():
+        try:
+            socket.getaddrinfo(host, None)
+            box["s"] = "ok"
+        except socket.gaierror as exc:
+            if exc.errno == socket.EAI_NONAME:
+                box["s"] = "nxdomain"
+            elif exc.errno == getattr(socket, "EAI_NODATA", None):
+                box["s"] = "ok"         # the name exists, it just has no address
+            else:
+                box["s"] = "temp"
+        except Exception:  # noqa: BLE001
+            box["s"] = "temp"
+    t = threading.Thread(target=work, daemon=True)
+    t.start()
+    t.join(timeout)
+    return box.get("s", "temp")
+
+
+def cf_resolve_all(targets, resolve):
+    """{target: state}. A broken local resolver would make everything look like NXDOMAIN, so an NXDOMAIN
+    only counts when a known-good name still resolves right after."""
+    targets = sorted(set(targets))
+    if not targets:
+        return {}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        out = dict(zip(targets, pool.map(resolve, targets)))
+    if "nxdomain" in out.values() and resolve("cloudflare.com") != "ok":
+        out = {t: ("temp" if s == "nxdomain" else s) for t, s in out.items()}
+    return out
+
+
+def cf_cname_check(zone, records, tunnel_ids, resolved):
+    """records: [{name, content}]. tunnel_ids: set of live tunnel ids, or None if they could not be read.
+    resolved: {target: ok|nxdomain|temp}. A record that could not be judged makes the result skip, never pass."""
+    base = dict(key="cf:%s:dangling_cname" % zone, layer=CF_LAYER, asset=zone, check="dangling_cname")
+    bad, unchecked = [], []
+    for r in records:
+        name, target = r.get("name") or "?", (r.get("content") or "").lower().rstrip(".")
+        if not target:
+            continue
+        if target.endswith(".cfargotunnel.com"):
+            if tunnel_ids is None:
+                unchecked.append({"name": name, "why": "tunnel list not readable"})
+            elif target[:-len(".cfargotunnel.com")] not in tunnel_ids:
+                bad.append({"name": name, "target": target, "why": "the tunnel no longer exists", "red": True})
+            continue
+        st = resolved.get(target, "temp")
+        if st == "nxdomain":
+            prone = cf_takeover_prone(target)
+            bad.append({"name": name, "target": target, "red": prone,
+                        "why": "the target does not exist" + (" and is a host anyone can claim" if prone else "")})
+        elif st != "ok":
+            unchecked.append({"name": name, "why": "DNS lookup did not answer"})
+    ev = {"records": len(records), "bad": [{k: b[k] for k in ("name", "target", "why")} for b in bad], "unchecked": unchecked[:20]}
+    if bad:
+        red = any(b["red"] for b in bad)
+        lines = "; ".join("%s -> %s (%s)" % (b["name"], b["target"], b["why"]) for b in bad[:5])
+        return dict(base, result="red" if red else "yellow",
+                    title="%s: %s pointing at nothing" % (zone, plural(len(bad), "CNAME record")),
+                    detail="A name that points at a missing host or tunnel can be claimed by someone else (subdomain takeover). %s." % lines,
+                    fix="Cloudflare > %s > DNS: delete each record listed, or recreate what it points at." % zone, evidence=ev)
+    if unchecked:
+        return dict(base, result="skip", title="Not checked: CNAME targets in %s" % zone,
+                    detail="%s could not be judged tonight (%s). No finding was closed or changed by this."
+                           % (plural(len(unchecked), "record"), unchecked[0]["why"]),
+                    fix="Usually a one-night DNS hiccup. If it repeats, give the token Cloudflare Tunnel Read.", evidence=ev)
+    return dict(base, result="pass", evidence={"records": len(records)})
+
+
+def cf_token_check(verify, tokens, now):
+    """verify: result of /user/tokens/verify. tokens: reduced rows (cf_token_row) or None when unreadable."""
+    base = dict(key="cf:token:scope", layer=CF_LAYER, asset="Cloudflare API tokens", check="token_scope")
+    fix_base = "Cloudflare > My Profile > API Tokens: "
+    verify = verify or {}
+    own_id = verify.get("id")
+    ev, notes, yellow = {}, [], []
+    if verify.get("status") != "active":
+        yellow.append("the audit's own token reports status %s" % (verify.get("status") or "unknown"))
+    exp = _parse_iso(verify.get("expires_on"))
+    if exp is not None:
+        left = (exp - now).days
+        ev["audit_token_expires_in_days"] = left
+        if left <= 14:
+            yellow.append("the audit's own token expires in %d days" % max(left, 0))
+    own_write, own_found, flagged = [], False, []
+    if tokens is not None:
+        for t in tokens:
+            if t.get("status") not in (None, "active"):
+                continue
+            writes = [g for g in t["perms"] if re.search(r"\b(edit|write)\b", g, re.I)]
+            if own_id and t.get("id") == own_id:
+                own_found, own_write = True, writes
+            if writes and (not t["has_ip"] or not t.get("expires_on")):
+                flagged.append(t["name"])
+        ev["tokens_seen"] = len(tokens)
+    ev["flagged_tokens"] = sorted(set(flagged))
+    if own_write:
+        ev["audit_token_write_permissions"] = own_write
+        return dict(base, result="red", title="The audit's own Cloudflare token can change things (%s)" % ", ".join(own_write[:4]),
+                    detail="The nightly audit must only read. Its token has write permissions, so a leaked copy could edit your Cloudflare account.",
+                    fix=fix_base + "edit the audit's token down to the read-only list in the README, or make a new one and paste it on /admin/security.", evidence=ev)
+    if flagged:
+        yellow.append("%s with write access and no IP restriction or no expiry: %s" % (plural(len(set(flagged)), "token"), ", ".join(sorted(set(flagged))[:8])))
+    if yellow:
+        return dict(base, result="yellow", title="Cloudflare API token hygiene: " + yellow[0][:90],
+                    detail="; ".join(yellow).capitalize() + "." + ("" if tokens is not None else " Token permissions were not checked (the audit token needs User > API Tokens Read)."),
+                    fix=fix_base + "give every token that can write an expiry date and an IP restriction, or delete the ones nothing uses.", evidence=ev)
+    if tokens is None:
+        notes.append("the token list could not be read (the audit token needs User > API Tokens Read)")
+    elif not own_found:
+        notes.append("the audit's own token was not in the list, so its permissions were not checked")
+    if notes:
+        return dict(base, result="skip", title="Not checked: Cloudflare token permissions",
+                    detail="Not run: %s. No finding was closed or changed by this." % "; ".join(notes),
+                    fix="Add User > API Tokens Read (read only) to the audit token. It must be a user token, not an account-owned one.", evidence=ev)
+    return dict(base, result="pass", evidence=ev)
+
+
+def cf_token_row(t):
+    perms = []
+    for pol in t.get("policies") or []:
+        if str(pol.get("effect", "allow")) != "allow":
+            continue
+        perms.extend(g["name"] for g in pol.get("permission_groups") or [] if g.get("name"))
+    ips = (((t.get("condition") or {}).get("request_ip")) or {}).get("in") or []
+    return {"id": t.get("id"), "name": t.get("name") or "(unnamed)", "status": t.get("status"),
+            "expires_on": t.get("expires_on"), "has_ip": bool(ips), "perms": sorted(set(perms))}
+
+
+def _parse_iso(s):
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00")) if s else None
+    except ValueError:
+        return None
+
+
+def cf_ssl_check(zone, ssl, min_tls):
+    base = dict(key="cf:%s:ssl_mode" % zone, layer=CF_LAYER, asset=zone, check="ssl_mode")
+    ev = {"ssl": ssl, "min_tls_version": min_tls}
+    red, yellow = [], []
+    if ssl in ("flexible", "off"):
+        red.append("SSL mode is %s, so the hop from Cloudflare to the origin is not encrypted or not checked" % ssl)
+    elif ssl == "full":
+        yellow.append("SSL mode is Full, which accepts any certificate on the origin (Full strict checks it)")
+    elif ssl != "strict" and ssl is not None:
+        yellow.append("SSL mode is an unexpected value (%s)" % ssl)
+    if min_tls in ("1.0", "1.1"):
+        yellow.append("minimum TLS version is %s (should be 1.2 or higher)" % min_tls)
+    if red or yellow:
+        res = "red" if red else "yellow"
+        return dict(base, result=res, title="%s: %s" % (zone, (red + yellow)[0][:100]), detail="; ".join(red + yellow).capitalize() + ".",
+                    fix="Cloudflare > %s > SSL/TLS: set Overview to Full (strict) and Edge Certificates > Minimum TLS Version to 1.2." % zone, evidence=ev)
+    if ssl is None or min_tls is None:
+        return dict(base, result="skip", title="Not checked: SSL settings for %s" % zone,
+                    detail="Could not read %s. No finding was closed or changed by this." % ("the SSL mode" if ssl is None else "the minimum TLS version"),
+                    fix="Give the token Zone Settings Read.", evidence=ev)
+    return dict(base, result="pass", evidence=ev)
+
+
+def cf_members_check(accepted, pending):
+    base = dict(key="cf:account:members", layer=CF_LAYER, asset="Cloudflare account", check="account_members")
+    ev = {"members": accepted, "pending_invites": pending}
+    if accepted > 1:
+        return dict(base, result="red", title="The Cloudflare account has %d members (expected exactly 1)" % accepted,
+                    detail="Someone was added to the Bestly Cloudflare account. They can change DNS and Workers." + (" %s also pending." % plural(pending, "invite is", "invites are") if pending else ""),
+                    fix="Cloudflare > Manage Account > Members: remove anyone who should not be there, then rotate tokens they could have seen.", evidence=ev)
+    if pending:
+        return dict(base, result="yellow", title="The Cloudflare account has %s pending" % plural(pending, "invite"),
+                    detail="An invite is waiting to be accepted. Once accepted that person is a member of the account.",
+                    fix="Cloudflare > Manage Account > Members: cancel the invite if you did not send it.", evidence=ev)
+    if accepted == 0:
+        return dict(base, result="skip", title="Not checked: Cloudflare account members",
+                    detail="The members list was empty, which cannot be right for a live account. No finding was closed or changed by this.", evidence=ev)
+    return dict(base, result="pass", evidence=ev)
+
+
+def cf_account_count_check(n):
+    base = dict(key="cf:account:count", layer=CF_LAYER, asset="Cloudflare account", check="account_count", evidence={"accounts": n})
+    if n == 1:
+        return dict(base, result="pass")
+    if n == 0:
+        return dict(base, result="skip", title="Not checked: the token can see no Cloudflare account",
+                    detail="The accounts list was empty, so account-level checks did not run. No finding was closed or changed by this.",
+                    fix="Give the token Account Settings Read on the Bestly account.")
+    return dict(base, result="yellow", title="The Cloudflare token can see %d accounts (expected 1)" % n,
+                detail="Account-level checks (Workers, members, tunnels) ran on the first account only. Another account is outside the audit.",
+                fix="Create the audit token scoped to the Bestly account only, or add the other account to the audit.")
+
+
+def cf_zones_check(zones):
+    base = dict(key="cf:account:zones", layer=CF_LAYER, asset="Cloudflare account", check="zones_list", evidence={"zones": len(zones)})
+    if zones:
+        return dict(base, result="pass")
+    return dict(base, result="yellow", title="The Cloudflare token can see no zones",
+                detail="Per-zone checks (routes, DNS, SSL) did not run.", fix="Create the token with Zone permissions on All zones.")
+
+
+def run_cloudflare(ctx, cf, cinv, checks):
+    """Every Cloudflare check. Each call that fails is recorded as skip naming the permission it needs."""
+    db, now = ctx.db, ctx.now
+    acct, zones, workers = cinv["account"], cinv["zones"], cinv["workers"]
+    A = "Cloudflare account"
+    checks.add(**cf_account_count_check(cinv["accounts"]))
+
+    # ---- zones: routes, dangling CNAMEs, SSL
+    if zones is None:
+        cf_skip(checks, "cf:account:zones", A, "zones_list", "the Cloudflare zone list", cinv["zones_error"], "Zone Read")
+    else:
+        checks.add(**cf_zones_check(zones))
+    outage = {}
+    tunnels = {}
+    for z in zones or []:
+        zn, zid = z["name"], z["id"]
+        try:
+            routes = cf.one("/zones/%s/workers/routes" % zid)
+            if not isinstance(routes, list):
+                raise ApiError("Cloudflare workers/routes: unexpected answer")
+            if routes and "sites" not in outage:
+                try:
+                    since = (now - timedelta(hours=CF_OUTAGE_WINDOW_HOURS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    outage["sites"] = cf_down_sites(db.get("edge_guard_log?select=site,state,at&at=gte.%s&order=at.desc&limit=200"
+                                                           % urllib.parse.quote(since)))
+                except ApiError as exc:
+                    log("edge_guard_log unreadable (%s); any Worker route will be red" % exc)
+                    outage["sites"] = set()
+            checks.add(**cf_route_check(zn, routes, outage.get("sites", set())))
+        except (TokenProblem, ApiError) as exc:
+            cf_skip(checks, "cf:%s:worker_routes" % zn, zn, "worker_routes", "Worker routes for %s" % zn, exc, "Workers Routes Read")
+        try:
+            recs = cf.paged("/zones/%s/dns_records" % zid, per_page=100, type="CNAME",
+                            keep=lambda r: {"name": r.get("name"), "content": r.get("content")})
+            if "ids" not in tunnels and acct and any((r["content"] or "").lower().rstrip(".").endswith(".cfargotunnel.com") for r in recs):
+                try:
+                    tunnels["ids"] = {t["id"] for t in cf.paged("/accounts/%s/cfd_tunnel" % acct, per_page=100, is_deleted="false",
+                                                                keep=lambda t: {"id": t.get("id")})}
+                except (TokenProblem, ApiError):
+                    tunnels["ids"] = None
+            targets = [(r["content"] or "").lower().rstrip(".") for r in recs
+                       if r["content"] and not (r["content"] or "").lower().rstrip(".").endswith(".cfargotunnel.com")]
+            checks.add(**cf_cname_check(zn, recs, tunnels.get("ids"), cf_resolve_all(targets, ctx.resolve)))
+        except (TokenProblem, ApiError) as exc:
+            cf_skip(checks, "cf:%s:dangling_cname" % zn, zn, "dangling_cname", "CNAME records for %s" % zn, exc, "DNS Read")
+        ssl = tls = err = None
+        try:
+            ssl = (cf.one("/zones/%s/settings/ssl" % zid) or {}).get("value")
+        except (TokenProblem, ApiError) as exc:
+            err = exc
+        try:
+            tls = (cf.one("/zones/%s/settings/min_tls_version" % zid) or {}).get("value")
+        except (TokenProblem, ApiError) as exc:
+            err = err or exc
+        c = cf_ssl_check(zn, ssl, tls)
+        if c["result"] == "skip" and err is not None:
+            cf_skip(checks, c["key"], zn, "ssl_mode", "SSL settings for %s" % zn, err, "Zone Settings Read")
+        else:
+            checks.add(**c)
+
+    # ---- account: Workers usage, owners, members
+    if acct:
+        day_end = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        day = (day_end - timedelta(days=1)).strftime("%Y-%m-%d")
+        try:
+            usage = cf_workers_usage(cf, acct, day_end - timedelta(days=1), day_end)
+            checks.add(**cf_usage_check(sum(usage.values()), usage, day))
+        except (TokenProblem, ApiError) as exc:
+            cf_skip(checks, "cf:account:workers_usage", A, "workers_usage", "Workers request count", exc, "Account Analytics Read")
+
+        if workers is None:
+            cf_skip(checks, "cf:account:workers_list", A, "workers_list", "the Worker list", cinv["workers_error"], "Workers Scripts Read")
+        else:
+            checks.add("cf:account:workers_list", "pass", CF_LAYER, A, "workers_list", evidence={"workers": len(workers)})
+            unowned = [n for n in workers if n not in CF_WORKER_OWNERS]
+            req7 = None
+            if unowned:
+                try:
+                    req7 = cf_workers_usage(cf, acct, day_end - timedelta(days=7), day_end)
+                except (TokenProblem, ApiError):
+                    req7 = None
+            for n in workers:
+                reqs = cron = None
+                if n in unowned:
+                    reqs = None if req7 is None else req7.get(n, 0)
+                    try:
+                        sch = cf.one("/accounts/%s/workers/scripts/%s/schedules" % (acct, urllib.parse.quote(n, safe="")))
+                        sch = sch.get("schedules") if isinstance(sch, dict) else sch
+                        cron = bool(sch) if isinstance(sch, list) else None
+                    except (TokenProblem, ApiError):
+                        cron = None
+                checks.add(**cf_worker_check(n, reqs, cron))
+            checks.extend(cf_gone_worker_passes(set(workers), open_keys(db, "cf:worker:")))
+
+        try:
+            ms = cf.paged("/accounts/%s/members" % acct, keep=lambda m: {"status": m.get("status")})
+            checks.add(**cf_members_check(sum(1 for m in ms if m["status"] == "accepted"),
+                                          sum(1 for m in ms if m["status"] == "pending")))
+        except (TokenProblem, ApiError) as exc:
+            cf_skip(checks, "cf:account:members", A, "account_members", "Cloudflare account members", exc, "Account Settings Read")
+
+    # ---- the audit's own token and every other token
+    try:
+        verify = cf.one("/user/tokens/verify")
+        tokens = None
+        try:
+            tokens = cf.paged("/user/tokens", keep=cf_token_row)
+        except (TokenProblem, ApiError):
+            tokens = None
+        checks.add(**cf_token_check(verify if isinstance(verify, dict) else {}, tokens, now))
+    except (TokenProblem, ApiError) as exc:
+        cf_skip(checks, "cf:token:scope", "Cloudflare API tokens", "token_scope", "Cloudflare token permissions", exc, "API Tokens Read")
 
 
 # --------------------------------------------------------- Supabase advisors
@@ -700,9 +1272,10 @@ class Ctx:
     """Everything the run touches from outside, so selftest can swap it for fakes."""
 
     def __init__(self, db, vercel_token="", supa_token="", api=http_json, web=run_web_checks,
-                 clone=clone_repo, now=None):
+                 clone=clone_repo, now=None, cf_token="", resolve=dns_state):
         self.db, self.vercel_token, self.supa_token = db, vercel_token, supa_token
         self.api, self.web, self.clone = api, web, clone
+        self.cf_token, self.resolve = cf_token, resolve
         self.now = now or datetime.now(timezone.utc)
 
 
@@ -851,6 +1424,23 @@ def run_audit(ctx, args, live, state):
         token_state(db, "supabase", "missing") if live else None
         unverified.append("Supabase advisors (token missing)")
 
+    cinv = None
+    cf_ok = False
+    if ctx.cf_token:
+        try:
+            cinv = gather_cloudflare(Cloudflare(ctx.cf_token, ctx.api))
+            cf_ok = True
+            token_state(db, "cloudflare", "ok") if live else None
+        except TokenProblem as exc:
+            token_state(db, "cloudflare", "rejected", "Cloudflare refused the token (%s)" % exc) if live else None
+            unverified.append("Cloudflare (token rejected)")
+        except ApiError as exc:
+            problems.append("Cloudflare inventory: %s" % exc)
+            unverified.append("Cloudflare (API error)")
+    else:
+        token_state(db, "cloudflare", "missing") if live else None
+        unverified.append("Cloudflare (token missing)")
+
     if vercel_ok:
         hosts = list(vinv["hosts"])
         apexes = list(vinv["apexes"])
@@ -875,6 +1465,7 @@ def run_audit(ctx, args, live, state):
     }
     if not vercel_ok:
         inventory["vercel_carried_forward"] = True
+    inventory["cloudflare"] = cf_inventory(cinv) if cf_ok else prev_inv.get("cloudflare", {})
     if sinv is not None:
         extra = sorted(set(p["name"] for p in sinv) - set(EXPECTED_SUPABASE))
         if extra:
@@ -1048,6 +1639,21 @@ def run_audit(ctx, args, live, state):
                            "env var names, homepage changed with no deploy.",
                            "Paste a working Vercel token on /admin/security (Audit tokens card).", {"reason": "vercel_unavailable"})
 
+        # 4d2. Cloudflare (routes, Workers, DNS, SSL, members, tokens)
+        if cf_ok:
+            run_cloudflare(ctx, Cloudflare(ctx.cf_token, ctx.api), cinv, checks)
+        elif not ctx.cf_token:
+            skip_missing_token(checks, "cloudflare", "cf:account:members", CF_LAYER, "Cloudflare account", "account_members",
+                               ["Worker routes per zone", "Workers request count against the free daily cap", "Workers with no owner",
+                                "CNAME records pointing at nothing", "API token permissions", "SSL mode and minimum TLS per zone",
+                                "account members"])
+        else:
+            checks.add("cf:account:members", "skip", CF_LAYER, "Cloudflare account", "account_members",
+                       "Not checked: Cloudflare did not answer",
+                       "The Cloudflare token was refused or the API failed tonight. Not run: Worker routes, Workers usage, Worker owners, "
+                       "dangling CNAMEs, token permissions, SSL mode, account members.",
+                       "Paste a working Cloudflare token on /admin/security (Audit tokens card).", {"reason": "cloudflare_unavailable"})
+
         # 4e. El Dora ownership (bestly_memory eldora/domain-risk)
         try:
             rows = db.get("bestly_memory?select=title,body&area=eq.eldora&key=eq.domain-risk&limit=1")
@@ -1149,7 +1755,8 @@ def main(argv=None):
     db = Db(url, key)
     ctx = Ctx(db,
               get_token(db, VERCEL_SERVICE, VERCEL_ACCOUNT, VERCEL_VAULT_NAME),
-              get_token(db, SUPABASE_SERVICE, SUPABASE_ACCOUNT, SUPABASE_VAULT_NAME))
+              get_token(db, SUPABASE_SERVICE, SUPABASE_ACCOUNT, SUPABASE_VAULT_NAME),
+              cf_token=get_token(db, CLOUDFLARE_SERVICE, CLOUDFLARE_ACCOUNT, CLOUDFLARE_VAULT_NAME))
     stamp = datetime.now().strftime("%Y%m%d")
     try:
         summary = run_audit(ctx, args, live, state)
@@ -1165,7 +1772,7 @@ def main(argv=None):
     log(summary)
     if live and not args.quiet and "token rejected" in summary:
         scout_notify(db, "%s: an audit token was refused" % OWNER,
-                     "Vercel or Supabase refused the saved token, so those checks were skipped tonight. Paste a new one on the Security page.",
+                     "Vercel, Supabase or Cloudflare refused the saved token, so those checks were skipped tonight. Paste a new one on the Security page.",
                      "warning", "security-audit.token.%s" % stamp)
     return summary
 

@@ -11,10 +11,14 @@ import json
 import os
 import sys
 import contextlib
+import math
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import security_audit as sa  # noqa: E402
+
+sa.CF_PAUSE_S = 0
 
 FAILS = []
 
@@ -27,6 +31,11 @@ def ok(cond, label):
 
 VTOKEN = "vercel_test_token_AAAAAAAAAAAAAAAA"
 STOKEN = "sbp_test_token_BBBBBBBBBBBBBBBBBBB"
+CTOKEN = "cf_test_token_CCCCCCCCCCCCCCCCCCCC"
+CF_EMAIL = "owner-secret@example.com"
+CF_ACCOUNT_NAME = "Secret Name's Account"
+OWNED = ["bestly-site-outage-splash", "bestly-cloud-maintenance-splash", "bestly-studio-mail"]
+FAR = "2099-01-01T00:00:00Z"
 SECRET_ENV_VALUE = "ENV_VALUE_MUST_NEVER_BE_KEPT_12345"
 RUN = "11111111-2222-3333-4444-555555555555"
 BASE = "https://fake.supabase.co"
@@ -45,6 +54,30 @@ class FakeWorld:
         self.pending_sha, self.cur_ev = None, {}
         self.started_recently = started_recently
         self.env_status = env_status
+        # ---- fake Cloudflare (healthy account by default)
+        self.cf_calls = []         # (method, path)
+        self.cf_reject = False
+        self.cf_deny = set()       # path fragments answered 403
+        self.cf_page_size = 0      # 0 = honour per_page; N = force N rows a page (pagination test)
+        self.cf_accounts = [{"id": "acct1", "name": CF_ACCOUNT_NAME}]
+        self.cf_zones = [{"id": "z1", "name": "bestly.tech"}, {"id": "z2", "name": "hoku-clean.com"}]
+        self.cf_routes = {"z1": [], "z2": []}
+        self.cf_workers = list(OWNED)
+        self.cf_crons = {}
+        self.cf_usage_day = {"bestly-studio-mail": 40, "bestly-site-outage-splash": 12}
+        self.cf_usage_week = {"bestly-studio-mail": 280}
+        self.cf_graphql_denied = False
+        self.cf_cnames = {"z1": [{"name": "cloud.bestly.tech", "content": "abc123.cfargotunnel.com"},
+                                 {"name": "www.bestly.tech", "content": "cname.vercel-dns.com"}], "z2": []}
+        self.cf_tunnels = [{"id": "abc123", "name": "pi"}]
+        self.cf_ssl = {"z1": "strict", "z2": "strict"}
+        self.cf_tls = {"z1": "1.2", "z2": "1.3"}
+        self.cf_members = [{"status": "accepted", "user": {"email": CF_EMAIL}}]
+        self.cf_verify = {"id": "tok-audit", "status": "active", "expires_on": FAR}
+        self.cf_tokens = [cf_tok("tok-audit", "Bestly audit (read only)", ["Zone Read", "DNS Read", "Workers Scripts Read"], ip=True)]
+        self.edge_log = []
+        self.dns = {}              # target -> ok | nxdomain | temp (default ok)
+        self.dns_canary = "ok"
 
     def __call__(self, method, url, headers=None, body=None, timeout=60, tries=1):
         self.calls.append((method, url))
@@ -63,7 +96,68 @@ class FakeWorld:
             return self.vercel(url)
         if url.startswith(sa.SUPABASE_API):
             return self.supabase(url, headers)
+        if url.startswith(sa.CF_API):
+            return self.cloudflare(method, url, headers, payload)
         raise AssertionError("unexpected call " + url)
+
+    def resolve(self, target):
+        return self.dns_canary if target == "cloudflare.com" else self.dns.get(target, "ok")
+
+    # ---- cloudflare
+    def _cf_list(self, rows, q):
+        size = self.cf_page_size or int(q.get("per_page", 50))
+        page = int(q.get("page", 1))
+        return 200, {"success": True, "result": rows[(page - 1) * size: page * size],
+                     "result_info": {"page": page, "per_page": size, "total_pages": max(1, math.ceil(len(rows) / size))}}
+
+    def cloudflare(self, method, url, headers, payload):
+        assert headers["Authorization"] == "Bearer " + CTOKEN
+        sp = urllib.parse.urlsplit(url)
+        path = sp.path[len("/client/v4"):]
+        q = {k: v[0] for k, v in urllib.parse.parse_qs(sp.query).items()}
+        self.cf_calls.append((method, path))
+        if self.cf_reject or any(f in path for f in self.cf_deny):
+            return 403, {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}]}
+        ok = lambda r: (200, {"success": True, "result": r})  # noqa: E731
+        if method == "POST":
+            assert path == "/graphql", path
+            assert payload["query"].lstrip().startswith("query") and "mutation" not in payload["query"]
+            if self.cf_graphql_denied:
+                return 200, {"data": None, "errors": [{"message": "not authorized to access this resource"}]}
+            since = datetime.fromisoformat(payload["variables"]["since"].replace("Z", "+00:00"))
+            until = datetime.fromisoformat(payload["variables"]["until"].replace("Z", "+00:00"))
+            usage = self.cf_usage_day if (until - since) <= timedelta(days=1) else self.cf_usage_week
+            return 200, {"data": {"viewer": {"accounts": [{"workersInvocationsAdaptive": [
+                {"sum": {"requests": n}, "dimensions": {"scriptName": name}} for name, n in usage.items()]}]}}, "errors": None}
+        assert method == "GET", method
+        if path == "/accounts":
+            return self._cf_list(self.cf_accounts, q)
+        if path == "/zones":
+            return self._cf_list(self.cf_zones, q)
+        if path == "/accounts/acct1/workers/scripts":
+            return ok([{"id": n, "etag": "x"} for n in self.cf_workers])
+        if path.startswith("/accounts/acct1/workers/scripts/") and path.endswith("/schedules"):
+            name = path.split("/")[-2]
+            return ok({"schedules": [{"cron": c} for c in self.cf_crons.get(name, [])]})
+        if path.startswith("/zones/") and path.endswith("/workers/routes"):
+            return ok(self.cf_routes[path.split("/")[2]])
+        if path.startswith("/zones/") and path.endswith("/dns_records"):
+            assert q["type"] == "CNAME"
+            return self._cf_list(self.cf_cnames[path.split("/")[2]], q)
+        if path == "/accounts/acct1/cfd_tunnel":
+            assert q["is_deleted"] == "false"
+            return self._cf_list(self.cf_tunnels, q)
+        if path.startswith("/zones/") and path.endswith("/settings/ssl"):
+            return ok({"id": "ssl", "value": self.cf_ssl[path.split("/")[2]]})
+        if path.startswith("/zones/") and path.endswith("/settings/min_tls_version"):
+            return ok({"id": "min_tls_version", "value": self.cf_tls[path.split("/")[2]]})
+        if path == "/accounts/acct1/members":
+            return self._cf_list(self.cf_members, q)
+        if path == "/user/tokens/verify":
+            return ok(self.cf_verify)
+        if path == "/user/tokens":
+            return self._cf_list(self.cf_tokens, q)
+        raise AssertionError("unexpected cloudflare " + url)
 
     # ---- database
     def db_rpc(self, name, p):
@@ -112,6 +206,9 @@ class FakeWorld:
             return 200, [{"key": "supa:Bestly:rpc:anon_writer:old_fn"}, {"key": "supa:Bestly:advisor:rls_disabled_in_public"}]
         if path.startswith("bestly_memory"):
             return 200, [{"title": "El Dora domain is in Rohit's GoDaddy account", "body": "Opened 2026-08-31, still open."}]
+        if path.startswith("edge_guard_log"):
+            assert "order=at.desc" in path and "at=gte." in path
+            return 200, self.edge_log
         if path.startswith("user_roles"):
             return 200, [{"user_id": "u"}]
         raise AssertionError("unexpected get " + path)
@@ -181,9 +278,16 @@ def fake_web_factory(world):
     return web
 
 
-def make(world, vtoken=VTOKEN, stoken=STOKEN):
+def cf_tok(tid, name, perms, ip=False, expires=FAR, status="active"):
+    return {"id": tid, "name": name, "status": status, "expires_on": expires,
+            "policies": [{"effect": "allow", "permission_groups": [{"id": "pg-" + p, "name": p} for p in perms]}],
+            "condition": {"request_ip": {"in": ["203.0.113.7/32"]}} if ip else {}}
+
+
+def make(world, vtoken=VTOKEN, stoken=STOKEN, ctoken=CTOKEN):
     db = sa.Db(BASE, "service-role-key-not-real", api=world)
-    ctx = sa.Ctx(db, vtoken, stoken, api=world, web=fake_web_factory(world), clone=lambda d: True)
+    ctx = sa.Ctx(db, vtoken, stoken, api=world, web=fake_web_factory(world), clone=lambda d: True,
+                 cf_token=ctoken, resolve=world.resolve)
     return ctx
 
 
@@ -267,7 +371,7 @@ def test_pure():
 def test_no_tokens():
     print("missing tokens (live)")
     w = FakeWorld()
-    res, err, out = run(w, vtoken="", stoken="")
+    res, err, out = run(w, vtoken="", stoken="", ctoken="")
     ok(err is None, "run succeeds without tokens (%s)" % err)
     cs = by_key(batch_checks(w))
     ok(cs["vercel:team:members"]["result"] == "skip", "vercel checks recorded as skip")
@@ -279,7 +383,8 @@ def test_no_tokens():
     ok(len(fin) == 1 and fin[0]["p_failed"] is False, "run finishes ok=true (missing token is not a failure)")
     ok("Not checked" in fin[0]["p_summary"], "summary says what was not checked")
     states = [p for n, p in w.rpc if n == "security_token_state_put"]
-    ok({s["p_status"] for s in states} == {"missing"}, "token state recorded as missing")
+    ok({s["p_status"] for s in states} == {"missing"} and {s["p_which"] for s in states} == {"vercel", "supabase", "cloudflare"},
+       "token state recorded as missing for all three")
     ok(not any("fingerprint" in k for k in cs), "fingerprints are not checks")
 
 
@@ -383,6 +488,8 @@ def test_no_secret_leaks():
     ok("someone@example.com" not in blob, "Vercel member emails are not stored")
     ok(not any("decrypt" in u for _, u in w.calls), "env var values are never requested decrypted")
     ok(all(m == "GET" for m, u in w.calls if "vercel" in u or "api.supabase.com" in u), "only GETs go to Vercel / Supabase Management")
+    ok(CTOKEN not in blob and CF_EMAIL not in blob and CF_ACCOUNT_NAME not in blob,
+       "Cloudflare token, member emails and account name never reach the database, the log or the summary")
 
 
 def test_rejected_token():
@@ -475,6 +582,251 @@ def test_web_checks_contract():
     ok(items == [] and (err is None or "not installed" in err), "missing web_checks.py is an error, never an empty pass")
 
 
+# ------------------------------------------------------------------ cloudflare
+def cf_keys(w):
+    return {k: v for k, v in by_key(batch_checks(w)).items() if k.startswith("cf:")}
+
+
+def cf_run(**attrs):
+    w = FakeWorld()
+    for k, v in attrs.items():
+        setattr(w, k, v)
+    res, err, out = run(w)
+    assert err is None, err
+    return w, cf_keys(w)
+
+
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def test_cf_no_token():
+    print("cloudflare: no token")
+    w = FakeWorld()
+    res, err, out = run(w, ctoken="")
+    cs = cf_keys(w)
+    ok(err is None, "run succeeds without a Cloudflare token (%s)" % err)
+    ok(list(cs) == ["cf:account:members"] and cs["cf:account:members"]["result"] == "skip", "exactly one skip and nothing else under cf:")
+    ok("pi:cloudflare:api_token" in cs["cf:account:members"]["fix"], "skip names the Vault secret")
+    ok(all(w_ in cs["cf:account:members"]["detail"] for w_ in ("Worker routes", "SSL mode", "account members")), "skip lists every check that did not run")
+    ok(not any(sa.CF_API in u for _, u in w.calls), "no Cloudflare call without a token")
+    ok(("cloudflare", "missing") in [(p["p_which"], p["p_status"]) for n, p in w.rpc if n == "security_token_state_put"], "token state missing")
+    ok("Cloudflare (token missing)" in res, "summary says Cloudflare was not checked")
+
+
+def test_cf_rejected():
+    print("cloudflare: token rejected")
+    w = FakeWorld()
+    w.cf_reject = True
+    res, err, out = run(w)
+    cs = cf_keys(w)
+    ok(err is None, "a rejected token is not a failed run")
+    ok(list(cs) == ["cf:account:members"] and cs["cf:account:members"]["result"] == "skip", "one unverified entry, nothing passes")
+    ok(cs["cf:account:members"]["evidence"]["reason"] == "cloudflare_unavailable", "reason recorded")
+    ok(("cloudflare", "rejected") in [(p["p_which"], p["p_status"]) for n, p in w.rpc if n == "security_token_state_put"], "token state rejected")
+    ok("token rejected" in res and "Cloudflare" in res, "summary carries 'token rejected' (the Scout notice trigger)")
+    ok(len(w.cf_calls) == 1, "stops at the first refused call")
+    inv = [p for n, p in w.rpc if n == "security_run_start"][0]["p_inventory"]
+    ok(inv["cloudflare"] == {}, "no previous inventory to carry forward")
+
+
+def test_cf_healthy():
+    print("cloudflare: healthy account")
+    w, cs = cf_run()
+    want = {"cf:account:count", "cf:account:zones", "cf:account:workers_usage", "cf:account:workers_list", "cf:account:members",
+            "cf:token:scope", "cf:bestly.tech:worker_routes", "cf:hoku-clean.com:worker_routes", "cf:bestly.tech:dangling_cname",
+            "cf:hoku-clean.com:dangling_cname", "cf:bestly.tech:ssl_mode", "cf:hoku-clean.com:ssl_mode"} | \
+           {"cf:worker:%s:orphan" % n for n in OWNED}
+    ok(set(cs) == want, "exact key set: %s" % sorted(set(cs) ^ want))
+    ok(all(c["layer"] == "Edge (Cloudflare)" for c in cs.values()), "layer is Edge (Cloudflare)")
+    ok(all(c["result"] == "pass" for c in cs.values()), "all pass: %s" % {k: v["result"] for k, v in cs.items() if v["result"] != "pass"})
+    ok(cs["cf:account:workers_usage"]["evidence"]["requests"] == 52, "usage evidence has the total")
+    ok(("cloudflare", "ok") in [(p["p_which"], p["p_status"]) for n, p in w.rpc if n == "security_token_state_put"], "token state ok")
+    inv = [p for n, p in w.rpc if n == "security_run_start"][0]["p_inventory"]["cloudflare"]
+    ok(inv == {"account": "acct1", "zones": ["bestly.tech", "hoku-clean.com"], "workers": sorted(OWNED)}, "inventory has account, zones, workers")
+    non_get = [(m, p) for m, p in w.cf_calls if m != "GET"]
+    ok(non_get == [("POST", "/graphql")] or set(non_get) == {("POST", "/graphql")}, "the only non-GET is the read-only GraphQL POST")
+    ok(not any(p.startswith("/zones/") and p.endswith("/schedules") or "/schedules" in p for _, p in w.cf_calls), "owned Workers: no schedule lookups")
+
+
+def test_cf_routes():
+    print("cloudflare: worker routes")
+    route = {"pattern": "bestly.tech/*", "script": "bestly-site-outage-splash", "request_limit_fail_open": True}
+    w, cs = cf_run(cf_routes={"z1": [route], "z2": []})
+    c = cs["cf:bestly.tech:worker_routes"]
+    ok(c["result"] == "red", "a route with no outage is red")
+    ok(c["evidence"]["routes"][0] == {"pattern": "bestly.tech/*", "script": "bestly-site-outage-splash", "request_limit_fail_open": True}, "evidence: pattern, script, fail_open")
+    ok(cs["cf:hoku-clean.com:worker_routes"]["result"] == "pass", "other zone unaffected")
+    down = [{"site": "bestly.tech", "state": "down", "at": now_iso()}]
+    w, cs = cf_run(cf_routes={"z1": [route], "z2": []}, edge_log=down)
+    ok(cs["cf:bestly.tech:worker_routes"]["result"] == "yellow" and "Splash route on during an outage" in cs["cf:bestly.tech:worker_routes"]["title"],
+       "a route during an Edge Guard outage is yellow")
+    w, cs = cf_run(cf_routes={"z1": [route], "z2": []}, edge_log=[{"site": "bestly.tech", "state": "recovered", "at": now_iso()},
+                                                                  {"site": "bestly.tech", "state": "down", "at": now_iso()}])
+    ok(cs["cf:bestly.tech:worker_routes"]["result"] == "red", "newest row says recovered: red again")
+    closed = dict(route, request_limit_fail_open=False)
+    w, cs = cf_run(cf_routes={"z1": [closed], "z2": []}, edge_log=down)
+    ok(cs["cf:bestly.tech:worker_routes"]["result"] == "red", "a fail-closed route is red even during an outage")
+    other = dict(route, pattern="cloud.bestly.tech/*")
+    w, cs = cf_run(cf_routes={"z1": [other], "z2": []}, edge_log=down)
+    ok(cs["cf:bestly.tech:worker_routes"]["result"] == "red", "outage on bestly.tech does not excuse a cloud.bestly.tech route")
+    www = dict(route, pattern="www.bestly.tech/*")
+    w, cs = cf_run(cf_routes={"z1": [route, www], "z2": []}, edge_log=down)
+    ok(cs["cf:bestly.tech:worker_routes"]["result"] == "yellow", "bestly.tech outage covers www too")
+    w, cs = cf_run(cf_deny={"/workers/routes"})
+    ok(cs["cf:bestly.tech:worker_routes"]["result"] == "skip" and "Workers Routes Read" in cs["cf:bestly.tech:worker_routes"]["detail"], "403 on routes is skip naming the permission")
+    ok(sa.cf_down_sites([{"site": "a", "state": "down"}, {"site": "a", "state": "ok"}, {"site": "b", "state": "quota"}]) == {"a"}, "down_sites uses the newest row per site")
+
+
+def test_cf_usage():
+    print("cloudflare: Workers usage")
+    for total, want in ((49999, "pass"), (50000, "yellow"), (60000, "yellow"), (79999, "yellow"), (80000, "red"), (85000, "red")):
+        c = sa.cf_usage_check(total, {"a": total}, "2026-10-14")
+        ok(c["result"] == want, "%d requests is %s" % (total, want))
+    w, cs = cf_run(cf_usage_day={"a": 30000, "b": 20000, "c": 7000, "d": 3000})
+    c = cs["cf:account:workers_usage"]
+    ok(c["result"] == "yellow" and [t["script"] for t in c["evidence"]["top_scripts"]] == ["a", "b", "c"], "60k is yellow with the top 3 scripts")
+    w, cs = cf_run(cf_usage_day={"a": 85000})
+    ok(cs["cf:account:workers_usage"]["result"] == "red", "85k is red")
+    w, cs = cf_run(cf_graphql_denied=True)
+    c = cs["cf:account:workers_usage"]
+    ok(c["result"] == "skip" and "Account Analytics Read" in c["detail"], "GraphQL denied is skip naming Account Analytics Read")
+    ok(c["evidence"]["permission"] == "Account Analytics Read", "permission in evidence")
+    try:
+        sa.Cloudflare("t", api=lambda *a, **k: (200, {})).graphql("mutation { x }", {})
+        ok(False, "graphql refuses a mutation")
+    except ValueError:
+        ok(True, "graphql refuses a mutation")
+
+
+def test_cf_workers():
+    print("cloudflare: Worker owners")
+    w, cs = cf_run(cf_workers=OWNED + ["stitch-proxy"], cf_usage_week={"stitch-proxy": 123}, cf_crons={"stitch-proxy": ["0 * * * *"]})
+    c = cs["cf:worker:stitch-proxy:orphan"]
+    ok(c["result"] == "yellow" and c["title"] == "Worker with no owner: stitch-proxy", "an unowned Worker is yellow")
+    ok("123" in c["detail"] and "cron schedule: yes" in c["detail"], "detail has 7-day requests and the cron flag")
+    ok(all(cs["cf:worker:%s:orphan" % n]["result"] == "pass" for n in OWNED), "owned Workers record pass under the same key")
+    ok(any(p.endswith("/stitch-proxy/schedules") for _, p in w.cf_calls), "schedules looked up for the unowned Worker")
+    w, cs = cf_run(cf_workers=OWNED + ["a", "b", "c", "d"])
+    ok(sorted(k for k, v in cs.items() if k.endswith(":orphan") and v["result"] == "yellow") == ["cf:worker:%s:orphan" % n for n in "abcd"],
+       "expected first run shape: only the unowned Workers are yellow")
+    w, cs = cf_run(cf_workers=OWNED + ["x"], cf_graphql_denied=True)
+    ok("unknown" in cs["cf:worker:x:orphan"]["detail"], "analytics denied: 7-day count is 'unknown', not 0")
+    w, cs = cf_run(cf_deny={"/workers/scripts"})
+    ok(cs["cf:account:workers_list"]["result"] == "skip" and "Workers Scripts Read" in cs["cf:account:workers_list"]["detail"], "Worker list denied is skip")
+    ok(not any(k.endswith(":orphan") for k in cs), "no owner verdicts without the Worker list")
+    gone = sa.cf_gone_worker_passes({"here"}, ["cf:worker:here:orphan", "cf:worker:gone:orphan", "supa:x"])
+    ok([g["key"] for g in gone] == ["cf:worker:gone:orphan"] and gone[0]["result"] == "pass", "a deleted Worker closes its finding")
+
+
+def test_cf_cnames():
+    print("cloudflare: dangling CNAMEs")
+    vercel = {"name": "old.bestly.tech", "content": "cname.vercel-dns.com"}
+    cn = lambda extra: {"z1": extra, "z2": []}  # noqa: E731
+    w, cs = cf_run(cf_cnames=cn([vercel]), dns={"cname.vercel-dns.com": "nxdomain"})
+    c = cs["cf:bestly.tech:dangling_cname"]
+    ok(c["result"] == "red" and c["evidence"]["bad"][0]["name"] == "old.bestly.tech", "NXDOMAIN on a takeover-prone host is red")
+    ok(set(c["evidence"]["bad"][0]) == {"name", "target", "why"}, "evidence lists name, target, why")
+    w, cs = cf_run(cf_cnames=cn([{"name": "t.bestly.tech", "content": "dead999.cfargotunnel.com"}]))
+    ok(cs["cf:bestly.tech:dangling_cname"]["result"] == "red", "a deleted tunnel is red")
+    w, cs = cf_run(cf_cnames=cn([{"name": "t.bestly.tech", "content": "abc123.cfargotunnel.com"}]))
+    ok(cs["cf:bestly.tech:dangling_cname"]["result"] == "pass", "a live tunnel passes")
+    ok(any(p == "/accounts/acct1/cfd_tunnel" for _, p in w.cf_calls), "tunnel list read")
+    w, cs = cf_run(cf_cnames=cn([vercel]), dns={"cname.vercel-dns.com": "temp"})
+    ok(cs["cf:bestly.tech:dangling_cname"]["result"] == "skip", "a DNS timeout is skip, never pass")
+    w, cs = cf_run(cf_cnames=cn([{"name": "m.bestly.tech", "content": "mail.example.org"}]), dns={"mail.example.org": "nxdomain"})
+    ok(cs["cf:bestly.tech:dangling_cname"]["result"] == "yellow", "NXDOMAIN on another host is yellow")
+    w, cs = cf_run(cf_cnames=cn([vercel]), dns={"cname.vercel-dns.com": "nxdomain"}, dns_canary="temp")
+    ok(cs["cf:bestly.tech:dangling_cname"]["result"] == "skip", "a broken local resolver cannot raise a red")
+    w, cs = cf_run(cf_cnames=cn([{"name": "t.bestly.tech", "content": "dead999.cfargotunnel.com"}]), cf_deny={"cfd_tunnel"})
+    ok(cs["cf:bestly.tech:dangling_cname"]["result"] == "skip", "tunnel list denied: skip, not a verdict")
+    ok(all(sa.cf_takeover_prone(t) for t in ("x.vercel-dns.com", "a.vercel.app", "u.github.io", "a.herokuapp.com", "a.azurewebsites.net",
+                                            "d1.cloudfront.net", "b.s3.amazonaws.com", "b.s3-website-us-east-1.amazonaws.com",
+                                            "a.netlify.app", "a.pages.dev", "a.workers.dev")), "takeover-prone list")
+    ok(not sa.cf_takeover_prone("mail.example.org") and not sa.cf_takeover_prone("ec2.amazonaws.com"), "other hosts are not takeover-prone")
+
+
+def test_cf_ssl_members_tokens():
+    print("cloudflare: SSL, members, tokens")
+    w, cs = cf_run(cf_ssl={"z1": "flexible", "z2": "full"})
+    ok(cs["cf:bestly.tech:ssl_mode"]["result"] == "red" and cs["cf:hoku-clean.com:ssl_mode"]["result"] == "yellow", "flexible red, full yellow")
+    w, cs = cf_run(cf_ssl={"z1": "off", "z2": "strict"})
+    ok(cs["cf:bestly.tech:ssl_mode"]["result"] == "red", "off is red")
+    w, cs = cf_run(cf_tls={"z1": "1.0", "z2": "1.2"})
+    c = cs["cf:bestly.tech:ssl_mode"]
+    ok(c["result"] == "yellow" and c["evidence"] == {"ssl": "strict", "min_tls_version": "1.0"}, "min TLS below 1.2 is yellow, both values in evidence")
+    w, cs = cf_run(cf_ssl={"z1": "flexible", "z2": "strict"}, cf_tls={"z1": "1.0", "z2": "1.2"})
+    ok(cs["cf:bestly.tech:ssl_mode"]["result"] == "red" and cs["cf:bestly.tech:ssl_mode"]["evidence"]["min_tls_version"] == "1.0", "worst wins, both in evidence")
+    w, cs = cf_run(cf_deny={"settings/min_tls_version"})
+    ok(cs["cf:bestly.tech:ssl_mode"]["result"] == "skip", "half-read settings are skip, not pass")
+
+    w, cs = cf_run(cf_members=[{"status": "accepted", "user": {"email": CF_EMAIL}}, {"status": "accepted", "user": {"email": "b@example.com"}}])
+    ok(cs["cf:account:members"]["result"] == "red", "2 members is red")
+    w, cs = cf_run(cf_members=[{"status": "accepted"}, {"status": "accepted"}, {"status": "accepted"}], cf_page_size=1)
+    ok(cs["cf:account:members"]["result"] == "red" and cs["cf:account:members"]["evidence"]["members"] == 3, "pagination: all pages counted")
+    ok(sum(1 for _, p in w.cf_calls if p == "/accounts/acct1/members") == 3, "three member pages fetched")
+    w, cs = cf_run(cf_members=[{"status": "accepted"}, {"status": "pending"}])
+    ok(cs["cf:account:members"]["result"] == "yellow", "a pending invite is yellow")
+    w, cs = cf_run(cf_zones=[{"id": "z%d" % i, "name": "z%d.com" % i} for i in range(1, 4)], cf_page_size=1,
+                   cf_routes={"z1": [], "z2": [], "z3": []}, cf_cnames={"z1": [], "z2": [], "z3": []},
+                   cf_ssl={"z1": "strict", "z2": "strict", "z3": "strict"}, cf_tls={"z1": "1.2", "z2": "1.2", "z3": "1.2"})
+    ok({"cf:z1.com:ssl_mode", "cf:z2.com:ssl_mode", "cf:z3.com:ssl_mode"} <= set(cs), "zones list paginates")
+    w, cs = cf_run(cf_accounts=[{"id": "acct1"}, {"id": "acct2"}])
+    ok(cs["cf:account:count"]["result"] == "yellow", "two accounts is yellow")
+
+    risky = cf_tok("tok-b", "ci deploy", ["Workers Scripts Write"])
+    w, cs = cf_run(cf_tokens=[w.cf_tokens[0], risky])
+    c = cs["cf:token:scope"]
+    ok(c["result"] == "yellow" and c["evidence"]["flagged_tokens"] == ["ci deploy"], "a write token with no IP restriction is yellow, by name")
+    ok("tok-b" not in json.dumps(c) and "tok-audit" not in json.dumps(c), "token ids never appear in the check")
+    noexp = cf_tok("tok-c", "dns bot", ["DNS Edit"], ip=True, expires=None)
+    w, cs = cf_run(cf_tokens=[w.cf_tokens[0], noexp])
+    ok(cs["cf:token:scope"]["result"] == "yellow", "a write token with no expiry is yellow")
+    safe = cf_tok("tok-d", "locked", ["DNS Edit"], ip=True)
+    w, cs = cf_run(cf_tokens=[w.cf_tokens[0], safe])
+    ok(cs["cf:token:scope"]["result"] == "pass", "a write token with IP restriction and expiry passes")
+    w, cs = cf_run(cf_tokens=[cf_tok("tok-audit", "Bestly audit", ["Zone Read", "DNS Edit"], ip=True)])
+    ok(cs["cf:token:scope"]["result"] == "red", "the audit's own token with a write permission is red")
+    soon = (datetime.now(timezone.utc) + timedelta(days=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    w, cs = cf_run(cf_verify={"id": "tok-audit", "status": "active", "expires_on": soon})
+    ok(cs["cf:token:scope"]["result"] == "yellow", "own token expiring within 14 days is yellow")
+    w, cs = cf_run(cf_deny={"/user/tokens"} )
+    ok(cs["cf:token:scope"]["result"] == "skip", "tokens endpoints denied is skip")
+    w = FakeWorld()
+    orig = w.cloudflare
+    w.cloudflare = lambda m, u, h, p: (403, {"success": False}) if "/user/tokens?" in u else orig(m, u, h, p)
+    res, err, out = run(w)
+    c = cf_keys(w)["cf:token:scope"]
+    ok(c["result"] == "skip" and "API Tokens Read" in c["detail"], "list denied (verify ok) is skip naming API Tokens Read")
+    w, cs = cf_run(cf_verify={"id": "tok-audit", "status": "expired"})
+    ok(cs["cf:token:scope"]["result"] == "yellow", "an inactive audit token is flagged")
+
+
+def test_cf_secrets():
+    print("cloudflare: secrets")
+    w, cs = cf_run(cf_workers=OWNED + ["x"], cf_tokens=[cf_tok("tok-audit", "a", ["DNS Edit"]), cf_tok("tok-b", "b", ["DNS Edit"])],
+                   cf_routes={"z1": [{"pattern": "bestly.tech/*", "script": "s", "request_limit_fail_open": False}], "z2": []})
+    res, err, out = run(w)
+    blob = json.dumps(w.rpc) + json.dumps(w.patches) + out + (res or "")
+    ok(CTOKEN not in blob, "the Cloudflare token is never in a db payload, the log or the summary")
+    ok(CF_EMAIL not in blob and CF_ACCOUNT_NAME not in blob, "member emails and the account name are dropped")
+    ok("tok-b" not in blob and "tok-audit" not in blob, "token ids are never stored")
+    pure = json.dumps([sa.cf_token_check({"id": "i", "status": "active"}, [sa.cf_token_row(cf_tok("i", "n", ["DNS Edit"]))], datetime.now(timezone.utc))])
+    ok(CTOKEN not in pure, "token check output is names only")
+    ok(all(m == "GET" or p == "/graphql" for m, p in w.cf_calls), "GET only, except the read-only GraphQL POST")
+    ok(sum(1 for m, _ in w.cf_calls if m == "POST") >= 1, "the GraphQL POST was used")
+
+
+def test_cf_missing_perm_for_discovery():
+    print("cloudflare: partial permissions")
+    w, cs = cf_run(cf_deny={"/zones"})
+    ok(cs["cf:account:zones"]["result"] == "skip" and "Zone Read" in cs["cf:account:zones"]["detail"], "zone list denied: one skip naming Zone Read")
+    ok(not any(":ssl_mode" in k or ":worker_routes" in k for k in cs), "no per-zone verdicts without the zone list")
+    ok(cs["cf:account:members"]["result"] == "pass", "account-level checks still run")
+    w, cs = cf_run(cf_deny={"/members"})
+    ok(cs["cf:account:members"]["result"] == "skip" and "Account Settings Read" in cs["cf:account:members"]["detail"], "members denied is skip")
+
+
 if __name__ == "__main__":
     test_pure()
     test_no_tokens()
@@ -487,6 +839,16 @@ if __name__ == "__main__":
     test_dry_and_guard()
     test_web_checks_contract()
     test_no_false_alarms()
+    test_cf_no_token()
+    test_cf_rejected()
+    test_cf_healthy()
+    test_cf_routes()
+    test_cf_usage()
+    test_cf_workers()
+    test_cf_cnames()
+    test_cf_ssl_members_tokens()
+    test_cf_secrets()
+    test_cf_missing_perm_for_discovery()
     print()
     if FAILS:
         print("SELFTEST FAILED: %d" % len(FAILS))
