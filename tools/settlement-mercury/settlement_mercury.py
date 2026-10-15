@@ -23,6 +23,7 @@ Auth
 """
 import json
 import os
+import socket
 import sys
 import time
 import urllib.error
@@ -41,8 +42,8 @@ TOKEN_FILE = os.environ.get("SETTLEMENT_TOKEN_FILE", "/home/pi/.bestly/db_watchd
 BATCH = 150
 
 
-def _env_token():
-    t = os.environ.get("MERCURY_API_TOKEN", "").strip()
+def _env_value(name):
+    t = os.environ.get(name, "").strip()
     if t:
         return t
     try:
@@ -50,11 +51,50 @@ def _env_token():
             ln = ln.strip()
             if ln.startswith("export "):
                 ln = ln[7:]
-            if ln.startswith("MERCURY_API_TOKEN="):
+            if ln.startswith(name + "="):
                 return ln.split("=", 1)[1].strip().strip('"').strip("'")
     except OSError:
         pass
     return ""
+
+
+def _env_token():
+    return _env_value("MERCURY_API_TOKEN")
+
+
+def _vault_token():
+    """Vault pi:mercury_api_token through the service-role RPC pi_secret_get, the path mercury-sync uses (works on the Pi
+    since 2026-10-14). Tried before mercury_token_t, which needs the db-watchdog token file. Never printed."""
+    key = _env_value("SUPABASE_SERVICE_ROLE_KEY")
+    if not key:
+        return ""
+    req = urllib.request.Request(lib.URL + "/rest/v1/rpc/pi_secret_get", data=json.dumps({"p_name": "pi:mercury_api_token"}).encode(),
+                                 method="POST", headers={"Content-Type": "application/json", "apikey": key, "Authorization": "Bearer " + key})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            v = json.loads(r.read().decode() or "null")
+    except Exception:  # noqa: BLE001  (not allowlisted, not saved, or the DB is briefly down: fall through)
+        return ""
+    return v.strip() if isinstance(v, str) else ""
+
+
+class force_ipv4(object):
+    """Mercury allowlists a token by source address and the Pi is dual-stack: left alone it reaches api.mercury.com over
+    IPv6, which nobody allowlisted (and the SLAAC suffix rotates). Inside this block every lookup is IPv4 only. Same fix
+    mercury-sync got on 2026-10-14; the Pi's allowlisted IPv4 is in house/handoff/2026-10-14-pi-migration."""
+
+    def __enter__(self):
+        self._real = socket.getaddrinfo
+
+        def ipv4_only(host, port, family=0, *args, **kwargs):
+            return self._real(host, port, socket.AF_INET, *args, **kwargs)
+
+        socket.getaddrinfo = ipv4_only
+        return self
+
+    def __exit__(self, *exc):
+        socket.getaddrinfo = self._real
+        return False
 
 
 def _wd_token():
@@ -152,16 +192,18 @@ def main(argv):
     days = 365 if "--backfill" in argv else 14
     if "--days" in argv:
         days = int(argv[argv.index("--days") + 1])
-    token = _env_token()
+    token = _env_token() or _vault_token()
+    why = ""
     if not token:
         # Saved from the Cost Cutter page (write-only field, Vault secret pi:mercury_api_token); needs the db-watchdog token.
         try:
             token = (sb("mercury_token_t") or "").strip()
-        except Exception:  # noqa: BLE001  (no token saved yet, or the DB is briefly unreachable: same quiet result)
-            token = ""
+        except Exception as e:  # noqa: BLE001  (no token saved yet, or the DB is briefly unreachable)
+            token, why = "", " (mercury_token_t: %s)" % type(e).__name__
     if not token:
-        return "ok no Mercury token yet (MERCURY_API_TOKEN in /home/pi/scripts/.env, shared with Penny); nothing to check"
-    credits = fetch_credits(token, days)
+        return "ok no Mercury token yet%s (MERCURY_API_TOKEN in /home/pi/scripts/.env, or Vault pi:mercury_api_token); nothing to check" % why
+    with force_ipv4():
+        credits = fetch_credits(token, days)
     if dry:
         return f"ok dry: {len(credits)} credits in the last {days} days, nothing sent"
     tot = {"matched": 0, "unmatched": 0, "skipped": 0, "newly_paid": 0}

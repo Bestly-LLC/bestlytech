@@ -36,3 +36,10 @@ python3 /opt/bestly/cron/jobs/settlement_mercury.py --dry          # fetch + cou
 python3 /opt/bestly/cron/jobs/settlement_mercury.py --backfill     # 365 days, once
 ```
 Install/update: copy this folder to the Pi and `sh install.sh` (idempotent crontab line `7 */2 * * *`).
+
+## 2026-10-15: token lookup and IPv4
+
+- Token order is now `.env` `MERCURY_API_TOKEN`, then Vault `pi:mercury_api_token` through the service-role `pi_secret_get` (the path mercury-sync uses), then `mercury_token_t`. Until this change the Pi run reported "no Mercury token yet" in about 1 ms, which matches the db-watchdog token file being unreadable (reproduced offline, not confirmed on the Pi). The message now names the reason.
+- Mercury calls run inside `force_ipv4()`: Mercury allowlists the token by source address and the Pi is dual-stack, so without it requests leave over IPv6. Same fix as mercury-sync.
+- Install: copy `settlement_mercury.py` to `/opt/bestly/cron/jobs/` on the Pi (back up the old one first), `python3 -m py_compile` it, then `python3 /opt/bestly/cron/jobs/settlement_mercury.py --dry`.
+- Note: `settlement_mercury_ingest_t` still authenticates with the db-watchdog token file. If the dry run works but live ingest fails with FileNotFoundError, that file is the thing to fix.
