@@ -19,7 +19,7 @@ const say = (t, b) => { document.getElementById("o").innerHTML = "<h1>" + t + "<
   if (!code) return say("Nothing to connect.", '<p class="mute">Open the link your Bestly contact sent you.</p>');
   const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "resolve", k: code }) })
     .then(r => r.json()).catch(() => ({ ok: false, error: "unreachable" }));
-  const plat = ["instagram", "tiktok", "facebook", "linkedin", "pinterest"].includes(r.platform) ? r.platform : null;
+  const plat = ["instagram", "tiktok", "facebook", "linkedin", "pinterest", "youtube"].includes(r.platform) ? r.platform : null;
   if (plat) return location.replace("/connect/" + plat + ".html?k=" + encodeURIComponent(code));
   say("This link isn't valid.", '<p class="mute">Ask your Bestly contact for a new one.</p>');
 })();
