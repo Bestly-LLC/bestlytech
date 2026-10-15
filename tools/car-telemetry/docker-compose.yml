@@ -1,0 +1,50 @@
+# Blue Steel live location: Tesla Fleet Telemetry receiver + forwarder. Lives at /opt/bestly/telemetry on the Pi.
+# Only the receiver's TLS port is published, and only on loopback; the Tailscale Funnel (opened by Jared)
+# passes raw TCP 8443 to 127.0.0.1:8444. The metrics port (9090) and the zmq port (5284) are NOT published.
+name: car-telemetry
+services:
+  fleet-telemetry:
+    # teslamotors/fleet-telemetry v0.9.5, linux/arm64 manifest digest (Docker Hub tesla/fleet-telemetry)
+    image: tesla/fleet-telemetry@sha256:3bba215b5cba5d89d1a4d425a8bc2431da85a9af5b1b73e7720fa4765cf481fc
+    restart: always
+    # Root inside the container so it can read the root-owned 0600 server key; nothing else is granted.
+    user: "0:0"
+    cap_drop: [ALL]
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    command: ["/fleet-telemetry", "-config=/etc/fleet-telemetry/config.json"]
+    ports:
+      # Host side is 8444, not 8443: Pi-hole's web UI (pihole-FTL) already listens on 0.0.0.0:8443 on this Pi, so
+      # 127.0.0.1:8443 cannot be bound, and a Funnel pointed at 127.0.0.1:8443 would publish Pi-hole's admin page.
+      # The public port stays 8443 (what the car connects to); only the local Funnel target is 8444.
+      - "127.0.0.1:8444:8443"
+    volumes:
+      - ./config.json:/etc/fleet-telemetry/config.json:ro
+      - ./server:/etc/fleet-telemetry/server:ro
+    environment:
+      SUPPRESS_TLS_HANDSHAKE_ERROR_LOGGING: "true"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  fwd:
+    build: ./fwd
+    image: car-telemetry-fwd:1.0.1
+    restart: always
+    user: "65532:65532"
+    cap_drop: [ALL]
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp"]
+    env_file: ./.env          # SUPABASE_ANON_KEY (publishable) + CAR_TELEMETRY_TOKEN (secret, root 0600)
+    environment:
+      ZMQ_ADDR: tcp://fleet-telemetry:5284
+      RECEIVER_HOST: fleet-telemetry
+      RECEIVER_PORT: "8443"
+      CERT_FILE: /pub/server.crt
+    volumes:
+      - ./pub:/pub:ro         # public certificate only
+    depends_on: [fleet-telemetry]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

@@ -1,0 +1,7 @@
+[Unit]
+Description=Re-sign the Fleet Telemetry server certificate when fewer than 45 days remain
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/bestly/telemetry/certs.sh

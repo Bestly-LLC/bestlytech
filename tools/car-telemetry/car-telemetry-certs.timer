@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily check of the Fleet Telemetry server certificate
+
+[Timer]
+OnCalendar=*-*-* 04:11:00
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target
