@@ -42,6 +42,7 @@ class FakeWorld:
         self.patches = []
         self.batch_rpc, self.facts_rpc = batch_rpc, facts_rpc
         self.prev_sha, self.deployed, self.web_ok = prev_sha, deployed, web_ok
+        self.pending_sha, self.cur_ev = None, {}
         self.started_recently = started_recently
         self.env_status = env_status
 
@@ -99,7 +100,8 @@ class FakeWorld:
                              "status": "yellow", "trigger": "scheduled", "inventory": {}})
             rows.append({"started_at": "2026-10-13T08:00:00+00:00", "status": "yellow", "trigger": "scheduled",
                          "inventory": {"hosts": ["bestly.tech", "www.bestly.tech"],
-                                       "fingerprints": {"bestly.tech": {"title": "t", "status": 200, "text_sha256": self.prev_sha}},
+                                       "fingerprints": {"bestly.tech": {"title": "t", "status": 200, "text_sha256": self.prev_sha, "algo": 2,
+                                                                         "pending_sha256": self.pending_sha}},
                                        "vercel_projects": [], "supabase_projects": ["Bestly"], "vercel_team_members": 1}})
             return 200, rows
         if path.startswith("security_findings") and "severity=eq.red" in path:
@@ -172,7 +174,8 @@ def fake_web_factory(world):
             {"key": "web:www.bestly.tech:headers", "result": "yellow", "layer": "Websites", "asset": "www.bestly.tech",
              "check": "headers", "title": "missing HSTS", "detail": "d", "fix": "f", "evidence": {}},
             {"key": "fingerprint:bestly.tech", "result": "info", "layer": "Websites", "asset": "bestly.tech", "check": "fp",
-             "evidence": {"title": "Bestly", "status": 200, "text_sha256": "new"}},
+             "evidence": dict({"title": "Bestly", "status": 200, "text_sha256": "new", "algo": 2,
+                               "final_host": "bestly.tech"}, **world.cur_ev)},
             {"key": "dns:bestly.tech:expiry", "result": "info", "layer": "DNS / email", "asset": "bestly.tech", "check": "e"},
         ], None
     return web
@@ -283,6 +286,7 @@ def test_no_tokens():
 def test_order_and_batch():
     print("order, one batch, fingerprints (live, both tokens)")
     w = FakeWorld()
+    w.pending_sha = "new"
     res, err, out = run(w)
     ok(err is None, "run succeeds (%s)" % err)
     n = names(w)
@@ -317,14 +321,56 @@ def test_order_and_batch():
 def test_deployed_explains_change():
     print("defacement rule")
     w = FakeWorld(deployed=True)
+    w.pending_sha = "new"
     run(w)
     ok(by_key(batch_checks(w))["web:bestly.tech:content_changed"]["result"] == "pass", "a production deploy explains the change")
     w = FakeWorld(prev_sha="new")
     run(w)
     ok(by_key(batch_checks(w))["web:bestly.tech:content_changed"]["result"] == "pass", "unchanged text passes")
     w = FakeWorld()
+    w.pending_sha = "new"
     run(w, vtoken="")
     ok("web:bestly.tech:content_changed" not in by_key(batch_checks(w)), "no vercel token: no verdict on content_changed (not a fake pass)")
+
+
+def test_no_false_alarms():
+    print("content check: no false alarms")
+    w = FakeWorld()          # changed once, never seen before
+    run(w)
+    cs = by_key(batch_checks(w))
+    ok("web:bestly.tech:content_changed" not in cs, "first sighting of a change raises nothing")
+    fp = w.patches[0][1]["inventory"]["fingerprints"]["bestly.tech"]
+    ok(fp["text_sha256"] == "old" and fp["pending_sha256"] == "new", "pending hash stored, baseline held")
+    w = FakeWorld()
+    w.pending_sha = "other"  # a different pending hash does not confirm
+    run(w)
+    ok("web:bestly.tech:content_changed" not in by_key(batch_checks(w)), "a different pending hash does not confirm")
+    w = FakeWorld()
+    w.pending_sha = "new"
+    run(w)
+    ok(by_key(batch_checks(w))["web:bestly.tech:content_changed"]["result"] == "yellow", "same change on 2 runs raises")
+    ok(w.patches[0][1]["inventory"]["fingerprints"]["bestly.tech"]["text_sha256"] == "new", "baseline moves once confirmed")
+    for ev, label in (({"status": 503, "text_sha256": None, "unchecked": "http 503"}, "non-200"),
+                      ({"text_sha256": None, "unchecked": "empty body"}, "empty body")):
+        w = FakeWorld()
+        w.pending_sha = "new"
+        w.cur_ev = ev
+        run(w)
+        c = by_key(batch_checks(w))["web:bestly.tech:content_changed"]
+        ok(c["result"] == "skip", "%s is 'could not check', not a finding" % label)
+        f = w.patches[0][1]["inventory"]["fingerprints"]["bestly.tech"]
+        ok(f["text_sha256"] == "old" and f["pending_sha256"] == "new", "%s: baseline and pending untouched" % label)
+    w = FakeWorld()
+    w.pending_sha = "new"
+    w.cur_ev = {"final_host": "cloud.bestly.tech"}
+    run(w)
+    ok(by_key(batch_checks(w))["web:bestly.tech:content_changed"]["result"] == "skip", "redirect to another monitored host is skipped")
+    w = FakeWorld()
+    run(w)
+    w2 = FakeWorld()
+    w2.prev_sha = "new"
+    run(w2)
+    ok(by_key(batch_checks(w2))["web:bestly.tech:content_changed"]["result"] == "pass", "unchanged still passes")
 
 
 def test_no_secret_leaks():
@@ -440,6 +486,7 @@ if __name__ == "__main__":
     test_fallbacks()
     test_dry_and_guard()
     test_web_checks_contract()
+    test_no_false_alarms()
     print()
     if FAILS:
         print("SELFTEST FAILED: %d" % len(FAILS))
