@@ -5,15 +5,15 @@
  * phone the places Jared actually goes live at the bottom where his thumb is, the way
  * they already do in Eli's portal, and everything else stays in the drawer behind More.
  *
- * The raised center button opens Quick tools: a Control Center style sheet with the six
- * things he reaches for most (Wall, Scout, Meetings, Street Sweeping, a one-tap projector
- * refocus and a one-tap wall restart).
+ * The raised center button opens Quick tools: a Control Center style sheet with the nine
+ * things he reaches for most (Wall, Sky, Kitchen, a one-tap "groceries are here", Scout,
+ * Meetings, Street Sweeping, a one-tap projector refocus and a one-tap wall restart).
  *
  * Hidden from md up - the sidebar is the right answer on a real screen.
  */
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Binoculars, Brush, Car, Focus, LayoutDashboard, Menu, Mic, Plane, Projector, RotateCw, Zap, X } from "lucide-react";
+import { Binoculars, Brush, Car, ChefHat, Focus, LayoutDashboard, Menu, Mic, PackageCheck, Plane, Projector, RotateCw, Zap, X } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { openScout } from "@/components/admin/scoutBus";
 import { dotHex, useScoutDot } from "@/components/admin/scoutUnread";
@@ -31,6 +31,18 @@ type Tool = { label: string; sub: string; icon: typeof Zap; tint: string; to?: s
 const TOOLS: Tool[] = [
   { label: "Wall", sub: "Remote & layout", icon: Projector, tint: "#5E5CE6", to: "/admin/wall" },
   { label: "Sky", sub: "Planes overhead", icon: Plane, tint: "#0A84FF", to: "/admin/sky" },
+  { label: "Kitchen", sub: "Pantry & dinner", icon: ChefHat, tint: "#FFD60A", to: "/admin/home-hub/kitchen" },
+  {
+    label: "Groceries here", sub: "Mark order arrived", icon: PackageCheck, tint: "#AC8E68",
+    run: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase.rpc as any)("basil_kitchen_arrived");
+      if (error) return `Didn't go through: ${error.message}`;
+      const n = Number((data as { delivered?: number } | null)?.delivered ?? 0);
+      if (n <= 0) return "Nothing was on the way.";
+      return n === 1 ? "Got it. 1\u00a0item is in stock." : `Got it. ${n}\u00a0items are in stock.`;
+    },
+  },
   { label: "Ask Scout", sub: "Anything, anytime", icon: Binoculars, tint: "#30D158", run: () => openScout() },
   { label: "Meetings", sub: "Record & notes", icon: Mic, tint: "#FF453A", to: "/admin/meetings" },
   { label: "Street Sweeping", sub: "Where's the car", icon: Brush, tint: "#FF9F0A", to: "/admin/street-sweeping" },
@@ -56,6 +68,7 @@ function QuickTools({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
   const scoutDot = useScoutDot();
   const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const sheet = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -69,8 +82,12 @@ function QuickTools({ open, onClose }: { open: boolean; onClose: () => void }) {
   const tap = async (t: Tool) => {
     if (navigator.vibrate) navigator.vibrate(8);
     if (t.to) { onClose(); navigate(t.to); return; }
-    const msg = await t.run?.();
-    if (typeof msg === "string") setNote(msg); else onClose();
+    if (busy) return; // a second tap must not run a one-shot action twice
+    setBusy(t.label);
+    try {
+      const msg = await t.run?.();
+      if (typeof msg === "string") setNote(msg); else onClose();
+    } finally { setBusy(null); }
   };
 
   return (
@@ -114,6 +131,8 @@ function QuickTools({ open, onClose }: { open: boolean; onClose: () => void }) {
                 type="button"
                 data-tool
                 tabIndex={open ? 0 : -1}
+                aria-busy={busy === t.label}
+                disabled={!!busy}
                 onClick={() => void tap(t)}
                 style={{ transitionDelay: open ? `${60 + i * 35}ms` : "0ms" }}
                 className={cn(
@@ -121,6 +140,7 @@ function QuickTools({ open, onClose }: { open: boolean; onClose: () => void }) {
                   "bg-white/[0.06] active:scale-95 bento:bg-black/[0.04]",
                   "transition-[transform,opacity] duration-300",
                   open ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0",
+                  busy === t.label && "motion-safe:animate-pulse",
                 )}
               >
                 <span className="relative flex h-11 w-11 items-center justify-center rounded-full" style={{ background: t.tint }}>
