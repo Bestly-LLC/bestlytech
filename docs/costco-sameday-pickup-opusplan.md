@@ -72,3 +72,26 @@ Shipped as planned.
 - Verified: the PostgREST `or=` filter returns the Oct 1 receipt `369eccd5-ce34-4e67-8cc5-53ac330fe4ef` plus the DoorDash no-contact mails; `body_text ~* '\mdelivered your order\M'` is true for `369eccd5-...` and false for the confirm email `3dad71c2-...`; an in-memory dry `fire_deliveries` over history classifies the receipt as store "Costco" (skipped as old); `costco_pending()` is true tonight (order in flight).
 - Not done on purpose: no test event, no HA test run.
 - Records: `bestly_memory` `house/doordash-pickup-nag` and `bestly_agents` `pi-doordash-pickup` updated.
+
+## Wording (Costco) (2026-10-14, executed)
+
+Jared wants Costco-only wording; DoorDash wording is untouched. Applies only when the store is exactly `Costco`.
+
+| Surface | Costco | Everyone else |
+|---|---|---|
+| Phone push, Live Activity, away push title | `Costco Delivery at the Door` | `Food's at the door` |
+| Body | `Grocery Delivery · 6:42 PM` (push), `Grocery Delivery · 12 min` (Live Activity) | `<store> · ...` |
+| Subtitle | none | `Scout` |
+| Dynamic Island short text (`critical_text`) | `Groceries` | `Food` |
+| 90-minute final push | `Still at the door?` / `Grocery Delivery · <time>`, no subtitle | `<store> · <time>`, Scout |
+| Wall banner | `Costco Delivery at the Door` / `Groceries were left at the door at <time>. Nagging until the front door unlocks.` | `Food's at the door: <store>` / `<store> was left ... Scout is nagging ...` |
+| Wall timeout resolve title | `Groceries were left at the door` | `Food was left at the door` |
+
+Implementation.
+
+- HA package (live and golden, identical): `doordash_nag_round` gets three new variables (`costco`, `title`, `what`) before the level comment; the three phone/Live Activity titles and messages read them, the two subtitles and `critical_text` branch on `costco`. The `doordash_pickup_start` away push and the `doordash_pickup_cleanup` final push branch on `store == 'Costco'`. HomePod line unchanged from the earlier change.
+- `doordash_pickup.py` `banner()`: Costco title, body and timeout-resolve title as above. The timeout resolve body still reads "<store> is still at the door after 90 minutes; Scout sent a last reminder." (not changed on purpose).
+- Backups `<file>.bak_costco2_202610141858` for the live YAML, golden YAML and the job. `check_config` passed, `script` and `automation` reloaded. A real Costco nag was running (`doordash_waiting` on), so `script.doordash_nag` was restarted right after the reload.
+- Verified with `/api/template`: Costco renders `Costco Delivery at the Door | Grocery Delivery | (empty) | Groceries`, Chipotle renders `Food's at the door | Chipotle | Scout | Food`. The `runjob.py doordash_pickup --dry` run is clean. No test event, no HA test run.
+
+Undo: `sudo cp -p <file>.bak_costco2_202610141858 <file>` for the three files, then reload `script` and `automation` in HA.
