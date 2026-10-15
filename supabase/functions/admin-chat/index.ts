@@ -161,6 +161,7 @@ import { llm, llmChat, llmVision, LlmUnavailable, thinkingLeak, stripToolSyntax,
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsWith } from "../_shared/cors.ts";
+import { chefCook, chefMarkdown } from "../_shared/chef.ts";
 import { sendAsJared } from "../_shared/bestly-signature.ts";
 
 const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
@@ -565,6 +566,17 @@ const TOOLS = [
         subject: { type: "string", description: "words from the subject" },
       },
     },
+  },
+  {
+    name: "kitchen_chef",
+    description:
+      "Basil's gourmet chef: new recipes cooked from what is in Jared's pantry right now, with TOKIT Omni Cook steps when the " +
+      "machine genuinely helps. Use it for recipe ideas, 'what can I cook', 'something with salmon', 'dinner ideas'. Recipes are " +
+      "saved to the Kitchen page (Home Hub, Kitchen) with cook mode. Pass his words as ask; reply with the markdown it returns.",
+    input_schema: { type: "object", properties: {
+      ask: { type: "string", description: "what he's in the mood for, in his words (optional)" },
+      count: { type: "integer", minimum: 1, maximum: 4, description: "how many recipes (default 3)" },
+    } },
   },
   {
     name: "ask_user",
@@ -1327,6 +1339,7 @@ const FREE_TOOLS = new Set([
   "send_email", "look", "report_spam",
   "search_mail", "read_email",   // v41
   "call_debrief", "add_todo",     // v69
+  "kitchen_chef",                 // 2026-10-15: Basil's chef (free AI only, saves recipes to the Kitchen page)
   "commit_files", "db_write", "mac_command", "code_job",   // v38/v42: the same hands as paid Scout (same confirmation rules, same AUTOPILOT_NEVER)
 ]);
 const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "search_code", "meeting_transcript", "call_debrief", "look", "search_mail", "read_email"]);
@@ -1431,6 +1444,7 @@ const TOOL_TOPICS: [string[], RegExp][] = [
   [["make_video"], /\b(video|videos|clip|clips|ltx|render|animate|animation|footage|b-?roll|reel)\b/i],
   [["send_email"], /\b(e-?mails?|mail|send|signature|message (to|eli|rohit)|write to|reply to)\b/i],
   [["look"], /\b(images?|photos?|screenshots?|pictures?|videos?|frames?|pdf|look|see|seen)\b|scout-files/i],
+  [["kitchen_chef"], /\b(chef|recipes?|cook|cooking|dinner|lunch|breakfast|meal|pantry|omni ?cook|tokit|gourmet|eat)\b/i],
   [["report_spam"], /\b(spam|phish(ing)?|scam|junk|block (this|that|the) sender|report (this|that|it) (to|as))\b/i],
   // v38: code, data and schema work. Wide on purpose: Scout used to refuse these, and a missing tool schema is a silent refusal.
   [["commit_files", "code_job"], /\b(websites?|landing|one-?page|webpage|app|build|code|bugs?|fix(es|ed)?|build|built|change[sd]?|edit|implement|feature|page|button|component|site|admin|deploy|commit|repo|refactor|css|layout|typo|wording|copy|broken|errors?|fail(ed|ing|s)?|migration|edge ?functions?|functions?|alert|dashboard|ui|screen)\b/i],
@@ -1514,7 +1528,7 @@ const DOING: Record<string, string> = {
   run_sql: "checking the database", search_mail: "searching your mail", read_email: "reading an email", read_file: "reading the code", search_code: "searching the code",
   list_files: "looking through the files", today: "checking your queue", incidents: "checking open incidents", meeting_transcript: "reading the call transcript",
   commit_files: "committing a code change", db_write: "updating data", mac_run: "preparing a Mac mini job", pi_command: "talking to the Pi",
-  send_email: "sending an email", look: "looking at your files", notify: "sending a notification", code_job: "handing code to the Mac mini",
+  send_email: "sending an email", kitchen_chef: "asking the chef", look: "looking at your files", notify: "sending a notification", code_job: "handing code to the Mac mini",
 };
 const pt12 = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" });
 /** v41 output scrub: no tool syntax, no NEEDS_TOOLS, no thinking out loud ever reaches a saved message. "" = a failed step, not a reply. */
@@ -2048,6 +2062,15 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
     case "today": {
       const { data, error } = await db.rpc("admin_today");
       out = error ? { ok: false, error: error.message } : { ok: true, queue: data };
+      break;
+    }
+    case "kitchen_chef": {
+      try {
+        const r = await chefCook(db, { ask: String(args.ask ?? ""), count: Number(args.count) || 3, job: "admin-chat", fn: "admin-chat", deadlineMs: 60_000 });
+        out = { ok: true, markdown: chefMarkdown(r), recipes: r.recipes.map((x) => ({ name: x.name, minutes: x.minutes, omni: !!x.omni_steps })) };
+      } catch (e) {
+        out = { ok: false, error: (e as Error).message };
+      }
       break;
     }
     case "incidents": {

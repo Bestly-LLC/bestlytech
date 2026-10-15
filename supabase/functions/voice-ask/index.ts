@@ -12,6 +12,9 @@
 // from llm_keys() (Vault), never from the Pi. The audio is used once and never stored.
 // Answer: tier 0 = Basil (kitchen, 2026-10-14): basil_voice() in SQL handles pantry updates and kitchen questions
 // ("used the salmon", "do we have eggs", "what's for dinner", "undo") with no AI at all; anything else falls through.
+// Before that, the chef (2026-10-15): "ask the chef", "surprise me", "a recipe with salmon", "something fancy for
+// dinner" go to the basil-chef function (free AI cooks from the pantry, Omni Cook steps where they help, recipes saved
+// for the Kitchen page). "What's for dinner" stays Basil's instant answer from the saved recipes.
 // Then Scout on the free ladder only (paid "never"), through the free-llm function (op run = _shared/free-llm.ts
 // llm(): Groq -> Cloudflare -> Mac mini). A quick spoken answer from the wall's live snapshot plus Scout's own queue
 // (admin_today, upcoming Turo trips, open incidents). If it needs Scout's tools it goes to admin-chat on autopilot
@@ -54,7 +57,7 @@ async function keys(): Promise<Record<string, string>> {
   return v;
 }
 
-const VOCAB = "Hey Scout. Turo, Tesla, HomePod, Bestly, Eli, Jared, West Hollywood, Kings Road, LAX, EcoFlow, Nextcloud, planes overhead. Basil, pantry, fridge, freezer, Costco.";
+const VOCAB = "Hey Scout. Turo, Tesla, HomePod, Bestly, Eli, Jared, West Hollywood, Kings Road, LAX, EcoFlow, Nextcloud, planes overhead. Basil, pantry, fridge, freezer, Costco, chef, recipe, Omni Cook.";
 
 async function stt(wav: Uint8Array): Promise<{ text: string; via: string }> {
   const k = await keys();
@@ -167,6 +170,25 @@ async function basil(text: string): Promise<string | null> {
   } catch { return null; }
 }
 
+/** The chef: new recipes from the pantry. Null when it isn't a chef phrase. */
+const CHEF = /\b(chef|gourmet|recipes?|surprise me|something (new|fancy|different|special))\b|\bwhat (can|could|should) (i|we) (make|cook) with\b|\bcook (me|us) something\b/i;
+async function chef(text: string): Promise<string | null> {
+  if (!CHEF.test(text)) return null;
+  const ask = text.replace(/^\s*(hey\s+)?scout[,.!]?\s*/i, "").replace(/\b(ask|tell) (the )?chef\b[,.!]?\s*/i, "").trim();
+  try {
+    const r = await fetch(`${URL_}/functions/v1/basil-chef`, {
+      method: "POST", headers: { "Content-Type": "application/json", ...keyHeaders(SECRET_KEY) },
+      body: JSON.stringify({ ask: /^(for )?(dinner|lunch|something|ideas?|a recipe|recipes?)?[.?!]*$/i.test(ask) ? "" : ask, count: 3, spoken: true }),
+      signal: AbortSignal.timeout(45_000),
+    });
+    const j = await r.json().catch(() => null);
+    if (j?.ok && j.spoken) return spoken(String(j.spoken));
+    return spoken(String(j?.error ?? "The chef couldn't cook anything up just now. Try again in a minute."));
+  } catch {
+    return "The chef is taking too long. Try again in a minute, or tap Ask the chef on the Kitchen page.";
+  }
+}
+
 /** Scout's own view for the quick answer: what needs him, upcoming Turo trips, open incidents. */
 async function scoutSnapshot(): Promise<Record<string, unknown>> {
   const now = new Date();
@@ -251,6 +273,11 @@ async function freeLlm(system: string, user: string): Promise<{ text: string; vi
 
 async function answer(text: string, ctx: unknown): Promise<{ reply: string; via: string; ms: number; tier: number }> {
   const t0 = Date.now();
+  const cooked = await chef(text);
+  if (cooked) {
+    await logTurn(await voiceThread().catch(() => null), text, cooked).catch(() => {});
+    return { reply: cooked, via: "chef", ms: Date.now() - t0, tier: 0 };
+  }
   const kitchen = await basil(text);
   if (kitchen) {
     await logTurn(await voiceThread().catch(() => null), text, kitchen).catch(() => {});
