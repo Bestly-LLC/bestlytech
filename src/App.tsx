@@ -105,6 +105,7 @@ const HomeHubPihole = lazyPage(() => import("./pages/admin/HomeHubPihole"));
 const HomeHubHomeAssistant = lazyPage(() => import("./pages/admin/HomeHubHomeAssistant"));
 const HomeHubHomebridge = lazyPage(() => import("./pages/admin/HomeHubHomebridge"));
 const HomeHubAccess = lazyPage(() => import("./pages/admin/HomeHubAccess"));
+const HomeHubKitchen = lazyPage(() => import("./pages/admin/HomeHubKitchen"));
 const StreetSweeping = lazyPage(() => import("./pages/admin/StreetSweeping"));
 const Emergency = lazyPage(() => import("./pages/admin/Emergency"));
 const Vesta = lazyPage(() => import("./pages/admin/Vesta"));
@@ -281,6 +282,7 @@ const App = () => {
                   <Route path="home-hub/home-assistant" element={<HomeHubHomeAssistant />} />
                   <Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
                   <Route path="home-hub/access" element={<HomeHubAccess />} />
+                  <Route path="home-hub/kitchen" element={<HomeHubKitchen />} />
                   <Route path="street-sweeping" element={<StreetSweeping />} />
                   <Route path="emergency" element={<Emergency />} />
                   <Route path="vesta" element={<Vesta />} />

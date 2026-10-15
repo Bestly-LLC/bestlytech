@@ -10,7 +10,9 @@
 //
 // Speech-to-text: Groq whisper-large-v3-turbo (free tier), Cloudflare Workers AI whisper as the fallback. Keys come
 // from llm_keys() (Vault), never from the Pi. The audio is used once and never stored.
-// Answer: Scout on the free ladder only (paid "never"), through the free-llm function (op run = _shared/free-llm.ts
+// Answer: tier 0 = Basil (kitchen, 2026-10-14): basil_voice() in SQL handles pantry updates and kitchen questions
+// ("used the salmon", "do we have eggs", "what's for dinner", "undo") with no AI at all; anything else falls through.
+// Then Scout on the free ladder only (paid "never"), through the free-llm function (op run = _shared/free-llm.ts
 // llm(): Groq -> Cloudflare -> Mac mini). A quick spoken answer from the wall's live snapshot plus Scout's own queue
 // (admin_today, upcoming Turo trips, open incidents). If it needs Scout's tools it goes to admin-chat on autopilot
 // (free agent first; anything that needs Jared's yes is refused in code there). Every turn lands in a
@@ -52,7 +54,7 @@ async function keys(): Promise<Record<string, string>> {
   return v;
 }
 
-const VOCAB = "Hey Scout. Turo, Tesla, HomePod, Bestly, Eli, Jared, West Hollywood, Kings Road, LAX, EcoFlow, Nextcloud, planes overhead.";
+const VOCAB = "Hey Scout. Turo, Tesla, HomePod, Bestly, Eli, Jared, West Hollywood, Kings Road, LAX, EcoFlow, Nextcloud, planes overhead. Basil, pantry, fridge, freezer, Costco.";
 
 async function stt(wav: Uint8Array): Promise<{ text: string; via: string }> {
   const k = await keys();
@@ -143,9 +145,26 @@ async function recentConvo(threadId: string | null): Promise<string> {
   return ((data ?? []) as any[]).reverse().map((m) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body).slice(0, 300)}`).join("\n");
 }
 
+async function logTurn(threadId: string | null, text: string, reply: string) {
+  if (!threadId) return;
+  await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "user", body: text });
+  await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
+  await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
+}
+
 function spoken(s: string): string {
   return s.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/^\s*(OPTIONS|FIXED|NEEDS_YES|STUCK|DRAFT):.*$/gim, "")
     .replace(/[*_`#>\[\]]/g, "").replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim().slice(0, 500);
+}
+
+/** Tier 0: Basil, the kitchen manager. Pantry updates and kitchen questions come straight from pantry_items via
+ * basil_voice() (pure SQL, no AI, instant). Returns null when it isn't a kitchen phrase so Scout answers as before. */
+async function basil(text: string): Promise<string | null> {
+  try {
+    const { data, error } = await db.rpc("basil_voice", { p_text: text });
+    if (error || !(data as any)?.handled || !(data as any).reply) return null;
+    return spoken(String((data as any).reply));
+  } catch { return null; }
 }
 
 /** Scout's own view for the quick answer: what needs him, upcoming Turo trips, open incidents. */
@@ -232,6 +251,11 @@ async function freeLlm(system: string, user: string): Promise<{ text: string; vi
 
 async function answer(text: string, ctx: unknown): Promise<{ reply: string; via: string; ms: number; tier: number }> {
   const t0 = Date.now();
+  const kitchen = await basil(text);
+  if (kitchen) {
+    await logTurn(await voiceThread().catch(() => null), text, kitchen).catch(() => {});
+    return { reply: kitchen, via: "basil", ms: Date.now() - t0, tier: 0 };
+  }
   const [threadId, snap] = await Promise.all([voiceThread(), scoutSnapshot().catch(() => ({}))]);
   const convo = await recentConvo(threadId);
   let reply = "", via = "";
@@ -244,11 +268,7 @@ async function answer(text: string, ctx: unknown): Promise<{ reply: string; via:
     via = `tier1 failed: ${(e as Error).message}`.slice(0, 160);
   }
   if (reply && !/NEEDS[_\s-]?TOOLS/i.test(reply)) {
-    if (threadId) {
-      await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "user", body: text });
-      await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
-      await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
-    }
+    await logTurn(threadId, text, reply);
     return { reply, via, ms: Date.now() - t0, tier: 1 };
   }
   // Tier 2: Scout with its tools (admin-chat autopilot = free agent first, nothing that needs a yes runs).
