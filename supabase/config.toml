@@ -154,3 +154,6 @@ project_id = "rcqfqhguwpmaarseifqg"
 
 [functions.leo-10dlc]
   verify_jwt = false
+
+[functions.card-scan]
+  verify_jwt = false
