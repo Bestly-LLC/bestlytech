@@ -18,8 +18,10 @@ import {
 import { ago, Panel } from "@/components/admin/homeHub/shared";
 import { pollInterval } from "@/lib/polling";
 import { cn } from "@/lib/utils";
+import { Segmented, TAP } from "@/components/admin/kitchen/Segmented";
+import { RecipeSheet } from "@/components/admin/kitchen/RecipeSheet";
 import {
-  Apple, ChefHat, Clock, Loader2, Mic, MousePointerClick, Package, Plus, Receipt, RefreshCw,
+  Apple, ChefHat, ChevronRight, Clock, CookingPot, Loader2, Mic, MousePointerClick, Package, Plus, Receipt, RefreshCw,
   Refrigerator, Search, Snowflake, Truck, Undo2, UtensilsCrossed, type LucideIcon,
 } from "lucide-react";
 
@@ -33,12 +35,12 @@ interface Item {
   id: string; name: string; category: string | null; location: Loc; qty: number | null; unit: string | null;
   status: Status; use_soon: boolean; use_by: string | null; source: string | null; updated_at: string;
 }
-interface Idea { name: string; how: string; uses_soon: number }
+interface Idea { name: string; how: string; uses_soon: number; minutes?: number | null; serves?: number | null; omni?: boolean }
 interface KitchenEvent {
   id: number; at: string; source: string; action: string; item_id: string | null; item_name: string | null;
   before_status: Status | null; after_status: Status | null; said: string | null;
 }
-interface Kitchen { items: Item[]; ideas: Idea[]; events: KitchenEvent[]; last_tick: string | null; now: string }
+interface Kitchen { items: Item[]; ideas: Idea[]; ideas_total?: number; events: KitchenEvent[]; last_tick: string | null; now: string }
 
 const rpc = supabase.rpc.bind(supabase) as unknown as (fn: string, args?: object) => Promise<{ data: unknown; error: { message: string } | null }>;
 
@@ -58,7 +60,6 @@ const SETTABLE: { key: Exclude<Status, "arriving">; label: string; thumb: string
 ];
 
 const SUFFIX_S = /[^s]s$/i;
-const TAP = "touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50";
 
 function timeLabel(iso: string, now: number) {
   const age = now - new Date(iso).getTime();
@@ -98,6 +99,10 @@ export default function HomeHubKitchen() {
   const loc = parseLoc(sp.get("where"));
   const statusFilter = parseStatus(sp.get("status"));
   const [addOpen, setAddOpen] = useState(false);
+  // "New ideas" swaps the three on screen; the 60 s refresh keeps them until the page reloads.
+  const [ideas, setIdeas] = useState<Idea[] | null>(null);
+  const [ideasBusy, setIdeasBusy] = useState(false);
+  const [recipe, setRecipe] = useState<string | null>(null);
   const [undoing, setUndoing] = useState<number | null>(null);
   const [arriving, setArriving] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
@@ -287,7 +292,17 @@ export default function HomeHubKitchen() {
       ) : data && (
         <>
           <div className="space-y-3">
-            <Tonight ideas={data.ideas} useSoon={useSoon} onFind={findItem} tabbable={!wide} />
+            <Tonight
+              ideas={ideas ?? data.ideas} total={data.ideas_total ?? null} useSoon={useSoon} onFind={findItem} tabbable={!wide}
+              onOpen={setRecipe} busy={ideasBusy}
+              onMore={async () => {
+                setIdeasBusy(true);
+                const { data: res, error: e } = await rpc("basil_kitchen_ideas", { p_skip: (ideas ?? data.ideas).map((i) => i.name) });
+                setIdeasBusy(false);
+                if (e) { toast.error(`Couldn't get new ideas. ${e.message}`); return; }
+                setIdeas((res as { ideas: Idea[] }).ideas);
+              }}
+            />
             {counts.arriving > 0 && <ArrivingBanner count={counts.arriving} busy={arriving} onArrived={markArrived} />}
           </div>
 
@@ -389,22 +404,38 @@ export default function HomeHubKitchen() {
       )}
 
       <AddItem open={addOpen} onOpenChange={setAddOpen} onAdded={load} wide={wide} />
+      <RecipeSheet name={recipe} onClose={() => setRecipe(null)} onReopen={setRecipe} wide={wide} onPantryChanged={load} />
     </div>
   );
 }
 
 /* ---------- Tonight: the one thing this page is for ---------- */
 
-function Tonight({ ideas, useSoon, onFind, tabbable }: { ideas: Idea[]; useSoon: Item[]; onFind: (name: string) => void; tabbable: boolean }) {
+function Tonight({ ideas, total, useSoon, onFind, tabbable, onOpen, onMore, busy }: {
+  ideas: Idea[]; total: number | null; useSoon: Item[]; onFind: (name: string) => void; tabbable: boolean;
+  onOpen: (name: string) => void; onMore: () => void; busy: boolean;
+}) {
+  const canMore = total == null ? ideas.length > 0 : total > ideas.length;
   return (
     <section
       aria-label="Tonight"
       className="bento-tile bento-butter rounded-2xl border border-white/[0.08] bg-gradient-to-br from-amber-500/[0.10] via-white/[0.03] to-transparent p-4 sm:p-6"
     >
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-        <UtensilsCrossed className="h-4 w-4" aria-hidden />
-        Tonight you could make
-      </h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <UtensilsCrossed className="h-4 w-4" aria-hidden />
+          Tonight you could make
+        </h2>
+        {canMore && (
+          <button
+            type="button" onClick={onMore} disabled={busy}
+            className={cn(TAP, "-my-2 -mr-2 inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-white/75 hover:bg-white/[0.06] hover:text-white disabled:opacity-60")}
+          >
+            <RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} aria-hidden />
+            New ideas
+          </button>
+        )}
+      </div>
       {ideas.length === 0 ? (
         <p className="mt-3 text-white/70">Nothing fully makeable right now. Might be time for a Costco run.</p>
       ) : (
@@ -412,6 +443,7 @@ function Tonight({ ideas, useSoon, onFind, tabbable }: { ideas: Idea[]; useSoon:
           // Phone: one swipeable row, the next card peeking. From sm: the three-up grid. Keyboard users can scroll the row.
           tabIndex={tabbable ? 0 : undefined}
           aria-label={tabbable ? "Dinner ideas, swipe for more" : undefined}
+          aria-busy={busy}
           className={cn(
             "mt-4 -mx-4 flex gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
             "sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0",
@@ -419,17 +451,33 @@ function Tonight({ ideas, useSoon, onFind, tabbable }: { ideas: Idea[]; useSoon:
           )}
         >
           {ideas.map((idea, n) => (
-            <li key={idea.name} className="relative w-[82%] shrink-0 snap-start rounded-xl bg-white/[0.04] p-4 sm:w-auto sm:shrink">
-              <p className="text-lg font-semibold text-white leading-tight tracking-[-0.01em] text-balance">
-                <span className="sr-only">{n + 1}. </span>{idea.name}
-              </p>
-              <p className="mt-1.5 text-sm text-white/70 text-pretty">{idea.how}</p>
-              {idea.uses_soon > 0 && (
-                <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-200">
-                  <Clock className="h-3.5 w-3.5" aria-hidden />
-                  Uses something to eat soon
-                </p>
-              )}
+            <li
+              key={idea.name}
+              className="relative w-[82%] shrink-0 snap-start sm:w-auto sm:shrink motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300"
+            >
+              <button
+                type="button" onClick={() => onOpen(idea.name)}
+                className={cn(TAP, "group flex h-full w-full flex-col rounded-xl bg-white/[0.04] p-4 text-left hover:bg-white/[0.07] motion-safe:transition-[background-color,transform] motion-safe:duration-150 motion-safe:active:scale-[0.98]")}
+              >
+                <span className="flex items-start justify-between gap-2">
+                  <span className="text-lg font-semibold text-white leading-tight tracking-[-0.01em] text-balance">
+                    <span className="sr-only">{n + 1}. </span>{idea.name}
+                  </span>
+                  <ChevronRight className="mt-0.5 h-5 w-5 shrink-0 text-white/40 group-hover:text-white/70" aria-hidden />
+                </span>
+                <span className="mt-1.5 text-sm text-white/70 text-pretty">{idea.how}</span>
+                <span className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-3 text-xs font-medium text-white/60">
+                  {idea.minutes != null && (
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap"><Clock className="h-3.5 w-3.5" aria-hidden />{idea.minutes}{"\u00a0"}min</span>
+                  )}
+                  {idea.omni && (
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-white/75"><CookingPot className="h-3.5 w-3.5" aria-hidden />Omni Cook</span>
+                  )}
+                  {idea.uses_soon > 0 && (
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-amber-200"><Clock className="h-3.5 w-3.5" aria-hidden />Uses something to eat soon</span>
+                  )}
+                </span>
+              </button>
             </li>
           ))}
         </ol>
@@ -473,51 +521,6 @@ function StatTile({ label, short, value, tone, icon: Icon, active, onClick }: {
       </span>
       <span className={cn("order-1 block text-xl font-semibold leading-tight tabular-nums whitespace-nowrap sm:order-2 sm:mt-1 sm:text-2xl", ink)}>{value}</span>
     </button>
-  );
-}
-
-/** Segmented control with a sliding thumb: equal columns, so the thumb moves by whole widths. The thumb only moves
- * because a choice changed; reduced motion snaps it. A value outside the options (an item that is "on the way") hides it. */
-function Segmented({ label, value, onChange, options, className, dense }: {
-  label: string; value: string; onChange: (v: string) => void;
-  options: { key: string; label: ReactNode; thumb?: string; ink?: string }[]; className?: string;
-  /** Five-up controls on a phone: a step smaller so every label fits its column. */
-  dense?: boolean;
-}) {
-  const idx = options.findIndex((o) => o.key === value);
-  const sel = idx >= 0 ? options[idx] : null;
-  return (
-    <div
-      role="group" aria-label={label}
-      className={cn("relative grid sm:inline-grid rounded-xl bg-white/[0.05] p-1", className)}
-      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
-    >
-      <span
-        aria-hidden
-        className={cn(
-          "absolute top-1 bottom-1 left-1 rounded-lg shadow-sm",
-          "motion-safe:transition-[transform,background-color,opacity] motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.32,0.72,0,1)]",
-          sel?.thumb ?? "bg-white/[0.14]", sel ? "opacity-100" : "opacity-0",
-        )}
-        style={{ width: `calc((100% - 0.5rem) / ${options.length})`, transform: `translateX(${Math.max(idx, 0) * 100}%)` }}
-      />
-      {options.map((o) => {
-        const on = o.key === value;
-        return (
-          <button
-            key={o.key} type="button" aria-pressed={on} onClick={() => onChange(o.key)}
-            className={cn(
-              "relative min-h-11 sm:min-h-8 rounded-lg font-medium whitespace-nowrap",
-              dense ? "px-1 sm:px-3 text-[0.8125rem] sm:text-sm" : "px-2 sm:px-3 text-sm",
-              "motion-safe:transition-[color,transform] motion-safe:duration-150 motion-safe:active:scale-[0.96]", TAP,
-              on ? (o.ink ?? "text-white") : "text-white/60 hover:text-white",
-            )}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
