@@ -20,6 +20,7 @@ import { pollInterval } from "@/lib/polling";
 import { cn } from "@/lib/utils";
 import { Segmented, TAP } from "@/components/admin/kitchen/Segmented";
 import { RecipeSheet } from "@/components/admin/kitchen/RecipeSheet";
+import { Lines } from "@/components/Lines";
 import {
   Apple, ChefHat, ChevronRight, Clock, CookingPot, Loader2, Mic, MousePointerClick, Package, Plus, Receipt, RefreshCw,
   Refrigerator, Search, Snowflake, Truck, Undo2, UtensilsCrossed, type LucideIcon,
@@ -36,6 +37,7 @@ interface Item {
   status: Status; use_soon: boolean; use_by: string | null; source: string | null; updated_at: string;
 }
 interface Idea { name: string; how: string; uses_soon: number; minutes?: number | null; serves?: number | null; omni?: boolean }
+interface ChefIdea { name: string; how: string; minutes: number | null; serves: number | null; omni: boolean; chef_note?: string | null }
 interface KitchenEvent {
   id: number; at: string; source: string; action: string; item_id: string | null; item_name: string | null;
   before_status: Status | null; after_status: Status | null; said: string | null;
@@ -103,6 +105,9 @@ export default function HomeHubKitchen() {
   const [ideas, setIdeas] = useState<Idea[] | null>(null);
   const [ideasBusy, setIdeasBusy] = useState(false);
   const [recipe, setRecipe] = useState<string | null>(null);
+  // The chef's newest recipes (from this page, Scout chat or Hey Scout). basil-chef edge function cooks new ones.
+  const [chef, setChef] = useState<ChefIdea[]>([]);
+  const [chefBusy, setChefBusy] = useState(false);
   const [undoing, setUndoing] = useState<number | null>(null);
   const [arriving, setArriving] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
@@ -168,12 +173,29 @@ export default function HomeHubKitchen() {
   }, [loaded]);
 
   const load = useCallback(async () => {
-    const { data: d, error: e } = await rpc("basil_kitchen");
+    const [{ data: d, error: e }, { data: c }] = await Promise.all([rpc("basil_kitchen"), rpc("basil_kitchen_chef_recent", { p_limit: 3 })]);
     if (e) setError(e.message);
     else { setData(d as Kitchen); setError(null); }
+    if (Array.isArray(c)) setChef(c as ChefIdea[]);
     setNow(Date.now());
     setLoaded(true);
   }, []);
+
+  const cook = async (ask: string) => {
+    setChefBusy(true);
+    const { data: res, error: e } = await supabase.functions.invoke("basil-chef", { body: { ask, count: 3 } });
+    setChefBusy(false);
+    if (e) {
+      const body = await (e as { context?: Response }).context?.json?.().catch(() => null);
+      toast.error(body?.error ?? `The chef couldn't cook just now. ${e.message}`);
+      return false;
+    }
+    const list = (res as { recipes?: ChefIdea[] })?.recipes ?? [];
+    if (!list.length) { toast.error("The chef came up empty. Try again in a minute."); return false; }
+    setChef(list);
+    toast.success(list.length === 1 ? "1 new recipe from the chef" : `${list.length} new recipes from the chef`);
+    return true;
+  };
 
   useEffect(() => {
     load();
@@ -295,6 +317,7 @@ export default function HomeHubKitchen() {
             <Tonight
               ideas={ideas ?? data.ideas} total={data.ideas_total ?? null} useSoon={useSoon} onFind={findItem} tabbable={!wide}
               onOpen={setRecipe} busy={ideasBusy}
+              chef={<ChefRow recipes={chef} busy={chefBusy} tabbable={!wide} onOpen={setRecipe} onCook={cook} />}
               onMore={async () => {
                 setIdeasBusy(true);
                 const { data: res, error: e } = await rpc("basil_kitchen_ideas", { p_skip: (ideas ?? data.ideas).map((i) => i.name) });
@@ -411,9 +434,9 @@ export default function HomeHubKitchen() {
 
 /* ---------- Tonight: the one thing this page is for ---------- */
 
-function Tonight({ ideas, total, useSoon, onFind, tabbable, onOpen, onMore, busy }: {
+function Tonight({ ideas, total, useSoon, onFind, tabbable, onOpen, onMore, busy, chef }: {
   ideas: Idea[]; total: number | null; useSoon: Item[]; onFind: (name: string) => void; tabbable: boolean;
-  onOpen: (name: string) => void; onMore: () => void; busy: boolean;
+  onOpen: (name: string) => void; onMore: () => void; busy: boolean; chef?: ReactNode;
 }) {
   const canMore = total == null ? ideas.length > 0 : total > ideas.length;
   return (
@@ -451,37 +474,12 @@ function Tonight({ ideas, total, useSoon, onFind, tabbable, onOpen, onMore, busy
           )}
         >
           {ideas.map((idea, n) => (
-            <li
-              key={idea.name}
-              className="relative w-[82%] shrink-0 snap-start sm:w-auto sm:shrink motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300"
-            >
-              <button
-                type="button" onClick={() => onOpen(idea.name)}
-                className={cn(TAP, "group flex h-full w-full flex-col rounded-xl bg-white/[0.04] p-4 text-left hover:bg-white/[0.07] motion-safe:transition-[background-color,transform] motion-safe:duration-150 motion-safe:active:scale-[0.98]")}
-              >
-                <span className="flex items-start justify-between gap-2">
-                  <span className="text-lg font-semibold text-white leading-tight tracking-[-0.01em] text-balance">
-                    <span className="sr-only">{n + 1}. </span>{idea.name}
-                  </span>
-                  <ChevronRight className="mt-0.5 h-5 w-5 shrink-0 text-white/40 group-hover:text-white/70" aria-hidden />
-                </span>
-                <span className="mt-1.5 text-sm text-white/70 text-pretty">{idea.how}</span>
-                <span className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-3 text-xs font-medium text-white/60">
-                  {idea.minutes != null && (
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap"><Clock className="h-3.5 w-3.5" aria-hidden />{idea.minutes}{"\u00a0"}min</span>
-                  )}
-                  {idea.omni && (
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-white/75"><CookingPot className="h-3.5 w-3.5" aria-hidden />Omni Cook</span>
-                  )}
-                  {idea.uses_soon > 0 && (
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-amber-200"><Clock className="h-3.5 w-3.5" aria-hidden />Uses something to eat soon</span>
-                  )}
-                </span>
-              </button>
-            </li>
+            <IdeaCard key={idea.name} n={n} name={idea.name} how={idea.how} minutes={idea.minutes} omni={idea.omni}
+              soon={idea.uses_soon > 0} onOpen={onOpen} />
           ))}
         </ol>
       )}
+      {chef}
       {useSoon.length > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <span className="text-xs font-medium text-white/60">Use soon</span>
@@ -497,6 +495,149 @@ function Tonight({ ideas, total, useSoon, onFind, tabbable, onOpen, onMore, busy
         </div>
       )}
     </section>
+  );
+}
+
+function IdeaCard({ n, name, how, minutes, omni, soon, onOpen }: {
+  n: number; name: string; how: string; minutes?: number | null; omni?: boolean; soon?: boolean; onOpen: (name: string) => void;
+}) {
+  return (
+    <li className="relative w-[82%] shrink-0 snap-start sm:w-auto sm:shrink motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
+      <button
+        type="button" onClick={() => onOpen(name)}
+        className={cn(TAP, "group flex h-full w-full flex-col rounded-xl bg-white/[0.04] p-4 text-left hover:bg-white/[0.07] motion-safe:transition-[background-color,transform] motion-safe:duration-150 motion-safe:active:scale-[0.98]")}
+      >
+        <span className="flex items-start justify-between gap-2">
+          <span className="text-lg font-semibold text-white leading-tight tracking-[-0.01em] text-balance">
+            <span className="sr-only">{n + 1}. </span>{name}
+          </span>
+          <ChevronRight className="mt-0.5 h-5 w-5 shrink-0 text-white/40 group-hover:text-white/70" aria-hidden />
+        </span>
+        <span className="mt-1.5 text-sm text-white/70 text-pretty">{how}</span>
+        <span className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-3 text-xs font-medium text-white/60">
+          {minutes != null && (
+            <span className="inline-flex items-center gap-1 whitespace-nowrap"><Clock className="h-3.5 w-3.5" aria-hidden />{minutes}{"\u00a0"}min</span>
+          )}
+          {omni && (
+            <span className="inline-flex items-center gap-1 whitespace-nowrap text-white/75"><CookingPot className="h-3.5 w-3.5" aria-hidden />Omni Cook</span>
+          )}
+          {soon && (
+            <span className="inline-flex items-center gap-1 whitespace-nowrap text-amber-200"><Clock className="h-3.5 w-3.5" aria-hidden />Uses something to eat soon</span>
+          )}
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/* ---------- From the chef: new recipes from the pantry (basil-chef, free AI) ---------- */
+
+const CHEF_ASKS = [
+  { label: "Surprise me", ask: "" },
+  { label: "Under 30 minutes", ask: "something quick, under 30 minutes" },
+  { label: "Use the Omni Cook", ask: "dishes where the Omni Cook does most of the work" },
+  { label: "Something light", ask: "something light and fresh" },
+];
+
+function ChefRow({ recipes, busy, tabbable, onOpen, onCook }: {
+  recipes: ChefIdea[]; busy: boolean; tabbable: boolean; onOpen: (name: string) => void; onCook: (ask: string) => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [ask, setAsk] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (open) inputRef.current?.focus({ preventScroll: true }); }, [open]);
+  const close = () => { setOpen(false); requestAnimationFrame(() => openerRef.current?.focus({ preventScroll: true })); };
+  const go = async (a: string) => {
+    if (busy) return;
+    if (await onCook(a)) { setOpen(false); setAsk(""); }
+  };
+  return (
+    <div className="mt-5 border-t border-white/[0.08] pt-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <ChefHat className="h-4 w-4" aria-hidden />
+          From the chef
+        </h3>
+        {!open && (
+          <button
+            ref={openerRef} type="button" onClick={() => setOpen(true)} disabled={busy} aria-controls="chef-ask" aria-expanded={false}
+            className={cn(TAP, "-my-2 inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/[0.08] px-3.5 text-sm font-medium text-white hover:bg-white/[0.13] disabled:opacity-60 motion-safe:active:scale-[0.97] motion-safe:transition-[background-color,transform]")}
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ChefHat className="h-4 w-4" aria-hidden />}
+            {busy ? "Cooking" : "Ask the chef"}
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <form
+          id="chef-ask"
+          onSubmit={(e) => { e.preventDefault(); go(ask.trim()); }}
+          onKeyDown={(e) => { if (e.key === "Escape" && !busy) { e.preventDefault(); close(); } }}
+          className="mt-3 max-w-2xl space-y-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 motion-safe:duration-200"
+        >
+          <Label htmlFor="chef-ask-input" className="block text-sm font-medium text-white/80">
+            <Lines>What are you in the mood for? Optional.</Lines>
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              id="chef-ask-input" ref={inputRef} value={ask} onChange={(e) => setAsk(e.target.value)} maxLength={200}
+              placeholder="Something with salmon" enterKeyHint="go" autoComplete="off" disabled={busy}
+              className="h-11 sm:h-10 min-w-0 flex-1 text-base sm:text-sm bg-white/[0.04] border-white/[0.08]"
+            />
+            <Button type="submit" disabled={busy} className="h-11 sm:h-10 shrink-0 motion-safe:active:scale-[0.97] motion-safe:transition-transform">
+              {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden /> : <ChefHat className="mr-1.5 h-4 w-4" aria-hidden />}
+              {busy ? "Cooking" : "Cook"}
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Quick asks">
+            {CHEF_ASKS.map((c) => (
+              <button
+                key={c.label} type="button" disabled={busy} onClick={() => go(c.ask)}
+                className={cn(TAP, "min-h-11 sm:min-h-9 rounded-full border border-white/[0.12] bg-white/[0.03] px-3 text-xs font-medium text-white/85 hover:bg-white/[0.08] disabled:opacity-50 motion-safe:active:scale-[0.97] motion-safe:transition-transform")}
+              >
+                {c.label}
+              </button>
+            ))}
+            <button
+              type="button" disabled={busy} onClick={close}
+              className={cn(TAP, "min-h-11 sm:min-h-9 rounded-full px-3 text-xs font-medium text-white/60 hover:text-white disabled:opacity-50")}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      <p className="sr-only" aria-live="polite">{busy ? "The chef is writing recipes from your pantry." : ""}</p>
+      {busy ? (
+        <div className="mt-4">
+          <div className="grid gap-3 sm:grid-cols-3" aria-hidden>
+            {[0, 1, 2].map((i) => <Skeleton key={i} className={cn("h-36 rounded-xl bg-white/[0.05]", i > 0 && "hidden sm:block")} />)}
+          </div>
+          <p className="mt-2 text-xs text-white/60"><Lines>Reading your pantry and writing recipes. About 10 seconds.</Lines></p>
+        </div>
+      ) : recipes.length > 0 ? (
+        <ol
+          tabIndex={tabbable ? 0 : undefined}
+          aria-label={tabbable ? "Chef recipes, swipe for more" : "Chef recipes"}
+          className={cn(
+            "mt-4 -mx-4 flex gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            "sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0",
+            "rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+          )}
+        >
+          {recipes.map((r, n) => (
+            <IdeaCard key={r.name} n={n} name={r.name} how={r.how} minutes={r.minutes} omni={r.omni} onOpen={onOpen} />
+          ))}
+        </ol>
+      ) : !open && (
+        <p className="mt-2 text-sm text-white/65 text-pretty">
+          <Lines>New recipes from what you have, with Omni Cook steps when they help.</Lines>
+        </p>
+      )}
+    </div>
   );
 }
 

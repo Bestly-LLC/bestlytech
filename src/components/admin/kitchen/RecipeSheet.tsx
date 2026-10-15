@@ -7,8 +7,9 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { Segmented, TAP } from "./Segmented";
+import { Lines } from "@/components/Lines";
 import {
-  AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, CookingPot, Info, Loader2, Pause, Play, RotateCcw,
+  AlertTriangle, Check, ChefHat, ChevronLeft, ChevronRight, Clock, CookingPot, Info, Loader2, Pause, Play, RotateCcw,
   Timer as TimerIcon, Users, X,
 } from "lucide-react";
 
@@ -25,6 +26,7 @@ interface Omni { mode: string; f?: number; c?: number; min: number; speed?: stri
 interface Step { t: string; timer?: number; omni?: Omni }
 interface Recipe {
   name: string; how: string; serves: number | null; minutes: number | null; omni_note: string | null;
+  source?: string | null; chef_note?: string | null;
   steps: Step[]; omni_steps: Step[] | null; ingredients: Ing[];
 }
 
@@ -199,6 +201,11 @@ function RecipeBody({ name, onClose, onPantryChanged, wide, timer, resume }: {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-5 sm:px-6 sm:pt-8">
+        {recipe.source === "chef" && (
+          <p className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-200/90">
+            <ChefHat className="h-3.5 w-3.5" aria-hidden />From the chef
+          </p>
+        )}
         <h2 className="pr-10 text-[1.75rem] font-bold leading-tight tracking-[-0.02em] text-white text-balance">{recipe.name}</h2>
         <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/65">
           {recipe.minutes != null && (
@@ -209,6 +216,11 @@ function RecipeBody({ name, onClose, onPantryChanged, wide, timer, resume }: {
           )}
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">{steps.length} steps</span>
         </p>
+        {recipe.chef_note && (
+          <p className="mt-4 rounded-xl bg-amber-500/[0.08] px-4 py-3 text-sm leading-relaxed text-amber-50/90 text-pretty">
+            <span className="font-semibold text-amber-200">Chef's tip. </span><Lines>{recipe.chef_note}</Lines>
+          </p>
+        )}
 
         {!!recipe.omni_steps?.length && (
           <div className="mt-5">
