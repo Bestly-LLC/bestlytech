@@ -1,0 +1,229 @@
+--- /Users/jaredbest/tmp-telemetry-build/work/worker.py.orig	2026-10-14 17:19:42
++++ /Users/jaredbest/tmp-telemetry-build/work/worker.py.new	2026-10-14 17:24:41
+@@ -18,20 +18,26 @@
+ Secrets: worker token in the macOS Keychain (service bestly-tesla-worker); Tesla tokens and
+ the private key come from Supabase Vault per job and are only held in memory.
+ """
+-import asyncio, json, os, re, subprocess, sys, threading, time, urllib.request, urllib.error
++import asyncio, contextlib, ipaddress, json, os, re, shutil, socket, ssl, subprocess, sys, tempfile, threading, time, urllib.request, urllib.error
+ from datetime import datetime, timedelta, timezone
+ 
+ import aiohttp
+-from cryptography.hazmat.primitives import serialization
++from cryptography import x509
++from cryptography.hazmat.primitives import hashes, serialization
++from cryptography.hazmat.primitives.asymmetric import ec
++from cryptography.x509.oid import NameOID
+ from tesla_fleet_api import TeslaFleetApi
+ from tesla_fleet_api.tesla.vehicle.signed import VehicleSigned
+ from tesla_fleet_api.exceptions import TeslaFleetError
+ 
+-VERSION = "1.8.3"
++VERSION = "1.9.0"
+ SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
+ ANON = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"  # publishable key (key switch 2026-09-24)
+ TOKEN_URL = "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token"
+ F = lambda f: round((f - 32) * 5 / 9, 1)  # Tesla takes Celsius
++# 1.9.0: Fleet Telemetry settings need Tesla's own signer (teslamotors/vehicle-command v0.4.1, built on the Pi 2026-10-14).
++PROXY_BIN = "/opt/bestly/bin/tesla-http-proxy"
++FLEET_NA = "https://fleet-api.prd.na.vn.cloud.tesla.com"
+ 
+ 
+ class CarSaidNo(Exception):
+@@ -282,6 +288,186 @@
+             })
+         return {"ok": True, "source": "tesla", "charges": out, "count": len(out)}
+ 
++    # ---- 1.9.0 (2026-10-14): Tesla Fleet Telemetry settings (live location while the car is driving) ---------------
++    # telemetry_push   : send the streaming settings (host, CA, fields, expiry) to the car through Tesla.
++    # telemetry_check  : read them back, look for car-side errors, re-send if they are missing / near expiry (only when enabled).
++    # telemetry_delete : take the settings off the car.
++    # None of these wake the car or use the vehicle-command signer; they only talk to Tesla's servers, so a sleeping car is fine.
++    @contextlib.asynccontextmanager
++    async def signing_proxy(self, s):
++        """tesla-http-proxy (teslamotors/vehicle-command, pinned build in /opt/bestly/bin) on 127.0.0.1 for the length of
++        one job. Tesla only accepts fleet_telemetry_config signed by the virtual key, and the Python library can't do that.
++        The key and a throwaway TLS key live in a 0700 temp dir on the RAM disk and are removed when the job ends.
++        Yields (port, ssl_context)."""
++        d = tempfile.mkdtemp(prefix="tg-", dir="/dev/shm" if os.path.isdir("/dev/shm") else None)
++        proc = None
++        try:
++            os.chmod(d, 0o700)
++            key_file, tls_key, tls_crt = (os.path.join(d, n) for n in ("cmd.pem", "tls.key", "tls.crt"))
++            # The proxy's Go loader wants SEC1 PEM; re-encode whatever the vault holds.
++            ck = serialization.load_pem_private_key(s["private_key"].encode(), password=None)
++            tk = ec.generate_private_key(ec.SECP256R1())
++            for path, key in ((key_file, ck), (tls_key, tk)):
++                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
++                with os.fdopen(fd, "wb") as f:
++                    f.write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL,
++                                              serialization.NoEncryption()))
++            name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "tg-proxy-local")])
++            now = datetime.now(timezone.utc)
++            crt = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(tk.public_key())
++                   .serial_number(x509.random_serial_number()).not_valid_before(now - timedelta(minutes=5))
++                   .not_valid_after(now + timedelta(days=1))
++                   .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]), critical=False)
++                   .sign(tk, hashes.SHA256()))
++            pem = crt.public_bytes(serialization.Encoding.PEM)
++            with open(tls_crt, "wb") as f:
++                f.write(pem)
++            with socket.socket() as sk:
++                sk.bind(("127.0.0.1", 0))
++                port = sk.getsockname()[1]
++            proc = subprocess.Popen([PROXY_BIN, "-host", "127.0.0.1", "-port", str(port), "-tls-key", tls_key, "-cert", tls_crt,
++                                     "-key-file", key_file], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
++                                    stderr=subprocess.DEVNULL, cwd=d)
++            for _ in range(50):
++                if proc.poll() is not None:
++                    raise RuntimeError("The signing helper stopped at startup")
++                try:
++                    with socket.create_connection(("127.0.0.1", port), timeout=0.5):
++                        break
++                except OSError:
++                    await asyncio.sleep(0.2)
++            else:
++                raise RuntimeError("The signing helper did not start")
++            yield port, ssl.create_default_context(cadata=pem.decode())
++        finally:
++            if proc is not None and proc.poll() is None:
++                proc.terminate()
++                try:
++                    proc.wait(timeout=5)
++                except subprocess.TimeoutExpired:
++                    proc.kill()
++            shutil.rmtree(d, ignore_errors=True)
++
++    async def tg_http(self, access, method, path, body=None, base=FLEET_NA, ctx=None):
++        async with aiohttp.ClientSession() as ses:
++            async with ses.request(method, base + path, json=body, headers={"Authorization": "Bearer " + access}, ssl=ctx,
++                                   timeout=aiohttp.ClientTimeout(total=40)) as r:
++                txt = await r.text()
++                status = r.status
++        try:
++            j = json.loads(txt) if txt else {}
++        except ValueError:
++            j = {"raw": txt[:300]}
++        return status, (j if isinstance(j, dict) else {"raw": str(j)[:300]})
++
++    async def telemetry_push(self, s, access, args, job):
++        """Send the settings. The longest allowed expiry is not in Tesla's docs, so try a year, then 180 days, then 30."""
++        if not args.get("ca"):
++            raise RuntimeError("The telemetry CA certificate is missing from the vault (tesla_telemetry_ca_crt)")
++        vin = args["vin"]
++        last = ""
++        async with self.signing_proxy(s) as (port, ctx):
++            for days in (364, 180, 30):
++                exp = int(time.time()) + days * 86400
++                cfg = {"hostname": args["hostname"], "port": int(args["port"]), "ca": args["ca"], "fields": args["fields"],
++                       "alert_types": ["service"], "delivery_policy": "latest", "prefer_typed": True, "exp": exp}
++                self.stage(job, "Sending the live-location settings to Tesla")
++                self.spend("command", job)
++                st, j = await self.tg_http(access, "POST", "/api/1/vehicles/fleet_telemetry_config", {"vins": [vin], "config": cfg},
++                                           base=f"https://127.0.0.1:{port}", ctx=ctx)
++                resp = j.get("response") if isinstance(j.get("response"), dict) else {}
++                text = json.dumps(j)[:400]
++                if st == 200 and (resp.get("updated_vehicles") or 0) >= 1:
++                    break
++                skipped = resp.get("skipped_vehicles") or {}
++                if st == 200 and skipped:
++                    why = ",".join(sorted(k for k, v in skipped.items() if vin in (v or []))) or "skipped"
++                    if "key" in why:
++                        rpc("car_telemetry_record", {"p_token": self.token, "p_kind": "check", "p_data": {"problem": "key_missing"}})
++                        raise RuntimeError("Tesla says the Bestly virtual key isn't on the car, so the live-location settings can't be sent.")
++                    raise RuntimeError(f"Tesla skipped the car ({why}).")
++                if st >= 400 and "exp" in text.lower():
++                    last = text
++                    log(f"job {job['id']} expiry of {days} days refused: {text[:160]}")
++                    continue
++                raise RuntimeError(f"Tesla refused the live-location settings (HTTP {st}): {text[:200]}")
++            else:
++                raise RuntimeError(f"Tesla refused every expiry we tried: {last[:200]}")
++        await asyncio.sleep(2)
++        synced = None
++        try:
++            self.spend("data", job)
++            st2, j2 = await self.tg_http(access, "GET", f"/api/1/vehicles/{vin}/fleet_telemetry_config")
++            synced = (j2.get("response") or {}).get("synced")
++        except Exception:
++            pass
++        exp_at = datetime.fromtimestamp(exp, timezone.utc).isoformat()
++        out = {"ok": True, "msg": "telemetry settings sent", "exp_at": exp_at, "exp_days": days, "synced": synced}
++        rpc("car_telemetry_record", {"p_token": self.token, "p_kind": "push", "p_data": out})
++        return out
++
++    async def telemetry_job(self, s, job, access):
++        a = job["action"]
++        args = rpc("car_telemetry_push_args", {"p_token": self.token})
++        vin = args["vin"]
++        if a == "telemetry_delete":
++            self.spend("command", job)
++            st, j = await self.tg_http(access, "DELETE", f"/api/1/vehicles/{vin}/fleet_telemetry_config")
++            if st not in (200, 404):
++                raise RuntimeError(f"Tesla would not remove the live-location settings (HTTP {st}): {json.dumps(j)[:200]}")
++            rpc("car_telemetry_record", {"p_token": self.token, "p_kind": "delete", "p_data": {"status": st}})
++            return {"ok": True, "msg": "telemetry settings removed", "http": st}, None
++        if a == "telemetry_push":
++            return await self.telemetry_push(s, access, args, job), None
++        # telemetry_check
++        self.stage(job, "Checking the live-location settings")
++        self.spend("data", job)
++        st, j = await self.tg_http(access, "GET", f"/api/1/vehicles/{vin}/fleet_telemetry_config")
++        resp = j.get("response") if isinstance(j.get("response"), dict) else {}
++        cfg = resp.get("config") if isinstance(resp.get("config"), dict) else None
++        text = json.dumps(j)[:300]
++        problem = None
++        if st >= 400 and "key" in text.lower() and "missing" in text.lower():
++            problem = "key_missing"
++        elif st >= 400 and st != 404:
++            problem = f"Tesla answered HTTP {st} when asked for the settings"
++        exp_ts = None
++        if cfg:
++            try:
++                exp_ts = float(cfg.get("exp"))
++            except (TypeError, ValueError):
++                exp_ts = None
++        enabled = bool(args.get("enabled"))
++        why = None
++        if enabled and problem is None:
++            if not cfg:
++                why = "settings missing on the car"
++            elif exp_ts is not None and exp_ts - time.time() < 30 * 86400:
++                why = "settings expire in under 30 days"
++            elif cfg.get("hostname") != args["hostname"] or int(cfg.get("port") or 0) != int(args["port"]):
++                why = "settings point somewhere else"
++        repushed = None
++        if why:
++            log(f"job {job['id']} telemetry re-push: {why}")
++            repushed = await self.telemetry_push(s, access, args, job)
++            exp_ts = datetime.fromisoformat(repushed["exp_at"]).timestamp()
++        errs = []
++        if problem is None:
++            try:
++                self.spend("data", job)
++                st3, j3 = await self.tg_http(access, "GET", f"/api/1/vehicles/{vin}/fleet_telemetry_errors")
++                errs = (j3.get("response") or {}).get("fleet_telemetry_errors") or []
++            except Exception:
++                errs = []
++        if errs and problem is None and not repushed:
++            e0 = errs[-1] if isinstance(errs[-1], dict) else {}
++            problem = ("The car reported a streaming error: " + str(e0.get("error") or e0.get("name") or errs[-1]))[:240]
++        out = {"ok": True, "msg": "telemetry checked", "http": st, "configured": bool(cfg), "synced": resp.get("synced"),
++               "exp_at": None if exp_ts is None else datetime.fromtimestamp(exp_ts, timezone.utc).isoformat(),
++               "errors": len(errs), "problem": problem, "repushed": why}
++        rpc("car_telemetry_record", {"p_token": self.token, "p_kind": "check", "p_data": out})
++        return out, None
++
+     async def run(self, claim):
+         job, s, vin = claim["job"], claim["secrets"], claim["vin"]
+         async with aiohttp.ClientSession() as session:
+@@ -289,6 +475,9 @@
+             api.private_key = serialization.load_pem_private_key(s["private_key"].encode(), password=None)
+             car = VehicleSigned(api, vin)
+             self.api = api
++            if job["action"] in ("telemetry_push", "telemetry_check", "telemetry_delete"):
++                # 1.9.0: Tesla-side settings only. Never wakes the car (and must not fall through to wait_online below).
++                return await self.telemetry_job(s, job, await self.access_token(session, s))
+             if job["action"].startswith("key_"):
+                 return await self.keys(car, job)
+             if job["action"] in ("charges", "charge_history"):
