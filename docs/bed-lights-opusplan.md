@@ -1,9 +1,19 @@
 # Bed lights (Withings in-bed sensor → Home Assistant)
 
-Status 2026-10-15: **blocked on the sensor.** Home Assistant has no Withings entities
-(live `homeassistant.states` lookups for `withings`, `in_bed`, `bed`, `sleep`, `analyzer`,
-`occupan` and every `binary_sensor.*` found nothing). The automation below is ready;
-it needs the real entity id in place of `binary_sensor.REPLACE_withings_in_bed`.
+Status 2026-10-15: **sensor live.** `binary_sensor.bed_withings_sleep_in_bed` exists and
+reported "on". The automation is `home-assistant/packages/bed_lights.yaml` (repo copy of the
+Pi's `/mnt/ssd/apps/homeassistant/packages/bed_lights.yaml`).
+
+How the sensor got there (Withings in-bed only works over a public HTTPS webhook):
+- Withings developer app "Home Assistant", callback URLs `https://my.home-assistant.io/redirect/oauth/`
+  and the same without the trailing slash (HA sends the no-slash form; Withings' Test button 301s on it).
+- Cloudflare tunnel `bestly-nextcloud` route `ha.bestly.tech` -> `http://localhost:8123`.
+- Cloudflare Access: app `ha.bestly.tech` = Allow "Only Jared"; app `ha.bestly.tech/api/webhook` = Bypass Everyone.
+- HA external URL `https://ha.bestly.tech`.
+- HA moved `http:` to `.storage/http` (`yaml_migration_done`), dropping `use_x_forwarded_for` and
+  `trusted_proxies`; the YAML block is ignored and the Network page form failed to save the list, so both
+  were written into `.storage/http` directly with HA stopped (backup `http.bak_proxy_<epoch>`).
+  Without this every tunnel request is a 400.
 
 ## What Jared asked for
 
@@ -25,74 +35,17 @@ it needs the real entity id in place of `binary_sensor.REPLACE_withings_in_bed`.
 
 - **Lights:** `light.studio` (the studio group). Change if the bed area is a different group.
 - **Debounce:** out of bed must hold 30 s, in bed 1 min, so rolling over doesn't flip lights.
-- **Night branch** sets the light directly (2% warm 2200 K) rather than turning on
-  Adaptive Lighting sleep mode, so it doesn't change the rest of the evening's lighting.
+- **Night branch** marks `light.studio` as manually controlled for Adaptive Lighting, then sets
+  2% warm 2200 K, rather than turning on sleep mode for the whole home.
 - **1 AM to morning:** uses the normal branch. Adaptive Lighting already runs dim and warm
   overnight and `automation.adaptive_lighting_sleep_mode_at_night` handles sleep mode.
 - **Only when home** (`person.jared`), so a guest in the bed doesn't run it while away.
 - `mode: restart` on the out-of-bed automation; getting back in bed turns the lights off
   whether or not the 5-minute timer is still running.
 
-## Automation (package `/mnt/ssd/apps/homeassistant/packages/bed_lights.yaml`)
+## Automation
 
-Or paste each item into Settings → Automations → Create → Edit in YAML.
-
-```yaml
-automation:
-  - id: bestly_bed_out_lights_on
-    alias: Bed - lights on when I get up
-    mode: restart
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.REPLACE_withings_in_bed
-        from: "on"
-        to: "off"
-        for: "00:00:30"
-    condition:
-      - condition: state
-        entity_id: person.jared
-        state: home
-    action:
-      - choose:
-          - conditions:
-              - condition: time
-                after: "20:00:00"
-                before: "01:00:00"
-            sequence:
-              - service: light.turn_on
-                target: { entity_id: light.studio }
-                data: { brightness_pct: 2, color_temp_kelvin: 2200, transition: 2 }
-              - delay: "00:05:00"
-              - service: light.turn_off
-                target: { entity_id: light.studio }
-                data: { transition: 5 }
-        default:
-          - service: adaptive_lighting.apply
-            data:
-              entity_id: switch.adaptive_lighting_home
-              lights: light.studio
-              turn_on_lights: true
-              transition: 2
-
-  - id: bestly_bed_in_lights_off
-    alias: Bed - lights off when I'm back in bed
-    mode: single
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.REPLACE_withings_in_bed
-        from: "off"
-        to: "on"
-        for: "00:01:00"
-    action:
-      - service: automation.turn_off
-        target: { entity_id: automation.bed_lights_on_when_i_get_up }
-        data: { stop_actions: true }
-      - service: automation.turn_on
-        target: { entity_id: automation.bed_lights_on_when_i_get_up }
-      - service: light.turn_off
-        target: { entity_id: light.studio }
-        data: { transition: 5 }
-```
+See `home-assistant/packages/bed_lights.yaml`.
 
 ## Deploy
 
