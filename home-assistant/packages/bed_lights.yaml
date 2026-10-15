@@ -33,7 +33,7 @@ automation:
               - delay: "00:05:00"
               - service: light.turn_off
                 target: { entity_id: light.studio }
-                data: { transition: 5 }
+                data: { transition: 30 }
         # Any other time: the Adaptive Lighting setting.
         default:
           - service: adaptive_lighting.apply
@@ -61,7 +61,7 @@ automation:
         target: { entity_id: automation.bed_lights_on_when_i_get_up }
       - service: light.turn_off
         target: { entity_id: all }
-        data: { transition: 5 }
+        data: { transition: 30 }
       - service: media_player.media_pause
         target: { entity_id: all }
         continue_on_error: true
