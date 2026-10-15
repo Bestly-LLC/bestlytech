@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -11,6 +12,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle,
+} from "@/components/ui/drawer";
 import { ago, Panel } from "@/components/admin/homeHub/shared";
 import { pollInterval } from "@/lib/polling";
 import { cn } from "@/lib/utils";
@@ -62,18 +66,84 @@ function timeLabel(iso: string, now: number) {
   return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+const STATUSES: Status[] = ["have", "low", "out", "arriving"];
+const parseLoc = (v: string | null): Loc | "all" => (LOCS.some((l) => l.key === v) ? (v as Loc) : "all");
+const parseStatus = (v: string | null): Status | null => (STATUSES.includes(v as Status) ? (v as Status) : null);
+const countLabel = (n: number) => `${n}\u00a0${n === 1 ? "item" : "items"}`;
+
+/** Wide screens get the Dialog and the "/" hint; phones get the bottom sheet. Tracks the `sm:` breakpoint. */
+function useMinWidth(px: number) {
+  const query = `(min-width: ${px}px)`;
+  const [match, setMatch] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const on = () => setMatch(mql.matches);
+    on();
+    mql.addEventListener("change", on);
+    return () => mql.removeEventListener("change", on);
+  }, [query]);
+  return match;
+}
+
+const canUndoEvent = (e: KitchenEvent) =>
+  ["have", "low", "out", "arriving"].includes(e.action) && !!e.item_id && !!e.before_status;
+
 export default function HomeHubKitchen() {
   const [data, setData] = useState<Kitchen | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const [query, setQuery] = useState("");
-  const [loc, setLoc] = useState<Loc | "all">("all");
-  const [statusFilter, setStatusFilter] = useState<Status | null>(null);
+  const [sp, setSp] = useSearchParams();
+  const [query, setQuery] = useState(() => sp.get("q") ?? "");
+  const loc = parseLoc(sp.get("where"));
+  const statusFilter = parseStatus(sp.get("status"));
   const [addOpen, setAddOpen] = useState(false);
   const [undoing, setUndoing] = useState<number | null>(null);
+  const [arriving, setArriving] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [stuck, setStuck] = useState(false);
+  const wide = useMinWidth(640);
+
+  // Filters live in the URL (?q=, ?where=, ?status=) so back/forward, a shared link and the lightning panel all work.
+  // replace: true, so typing never floods history. The search text stays local while typing and is mirrored out;
+  // lastQ remembers what we wrote so our own echo is never mistaken for a new link.
+  const lastQ = useRef(query.trim());
+  const setParam = useCallback((key: string, value: string | null) => {
+    setSp((prev) => {
+      const n = new URLSearchParams(prev);
+      if (value) n.set(key, value); else n.delete(key);
+      return n;
+    }, { replace: true });
+  }, [setSp]);
+  const setLoc = useCallback((v: Loc | "all") => setParam("where", v === "all" ? null : v), [setParam]);
+  const setStatusFilter = useCallback((v: Status | null) => setParam("status", v), [setParam]);
+  useEffect(() => {
+    const t = query.trim();
+    if (t === lastQ.current) return;
+    lastQ.current = t;
+    setParam("q", t || null);
+  }, [query, setParam]);
+  useEffect(() => {
+    const urlQ = (sp.get("q") ?? "").trim();
+    if (urlQ !== lastQ.current) { lastQ.current = urlQ; setQuery(urlQ); }
+  }, [sp]);
+  const clearFilters = () => { lastQ.current = ""; setQuery(""); setSp((prev) => { const n = new URLSearchParams(prev); ["q", "where", "status"].forEach((k) => n.delete(k)); return n; }, { replace: true }); };
+  const findItem = (name: string) => { lastQ.current = name; setQuery(name); setSp((prev) => { const n = new URLSearchParams(prev); n.set("q", name); n.delete("where"); n.delete("status"); return n; }, { replace: true }); };
+
+  // "/" jumps to search from anywhere that is not already a field (desktop habit; harmless on a phone).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.isComposing || e.defaultPrevented || addOpen) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (!searchRef.current) return;
+      e.preventDefault();
+      searchRef.current.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [addOpen]);
 
   // The search bar only turns into a material once the list is scrolling under it (scroll edge effect).
   useEffect(() => {
@@ -147,6 +217,16 @@ export default function HomeHubKitchen() {
     else toast.success(patch.use_soon ? `${item.name} flagged to use soon` : `${item.name} no longer flagged`);
   }, [load]);
 
+  const markArrived = useCallback(async () => {
+    setArriving(true);
+    const { data: res, error: e } = await rpc("basil_kitchen_arrived");
+    setArriving(false);
+    if (e) { toast.error(`Couldn't mark the order as here. ${e.message}`); return; }
+    const n = Number((res as { delivered?: number } | null)?.delivered ?? 0);
+    toast.success(n > 0 ? `Got it. ${countLabel(n)} ${n === 1 ? "is" : "are"} in stock` : "Nothing was on the way");
+    load();
+  }, [load]);
+
   const items = data?.items ?? [];
   const counts = useMemo(() => {
     const c: Record<Status, number> = { have: 0, low: 0, out: 0, arriving: 0 };
@@ -168,18 +248,23 @@ export default function HomeHubKitchen() {
     : "Basil keeps track of the kitchen.";
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
+      {/* Phone: the menu sits beside the title instead of costing a whole row under it. */}
+      <div className="absolute right-0 top-0 sm:hidden">
+        <ActionMenu label="More kitchen actions" className="h-11 w-11" items={[{ label: "Refresh now", icon: RefreshCw, onSelect: load }]} />
+      </div>
       <PageHeader
         title="Kitchen"
         description={description}
         actions={
           <>
-            <Button onClick={() => setAddOpen(true)} className="motion-safe:active:scale-[0.97] motion-safe:transition-transform">
+            <Button onClick={() => setAddOpen(true)} className="hidden sm:inline-flex motion-safe:active:scale-[0.97] motion-safe:transition-transform">
               <Plus className="h-4 w-4 mr-1.5" aria-hidden />
               Add item
             </Button>
             <ActionMenu
               label="More kitchen actions"
+              className="hidden sm:inline-flex"
               items={[{ label: "Refresh now", icon: RefreshCw, onSelect: load }]}
             />
           </>
@@ -196,18 +281,21 @@ export default function HomeHubKitchen() {
       {!loaded ? (
         <div className="space-y-3">
           <Skeleton className="h-40 rounded-2xl bg-white/[0.04]" />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-20 rounded-2xl bg-white/[0.04]" />)}</div>
+          <div className="grid grid-cols-4 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16 sm:h-20 rounded-2xl bg-white/[0.04]" />)}</div>
           <Skeleton className="h-96 rounded-2xl bg-white/[0.04]" />
         </div>
       ) : data && (
         <>
-          <Tonight ideas={data.ideas} useSoon={useSoon} onFind={(name) => { setQuery(name); setLoc("all"); setStatusFilter(null); }} />
+          <div className="space-y-3">
+            <Tonight ideas={data.ideas} useSoon={useSoon} onFind={findItem} tabbable={!wide} />
+            {counts.arriving > 0 && <ArrivingBanner count={counts.arriving} busy={arriving} onArrived={markArrived} />}
+          </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" role="group" aria-label="Filter by status">
-            <StatTile label="In stock" value={counts.have} active={statusFilter === "have"} onClick={() => setStatusFilter(statusFilter === "have" ? null : "have")} />
-            <StatTile label="Running low" value={counts.low} tone="amber" active={statusFilter === "low"} onClick={() => setStatusFilter(statusFilter === "low" ? null : "low")} />
-            <StatTile label="Used up" value={counts.out} tone="red" active={statusFilter === "out"} onClick={() => setStatusFilter(statusFilter === "out" ? null : "out")} />
-            <StatTile label="On the way" value={counts.arriving} tone="sky" icon={Truck} active={statusFilter === "arriving"} onClick={() => setStatusFilter(statusFilter === "arriving" ? null : "arriving")} />
+          <div className="grid grid-cols-4 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3" role="group" aria-label="Filter by status">
+            <StatTile label="In stock" short="In stock" value={counts.have} active={statusFilter === "have"} onClick={() => setStatusFilter(statusFilter === "have" ? null : "have")} />
+            <StatTile label="Running low" short="Low" value={counts.low} tone="amber" active={statusFilter === "low"} onClick={() => setStatusFilter(statusFilter === "low" ? null : "low")} />
+            <StatTile label="Used up" short="Used up" value={counts.out} tone="red" active={statusFilter === "out"} onClick={() => setStatusFilter(statusFilter === "out" ? null : "out")} />
+            <StatTile label="On the way" short="Coming" value={counts.arriving} tone="sky" icon={Truck} active={statusFilter === "arriving"} onClick={() => setStatusFilter(statusFilter === "arriving" ? null : "arriving")} />
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -215,28 +303,52 @@ export default function HomeHubKitchen() {
               <div
                 ref={barRef}
                 className={cn(
-                  "sticky top-12 sm:top-14 bento:top-16 z-20 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 mb-4 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 flex flex-col sm:flex-row gap-3 rounded-t-2xl border-b",
+                  "sticky top-12 sm:top-14 bento:top-16 z-20 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 mb-4 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 flex flex-col lg:flex-row gap-3 rounded-t-2xl border-b",
                   "motion-safe:transition-[background-color,border-color] motion-safe:duration-200",
                   stuck ? "bg-black/85 backdrop-blur-xl backdrop-saturate-150 border-white/[0.08]" : "bg-transparent border-transparent",
                 )}
               >
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/45" aria-hidden />
-                  <Input
-                    type="search" value={query} onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Find an item" aria-label="Find an item"
-                    className="pl-9 h-11 sm:h-10 text-base sm:text-sm bg-white/[0.04] border-white/[0.08]"
-                  />
+                <div className="flex flex-1 gap-2">
+                  <div className="group relative min-w-0 flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/45" aria-hidden />
+                    <Input
+                      ref={searchRef}
+                      type="search" value={query} onChange={(e) => setQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Escape") return;
+                        e.preventDefault();
+                        if (query) setQuery(""); else e.currentTarget.blur();
+                      }}
+                      placeholder="Find an item" aria-label="Find an item" aria-keyshortcuts="/"
+                      className={cn("pl-9 h-11 sm:h-10 text-base sm:text-sm bg-white/[0.04] border-white/[0.08]", "xl:pr-9")}
+                    />
+                    {!query && (
+                      <kbd
+                        aria-hidden
+                        className="pointer-events-none absolute right-3 top-1/2 hidden h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-md border border-white/[0.14] px-1.5 font-sans text-[0.6875rem] font-medium text-white/55 xl:flex group-focus-within:opacity-0 motion-safe:transition-opacity"
+                      >
+                        /
+                      </kbd>
+                    )}
+                  </div>
+                  <Button
+                    type="button" size="icon" aria-label="Add item" onClick={() => setAddOpen(true)}
+                    className="h-11 w-11 shrink-0 sm:hidden motion-safe:active:scale-[0.95] motion-safe:transition-transform"
+                  >
+                    <Plus className="h-5 w-5" aria-hidden />
+                  </Button>
                 </div>
                 <Segmented
                   label="Where"
                   dense
-                  className="w-full sm:w-auto"
+                  className="w-full lg:w-auto"
                   value={loc}
                   onChange={(v) => setLoc(v as Loc | "all")}
                   options={[{ key: "all", label: "All" }, ...LOCS.map((l) => ({ key: l.key, label: l.label }))]}
                 />
               </div>
+
+              <LatestChange events={data.events} now={now} undoing={undoing} onUndo={undo} />
 
               <p className="sr-only" aria-live="polite">
                 {filtering ? `${filtered.length} ${filtered.length === 1 ? "item" : "items"} shown` : ""}
@@ -246,12 +358,12 @@ export default function HomeHubKitchen() {
                   compact icon={ChefHat}
                   title={filtering ? "Nothing matches" : "The kitchen list is empty"}
                   description={filtering ? "Try another word or clear the filters." : "Add an item, or Basil fills this from your Costco and Instacart receipts."}
-                  action={filtering ? <Button variant="outline" onClick={() => { setQuery(""); setLoc("all"); setStatusFilter(null); }}>Clear filters</Button> : undefined}
+                  action={filtering ? <Button variant="outline" onClick={clearFilters}>Clear filters</Button> : undefined}
                 />
               ) : (
-                <div className="space-y-6">
+                <div className="2xl:columns-2 2xl:gap-8">
                   {groups.map((g) => (
-                    <section key={g.key} aria-label={g.label}>
+                    <section key={g.key} aria-label={g.label} className="mb-6 last:mb-0 break-inside-avoid 2xl:last:mb-6">
                       <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/60 mb-1">
                         <g.icon className="h-3.5 w-3.5" aria-hidden />
                         {g.label}
@@ -268,7 +380,7 @@ export default function HomeHubKitchen() {
               )}
             </Panel>
 
-            <div className="space-y-6 min-w-0">
+            <div className="space-y-6 min-w-0 xl:sticky xl:top-20 bento:xl:top-24 xl:self-start xl:max-h-[calc(100vh-6.5rem)] xl:overflow-y-auto xl:overscroll-contain">
               <VoiceHelp />
               <Recent events={data.events} now={now} undoing={undoing} onUndo={undo} />
             </div>
@@ -276,14 +388,14 @@ export default function HomeHubKitchen() {
         </>
       )}
 
-      <AddDialog open={addOpen} onOpenChange={setAddOpen} onAdded={load} />
+      <AddItem open={addOpen} onOpenChange={setAddOpen} onAdded={load} wide={wide} />
     </div>
   );
 }
 
 /* ---------- Tonight: the one thing this page is for ---------- */
 
-function Tonight({ ideas, useSoon, onFind }: { ideas: Idea[]; useSoon: Item[]; onFind: (name: string) => void }) {
+function Tonight({ ideas, useSoon, onFind, tabbable }: { ideas: Idea[]; useSoon: Item[]; onFind: (name: string) => void; tabbable: boolean }) {
   return (
     <section
       aria-label="Tonight"
@@ -296,9 +408,18 @@ function Tonight({ ideas, useSoon, onFind }: { ideas: Idea[]; useSoon: Item[]; o
       {ideas.length === 0 ? (
         <p className="mt-3 text-white/70">Nothing fully makeable right now. Might be time for a Costco run.</p>
       ) : (
-        <ol className="mt-4 grid gap-3 md:grid-cols-3">
+        <ol
+          // Phone: one swipeable row, the next card peeking. From sm: the three-up grid. Keyboard users can scroll the row.
+          tabIndex={tabbable ? 0 : undefined}
+          aria-label={tabbable ? "Dinner ideas, swipe for more" : undefined}
+          className={cn(
+            "mt-4 -mx-4 flex gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            "sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0",
+            "rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+          )}
+        >
           {ideas.map((idea, n) => (
-            <li key={idea.name} className="rounded-xl bg-white/[0.04] p-4">
+            <li key={idea.name} className="relative w-[82%] shrink-0 snap-start rounded-xl bg-white/[0.04] p-4 sm:w-auto sm:shrink">
               <p className="text-lg font-semibold text-white leading-tight tracking-[-0.01em] text-balance">
                 <span className="sr-only">{n + 1}. </span>{idea.name}
               </p>
@@ -333,20 +454,24 @@ function Tonight({ ideas, useSoon, onFind }: { ideas: Idea[]; useSoon: Item[]; o
 
 /* ---------- Pieces ---------- */
 
-function StatTile({ label, value, tone, icon: Icon, active, onClick }: {
-  label: string; value: number; tone?: "amber" | "red" | "sky"; icon?: LucideIcon; active: boolean; onClick: () => void;
+function StatTile({ label, short, value, tone, icon: Icon, active, onClick }: {
+  label: string; short: string; value: number; tone?: "amber" | "red" | "sky"; icon?: LucideIcon; active: boolean; onClick: () => void;
 }) {
   const ink = tone === "amber" ? "text-amber-200" : tone === "red" ? "text-red-200" : tone === "sky" ? "text-sky-200" : "text-white";
   return (
     <button
       type="button" onClick={onClick} aria-pressed={active}
       className={cn(
-        "text-left rounded-2xl border p-4 min-h-20 motion-safe:active:scale-[0.98] motion-safe:transition-transform", TAP,
+        "flex flex-col items-center justify-center rounded-2xl border px-1 py-2 min-h-16 text-center",
+        "sm:items-stretch sm:justify-start sm:p-4 sm:min-h-20 sm:text-left motion-safe:active:scale-[0.98] motion-safe:transition-transform", TAP,
         active ? "border-white/30 bg-white/[0.08]" : "border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.05]",
       )}
     >
-      <span className="flex items-center gap-1.5 text-xs text-white/60">{Icon && <Icon className="h-3.5 w-3.5" aria-hidden />}{label}</span>
-      <span className={cn("block text-2xl font-semibold tabular-nums mt-1 whitespace-nowrap", ink)}>{value}</span>
+      <span className="order-2 flex items-center gap-1.5 whitespace-nowrap text-xs text-white/60 sm:order-1">
+        {Icon && <Icon className="hidden h-3.5 w-3.5 sm:block" aria-hidden />}
+        <span className="sm:hidden">{short}</span><span className="hidden sm:inline">{label}</span>
+      </span>
+      <span className={cn("order-1 block text-xl font-semibold leading-tight tabular-nums whitespace-nowrap sm:order-2 sm:mt-1 sm:text-2xl", ink)}>{value}</span>
     </button>
   );
 }
@@ -401,11 +526,13 @@ function ItemRow({ item, onStatus, onEdit }: {
 }) {
   const detail = [item.category, item.qty != null ? `${item.qty} ${item.unit ?? ""}`.trim() : null].filter(Boolean).join(" · ");
   return (
-    <li className="flex items-center gap-3 py-3">
-      <div className="min-w-0 flex-1">
+    // Phone: name and menu on one line, the status control full width under them (nothing squeezes the name).
+    // From sm: everything on one line.
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 py-2.5 sm:flex sm:py-3 sm:gap-3 xl:py-2">
+      <div className="min-w-0 flex-1 flex flex-col xl:flex-row xl:flex-wrap xl:items-baseline xl:gap-x-2">
         <p className={cn("font-medium break-words", item.status === "out" ? "text-white/55" : "text-white")}>{item.name}</p>
         {((item.use_soon && item.status !== "out") || item.status === "arriving") && (
-          <div className="flex flex-wrap gap-1.5 mt-1">
+          <div className="flex flex-wrap gap-1.5 mt-1 xl:mt-0">
             {item.use_soon && (
               <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-200">
                 <Clock className="h-3 w-3" aria-hidden />Use soon
@@ -418,17 +545,19 @@ function ItemRow({ item, onStatus, onEdit }: {
             )}
           </div>
         )}
-        {detail && <p className="text-xs text-white/55 mt-0.5">{detail}</p>}
+        {detail && <p className="text-xs text-white/55 mt-0.5 xl:mt-0">{detail}</p>}
       </div>
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="contents sm:flex sm:items-center sm:gap-2 sm:shrink-0">
         <Segmented
           label={`${item.name} status`}
           value={item.status}
           onChange={(v) => onStatus(item, v as Status)}
           options={SETTABLE}
+          className="col-span-2 row-start-2 w-full sm:w-auto"
         />
         <ActionMenu
           label={`More for ${item.name}`}
+          className="col-start-2 row-start-1 h-11 w-11 sm:h-9 sm:w-9"
           items={[
             { label: item.use_soon ? "Clear use soon" : "Flag to use soon", icon: Clock, onSelect: () => onEdit(item, { use_soon: !item.use_soon }) },
             ...LOCS.filter((l) => l.key !== item.location).map((l) => ({
@@ -463,15 +592,63 @@ function VoiceHelp() {
   );
 }
 
-const SOURCE_ICON: Record<string, LucideIcon> = { voice: Mic, ui: MousePointerClick, receipt: Receipt };
+const SOURCE_ICON: Record<string, LucideIcon> = { voice: Mic, ui: MousePointerClick, receipt: Receipt, basil: ChefHat };
+const SOURCE_LABEL: Record<string, string> = { voice: "By voice", ui: "On this page", receipt: "From a receipt", basil: "By Basil" };
 
 function eventText(e: KitchenEvent): string {
   const name = e.item_name ?? "Item";
   if (e.action === "add") return `${name} added`;
   if (e.action === "undo") return `${name} back to ${STATUS_WORD[e.after_status ?? "have"]}`;
   if (e.action.startsWith("undone:")) return `${name} ${STATUS_WORD[(e.after_status ?? "have") as Status]} (undone)`;
+  if (e.said?.toLowerCase().startsWith("delivered")) return `${name} arrived`;
   if (e.after_status) return `${name} ${STATUS_WORD[e.after_status]}`;
   return name;
+}
+
+/** An order is on the way: one tap says it is all here (basil_kitchen_arrived flips every "on the way" item to in stock). */
+function ArrivingBanner({ count, busy, onArrived }: { count: number; busy: boolean; onArrived: () => void }) {
+  return (
+    <div
+      role="status"
+      className="flex items-center gap-3 rounded-2xl border border-sky-500/25 bg-sky-500/[0.08] px-4 py-2.5"
+    >
+      <Truck className="h-4 w-4 shrink-0 text-sky-200" aria-hidden />
+      <p className="min-w-0 flex-1 text-sm font-medium text-white">
+        <span className="whitespace-nowrap">{countLabel(count)}</span> on the way
+      </p>
+      <Button
+        type="button" variant="outline" size="sm" disabled={busy} onClick={onArrived}
+        className="h-11 shrink-0 whitespace-nowrap sm:h-9 motion-safe:active:scale-[0.97] motion-safe:transition-transform"
+      >
+        {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />}
+        It's all here
+      </Button>
+    </div>
+  );
+}
+
+/** Phone only: the newest change that can still be undone, one line, so a voice mistake is a tap away without scrolling to Recent. */
+function LatestChange({ events, now, undoing, onUndo }: {
+  events: KitchenEvent[]; now: number; undoing: number | null; onUndo: (id: number, name: string) => void;
+}) {
+  const e = events.find(canUndoEvent);
+  if (!e) return null;
+  return (
+    <div className="mb-3 flex items-center gap-2 rounded-xl bg-white/[0.04] pl-3 sm:hidden">
+      <p className="min-w-0 flex-1 text-sm text-white/80">
+        <span className="font-medium text-white">{eventText(e)}</span>
+        <span className="whitespace-nowrap text-white/55"> · {timeLabel(e.at, now)}</span>
+      </p>
+      <Button
+        variant="ghost" className="h-11 shrink-0 px-3 text-white/80 hover:text-white"
+        disabled={undoing === e.id} onClick={() => onUndo(e.id, e.item_name ?? "item")}
+        aria-label={`Undo: ${eventText(e)}`}
+      >
+        {undoing === e.id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden /> : <Undo2 className="mr-1 h-4 w-4" aria-hidden />}
+        Undo
+      </Button>
+    </div>
+  );
 }
 
 function Recent({ events, now, undoing, onUndo }: {
@@ -485,10 +662,10 @@ function Recent({ events, now, undoing, onUndo }: {
         <ul className="divide-y divide-white/[0.05] -my-2">
           {events.map((e) => {
             const Icon = SOURCE_ICON[e.source] ?? MousePointerClick;
-            const canUndo = ["have", "low", "out", "arriving"].includes(e.action) && !!e.item_id && !!e.before_status;
+            const canUndo = canUndoEvent(e);
             return (
               <li key={e.id} className="flex items-start gap-3 py-2.5">
-                <Icon className="h-4 w-4 mt-0.5 shrink-0 text-white/45" aria-label={e.source === "voice" ? "By voice" : e.source === "ui" ? "On this page" : e.source} />
+                <Icon className="h-4 w-4 mt-0.5 shrink-0 text-white/45" aria-label={SOURCE_LABEL[e.source] ?? e.source} />
                 <div className="min-w-0 flex-1">
                   <p className={cn("text-sm text-white/90 break-words", e.action.startsWith("undone:") && "text-white/50 line-through")}>{eventText(e)}</p>
                   <p className="text-xs text-white/55 break-words">
@@ -498,7 +675,7 @@ function Recent({ events, now, undoing, onUndo }: {
                 </div>
                 {canUndo && (
                   <Button
-                    variant="ghost" size="sm" className="h-9 shrink-0 text-white/70 hover:text-white"
+                    variant="ghost" size="sm" className="h-11 sm:h-9 shrink-0 text-white/70 hover:text-white"
                     disabled={undoing === e.id}
                     onClick={() => onUndo(e.id, e.item_name ?? "item")}
                   >
@@ -515,14 +692,45 @@ function Recent({ events, now, undoing, onUndo }: {
   );
 }
 
-function AddDialog({ open, onOpenChange, onAdded }: { open: boolean; onOpenChange: (o: boolean) => void; onAdded: () => void }) {
+/** Wide screens: a centered dialog. Phones: a bottom sheet you can drag away, with the field near the thumb. */
+function AddItem({ open, onOpenChange, onAdded, wide }: { open: boolean; onOpenChange: (o: boolean) => void; onAdded: () => void; wide: boolean }) {
+  const title = "Add to the kitchen";
+  const sub = "It goes on the list as in stock.";
+  if (wide) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{sub}</DialogDescription>
+          </DialogHeader>
+          <AddForm onDone={() => onOpenChange(false)} onAdded={onAdded} />
+        </DialogContent>
+      </Dialog>
+    );
+  }
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="max-h-[92dvh]">
+        <DrawerHeader className="pb-2 text-left">
+          <DrawerTitle>{title}</DrawerTitle>
+          <DrawerDescription>{sub}</DrawerDescription>
+        </DrawerHeader>
+        <div className="overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+          <AddForm onDone={() => onOpenChange(false)} onAdded={onAdded} />
+        </div>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
+function AddForm({ onDone, onAdded }: { onDone: () => void; onAdded: () => void }) {
+  // Mounted fresh each time the dialog or sheet opens, so the fields always start empty.
   const [name, setName] = useState("");
   const [where, setWhere] = useState<Loc | "auto">("auto");
   const [category, setCategory] = useState("");
   const [busy, setBusy] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { if (open) { setName(""); setWhere("auto"); setCategory(""); } }, [open]);
 
   const submit = async (ev: FormEvent) => {
     ev.preventDefault();
@@ -534,53 +742,47 @@ function AddDialog({ open, onOpenChange, onAdded }: { open: boolean; onOpenChang
     if (error) { toast.error(`Couldn't add ${n}. ${error.message}`); return; }
     const r = res as Item;
     toast.success(`Added ${r.name} to the ${r.location}`);
-    onOpenChange(false);
+    onDone();
     onAdded();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <form onSubmit={submit} className="space-y-5">
-          <DialogHeader>
-            <DialogTitle>Add to the kitchen</DialogTitle>
-            <DialogDescription>It goes on the list as in stock.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="kitchen-name">What is it?</Label>
-            <Input
-              id="kitchen-name" ref={nameRef} autoFocus autoComplete="off" maxLength={80}
-              value={name} onChange={(e) => setName(e.target.value)} placeholder="Coconut oil"
-              className="h-11 text-base sm:text-sm"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label id="kitchen-where">Where does it live?</Label>
-            <Segmented
-              label="Where does it live?"
-              value={where}
-              onChange={(v) => setWhere(v as Loc | "auto")}
-              options={[{ key: "auto", label: "Basil picks" }, ...LOCS.map((l) => ({ key: l.key, label: l.label }))]}
-              className="w-full"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="kitchen-category">Kind <span className="text-white/50 font-normal">(optional)</span></Label>
-            <Input
-              id="kitchen-category" autoComplete="off" maxLength={40}
-              value={category} onChange={(e) => setCategory(e.target.value)} placeholder="baking, snack, protein"
-              className="h-11 text-base sm:text-sm"
-            />
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={busy || name.trim().length < 2}>
-              {busy && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" aria-hidden />}
-              Add
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <form onSubmit={submit} className="space-y-5">
+      <div className="space-y-2">
+        <Label htmlFor="kitchen-name">What is it?</Label>
+        <Input
+          id="kitchen-name" ref={nameRef} autoFocus autoComplete="off" maxLength={80}
+          value={name} onChange={(e) => setName(e.target.value)} placeholder="Coconut oil"
+          className="h-11 text-base sm:text-sm"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label id="kitchen-where">Where does it live?</Label>
+        <Segmented
+          label="Where does it live?"
+          dense
+          value={where}
+          onChange={(v) => setWhere(v as Loc | "auto")}
+          options={[{ key: "auto", label: "Auto" }, ...LOCS.map((l) => ({ key: l.key, label: l.label }))]}
+          className="w-full"
+        />
+        <p className="text-xs text-white/55">Auto lets Basil pick the spot from what it is.</p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="kitchen-category">Kind <span className="text-white/50 font-normal">(optional)</span></Label>
+        <Input
+          id="kitchen-category" autoComplete="off" maxLength={40}
+          value={category} onChange={(e) => setCategory(e.target.value)} placeholder="baking, snack, protein"
+          className="h-11 text-base sm:text-sm"
+        />
+      </div>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button type="button" variant="ghost" className="h-11 sm:h-10" onClick={onDone}>Cancel</Button>
+        <Button type="submit" className="h-11 sm:h-10" disabled={busy || name.trim().length < 2}>
+          {busy && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" aria-hidden />}
+          Add
+        </Button>
+      </div>
+    </form>
   );
 }
