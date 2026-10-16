@@ -52,7 +52,12 @@ a{color:inherit;text-decoration:none}
 .bar nav a:hover{color:var(--fg)}.bar nav a:hover::after{width:100%}
 .bar .mail{font-size:13.5px;color:var(--fg);border:1px solid var(--line2);padding:8px 15px;border-radius:100px;transition:border-color .25s,background .25s}
 .bar .mail:hover{border-color:var(--acc);background:rgba(122,139,224,.1)}
+.bar-left{display:flex;align-items:center;gap:20px}
+.bar .back{font-size:13.5px;color:var(--mut);display:inline-flex;align-items:center;gap:7px;padding:8px 14px 8px 10px;border-radius:100px;border:1px solid transparent;transition:color .2s,border-color .2s,background .2s}
+.bar .back:hover{color:var(--fg);border-color:var(--line2);background:rgba(122,139,224,.08)}
+.bar .back svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;flex-shrink:0}
 @media(max-width:880px){.bar nav{display:none}}
+@media(max-width:560px){.bar .back span{display:none}}
 @media(max-width:760px){.bk{display:none}.hero{padding:142px 0 68px}h1{letter-spacing:-.026em;overflow-wrap:break-word}
  .facts{gap:12px 0;flex-direction:column}.facts span{display:block}
  section,.band{padding:68px 0}.end{padding:80px 0 68px}
@@ -110,6 +115,9 @@ a.tile:hover .m img{transform:scale(1.035)}
 .ar-wide .m{aspect-ratio:16/9}
 .ar-tall .m{aspect-ratio:4/3}
 .ar-sq .m{aspect-ratio:1/1}
+/* Live site preview: the real page rendered at its own width, scaled down to fit the tile. */
+.m.live{pointer-events:none}
+.m.live iframe{position:absolute;top:0;left:0;width:400%;height:400%;transform:scale(.25);transform-origin:0 0;border:0}
 .tile .t{padding:20px 22px 24px;display:flex;flex-direction:column;gap:7px}
 .tile h3{font-size:17px;font-weight:500;letter-spacing:-.012em}
 .tile .role{font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--acc);font-weight:500}
@@ -191,7 +199,10 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
 <body>
 
 <div class="bar" id="bar"><div class="bar-in">
-  <a class="brand" href="#top">Jared Best <span>— Selected Work</span></a>
+  <div class="bar-left">
+    <a class="back" href="https://www.bestly.tech"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg><span>Return to Bestly.tech</span></a>
+    <a class="brand" href="#top">Jared Best <span>— Selected Work</span></a>
+  </div>
   <nav>
     <a href="#work">Work</a><a href="#brand">Brand</a><a href="#product">Product</a>
     <a href="#content">Content</a><a href="#cloud">Cloud</a><a href="#background">Background</a>
@@ -227,8 +238,8 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
         <span class="go">theshift.shop <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
 
     <a class="tile ar-tall c rv" href="https://hoku-clean.com" target="_blank" rel="noopener">
-      <div class="m"><img src="/work/img/site-hoku.webp" alt="HOKU skincare storefront" loading="lazy" decoding="async"></div>
-      <div class="t"><span class="role">Brand &middot; Storefront</span>
+      <div class="m live"><iframe src="https://hoku-clean.com" title="HOKU — live preview" loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div>
+      <div class="t"><span class="role">Brand &middot; Storefront &middot; Live preview</span>
         <h3>HOKU</h3>
         <p>Hypochlorous acid skincare. Brand, product pages, and checkout.</p>
         <span class="go">hoku-clean.com <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
@@ -303,12 +314,19 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
         <p>A sailing app with real marine weather, plus a command center that plots actual ships on a live map. Open it &mdash; the boats are real and moving.</p>
         <span class="go">See it live <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
 
-    <a class="tile ar-wide c-5 rv" href="https://www.bestly.tech/cookie-yeti/dashboard" target="_blank" rel="noopener">
+    <a class="tile ar-wide c-5 rv" href="https://www.bestly.tech/cookie-yeti" target="_blank" rel="noopener">
       <div class="m"><img src="/work/img/cy-mac.webp" alt="Cookie Yeti on macOS" loading="lazy" decoding="async"></div>
       <div class="t"><span class="role">Mac &middot; iPad &middot; iPhone &middot; Chrome</span>
         <h3>Cookie Yeti</h3>
         <p>Kills cookie pop-ups in one click. One design system, four platforms, three themes &mdash; plus every store screenshot and banner.</p>
-        <span class="go">Open the dashboard <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
+        <span class="go">See it live <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
+
+    <a class="tile ar-wide c-12 rv" href="https://www.bestly.tech/agent" target="_blank" rel="noopener">
+      <div class="m"><img src="/work/img/site-bestlyagent.webp" alt="Bestly Agent — Maya booking an appointment over text" loading="lazy" decoding="async"></div>
+      <div class="t"><span class="role">AI phone agent &middot; Live</span>
+        <h3>Bestly Agent</h3>
+        <p>An AI that answers your business phone and does the work while it talks &mdash; books the appointment, updates the record, texts the confirmation.</p>
+        <span class="go">bestly.tech/agent <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
   </div>
 
   <div class="strip rv">
