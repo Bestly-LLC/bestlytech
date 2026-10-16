@@ -70,16 +70,11 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
       if (isStaleChunkError(this.state.error)) {
-        // A new version shipped while this tab was open; the reload is already on its way.
-        return (
-          <div className="min-h-screen flex items-center justify-center bg-background p-6">
-            <div className="max-w-md w-full text-center space-y-4">
-              <h1 className="text-xl font-semibold">Loading the new version…</h1>
-              <p className="text-sm text-muted-foreground">We shipped an update while this page was open.</p>
-              <Button onClick={() => window.location.assign(window.location.href)}>Load it now</Button>
-            </div>
-          </div>
-        );
+        // A new version shipped while this tab was open; componentDidCatch already
+        // fired the reload. Render nothing instead of a visible "error" card — the
+        // reload lands well under a second, and a blank frame reads as an ordinary
+        // navigation instead of a jarring crash-and-recover flash.
+        return null;
       }
       // /admin and the partner portal get Scout's "we'll be right back" page with the last known reason.
       if (typeof window !== 'undefined' && /^\/(admin|partner)(\/|$)/.test(window.location.pathname)) {
