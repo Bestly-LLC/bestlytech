@@ -1,0 +1,34 @@
+// Connect to-do vs Settings tile: identical steps. Usage: node qa_match.mjs <previewId|live> <mob|desk> <platform>
+// Needs the bestly-test client token in /tmp/w/bt.tok (never committed).
+import { chromium } from "/opt/node-tools/node_modules/playwright/index.mjs";
+import fs from "node:fs";
+const D = process.env.QA_DIR || "/tmp/w/";
+const TOK = fs.readFileSync(D + "bt.tok", "utf8").trim();
+const PREV = process.argv[2], SIZE = process.argv[3] || "desk", PLAT = process.argv[4] || "linkedin";
+const vp = SIZE === "mob" ? { width: 375, height: 812 } : { width: 1280, height: 900 };
+const b = await chromium.launch(); const ctx = await b.newContext({ viewport: vp, deviceScaleFactor: 2, hasTouch: SIZE === "mob", isMobile: SIZE === "mob" });
+const p = await ctx.newPage(); const errs = [];
+p.on("pageerror", e => errs.push(e.message.slice(0, 160))); p.on("console", m => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errs.push(m.text().slice(0, 160)); });
+await p.goto(`https://studio.bestly.tech/bestly-test?c=${TOK}${PREV === "live" ? "" : "&preview=" + PREV}`, { waitUntil: "domcontentloaded", timeout: 60000 });
+await p.waitForTimeout(8000);
+const grab = sel => p.evaluate(s => { const r = document.querySelector(s); if (!r) return null; const q = r.querySelector(".cxb") || r.querySelector(".g > .d");
+  return { steps: [...r.querySelectorAll(".csteps > li")].map(l => l.innerText.replace(/\s+/g, " ").trim()), trouble: [...r.querySelectorAll(".tbody b")].map(x => x.textContent), after: [...r.querySelectorAll(".pafter")].map(x => x.textContent) }; }, sel);
+await p.click("#pickTodo"); await p.waitForTimeout(1500);
+const rowSel = `.s2row.todo:has(.cxb)`;
+const todo = await grab(rowSel);
+const hasDetail = await p.evaluate(s => { const r = document.querySelector(s); return r ? !!r.querySelector(".g > .d:not(.cxb):not(.sm)") : null; }, rowSel);
+const links = await p.evaluate(s => { const r = document.querySelector(s); return r ? [...r.querySelectorAll(".tlink")].map(a => a.textContent.trim()) : null; }, rowSel);
+await p.evaluate(s => { const r = document.querySelector(s); if (r) r.scrollIntoView({ block: "center" }); }, rowSel); await p.waitForTimeout(400);
+await p.screenshot({ path: D + `qa/todo-${PLAT}-${SIZE}.png` });
+const overflowX = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
+await p.click(`${rowSel} .tbtn`); await p.waitForTimeout(900);
+const sheet = await grab("#sheetBody");
+await p.screenshot({ path: D + `qa/todo-sheet-${PLAT}-${SIZE}.png` });
+await p.click("#sheetCancel"); await p.waitForTimeout(600); await p.evaluate(() => location.hash = "#home"); await p.waitForTimeout(600);
+await p.click("#pickSet"); await p.waitForTimeout(1500);
+const tile = await grab(`[data-acct=${PLAT}]`);
+await p.evaluate(s => document.querySelector(s)?.scrollIntoView({ block: "center" }), `[data-acct=${PLAT}]`); await p.waitForTimeout(400);
+await p.screenshot({ path: D + `qa/tile-${PLAT}-${SIZE}.png` });
+const same = JSON.stringify(todo) === JSON.stringify(tile) && JSON.stringify(sheet) === JSON.stringify(tile);
+console.log(JSON.stringify({ size: SIZE, plat: PLAT, same, hasDetail, links, overflowX, steps: tile && tile.steps, todo: todo && todo.steps.length, sheet: sheet && sheet.steps.length, errs }));
+await b.close();
