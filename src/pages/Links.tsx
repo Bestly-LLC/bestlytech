@@ -1,7 +1,32 @@
-import { ExternalLink, Globe, Briefcase, Phone, Newspaper, Wrench, Instagram, Twitter } from "lucide-react";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  ExternalLink,
+  Globe,
+  Briefcase,
+  Phone,
+  MessageCircle,
+  Mail,
+  Newspaper,
+  Wrench,
+  Copy,
+  Check,
+  Instagram,
+  Linkedin,
+  Music2,
+  Plane,
+  UtensilsCrossed,
+  MapPin,
+  ScanLine,
+  ParkingCircle,
+  ArrowUpRight,
+} from "lucide-react";
+import { toast } from "sonner";
 import bestlyLogo from "@/assets/bestly-logo.png";
 import jaredHeadshot from "@/assets/jared-headshot.png";
 import { products as sharedProducts, isExternalHref } from "@/config/products";
+import { InteractiveDotGrid } from "@/components/InteractiveDotGrid";
+import { WowButton } from "@/components/wow/WowButton";
 
 interface LinkItem {
   label: string;
@@ -27,79 +52,262 @@ const pages: LinkItem[] = [
 ];
 
 const socials = [
-  { label: "Instagram", href: "#", icon: <Instagram className="h-5 w-5" /> },
-  { label: "TikTok", href: "#", icon: <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.75a8.18 8.18 0 004.76 1.52V6.84a4.84 4.84 0 01-1-.15z"/></svg> },
-  { label: "LinkedIn", href: "#", icon: <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg> },
-  { label: "X / Twitter", href: "#", icon: <Twitter className="h-5 w-5" /> },
+  { label: "Instagram", href: "https://www.instagram.com/bestly_llc/", icon: <Instagram className="h-5 w-5" /> },
+  { label: "LinkedIn", href: "https://linkedin.com/in/bestjared", icon: <Linkedin className="h-5 w-5" /> },
+];
+
+const favoriteApps = [
+  {
+    label: "Yuka",
+    description: "Scans food and cosmetics and rates what's actually in them.",
+    domain: "yuka.io",
+    href: "https://yuka.io",
+    icon: <ScanLine className="h-5 w-5" />,
+  },
+  {
+    label: "Flighty",
+    description: "Tracks every flight in real time, for you and whoever's picking you up.",
+    domain: "flighty.com",
+    href: "https://flighty.com",
+    icon: <Plane className="h-5 w-5" />,
+  },
+  {
+    label: "Too Good To Go",
+    description: "Leftover food from local restaurants at a third of the price.",
+    domain: "toogoodtogo.com",
+    href: "https://www.toogoodtogo.com",
+    icon: <UtensilsCrossed className="h-5 w-5" />,
+  },
+  {
+    label: "WeHo Loves Locals",
+    description: "Discounts at West Hollywood businesses, for residents only.",
+    domain: "weholocals.com",
+    href: "https://www.weholocals.com",
+    icon: <MapPin className="h-5 w-5" />,
+  },
+  {
+    label: "SpotAngels",
+    description: "Finds free and legal street parking before you circle the block.",
+    domain: "spotangels.com",
+    href: "https://www.spotangels.com/app",
+    icon: <ParkingCircle className="h-5 w-5" />,
+  },
 ];
 
 function LinkButton({ item }: { item: LinkItem }) {
   const isExternal = item.external || item.href.startsWith("http");
-  const Tag = isExternal ? "a" : "a";
-  const props = isExternal
-    ? { href: item.href, target: "_blank", rel: "noopener noreferrer" }
-    : { href: item.href };
+  const className =
+    "group flex min-h-[64px] w-full items-center gap-3 rounded-2xl wow-border border bg-[hsl(var(--wow-ink-elev))] px-5 py-4 transition-all duration-200 wow-ease hover:-translate-y-[1px] hover:border-[hsl(var(--wow-indigo-light))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--wow-ink))]";
 
-  return (
-    <Tag
-      {...props}
-      className="group flex w-full items-center gap-3 rounded-2xl border border-border/60 bg-card/80 px-5 py-4 backdrop-blur-sm transition-all duration-200 hover:scale-[1.02] hover:border-primary/40 hover:shadow-[0_0_20px_hsl(var(--primary)/0.15)]"
-    >
+  const inner = (
+    <>
       {item.image ? (
-        <img src={item.image} alt="" className="h-7 w-7 rounded-lg object-contain" />
+        <img src={item.image} alt="" className="h-8 w-8 rounded-lg object-contain" />
       ) : (
-        <span className="text-muted-foreground group-hover:text-primary transition-colors">{item.icon}</span>
+        <span className="wow-text-muted transition-colors group-hover:wow-text-indigo">{item.icon}</span>
       )}
-      <span className="flex-1 text-sm font-semibold text-foreground">{item.label}</span>
-      <ExternalLink className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary/60 transition-colors" />
-    </Tag>
+      <span className="flex-1 text-sm font-semibold wow-text-paper">{item.label}</span>
+      <ExternalLink className="h-4 w-4 wow-text-muted opacity-60 transition-colors group-hover:wow-text-indigo group-hover:opacity-100" />
+    </>
+  );
+
+  if (isExternal) {
+    return (
+      <a href={item.href} target="_blank" rel="noopener noreferrer" className={className}>
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <Link to={item.href} className={className}>
+      {inner}
+    </Link>
+  );
+}
+
+function AppCard({ app }: { app: (typeof favoriteApps)[number] }) {
+  return (
+    <a
+      href={app.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex items-start gap-4 rounded-2xl wow-border border bg-[hsl(var(--wow-ink-elev))] p-5 transition-all duration-200 wow-ease hover:-translate-y-[1px] hover:border-[hsl(var(--wow-indigo-light))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--wow-ink))]"
+    >
+      <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--wow-indigo))]/15 wow-text-indigo">
+        {app.icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="text-sm font-semibold wow-text-paper">{app.label}</span>
+          <ArrowUpRight className="h-3.5 w-3.5 wow-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
+        </span>
+        <span className="mt-1 block text-[13px] leading-snug wow-text-muted">{app.description}</span>
+        <span className="mt-1.5 block text-[11px] uppercase tracking-widest wow-text-muted/70">{app.domain}</span>
+      </span>
+    </a>
   );
 }
 
 export default function Links() {
+  const [copied, setCopied] = useState(false);
+
+  async function copyLink() {
+    const url = "https://www.bestly.tech/links";
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      toast.error("Couldn't copy — copy it from the address bar instead.");
+      return;
+    }
+    setCopied(true);
+    toast.success("Link copied.");
+    setTimeout(() => setCopied(false), 1800);
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/40 flex flex-col items-center px-4 py-10">
-      {/* Avatar + Info */}
-      <div className="flex flex-col items-center gap-3 mb-8">
-        <img
-          src={jaredHeadshot}
-          alt="Jared Best"
-          className="h-24 w-24 rounded-full border-2 border-primary/30 object-cover shadow-lg"
-        />
-        <img src={bestlyLogo} alt="Bestly LLC" className="h-7 w-auto" />
-        <p className="text-sm text-muted-foreground">Founder, Bestly LLC</p>
+    <div className="relative min-h-screen wow-bg-ink">
+      <div className="pointer-events-none fixed inset-0" aria-hidden="true">
+        <InteractiveDotGrid />
       </div>
 
-      {/* Links */}
-      <div className="w-full max-w-md flex flex-col gap-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground px-1">Products</p>
-        {productLinks.map((item) => (
-          <LinkButton key={item.label} item={item} />
-        ))}
+      <div className="relative z-10 flex min-h-screen flex-col items-center px-4 py-14 sm:py-20">
+        {/* Avatar + identity */}
+        <div className="flex flex-col items-center gap-4">
+          <img
+            src={jaredHeadshot}
+            alt="Jared Best"
+            className="h-28 w-28 rounded-full border-2 border-[hsl(var(--wow-indigo-light))]/40 object-cover shadow-[0_0_40px_-10px_hsl(var(--wow-indigo-light)/0.5)]"
+          />
+          <img src={bestlyLogo} alt="" className="h-6 w-auto opacity-90" />
+          <div className="text-center">
+            <h1 className="font-display text-2xl font-normal tracking-tight wow-text-paper">Jared Best</h1>
+            <p className="mt-1 text-sm wow-text-muted">Founder, Bestly LLC · West Hollywood, CA</p>
+          </div>
 
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground px-1 mt-4">Company</p>
-        {pages.map((item) => (
-          <LinkButton key={item.label} item={item} />
-        ))}
-      </div>
+          <button
+            type="button"
+            onClick={copyLink}
+            className="mt-1 inline-flex min-h-[36px] items-center gap-2 rounded-full wow-border border px-4 py-1.5 text-xs wow-text-muted transition-colors hover:wow-text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))]"
+          >
+            bestly.tech/links
+            {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
+        </div>
 
-      {/* Social row */}
-      <div className="flex gap-4 mt-10">
-        {socials.map((s) => (
+        {/* Primary CTA */}
+        <div className="mt-8 w-full max-w-md">
+          <WowButton to="/hire" variant="primary" magnetic={false} className="w-full !py-3.5 text-[15px]">
+            Book with Bestly
+          </WowButton>
+        </div>
+
+        {/* Contact row */}
+        <div className="mt-3 grid w-full max-w-md grid-cols-3 gap-3">
           <a
-            key={s.label}
-            href={s.href}
+            href="tel:+18165007236"
+            className="flex min-h-[56px] flex-col items-center justify-center gap-1.5 rounded-2xl wow-border border bg-[hsl(var(--wow-ink-elev))] py-3 text-xs font-medium wow-text-paper transition-colors wow-ease hover:border-[hsl(var(--wow-indigo-light))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))]"
+          >
+            <Phone className="h-[18px] w-[18px] wow-text-indigo" />
+            Call
+          </a>
+          <a
+            href="sms:+18165007236"
+            className="flex min-h-[56px] flex-col items-center justify-center gap-1.5 rounded-2xl wow-border border bg-[hsl(var(--wow-ink-elev))] py-3 text-xs font-medium wow-text-paper transition-colors wow-ease hover:border-[hsl(var(--wow-indigo-light))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))]"
+          >
+            <MessageCircle className="h-[18px] w-[18px] wow-text-indigo" />
+            Text
+          </a>
+          <a
+            href="mailto:jared@bestly.tech"
+            className="flex min-h-[56px] flex-col items-center justify-center gap-1.5 rounded-2xl wow-border border bg-[hsl(var(--wow-ink-elev))] py-3 text-xs font-medium wow-text-paper transition-colors wow-ease hover:border-[hsl(var(--wow-indigo-light))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))]"
+          >
+            <Mail className="h-[18px] w-[18px] wow-text-indigo" />
+            Email
+          </a>
+        </div>
+
+        {/* Socials */}
+        <div className="mt-5 flex gap-3">
+          {socials.map((s) => (
+            <a
+              key={s.label}
+              href={s.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={s.label}
+              className="flex h-11 w-11 items-center justify-center rounded-full wow-border border bg-[hsl(var(--wow-ink-elev))] wow-text-muted transition-colors wow-ease hover:wow-text-indigo hover:border-[hsl(var(--wow-indigo-light))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))]"
+            >
+              {s.icon}
+            </a>
+          ))}
+        </div>
+
+        {/* Favorite apps */}
+        <div className="mt-12 w-full max-w-md">
+          <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest wow-text-muted">
+            Apps I actually use
+          </p>
+          <div className="flex flex-col gap-3">
+            {favoriteApps.map((app) => (
+              <AppCard key={app.label} app={app} />
+            ))}
+          </div>
+        </div>
+
+        {/* Now playing */}
+        <div className="mt-8 w-full max-w-md">
+          <a
+            href="https://soundcloud.com/poolsuite/poolsuite-presents-20-an-hour-of-summer-with-neil-frances"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label={s.label}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-card/80 text-muted-foreground transition-all hover:text-primary hover:border-primary/40 hover:shadow-[0_0_16px_hsl(var(--primary)/0.15)]"
+            className="group flex items-center gap-4 rounded-2xl wow-border border bg-[hsl(var(--wow-ink-elev))] p-4 transition-all duration-200 wow-ease hover:-translate-y-[1px] hover:border-[hsl(var(--wow-indigo-light))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wow-indigo-light))]"
           >
-            {s.icon}
+            <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-[hsl(var(--wow-indigo))]">
+              <Music2 className="h-5 w-5 text-white" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] uppercase tracking-widest wow-text-muted">Now playing</span>
+              <span className="mt-0.5 block truncate text-sm font-semibold wow-text-paper">Poolsuite FM</span>
+              <span className="block truncate text-[13px] wow-text-muted">An hour of summer with NEIL FRANCES</span>
+            </span>
+            <ExternalLink className="h-4 w-4 flex-shrink-0 wow-text-muted opacity-60 group-hover:wow-text-indigo group-hover:opacity-100" />
           </a>
-        ))}
-      </div>
+        </div>
 
-      <p className="mt-10 text-xs text-muted-foreground/60">© {new Date().getFullYear()} Bestly LLC</p>
+        {/* Products */}
+        <div className="mt-12 w-full max-w-md">
+          <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest wow-text-muted">Products</p>
+          <div className="flex flex-col gap-3">
+            {productLinks.map((item) => (
+              <LinkButton key={item.label} item={item} />
+            ))}
+          </div>
+        </div>
+
+        {/* Company */}
+        <div className="mt-8 w-full max-w-md">
+          <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest wow-text-muted">Company</p>
+          <div className="flex flex-col gap-3">
+            {pages.map((item) => (
+              <LinkButton key={item.label} item={item} />
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-14 flex w-full max-w-xs flex-col items-center gap-4">
+          <div
+            aria-hidden="true"
+            className="h-px w-full opacity-60"
+            style={{
+              background:
+                "linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #3b82f6, #8b5cf6)",
+            }}
+          />
+          <p className="text-center text-xs wow-text-muted">Bestly LLC · Built in Los Angeles</p>
+          <p className="text-center text-[11px] wow-text-muted/60">© {new Date().getFullYear()} Bestly LLC</p>
+        </div>
+      </div>
     </div>
   );
 }
