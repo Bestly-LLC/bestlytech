@@ -1,9 +1,15 @@
-// client-feed — keeps a client's public posts on bestly.tech current on their own.
+// client-feed — a running record of the posts Studio published for a client.
+//
+// THE RULE: this shows what WE posted for them, never their whole account.
+// social_posts (status 'posted', with a remote_id) is the truth; we fetch each
+// of those by id and mirror its image. A post the client made herself is not
+// our work and must never appear on the work page. Enumerating /me/media — the
+// first version of this — put four of her own posts on the page beside ours.
 //
 // Two doors:
-//   GET  ?brand=&limit=       public, no key. What /work renders.
-//   POST {action:'sync'}      pg_cron (service key). Pulls Instagram, mirrors
-//                             each thumbnail into Storage, upserts the rows.
+//   GET  ?brand=&limit=       public, no key. What /work renders, plus counts.
+//   POST {action:'sync'}      pg_cron (service key). Mirrors any of our posts
+//                             whose image we do not hold yet.
 //
 // Why mirror the images instead of embedding Instagram: their CDN URLs are
 // signed and expire within days, and embed.js is blocked for a good share of
@@ -49,10 +55,15 @@ function isServiceCall(req: Request): boolean {
   return keys.includes(apikey) || keys.includes(bearer);
 }
 
-/** Posts we are allowed to surface publicly, by brand. */
+/**
+ * What we published for this client. client_feed_public joins social_posts
+ * (Studio's record of what it actually posted) to our mirrored images, so a
+ * post the client made herself never appears here — the page is a record of
+ * our work, not a reflection of her account.
+ */
 async function publicPosts(brand: string, limit: number) {
   const { data, error } = await db
-    .from("client_feed_posts")
+    .from("client_feed_public")
     .select("remote_id, permalink, caption, media_type, posted_at, image_url")
     .eq("brand", brand)
     .order("posted_at", { ascending: false })
@@ -66,6 +77,22 @@ async function publicPosts(brand: string, limit: number) {
     posted_at: p.posted_at,
     image: p.image_url,
   }));
+}
+
+/** The tracker line: how many we have published, and over what span. */
+async function stats(brand: string) {
+  const { data, error } = await db
+    .from("client_feed_public")
+    .select("posted_at")
+    .eq("brand", brand)
+    .order("posted_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  return {
+    total: rows.length,
+    first_posted: rows.length ? rows[0].posted_at : null,
+    last_posted: rows.length ? rows[rows.length - 1].posted_at : null,
+  };
 }
 
 type IgMedia = {
@@ -100,7 +127,7 @@ async function mirror(brand: string, m: IgMedia): Promise<string | null> {
 async function syncBrand(brand: string) {
   const { data: acct, error: acctErr } = await db
     .from("social_accounts")
-    .select("brand, handle, access_token, remote_user_id, active")
+    .select("brand, handle, access_token, active")
     .eq("brand", brand)
     .eq("platform", "instagram")
     .maybeSingle();
@@ -108,51 +135,78 @@ async function syncBrand(brand: string) {
   if (!acct?.access_token) throw new Error("no token on social_accounts");
   if (acct.active === false) throw new Error("account not active");
 
-  const qs = new URLSearchParams({
-    fields: "id,permalink,caption,media_type,media_url,thumbnail_url,timestamp",
-    limit: String(MAX_POSTS),
-    access_token: acct.access_token,
-  });
-  const res = await fetch(`${GRAPH_IG}/me/media?${qs}`);
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = body?.error?.message ?? `graph ${res.status}`;
-    throw new Error(String(msg).slice(0, 300));
-  }
+  // Studio's own record of what it published is the list. We never enumerate
+  // her account — a post she made herself is not our work and must not show up
+  // on the work page. This also means our posts stay listed once they fall out
+  // of the newest-N window the Graph API would have returned.
+  const { data: ours, error: oursErr } = await db
+    .from("social_posts")
+    .select("id, remote_id, permalink, caption, media_type, posted_at")
+    .eq("brand", brand)
+    .eq("platform", "instagram")
+    .eq("status", "posted")
+    .not("remote_id", "is", null)
+    .order("posted_at", { ascending: false })
+    .limit(MAX_POSTS);
+  if (oursErr) throw new Error(oursErr.message);
 
-  const media: IgMedia[] = Array.isArray(body?.data) ? body.data : [];
   let mirrored = 0;
+  for (const post of ours ?? []) {
+    const remoteId = post.remote_id as string;
 
-  for (const m of media) {
-    if (!m.id || !m.permalink) continue;
-    // Only fetch the image when we do not already hold one for this post.
     const { data: existing } = await db
       .from("client_feed_posts")
       .select("image_url")
       .eq("brand", brand)
-      .eq("remote_id", m.id)
+      .eq("remote_id", remoteId)
       .maybeSingle();
 
     let imageUrl = existing?.image_url ?? null;
-    if (!imageUrl) {
-      imageUrl = await mirror(brand, m);
-      if (imageUrl) mirrored++;
+    let permalink = post.permalink as string | null;
+    let caption = post.caption as string | null;
+    let mediaType = post.media_type as string | null;
+    let postedAt = post.posted_at as string | null;
+
+    // Ask Instagram about this one post, by id. Only needed until we hold its
+    // image; after that Studio's own row carries everything the page shows.
+    if (!imageUrl || !permalink) {
+      const qs = new URLSearchParams({
+        fields: "id,permalink,caption,media_type,media_url,thumbnail_url,timestamp",
+        access_token: acct.access_token,
+      });
+      const res = await fetch(`${GRAPH_IG}/${remoteId}?${qs}`);
+      const m = (await res.json().catch(() => ({}))) as IgMedia & { error?: { message?: string } };
+      if (!res.ok) {
+        // One unreachable post must not fail the whole brand: keep what we have.
+        continue;
+      }
+      permalink = m.permalink ?? permalink;
+      caption = m.caption ?? caption;
+      mediaType = m.media_type ?? mediaType;
+      postedAt = m.timestamp ?? postedAt;
+      if (!imageUrl) {
+        imageUrl = await mirror(brand, m);
+        if (imageUrl) mirrored++;
+      }
     }
+
+    if (!permalink) continue;
 
     const { error } = await db.from("client_feed_posts").upsert({
       brand,
-      remote_id: m.id,
-      permalink: m.permalink,
-      caption: m.caption ?? null,
-      media_type: m.media_type ?? null,
-      posted_at: m.timestamp ?? null,
+      remote_id: remoteId,
+      studio_post_id: post.id,
+      permalink,
+      caption,
+      media_type: mediaType,
+      posted_at: postedAt,
       image_url: imageUrl,
       updated_at: new Date().toISOString(),
     }, { onConflict: "brand,remote_id" });
     if (error) throw new Error(error.message);
   }
 
-  return { brand, handle: acct.handle, seen: media.length, mirrored };
+  return { brand, handle: acct.handle, ours: (ours ?? []).length, mirrored };
 }
 
 Deno.serve(async (req) => {
@@ -174,8 +228,8 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!allowed) return J({ error: "unknown brand" }, 404);
 
-      const posts = await publicPosts(brand, limit);
-      return J({ brand, posts }, 200, {
+      const [posts, tracker] = await Promise.all([publicPosts(brand, limit), stats(brand)]);
+      return J({ brand, posts, stats: tracker }, 200, {
         // A visitor can hold this for 10 min; the edge revalidates every 5.
         "Cache-Control": "public, max-age=600, s-maxage=300, stale-while-revalidate=86400",
       });
