@@ -126,7 +126,7 @@ export default function BestlyStudio() {
               height={1688}
               alt="A post waiting for approval on a phone, with Approve and Changes buttons"
               className="w-[46%] max-w-[260px] rounded-3xl border border-border shadow-xl"
-              fetchPriority="high"
+              {...{ fetchpriority: "high" }}
             />
             <img
               src="/studio/board-changes-phone.webp"

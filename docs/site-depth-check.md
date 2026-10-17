@@ -134,9 +134,14 @@ node scripts/site-audit/crawl.mjs --route /status
 It attaches a real Chromium to each route with the console and the network
 listening, and reports console errors, uncaught exceptions, any response ≥ 400,
 requests that failed, images with no alt text, images that did not load, pages
-still wearing the homepage's `<title>`, dead links (the SPA answers 200 and
-renders 404), and horizontal overflow at phone width. It exits non-zero when
-something is wrong.
+still wearing the homepage's `<title>` or its `<link rel="canonical">`, dead
+links (the SPA answers 200 and renders 404), and horizontal overflow at phone
+width. It exits non-zero when something is wrong.
+
+The canonical check is browser-only by necessity: `SEOHead` renders the tag at
+runtime, so a server-side fetch of the HTML sees the static one and would pass a
+broken page. Aliases are allowed to point at their primary (`/in-house-cloud` →
+`/cloud`, `/terms` → `/terms-of-use`); `noindex` pages are allowed to skip it.
 
 This is the tool that found all of the above. It is a script and not a cron job
 on purpose: it needs Chrome, it is slow, and the cheap half of it is already

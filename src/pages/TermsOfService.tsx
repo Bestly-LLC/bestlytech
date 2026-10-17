@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { AnimatedSection } from "@/components/AnimatedSection";
+import { SEOHead } from "@/components/SEOHead";
 
 export default function TermsOfService() {
   const lastUpdated = "December 4, 2024";
@@ -307,6 +308,11 @@ export default function TermsOfService() {
 
   return (
     <>
+      <SEOHead
+        title="Terms of Service | Bestly LLC"
+        description="The terms that govern use of Bestly LLC websites, apps, devices and the Bestly Agent service."
+        path="/terms-of-service"
+      />
       <div className="mx-auto max-w-4xl px-6 py-16 lg:px-8 lg:py-24">
         <AnimatedSection>
           <div className="mb-12">

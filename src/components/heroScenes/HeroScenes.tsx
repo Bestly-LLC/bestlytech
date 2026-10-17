@@ -116,7 +116,7 @@ export function HeroScenes() {
             src={srcFor(scene.image, isMobile)}
             alt=""
             decoding="async"
-            fetchPriority={i === 0 ? "high" : "auto"}
+            {...{ fetchpriority: i === 0 ? "high" : "auto" }}
             className="absolute inset-0 h-full w-full object-cover"
             initial={{ opacity: 0, scale: reduce ? 1 : 1.06 }}
             animate={{ opacity: 1, scale: 1 }}

@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { useLocation } from "react-router-dom";
 
 interface SEOHeadProps {
   title: string;
@@ -14,11 +15,18 @@ const DEFAULT_IMAGE = "/og-image.png";
 export function SEOHead({
   title,
   description,
-  path = "",
+  path,
   image = DEFAULT_IMAGE,
   type = "website",
 }: SEOHeadProps) {
-  const fullUrl = `${BASE_URL}${path}`;
+  const { pathname } = useLocation();
+  // The canonical used to default to "", i.e. the homepage. Fourteen of the
+  // thirty-two pages that render this component never passed `path`, so every
+  // one of them told Google it was a duplicate of bestly.tech/ — a real page
+  // indexed as nothing. Default to the route we are on instead, so a page that
+  // forgets the prop is still right and only an explicit override changes it.
+  const selfPath = (path || pathname).replace(/\/+$/, "") || "/";
+  const fullUrl = `${BASE_URL}${selfPath}`;
   const fullTitle = title.includes("Bestly") ? title : `${title} | Bestly LLC`;
   const imageUrl = image.startsWith("http") ? image : `${BASE_URL}${image}`;
 

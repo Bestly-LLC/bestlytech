@@ -50,7 +50,9 @@ export function BrandLoader({
         </div>
       ) : (
         <div className="brand-loader-mark flex h-24 w-24 items-center justify-center">
-          <img src="/bestly-mark.webp" alt="" width={84} height={84} decoding="async" fetchPriority="high" />
+          {/* lowercase `fetchpriority`: React 18 does not know the camelCase prop.
+              It warned and then wrote nothing, so the hint never reached the DOM. */}
+          <img src="/bestly-mark.webp" alt="" width={84} height={84} decoding="async" {...{ fetchpriority: "high" }} />
         </div>
       )}
       <span className="sr-only">{label}</span>
