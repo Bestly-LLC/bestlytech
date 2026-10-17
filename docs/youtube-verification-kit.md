@@ -43,7 +43,7 @@ Not checked (needs his login): the logo, the home page URL field, and the Author
 > Bestly Studio is a content service run by Bestly LLC for small businesses. We make short videos with each client, the client approves each post in their private Bestly portal, and Bestly Studio publishes the approved posts to the accounts the client has connected. For YouTube, the client taps Connect in their portal, signs in with Google, and allows two permissions. youtube.upload lets us upload an approved video to their channel. youtube.readonly lets us read the channel's name and ID to show which channel is connected and to check the connection still works. Nothing is uploaded until the client approves that post. The client can disconnect at any time from their portal or from their Google Account permissions.
 
 ### Data handling (for the form and the audit)
-- **Stored:** the Google refresh token (in Supabase Vault, not shown in any screen), the channel ID, and the channel title. Short-lived access tokens are used in memory for the call and are not shown to anyone.
+- **Stored:** the Google refresh token (in our database, encrypted at rest, not shown in any screen; correction 2026-10-17: earlier drafts said Vault, which was wrong), the channel ID, and the channel title. Short-lived access tokens are used in memory for the call and are not shown to anyone.
 - **Not stored:** other videos, comments, subscribers, analytics, the client's Google password.
 - **Sale, sharing, ads:** none. We do not sell it, share it with third parties or use it for advertising.
 - **AI:** not used to train AI or machine-learning models.
@@ -71,7 +71,7 @@ Pre-filled answers (edit if a field differs):
 - **API calls:** `videos.insert` (resumable upload) and `channels.list` (part=snippet,statistics or id, mine=true). No search, no comments, no analytics, no captions.
 - **Quota:** Default quota is enough for now: about 3 to 7 uploads per client per week for a handful of clients. We are not asking for an extension in this pass. (Google's page says the default allows 100 `videos.insert` calls a day. Confirm on the form.)
 - **How data is displayed:** Only to the client who owns the channel and Bestly staff: the channel name in the portal, and "Posted" with the video link after an upload. No public display, no aggregation.
-- **How data is stored:** Refresh token in Supabase Vault, channel ID and title in our database. Encrypted at rest and in transit. Deleted on disconnect or request.
+- **How data is stored:** Refresh token, channel ID and title in our database (Supabase, encrypted at rest; correction 2026-10-17: not Vault). Encrypted at rest and in transit. Deleted on disconnect or request.
 - **Third parties / ads / AI training:** none.
 - **Users and consent:** each client signs in with Google and approves the two permissions on Google's consent screen. Revoke any time at https://security.google.com/settings/security/permissions.
 - **YouTube ToS notice:** the privacy policy tells users they are bound by the YouTube Terms of Service (https://www.youtube.com/t/terms) and links the Google Privacy Policy.
@@ -161,7 +161,7 @@ Undo:
 update social_brand_settings set platforms = platforms - 'youtube_offered' where brand='bestly-test';
 update approval_items set platform='tiktok', title='VIDEO — a real mp4 in the player', caption='This is a 6-second vertical test clip so we can see exactly how a recorded video presents on her board before she records a real one.' where id='5dc0657d-73cf-40c2-8c90-86f371a57474';
 update social_connect_links set expires_at=now() where client_id='002bb43c-a311-410d-9e20-de08033de4e4' and used_at is null;
-delete from social_accounts where brand='bestly-test' and platform='youtube';  -- the test channel connection (the refresh token also sits in Vault)
+delete from social_accounts where brand='bestly-test' and platform='youtube';  -- the test channel connection (the refresh token is on this row)
 update approval_clients set social_brand=null where id='002bb43c-a311-410d-9e20-de08033de4e4';
 ```
 Also revoke the app at https://myaccount.google.com/permissions on the test channel's Google account.
