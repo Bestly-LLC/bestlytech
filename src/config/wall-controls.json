@@ -1734,6 +1734,22 @@
       "admin": "Wall.tsx:1030"
     },
     {
+      "id": "sky_terrain",
+      "group": "sky",
+      "label": "Terrain",
+      "kind": "select",
+      "path": "skyTerrain",
+      "options": [
+        { "value": "off", "label": "Off" },
+        { "value": "teal", "label": "Teal" },
+        { "value": "sand", "label": "Sand" },
+        { "value": "indigo", "label": "Indigo" }
+      ],
+      "default": "teal",
+      "shown_if": "airShow",
+      "admin": "Wall.tsx:1280"
+    },
+    {
       "id": "sky_traffic",
       "group": "sky",
       "label": "Traffic",

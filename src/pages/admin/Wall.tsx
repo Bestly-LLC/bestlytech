@@ -79,6 +79,8 @@ type WallState = {
   skyRoads?: boolean;
   /** TomTom congestion colors over the roads (Pi caches flow tiles; needs .tomtom_key on the Pi; 2026-10-02). Missing = on. */
   skyTraffic?: boolean;
+  /** Hillshaded terrain under the sky map: off | teal | sand | indigo (missing = teal). The wall recolors instantly; no refetch. */
+  skyTerrain?: "off" | "teal" | "sand" | "indigo";
   /** W1 round 4: where home sits on the sky (0..1 of the sky box; null = middle) and a plane held on the sign-wall name tag. */
   homePos?: { x: number; y: number } | null; airFocus?: { hex: string; until: number } | null;
   /** Strip widgets on the left side (missing = on) and the sample Turo booking pop-up (ms). W2 round 3. */
@@ -1077,6 +1079,13 @@ export default function Wall() {
                   <Row label="Traffic" detail="Live congestion colors on the roads (TomTom; the Pi refreshes every 15 min)." htmlFor="wall-sky-traffic">
                     <Switch className={swHit} id="wall-sky-traffic" checked={s.skyTraffic !== false} onCheckedChange={(v) => change({ skyTraffic: v })} />
                   </Row>
+                  <div className="border-b border-white/[0.07] px-4 py-2.5">
+                    <div className="text-[16px] text-white">Terrain</div>
+                    <div className="mb-2 mt-0.5 text-[13px] text-white/50">Hillshaded mountains under the sky map. Pick a color, or Off.</div>
+                    <Segmented compact label="Terrain" value={s.skyTerrain ?? "teal"}
+                      onChange={(v) => act({ skyTerrain: v }, `Terrain: ${v === "off" ? "Off" : v[0].toUpperCase() + v.slice(1)}.`)}
+                      options={[{ id: "off", label: "Off" }, { id: "teal", label: "Teal" }, { id: "sand", label: "Sand" }, { id: "indigo", label: "Indigo" }]} />
+                  </div>
                   <Row label="Space Station name" detail="The name under the Space Station when it passes over." htmlFor="wall-iss-tag">
                     <Switch className={swHit} id="wall-iss-tag" checked={s.issTag !== false} onCheckedChange={(v) => change({ issTag: v })} />
                   </Row>
