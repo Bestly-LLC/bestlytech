@@ -170,13 +170,16 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
 .client .lbl .go{margin-top:14px;font-size:13px;color:var(--dim);display:inline-flex;align-items:center;gap:7px;transition:color .25s,gap .25s}
 .client .lbl .go:hover{color:var(--acc2);gap:11px}
 .client .lbl .go svg{width:12px;height:12px;stroke:currentColor;stroke-width:1.8;fill:none}
-.client .ig{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:12px}
-/* Instagram's embed script sizes its own iframes; keep them inside the grid track. */
-.client .ig .instagram-media{min-width:0!important;margin:0!important;width:100%!important}
-/* The un-hydrated state: a readable card, not a bare quote block. */
-.client .ig blockquote.instagram-media{background:var(--surf2);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:grid;place-items:center;min-height:120px}
-.client .ig blockquote.instagram-media a{font-size:14px;color:var(--acc2)}
-.client .ig blockquote.instagram-media a:hover{text-decoration:underline}
+.client .ig{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.client .ig .igpost{position:relative;display:block;aspect-ratio:1/1;overflow:hidden;background:var(--surf2);
+ border:1px solid var(--line);border-radius:var(--r);transition:border-color .3s,transform .3s cubic-bezier(.16,1,.3,1)}
+.client .ig .igpost:hover{border-color:var(--line2);transform:translateY(-3px)}
+.client .ig .igpost img{width:100%;height:100%;object-fit:cover;transition:transform .9s cubic-bezier(.16,1,.3,1)}
+.client .ig .igpost:hover img{transform:scale(1.05)}
+/* No image yet (seed markup, or a post we could not mirror): still a real card. */
+.client .ig .igmeta{position:absolute;inset:auto 0 0 0;padding:10px 12px;font-size:12px;color:var(--mut);
+ background:linear-gradient(to top,rgba(10,11,16,.92),transparent)}
+.client .ig .igpost:not(:has(img)) .igmeta{inset:0;display:grid;place-items:center;background:none;text-align:center;color:var(--acc2)}
 @media(max-width:900px){.client{grid-template-columns:1fr;gap:22px}
  .client .ig{grid-template-columns:1fr;max-width:380px}}
 
@@ -223,7 +226,7 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
     <a class="brand" href="#top">Jared Best <span>— Selected Work</span></a>
   </div>
   <nav>
-    <a href="#work">Work</a><a href="#brand">Brand</a><a href="#product">Product</a>
+    <a href="#work">Work</a><a href="#centering">Social</a><a href="#brand">Brand</a><a href="#product">Product</a>
     <a href="#content">Content</a><a href="#cloud">Cloud</a><a href="#background">Background</a>
   </nav>
   <a class="mail" href="mailto:jared@bestly.tech">Get in touch</a>
@@ -300,9 +303,33 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
   </div>
 </div></section>
 
-<!-- 02 BRAND -->
+<!-- 02 CENTERING YOU -->
+<section id="centering"><div class="wrap">
+  <div class="shead rv"><div class="snum">02</div>
+    <h2>Centering You &mdash; her feed, kept full</h2>
+    <p>Content and social for a wellness practice in Los Angeles. We write it, design it, and post it. Everything below is pulled from her account automatically, so this page is never out of date.</p>
+  </div>
+  <div class="client rv">
+    <div class="lbl">
+      <h4>@centering.you</h4>
+      <p>Posts arrive here on their own within the hour. Nothing on this page is a screenshot.</p>
+      <a class="go" href="https://www.instagram.com/centering.you/" target="_blank" rel="noopener">See the account <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    </div>
+    <!-- Filled by the client-feed function. The markup below is the last known
+         good set, server-side, so the section is complete before any JS runs
+         and stays complete if the fetch fails. -->
+    <div class="ig" id="ig-centering" data-brand="client-centering-you">
+      <a class="igpost" href="https://www.instagram.com/p/Def9LsXjHIP/" target="_blank" rel="noopener">
+        <span class="igmeta">View on Instagram</span></a>
+      <a class="igpost" href="https://www.instagram.com/p/DecNX9UIMDs/" target="_blank" rel="noopener">
+        <span class="igmeta">View on Instagram</span></a>
+    </div>
+  </div>
+</div></section>
+
+<!-- 03 BRAND -->
 <div class="band" id="brand"><div class="wrap">
-  <div class="shead rv" style="border-top-color:var(--line2)"><div class="snum">02</div>
+  <div class="shead rv" style="border-top-color:var(--line2)"><div class="snum">03</div>
     <h2>El D&rsquo;Ora &mdash; an entire jewelry brand</h2>
     <p>Lab-grown diamond jewelry. I set the look, directed the product imagery, and built the store. Over 190 pieces in the catalog; eight of them here.</p>
   </div>
@@ -319,9 +346,9 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
   <div class="pull rv"><p>Every brand gets the same treatment: one look, applied everywhere &mdash; site, product shots, store listings, ads, social. Nothing gets bolted on later.</p></div>
 </div></div>
 
-<!-- 03 PRODUCT -->
+<!-- 04 PRODUCT -->
 <section id="product"><div class="wrap">
-  <div class="shead rv"><div class="snum">03</div>
+  <div class="shead rv"><div class="snum">04</div>
     <h2>Software that actually shipped</h2>
     <p>Real apps on real devices &mdash; designed, built, and carried through Apple review. Two of them are running live right now.</p>
   </div>
@@ -367,9 +394,9 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
   </div>
 </div></section>
 
-<!-- 04 CONTENT -->
+<!-- 05 CONTENT -->
 <div class="band" id="content"><div class="wrap">
-  <div class="shead rv" style="border-top-color:var(--line2)"><div class="snum">04</div>
+  <div class="shead rv" style="border-top-color:var(--line2)"><div class="snum">05</div>
     <h2>New ads and posts every single day</h2>
     <p>This is the part most people can&rsquo;t do. I built a system that writes, designs, and publishes fresh content daily for each brand &mdash; video ads, graphics, captions &mdash; with nobody sitting down to make them. Press play.</p>
   </div>
@@ -392,30 +419,11 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
     <figure><img src="/work/img/social-8.webp" alt="Daily social graphic" loading="lazy" decoding="async"></figure>
   </div>
   <div class="pull rv"><p>Hundreds of graphics and more than forty video ads made this way so far, across two brands, posting on schedule. If your business goes quiet on social because nobody has time &mdash; this is the fix.</p></div>
-
-  <div class="client rv">
-    <div class="lbl">
-      <h4>Centering You</h4>
-      <p>Content and social for a wellness practice in Los Angeles. We write it, design it, and post it &mdash; the grid below is her live feed, not a screenshot.</p>
-      <a class="go" href="https://www.instagram.com/centering.you/" target="_blank" rel="noopener">@centering.you <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-    </div>
-    <div class="ig">
-      <!-- embed.js swaps each blockquote for the live post. Blocked by a content
-           blocker (plenty of this audience runs one) it stays a plain link, so the
-           section still reads as finished instead of an empty box. -->
-      <blockquote class="instagram-media" data-instgrm-permalink="https://www.instagram.com/p/Def9LsXjHIP/" data-instgrm-version="14">
-        <a href="https://www.instagram.com/p/Def9LsXjHIP/" target="_blank" rel="noopener">View this post on Instagram</a>
-      </blockquote>
-      <blockquote class="instagram-media" data-instgrm-permalink="https://www.instagram.com/p/DecNX9UIMDs/" data-instgrm-version="14">
-        <a href="https://www.instagram.com/p/DecNX9UIMDs/" target="_blank" rel="noopener">View this post on Instagram</a>
-      </blockquote>
-    </div>
-  </div>
 </div></div>
 
-<!-- 05 CLOUD -->
+<!-- 06 CLOUD -->
 <section id="cloud"><div class="wrap">
-  <div class="shead rv"><div class="snum">05</div>
+  <div class="shead rv"><div class="snum">06</div>
     <h2>One computer in your office, instead of a stack of monthly bills</h2>
     <p>A server that sits in your building and replaces the tools you rent every month &mdash; email and docs, chat, video calls, file storage, e-signatures, password manager, and AI. You own it. Your data stays with you.</p>
   </div>
@@ -436,7 +444,7 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
 
 <!-- CAREER -->
 <section id="background"><div class="wrap">
-  <div class="shead rv" style="border-top-color:var(--line2)"><div class="snum">06</div>
+  <div class="shead rv" style="border-top-color:var(--line2)"><div class="snum">07</div>
     <h2>Eleven years doing this inside companies you already know</h2>
     <p>Before Bestly I ran operations at Disney, managed hotel partners at Expedia, and sold cars at Lucid Motors during launch. Same job every time: own the relationship, own the number, keep the thing running after the sale.</p>
   </div>
@@ -503,5 +511,41 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
   window.addEventListener('load', function(){ setTimeout(revealAll, 1200); });
 })();
 </script>
-<script async src="https://www.instagram.com/embed.js"></script>
+
+<script>
+/* Centering You's grid. The server-rendered cards above are the floor; this
+   replaces them with whatever the sync last mirrored. Any failure leaves the
+   floor in place rather than emptying the section. */
+(function(){
+  var el = document.getElementById('ig-centering');
+  if (!el || !window.fetch) return;
+  var FEED = 'https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/client-feed?brand=' +
+             encodeURIComponent(el.dataset.brand) + '&limit=8';
+  fetch(FEED, { mode: 'cors' })
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(d){
+      var posts = (d && d.posts) || [];
+      if (!posts.length) return;
+      el.textContent = '';
+      posts.forEach(function(p){
+        var a = document.createElement('a');
+        a.className = 'igpost';
+        a.href = p.permalink; a.target = '_blank'; a.rel = 'noopener';
+        if (p.image) {
+          var img = document.createElement('img');
+          img.src = p.image; img.loading = 'lazy'; img.decoding = 'async';
+          img.alt = p.caption ? String(p.caption).slice(0, 120) : 'Instagram post by @centering.you';
+          a.appendChild(img);
+        } else {
+          var s = document.createElement('span');
+          s.className = 'igmeta';
+          s.textContent = 'View on Instagram';
+          a.appendChild(s);
+        }
+        el.appendChild(a);
+      });
+    })
+    .catch(function(){ /* keep the server-rendered floor */ });
+})();
+</script>
 </body></html>
