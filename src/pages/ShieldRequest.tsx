@@ -148,6 +148,7 @@ export default function ShieldRequest() {
   if (loadState === "loading") {
     return (
       <div className="mx-auto max-w-3xl px-6 py-24 text-center">
+        <SEOHead title="Link not valid" description="" />
         <Loader2 className="h-7 w-7 animate-spin text-muted-foreground mx-auto" />
       </div>
     );
@@ -169,6 +170,7 @@ export default function ShieldRequest() {
   if (loadState === "error") {
     return (
       <div className="mx-auto max-w-2xl px-6 py-20 text-center">
+        <SEOHead title="Link not valid" description="" />
         <CircleAlert className="h-10 w-10 text-destructive mx-auto mb-4" />
         <h1 className="text-2xl font-semibold mb-3">Something went sideways.</h1>
         <p className="text-muted-foreground">Try refreshing.</p>

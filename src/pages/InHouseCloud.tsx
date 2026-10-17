@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { SEOHead } from "@/components/SEOHead";
+import { preloadDeviceGLB } from "@/components/cloud/deviceModel";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { GradientText } from "@/components/ui/GradientText";
@@ -173,6 +175,11 @@ const pillars = [
 ];
 
 export default function InHouseCloud() {
+  // This is the only route with the 3D device on it, so this is where the 2.1 MB
+  // GLB download is worth starting. It used to be a <link rel=preload> in
+  // index.html, which made every other page on the site pay for it.
+  useEffect(() => { preloadDeviceGLB(); }, []);
+
   return (
     <>
       <SEOHead

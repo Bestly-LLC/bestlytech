@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { AnimatedSection } from "@/components/AnimatedSection";
+import { SEOHead } from "@/components/SEOHead";
 
 export default function PrivacyPolicy() {
   const lastUpdated = "October 15, 2026";
@@ -404,6 +405,12 @@ export default function PrivacyPolicy() {
 
   return (
     <>
+      {/* Was inheriting the homepage's <title> and og: tags. */}
+      <SEOHead
+        title="Privacy Policy"
+        description="How Bestly LLC collects, uses, discloses and safeguards your information across our websites, apps, extensions, devices and services. Last updated October 15, 2026."
+        path="/privacy-policy"
+      />
       <div className="mx-auto max-w-4xl px-6 py-16 lg:px-8 lg:py-24">
         {/* Page Header */}
         <AnimatedSection>

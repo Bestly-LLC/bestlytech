@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import {
   ExternalLink,
@@ -166,6 +167,11 @@ export default function Links() {
 
   return (
     <div className="relative min-h-screen wow-bg-ink">
+      {/* Was showing the marketing homepage's <title>. */}
+      <Helmet>
+        <title>Jared Best — links | Bestly</title>
+        <meta name="robots" content="noindex" />
+      </Helmet>
       <div className="pointer-events-none fixed inset-0" aria-hidden="true">
         <InteractiveDotGrid />
       </div>
