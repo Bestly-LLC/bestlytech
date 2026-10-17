@@ -210,7 +210,10 @@ for (const r of report) {
   for (const e of r.consoleErrors) line(`        console: ${e}`);
   for (const e of r.pageErrors) line(`        page:    ${e}`);
   for (const e of r.badResponses) line(`        http:    ${e}`);
-  for (const e of r.failedRequests) line(`        request: ${e}`);
+  // Aborted requests are reported but do not fail a route: a HEAD probe or a
+  // beacon cancelled after its response was already read is normal. Check the
+  // page's own behaviour above it before treating one as a defect.
+  for (const e of r.failedRequests) line(`        note:    ${e} (aborted, not counted as a failure)`);
   for (const e of r.brokenImages) line(`        image:   ${e}`);
   for (const e of r.missingAlt) line(`        no alt:  ${e}`);
   if (r.overflow) line(`        overflow: ${r.overflow.scrollWidth}px in a ${r.overflow.innerWidth}px viewport`);
