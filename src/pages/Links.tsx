@@ -21,11 +21,12 @@ import {
   ScanLine,
   ParkingCircle,
   ArrowUpRight,
+  Cloud,
 } from "lucide-react";
 import { toast } from "sonner";
 import bestlyLogo from "@/assets/bestly-logo.png";
 import jaredHeadshot from "@/assets/jared-headshot.png";
-import { products as sharedProducts, isExternalHref } from "@/config/products";
+import { products as sharedProducts, isExternalHref, type Product } from "@/config/products";
 import { InteractiveDotGrid } from "@/components/InteractiveDotGrid";
 import { WowButton } from "@/components/wow/WowButton";
 
@@ -37,12 +38,47 @@ interface LinkItem {
   external?: boolean;
 }
 
-const productLinks: LinkItem[] = sharedProducts.map((p) => ({
-  label: p.name,
-  href: p.href,
-  image: p.image,
-  external: isExternalHref(p.href),
-}));
+/** A product's own image, else the Lucide icon config/products.ts already gives it. */
+function toLinkItem(p: Product): LinkItem {
+  const Icon = p.icon;
+  return {
+    label: p.name,
+    href: p.href,
+    image: p.image,
+    icon: Icon ? <Icon className="h-5 w-5" /> : undefined,
+    external: isExternalHref(p.href),
+  };
+}
+
+const byId = (id: string) => sharedProducts.find((p) => p.id === id);
+const group = (ids: string[]): LinkItem[] =>
+  ids.map(byId).filter((p): p is Product => Boolean(p)).map(toLinkItem);
+
+// What Bestly sells, first.
+const productLinks: LinkItem[] = [
+  { label: "Bestly Cloud", href: "/cloud", icon: <Cloud className="h-5 w-5" /> },
+  ...group(["bestly-agent", "bestly-studio", "hoku"]),
+];
+
+// Software anyone can download or sign up for.
+const appLinks: LinkItem[] = group([
+  "cookie-yeti",
+  "inventory-proof",
+  "parentiq",
+  "neckpilot",
+  "schoolpilot",
+  "hoascope",
+  "confesh",
+]);
+
+// Built for somebody else.
+const clientLinks: LinkItem[] = group([
+  "golden-hour-garden",
+  "the-shift-shop",
+  "purely-hunza",
+  "el-dora",
+  "captains-log",
+]);
 
 const pages: LinkItem[] = [
   { label: "Bestly Website", href: "/", icon: <Globe className="h-5 w-5" /> },
@@ -248,7 +284,47 @@ export default function Links() {
           ))}
         </div>
 
-        {/* Favorite apps */}
+        {/* Products */}
+        <div className="mt-12 w-full max-w-md">
+          <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest wow-text-muted">Products</p>
+          <div className="flex flex-col gap-3">
+            {productLinks.map((item) => (
+              <LinkButton key={item.label} item={item} />
+            ))}
+          </div>
+        </div>
+
+        {/* Apps */}
+        <div className="mt-8 w-full max-w-md">
+          <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest wow-text-muted">Apps</p>
+          <div className="flex flex-col gap-3">
+            {appLinks.map((item) => (
+              <LinkButton key={item.label} item={item} />
+            ))}
+          </div>
+        </div>
+
+        {/* Clients */}
+        <div className="mt-8 w-full max-w-md">
+          <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest wow-text-muted">Clients</p>
+          <div className="flex flex-col gap-3">
+            {clientLinks.map((item) => (
+              <LinkButton key={item.label} item={item} />
+            ))}
+          </div>
+        </div>
+
+        {/* Company */}
+        <div className="mt-8 w-full max-w-md">
+          <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest wow-text-muted">Company</p>
+          <div className="flex flex-col gap-3">
+            {pages.map((item) => (
+              <LinkButton key={item.label} item={item} />
+            ))}
+          </div>
+        </div>
+
+        {/* Favorite apps — personal, so it sits below everything for sale */}
         <div className="mt-12 w-full max-w-md">
           <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest wow-text-muted">
             Apps I actually use
@@ -278,26 +354,6 @@ export default function Links() {
             </span>
             <ExternalLink className="h-4 w-4 flex-shrink-0 wow-text-muted opacity-60 group-hover:wow-text-indigo group-hover:opacity-100" />
           </a>
-        </div>
-
-        {/* Products */}
-        <div className="mt-12 w-full max-w-md">
-          <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest wow-text-muted">Products</p>
-          <div className="flex flex-col gap-3">
-            {productLinks.map((item) => (
-              <LinkButton key={item.label} item={item} />
-            ))}
-          </div>
-        </div>
-
-        {/* Company */}
-        <div className="mt-8 w-full max-w-md">
-          <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest wow-text-muted">Company</p>
-          <div className="flex flex-col gap-3">
-            {pages.map((item) => (
-              <LinkButton key={item.label} item={item} />
-            ))}
-          </div>
         </div>
 
         {/* Footer */}
