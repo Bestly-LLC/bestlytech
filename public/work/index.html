@@ -173,6 +173,10 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
 .client .ig{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:12px}
 /* Instagram's embed script sizes its own iframes; keep them inside the grid track. */
 .client .ig .instagram-media{min-width:0!important;margin:0!important;width:100%!important}
+/* The un-hydrated state: a readable card, not a bare quote block. */
+.client .ig blockquote.instagram-media{background:var(--surf2);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:grid;place-items:center;min-height:120px}
+.client .ig blockquote.instagram-media a{font-size:14px;color:var(--acc2)}
+.client .ig blockquote.instagram-media a:hover{text-decoration:underline}
 @media(max-width:900px){.client{grid-template-columns:1fr;gap:22px}
  .client .ig{grid-template-columns:1fr;max-width:380px}}
 
@@ -396,8 +400,15 @@ a.tile:hover .go{color:var(--acc2);gap:11px}
       <a class="go" href="https://www.instagram.com/centering.you/" target="_blank" rel="noopener">@centering.you <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
     </div>
     <div class="ig">
-      <blockquote class="instagram-media" data-instgrm-permalink="https://www.instagram.com/p/Def9LsXjHIP/" data-instgrm-version="14"></blockquote>
-      <blockquote class="instagram-media" data-instgrm-permalink="https://www.instagram.com/p/DecNX9UIMDs/" data-instgrm-version="14"></blockquote>
+      <!-- embed.js swaps each blockquote for the live post. Blocked by a content
+           blocker (plenty of this audience runs one) it stays a plain link, so the
+           section still reads as finished instead of an empty box. -->
+      <blockquote class="instagram-media" data-instgrm-permalink="https://www.instagram.com/p/Def9LsXjHIP/" data-instgrm-version="14">
+        <a href="https://www.instagram.com/p/Def9LsXjHIP/" target="_blank" rel="noopener">View this post on Instagram</a>
+      </blockquote>
+      <blockquote class="instagram-media" data-instgrm-permalink="https://www.instagram.com/p/DecNX9UIMDs/" data-instgrm-version="14">
+        <a href="https://www.instagram.com/p/DecNX9UIMDs/" target="_blank" rel="noopener">View this post on Instagram</a>
+      </blockquote>
     </div>
   </div>
 </div></div>
