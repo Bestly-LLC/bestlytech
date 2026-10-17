@@ -42,8 +42,13 @@ async function canary() {
     const r = await llmProbe(p.name);
     results.push(r);
     if (r.ok) await db.rpc("bestly_raise", { p_key: `ai.free.${p.name}`, p_kind: "resolved", p_title: `Free AI: ${p.name} working again` });
+    else if (p.name === "freellm" && /^rate_limited/.test(r.error ?? "")) {
+      // A 429 means FreeLLM answered: its free routes for the one probe model are just resting (Scout keeps them busy).
+      // That is not an outage and the ladder already uses other models. Reachability is freellm_watch's job (ai.freellm).
+      await db.rpc("bestly_raise", { p_key: `ai.free.${p.name}`, p_kind: "resolved", p_title: `Free AI: ${p.name} working again` });
+    }
     else if (!/skipped/.test(r.error ?? "")) {
-      await db.rpc("bestly_raise", { p_key: `ai.free.${p.name}`, p_kind: "problem", p_severity: "warning", p_title: `Free AI: ${p.name} failed its morning check`,
+      await db.rpc("bestly_raise", { p_key: `ai.free.${p.name}`, p_kind: "problem", p_severity: "warning", p_title: `Free AI: ${p.name} failed its check`,
         p_body: `${r.error}. Scout uses the next provider in the chain meanwhile.`, p_area: "ai", p_healed: true });
     }
   }
