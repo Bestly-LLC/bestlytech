@@ -68,7 +68,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; skyCars?: boolean; skyCarLabels?: boolean; airLabels?: boolean; airLabelsSmall?: boolean; airCard?: boolean; airCardHeli?: boolean; airCardPin?: boolean; leftDate?: boolean; radio?: WallRadio; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; skyCars?: boolean; skyCarLabels?: boolean; skyOverscan?: boolean; airLabels?: boolean; airLabelsSmall?: boolean; airCard?: boolean; airCardHeli?: boolean; airCardPin?: boolean; leftDate?: boolean; radio?: WallRadio; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
   alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
   heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; tripDismiss?: { id: string; at: number } | null; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   /** W1 round 3 (sky): Space Station name tag, home marker, sky radius in miles (2-25), live LAX tower audio. */
@@ -1025,6 +1025,12 @@ export default function Wall() {
               <Row label={<span className="inline-flex items-center gap-2"><Plane className="h-4 w-4 text-white/60" aria-hidden /> Planes overhead</span>} detail="Live planes and helicopters over the house, above the strip." htmlFor="wall-air">
                 <Switch className={swHit} id="wall-air" checked={s.airShow !== false} onCheckedChange={(v) => act({ airShow: v }, v ? "Planes overhead on." : "Planes overhead off.")} />
               </Row>
+              {s.airShow !== false && (
+                <Row label="Fill whole ceiling" detail="The sky map reaches every lit edge of the ceiling, same scale and same Home spot. Turns itself off if the wall gets choppy." htmlFor="wall-sky-overscan">
+                  <Switch className={swHit} id="wall-sky-overscan" checked={s.skyOverscan === true}
+                    onCheckedChange={(v) => act({ skyOverscan: v }, v ? "Sky fills the whole ceiling." : "Sky back to its box.")} />
+                </Row>
+              )}
               {s.airShow !== false && (() => {
                 const rad = Math.min(25, Math.max(2, Math.round(s.airRadiusMi ?? 15)));
                 const setRad = (n: number) => change({ airRadiusMi: Math.min(25, Math.max(2, n)) });

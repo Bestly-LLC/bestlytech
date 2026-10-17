@@ -1724,6 +1724,16 @@
       "admin": "Wall.tsx:1277"
     },
     {
+      "id": "sky_overscan",
+      "group": "sky",
+      "label": "Fill whole ceiling",
+      "kind": "switch",
+      "path": "skyOverscan",
+      "default": false,
+      "shown_if": "airShow",
+      "admin": "Wall.tsx:1030"
+    },
+    {
       "id": "sky_traffic",
       "group": "sky",
       "label": "Traffic",
