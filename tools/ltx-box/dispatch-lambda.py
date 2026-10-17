@@ -13,8 +13,14 @@ def report(event, detail):
     sb, key = os.environ.get("SB_URL"), os.environ.get("SB_KEY")
     if not sb or not key:
         return
-    body = json.dumps({"p_event": event, "p_detail": {"instance_id": IID, **detail}}).encode()
-    req = urllib.request.Request(f"{sb}/rest/v1/rpc/ltx_report", body,
+    # Keyed path (2026-10-17): ltx_report_k checks LTX_REPORT_KEY against ltx_box.report_key_hash. The old public
+    # ltx_report is kept only until this is seen working, then anon loses it.
+    rk = os.environ.get("LTX_REPORT_KEY")
+    args = {"p_event": event, "p_detail": {"instance_id": IID, **detail}}
+    if rk:
+        args["p_key"] = rk
+    body = json.dumps(args).encode()
+    req = urllib.request.Request(f"{sb}/rest/v1/rpc/{'ltx_report_k' if rk else 'ltx_report'}", body,
                                  {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"})
     try:
         urllib.request.urlopen(req, timeout=8).read()
