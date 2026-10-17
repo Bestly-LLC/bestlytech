@@ -155,6 +155,5 @@ select public.team_onboard('[{
   "admin_url": "/work/",
   "sort": 70,
   "owns": ["Client feed stale"],
-  "tool_of": "studio",
   "pulse": {"src": "cron", "job": "client-feed-sync", "also": "client-feed-watch", "gap": 130}
 }]'::jsonb);
