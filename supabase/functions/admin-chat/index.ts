@@ -103,6 +103,20 @@ import { llm, llmChat, llmVision, LlmUnavailable, thinkingLeak, stripToolSyntax,
 //   Kept from the older lessons: v23 claim checks (CLAIMS_WORK / CLAIMS_DONE, v37), v34 interrupt (supersededSince), v36 run_state and caches.
 //   Where the plan met a lesson: a commit needs ~90 s of the request to be watched and reverted if it fails (rule 4), so a free commit that
 //   would start with less than that left is saved in run_state.pending and runs first thing in the next hop instead of going unwatched.
+// v70 (2026-10-17, Jared: "fix him to run free when he can and try to take on all and any tasks, even if he needs to spin up sub agents"):
+//   Audit of 4,086 chat messages, 753 threads, Sep 20 to Oct 17:
+//   - 510 fix-ladder (autopilot) attempts, only 30 ended FIXED and 251 ended NEEDS_YES. Autopilot had no hands, so the same
+//     incident came back every 20 minutes. Now, with auto-run on, autopilot may run repairs (mac_run, db_write, commit_files,
+//     code_job, pi_command, mac_command). Email, notifications, videos, alert-clearing and questions never run unwatched.
+//     With auto-run off, nothing changed. The "NEEDS_YES: let Scout work with paid AI" fallback is gone from autopilot: it
+//     never spends, so that message was a dead end.
+//   - 32 paid replies died on "This model does not support assistant message prefill": the 30-message history can end on an
+//     assistant turn (a progress note, or an auto-carried-on hop). The paid path now always closes with a user turn.
+//   - 10+ replies told him to open pages that do not exist (/admin/automations, /admin/acls), then argued when he said so.
+//     The real route list from src/App.tsx is in both system prompts, with a hard rule to believe him and check the code.
+//   - 270 hand-typed "keep going" in four weeks: AUTO_HOPS 4 -> 8 for a task (questions still never carry on).
+//   - New `delegate` tool: 1-4 read-only sub-agents run in parallel, each with one narrow goal, and report back. The parent
+//     does every write, so a sub-agent can never change the estate. Available to free and paid Scout and on the fix ladder.
 // v37 (2026-10-07, Jared: "give Scout vision like Claude: actually look at images, not convert them to text, and let me upload videos"):
 //   Scout sees. A picture, PDF or video he attaches carries a ⟦scout-files: path|path kind=image|pdf|video⟧ line (ScoutAttach.tsx;
 //   a video is frames the browser cut). On paid AI, the files in his two newest file messages reach Claude as real image / document
@@ -161,11 +175,12 @@ import { llm, llmChat, llmVision, LlmUnavailable, thinkingLeak, stripToolSyntax,
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsWith } from "../_shared/cors.ts";
+import { chefCook, chefMarkdown } from "../_shared/chef.ts";
 import { sendAsJared } from "../_shared/bestly-signature.ts";
 
 const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
 const MAX_TURNS = 10;
-const AUTO_HOPS = 4;             // v41 (was 24): a TASK may carry on by itself up to 4 more rounds, and only while each round adds a write or a new finding; a QUESTION never does
+const AUTO_HOPS = 8;             // v41 set 4; 2026-10-17 (Jared: "stop asking me to keep going") a TASK carries on up to 8 rounds, and only while each round adds a write or a new finding; a QUESTION never carries on
 const STOP_MARK = "[Stopped]";   // v34: his Stop button; the window draws it as a divider, the models read it as "he stopped you"
 
 /** v34: has he written (or tapped Stop) since `since`? Then the run answering the older message stops. */
@@ -179,6 +194,13 @@ const BUILD_POLLS = 10;          // ~65s of watching; builds here take ~35s
 const PI_WAIT_MS = 60_000;       // how long to wait for the Pi to report back inside one turn
 const REC_WAIT_MS = 20_000;      // how long to wait for the Mac mini to pick up a recorder job
 const REPOS: Record<string, string> = { site: "Bestly-LLC/bestlytech", hoku: "Bestly-LLC/hoku-clean" };
+// 2026-10-17: Scout told Jared to open /admin/automations and /admin/acls, neither exists, then argued about it three times.
+// These are the real routes from src/App.tsx. Keep them in the prompt so he can only name a page that is there.
+const ADMIN_ROUTES = "/admin, /admin/leads, /admin/submissions, /admin/settings, /admin/guide, /admin/contacts, /admin/waitlist, /admin/meetings, " +
+  "/admin/partners, /admin/cloud, /admin/cookie-yeti, /admin/cookie-yeti/subscribers, /admin/cookie-yeti/analytics, /admin/home-hub, " +
+  "/admin/home-hub/pihole, /admin/home-hub/home-assistant, /admin/home-hub/homebridge, /admin/home-hub/access, /admin/street-sweeping, " +
+  "/admin/emergency, /admin/vesta, /admin/roofguard, /admin/ava, /admin/wall, /admin/sky, /admin/security, /admin/spam, /admin/team, " +
+  "/admin/scout-lab, /admin/turo, /admin/claims, /admin/turo/lax-pass, /admin/turo/settings, /admin/playbook, /admin/skills";
 const WATCHABLE = new Set(["Bestly-LLC/bestlytech"]);
 const RESULT_CAP: Record<string, number> = { meeting_transcript: 100_000 };
 // The platform kills the function at 150s wall clock. Wrap up well before that.
@@ -567,6 +589,42 @@ const TOOLS = [
     },
   },
   {
+    name: "kitchen_chef",
+    description:
+      "Basil's gourmet chef: new recipes cooked from what is in Jared's pantry right now, with TOKIT Omni Cook steps when the " +
+      "machine genuinely helps. Use it for recipe ideas, 'what can I cook', 'something with salmon', 'dinner ideas'. Recipes are " +
+      "saved to the Kitchen page (Home Hub, Kitchen) with cook mode. Pass his words as ask; reply with the markdown it returns.",
+    input_schema: { type: "object", properties: {
+      ask: { type: "string", description: "what he's in the mood for, in his words (optional)" },
+      count: { type: "integer", minimum: 1, maximum: 4, description: "how many recipes (default 3)" },
+    } },
+  },
+  {
+    name: "delegate",
+    description:
+      "Spin up 1-4 sub-agents that work at the same time, in parallel, and report back. Each is a focused investigator with read tools only " +
+      "(run_sql, read_file, list_files, search_code, incidents, today, mail, transcripts); they cannot change anything. Use it when a job has " +
+      "independent parts: several incidents to diagnose, several files to compare, several services to check, one big search per area. " +
+      "Give each sub-agent one narrow goal and the context it needs. Then YOU act on their findings. Don't delegate a single lookup.",
+    input_schema: {
+      type: "object",
+      properties: {
+        tasks: {
+          type: "array", minItems: 1, maxItems: 4,
+          items: {
+            type: "object",
+            properties: {
+              goal: { type: "string", description: "One narrow thing to find out or check, in plain words." },
+              context: { type: "string", description: "What it needs to know to start (table names, the error, the incident key)." },
+            },
+            required: ["goal"],
+          },
+        },
+      },
+      required: ["tasks"],
+    },
+  },
+  {
     name: "ask_user",
     description:
       "Ask Jared 1-4 multiple-choice questions, shown as tappable answers (he can always type his own instead). Use it when the ask is " +
@@ -613,6 +671,76 @@ function questionsLine(input: any): string | null {
 /** v32: he asked Scout to ask him questions (first). */
 const ASKS_FOR_QUESTIONS = /\bask (me|the user|user)\b[^.?!]{0,30}\bquestions?\b|\bask user questions?\b|\bask me (first|before)\b|\bquiz me\b/i;
 const ASK_FIRST_NOTE = "He asked you to ask him questions first. Before doing anything else, call ask_user with 1-4 questions about what you need to know to do this well.";
+
+// ---------------------------------------------------------------- sub-agents (2026-10-17)
+// Jared: "let him take on all and any tasks, even if he needs to spin up sub agents." A delegate call runs
+// 1-4 read-only investigators at once. They only read, so a sub-agent can never change the estate behind
+// Scout's back; the parent does the writing with the same gates as always.
+const SUB_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "search_code", "meeting_transcript", "search_mail", "read_email"]);
+const SUB_MAX_STEPS = 5;
+const SUB_MAX_MS = 55_000;
+const SUB_RESULT_CAP = 1_600;
+
+async function runSubAgent(task: { goal?: string; context?: string }, threadId: string, deadline: number, n: number): Promise<Record<string, unknown>> {
+  const goal = String(task?.goal ?? "").replace(/\s+/g, " ").trim().slice(0, 500);
+  if (!goal) return { goal: "", ok: false, findings: "no goal given", tools: [] };
+  const context = String(task?.context ?? "").replace(/\s+/g, " ").trim().slice(0, 1_200);
+  const tools = TOOLS.filter((t) => SUB_TOOLS.has(t.name)).map((t) => ({
+    type: "function",
+    function: { name: t.name, description: t.description.slice(0, 300), parameters: t.input_schema },
+  }));
+  const msgs: Msg[] = [
+    { role: "system", content: `You are sub-agent ${n + 1} of Scout, working one narrow job inside Jared Best's Bestly admin. You can ONLY read: run_sql, read_file, list_files, search_code, incidents, today, mail and transcripts. You cannot change anything and nobody is watching you.\nFind the answer with tools, never from memory. Never invent a table, column, file, number or result. Times are UTC in the data; report Pacific time.\nWhen you have it, reply in plain text under 120 words: the finding first, then the evidence (the exact row, file line or error), then anything the parent must know. No options line, no markdown.` },
+    { role: "user", content: `${goal}${context ? `\n\nContext: ${context}` : ""}` },
+  ];
+  const used: string[] = [];
+  for (let i = 0; i < SUB_MAX_STEPS && Date.now() < deadline - 6_000; i++) {
+    let r: ChatResult;
+    try {
+      r = await llmChat({ messages: msgs, tools, maxTokens: 900, deadlineMs: Math.min(deadline - Date.now() - 2_000, 30_000), job: "subagent", ref: threadId, fn: "admin-chat", scope: "chat" });
+    } catch { break; }
+    if (!r.toolCalls.length) return { goal, ok: true, findings: r.content.slice(0, SUB_RESULT_CAP), tools: used };
+    msgs.push({ role: "assistant", content: r.content || null, tool_calls: r.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.raw } })) });
+    for (const c of r.toolCalls.slice(0, 2)) {
+      // A read it wrote as text (gpt-oss does this) is rescued before we give up on the step.
+      const args = { ...(c.args ?? {}) } as Record<string, any>;
+      let out: Record<string, unknown>;
+      try {
+        out = SUB_TOOLS.has(c.name)
+          ? await runTool(c.name, args, threadId)
+          : { ok: false, error: `"${c.name}" is not a read tool. Use one from the list.` };
+      } catch (e) { out = { ok: false, error: `tool crashed: ${(e as Error).message}` }; }
+      used.push(c.name);
+      let s = JSON.stringify(out);
+      if (s.length > 2_400) s = s.slice(0, 2_400) + "...(cut)";
+      msgs.push({ role: "tool", tool_call_id: c.id, content: s });
+    }
+  }
+  // Out of steps: one no-tools summary so the parent still gets what it found.
+  try {
+    msgs.push({ role: "user", content: "Stop using tools. In under 100 words, report what you found, using only the tool results above. Say plainly if you did not find it." });
+    const s = await llmChat({ messages: msgs, tools, toolChoice: "none", maxTokens: 500, deadlineMs: Math.min(deadline - Date.now(), 15_000), job: "subagent", ref: threadId, fn: "admin-chat", scope: "chat" });
+    return { goal, ok: true, findings: s.content.slice(0, SUB_RESULT_CAP), tools: used };
+  } catch {
+    return { goal, ok: false, findings: "ran out of time before reporting", tools: used };
+  }
+}
+
+async function delegateTool(args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
+  const list = (Array.isArray(args.tasks) ? args.tasks : []).slice(0, 4).filter((t: any) => String(t?.goal ?? "").trim());
+  if (!list.length) return { ok: false, error: "tasks required", hint: "1-4 tasks, each with a goal." };
+  // Sub-agents need real room to be worth it. Under 25 s left, do the work here instead of starting four doomed children.
+  if (toolDeadline - Date.now() < 25_000) {
+    return { ok: false, error: "not_enough_time", hint: "Not enough time left in this round to run sub-agents. Do the most important lookup yourself." };
+  }
+  const cap = Math.min(SUB_MAX_MS, toolDeadline - Date.now() - 4_000);
+  const deadline = Date.now() + cap;
+  // Staggered starts: four simultaneous calls on one Groq model share an 8K tokens/min budget and 429 each other.
+  const agents = await Promise.all(list.map((t: any, n: number) => sleep(n * 350).then(() => runSubAgent(t, threadId, deadline, n)))) as Record<string, unknown>[];
+  const brief = agents.map((a) => `### ${String(a.goal ?? "").slice(0, 160)}\n${String(a.findings ?? "")}${Array.isArray(a.tools) && a.tools.length ? `\n(checked with: ${[...new Set(a.tools as string[])].join(", ")})` : ""}`).join("\n\n").slice(0, 7_000);
+  await db.from("admin_chat_actions").insert({ thread_id: threadId, tool: "delegate", args: { tasks: list.length }, result: { ok: true, agents: agents.map((a) => ({ goal: a.goal, tools: a.tools })) }, ok: true }).then(() => null, () => null);
+  return { ok: true, agents: agents.length, reports: brief, hint: "Act on these reports now. Do not re-run the same reads yourself unless a report says it could not find it." };
+}
 
 const AUTO_RUN_ON = `
 
@@ -768,12 +896,17 @@ The router is a Verizon Internet Gateway (ASK-NCM1100) at 192.168.1.1. Scout has
 - Reach him later: notify (bell, and his phone with push). When you leave something waiting on him, or find something he must act on, notify him before you finish, in one line.
 - Change bestly.tech and the admin: list_files, read_file, commit_files (watched, auto-reverted on a failed build). Anything bigger than a one-line edit (several files, a new feature, a NEW site, another repo): code_job, which hands it to the Code Worker (free coding AI, build must pass, posts the live URL here).
 - Give the MacBook Air mail work: mac_command. Run anything on the Mac mini: mac_run (he taps Run). Record calls on the Mac mini: recorder.
+- Split a big job: delegate spawns 1-4 read-only sub-agents in parallel, each with one narrow goal (diagnose this incident, find every caller of this function, check these three services). They report; you act. Use it for anything with independent parts instead of doing them one at a time. Never delegate a single lookup.
 
 # Doing, not describing
 Your job is to clear his plate, not to hand him a to-do list. For every item: if a tool can do it, propose it in one line and, on his yes, do it and report the result. Batch them: "I can do these three - say yes and I'll run all of them." Cleanup (stale alerts, incidents that are over, cards whose job is done) you may do without asking and just report.
 Only hand Jared something when it physically needs him: typing a password, a device in his hand, a decision only he can make. When you do, say it is the one thing you cannot do and why, give the single exact step, and nothing else.
 Known one: accepting the Xcode licence needs sudo on his Mac, which needs his password - Apple does not allow it any other way. That is the only true blocker for the Cookie Yeti Mac and iOS builds.
 Database structure is never his job. Never give Jared SQL to paste into Supabase (SQL editor, CREATE, ALTER, cron.schedule, anything): that is a code change, not a decision. Before you call something missing, look: run_sql can read cron.job (jobname, schedule, command, active) and pg_proc, so check whether the job or function already exists and what it actually does. If a fix truly needs a schema or schedule change, file it with db_write into improver_ideas (title, area, kind 'schema', why, change = the exact SQL, effort, impact, status 'new') and tell him in one line it is queued for the next build session.
+
+# Real admin pages (the only ones that exist)
+${ADMIN_ROUTES}
+There are no other admin pages, tabs or settings pages. If he says a page is not real, he is looking at the screen and you are not: believe him, stop repeating it, and check src/App.tsx or list_files src/pages before you name any path again. Never invent a page to make an answer sound actionable.
 
 # Healing yourself
 When a tool fails, the result comes back with "lessons" (what worked before in the same spot) and, for run_sql, the real columns. Use them: change your approach, never repeat the exact call that failed. When a different approach works after a failure, call learn once with what worked, so next time is right first time. If you are stuck after two different tries, say plainly what you tried and what you need. When Jared says "remember" about how to do something (a tool, table, project or preference for how work gets done), save it with learn and taught_by_jared: true.
@@ -1327,7 +1460,9 @@ const FREE_TOOLS = new Set([
   "send_email", "look", "report_spam",
   "search_mail", "read_email",   // v41
   "call_debrief", "add_todo",     // v69
+  "kitchen_chef",                 // 2026-10-15: Basil's chef (free AI only, saves recipes to the Kitchen page)
   "commit_files", "db_write", "mac_command", "code_job",   // v38/v42: the same hands as paid Scout (same confirmation rules, same AUTOPILOT_NEVER)
+  "delegate",                     // 2026-10-17: spin up read-only sub-agents in parallel
 ]);
 const FREE_READS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "search_code", "meeting_transcript", "call_debrief", "look", "search_mail", "read_email"]);
 const FREE_STEPS = 26;           // v41: a TASK gets 25 tool calls a hop (QUESTION_CALLS for a question); the 85 s budget still bounds each hop
@@ -1431,11 +1566,14 @@ const TOOL_TOPICS: [string[], RegExp][] = [
   [["make_video"], /\b(video|videos|clip|clips|ltx|render|animate|animation|footage|b-?roll|reel)\b/i],
   [["send_email"], /\b(e-?mails?|mail|send|signature|message (to|eli|rohit)|write to|reply to)\b/i],
   [["look"], /\b(images?|photos?|screenshots?|pictures?|videos?|frames?|pdf|look|see|seen)\b|scout-files/i],
+  [["kitchen_chef"], /\b(chef|recipes?|cook|cooking|dinner|lunch|breakfast|meal|pantry|omni ?cook|tokit|gourmet|eat)\b/i],
   [["report_spam"], /\b(spam|phish(ing)?|scam|junk|block (this|that|the) sender|report (this|that|it) (to|as))\b/i],
   // v38: code, data and schema work. Wide on purpose: Scout used to refuse these, and a missing tool schema is a silent refusal.
   [["commit_files", "code_job"], /\b(websites?|landing|one-?page|webpage|app|build|code|bugs?|fix(es|ed)?|build|built|change[sd]?|edit|implement|feature|page|button|component|site|admin|deploy|commit|repo|refactor|css|layout|typo|wording|copy|broken|errors?|fail(ed|ing|s)?|migration|edge ?functions?|functions?|alert|dashboard|ui|screen)\b/i],
   [["db_write"], /\b(data|rows?|records?|database|table|schema|insert|update[sd]?|delete[sd]?|backfill|status|assign|owner|cron|migration|improver|queue[sd]?|fix(es|ed)?|change[sd]?|set)\b/i],
   [["mac_command"], /\b(imap|mail[_ ]?drain|restart[_ ]?mail|macbook|mail agent|mail bridge)\b/i],
+  // One job with several independent parts is exactly what sub-agents are for.
+  [["delegate"], /\b(each|every|all|several|multiple|both|compare|across|in parallel|at once|split|divide|audit|sweep|check (all|every|each))\b/i],
 ];
 /** Short descriptions for the tools whose full text is longer than the free window keeps (it would cut off "requires confirmed:true"). */
 const FREE_DESC: Record<string, string> = {
@@ -1448,12 +1586,13 @@ const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "re
 
 function freeToolDefs(autopilot: boolean, convo: string) {
   const want = new Set(ALWAYS_TOOLS);
-  if (autopilot) ["resolve_incident", "learn"].forEach((n) => want.add(n));   // the fix ladder closes and records its fixes
+  if (autopilot) ["resolve_incident", "learn", "delegate"].forEach((n) => want.add(n));   // the fix ladder closes and records its fixes
   for (const [names, re] of TOOL_TOPICS) if (re.test(convo)) names.forEach((n) => want.add(n));
   return [
-    ...TOOLS.filter((t) => FREE_TOOLS.has(t.name) && want.has(t.name) && !(autopilot && AUTOPILOT_NEVER.has(t.name))).map((t) => ({
+    ...TOOLS.filter((t) => FREE_TOOLS.has(t.name) && want.has(t.name) && !(autopilot && autopilotBlocked(t.name))).map((t) => ({
       type: "function",
-      function: { name: t.name, description: FREE_DESC[t.name] ?? t.description.slice(0, 420), parameters: t.input_schema },
+      // Autopilot runs with a hard token gate (Groq 7K/min): a 150-char description keeps every schema and still names the tool.
+      function: { name: t.name, description: autopilot ? t.description.slice(0, 150) : (FREE_DESC[t.name] ?? t.description.slice(0, 420)), parameters: t.input_schema },
     })),
     ASK_PAID_TOOL,
   ];
@@ -1465,8 +1604,11 @@ type Msg = Record<string, any>;
  * then the newest ones, then older chat turns. Without this, two file reads pushed the prompt past every Groq
  * model's size gate and the turn fell to Cloudflare (or failed when its daily Neurons were spent).
  */
-function trimForBudget(msgs: Msg[], maxTokens = 3800) {
-  const est = () => Math.ceil(JSON.stringify(msgs).length / 3.8);
+function trimForBudget(msgs: Msg[], maxTokens = 6400, toolsChars = 0) {
+  // 2026-10-17: the old estimate only counted the messages, so it thought a request was 3.7K tokens while the provider saw
+  // 7.1K once the tool schemas and the reply budget were added. Every step after the first read was skipped as skipped_size.
+  // 3.5 is free-llm's own divisor (estTokens); 3.8 underestimated and kept letting requests past the 7K gate.
+  const est = () => Math.ceil((JSON.stringify(msgs).length + toolsChars) / 3.5) + 1200;
   const toolIdx = msgs.map((m, i) => (m.role === "tool" ? i : -1)).filter((i) => i >= 0);
   const shrink = (i: number, keep: number, tag: string) => {
     const c = String(msgs[i].content ?? "");
@@ -1514,7 +1656,7 @@ const DOING: Record<string, string> = {
   run_sql: "checking the database", search_mail: "searching your mail", read_email: "reading an email", read_file: "reading the code", search_code: "searching the code",
   list_files: "looking through the files", today: "checking your queue", incidents: "checking open incidents", meeting_transcript: "reading the call transcript",
   commit_files: "committing a code change", db_write: "updating data", mac_run: "preparing a Mac mini job", pi_command: "talking to the Pi",
-  send_email: "sending an email", look: "looking at your files", notify: "sending a notification", code_job: "handing code to the Mac mini",
+  send_email: "sending an email", kitchen_chef: "asking the chef", look: "looking at your files", notify: "sending a notification", code_job: "handing code to the Mac mini",
 };
 const pt12 = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" });
 /** v41 output scrub: no tool syntax, no NEEDS_TOOLS, no thinking out loud ever reaches a saved message. "" = a failed step, not a reply. */
@@ -1592,10 +1734,10 @@ async function saveRunState(threadId: string, st: RunState | null) {
   await db.from("admin_chat_threads").update({ run_state: st ? capRunState(st) : null }).eq("id", threadId);
 }
 
-async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean; askFirst?: boolean; since?: string | null; state?: RunState | null; hop?: number } = {}):
+async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean; askFirst?: boolean; since?: string | null; state?: RunState | null; hop?: number; budgetMs?: number } = {}):
   Promise<{ answer?: string; why: string; tools?: string[]; note?: string; more?: boolean; stopped?: boolean; stalled?: boolean; paused?: boolean; state?: RunState; escalate?: { what: string; log: TryEntry[] } }> {
   const autopilot = !!opts.autopilot;
-  const until = Date.now() + FREE_BUDGET_MS;
+  const until = Date.now() + (opts.budgetMs ?? FREE_BUDGET_MS);
   const prior = autopilot ? null : (opts.state ?? null);   // v36: what earlier hops of this run already did
   // v41: a QUESTION asked through the service path (autopilot flag, no one watching) still gets the plain-answer prompt, not the FIXED / NEEDS_YES / STUCK verdict one. Writes stay blocked (AUTOPILOT_NEVER).
   const vm = autopilot && classifyAsk(text) !== "question";
@@ -1615,16 +1757,22 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
   const [{ data: hist }, { data: today }, { data: lessonRows }] = await Promise.all([
     db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(10),
     db.rpc("admin_today"),
-    // v44 (audit Oct 10): paid Scout got the top 30 lessons in its prompt; free Scout saw one only after a tool failed. Same 30, one line each.
+    // v44 (audit Oct 10): paid Scout got the top 30 lessons in its prompt; free Scout saw one only after a tool failed.
+    // 2026-10-17: 15 here, not 30. The 30-lesson block is what pushed the free prompt past Groq's 7K gate.
     db.from("scout_lessons").select("scope, title, do_text, wins, losses").eq("active", true)
-      .order("wins", { ascending: false }).order("updated_at", { ascending: false }).limit(30),
+      .order("wins", { ascending: false }).order("updated_at", { ascending: false }).limit(15),
   ]);
-  const freeLessons = ((lessonRows ?? []) as any[]).map((l) => `- [${l.scope}] ${l.title}: ${l.do_text}`.replace(/\s+/g, " ").slice(0, 150)).join("\n").slice(0, 4200);
+  // 2026-10-17: 30 lessons (4.2K chars) plus a 12-item queue pushed the free prompt past Groq's 7K-token gate, so every
+  // Groq rung was skipped as "skipped_size" and the run failed in 400 ms with no provider ever called. 15 + 8 leaves room
+  // for the tools and the work. Lessons also come back on a failed tool, so nothing important is lost.
+  const freeLessons = ((lessonRows ?? []) as any[]).map((l) => `- [${l.scope}] ${l.title}: ${l.do_text}`.replace(/\s+/g, " ").slice(0, 130)).join("\n").slice(0, 2200);
   const saidYes = !autopilot && PLAIN_YES.test(text);
-  const queue = ((today ?? []) as any[]).slice(0, 12).map((q) => `- [${q.key}] rank ${q.rank} ${q.title}${q.detail ? `: ${String(q.detail).slice(0, 140)}` : ""}`).join("\n");
+  const queue = ((today ?? []) as any[]).slice(0, 8).map((q) => `- [${q.key}] rank ${q.rank} ${q.title}${q.detail ? `: ${String(q.detail).slice(0, 100)}` : ""}`).join("\n");
 
   const yesRule = vm
-    ? "Jared is NOT here (the fix ladder sent you). FIRST check it is still happening right now (a scheduled job: SELECT status, return_message, start_time FROM cron.job_run_details d JOIN cron.job j USING (jobid) WHERE j.jobname='<name>' ORDER BY start_time DESC LIMIT 3; anything else: the incidents tool or the table it watches). If it has stopped, say so with the evidence and end FIXED: already clear. Use read tools and do only what needs no yes. Anything that needs his yes: don't call it, say it in your last line."
+    ? `Jared is NOT here (the fix ladder sent you). FIRST check it is still happening right now (a scheduled job: SELECT status, return_message, start_time FROM cron.job_run_details d JOIN cron.job j USING (jobid) WHERE j.jobname='<name>' ORDER BY start_time DESC LIMIT 3; anything else: the incidents tool or the table it watches). If it has stopped, say so with the evidence and end FIXED: already clear. ${autoRunOn
+      ? "Auto-run is ON, which is his standing yes: repair it yourself. mac_run, db_write, commit_files, code_job, pi_command and mac_command may run without asking (a code deploy still waits for his Run tap). Never send email, push a notification, make a video or clear alerts. Split a multi-part diagnosis with delegate. After a repair, verify it with a read and end FIXED: <what you changed and the evidence>."
+      : "Use read tools and do only what needs no yes. Anything that needs his yes: don't call it, say it in your last line."}`
     : saidYes
       ? "His latest message is a yes: set confirmed:true on the one action he agreed to."
       : autoRunOn
@@ -1632,7 +1780,7 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
         : "He has not said yes yet: before any action that needs confirmed:true, say what it will do and end with OPTIONS: Do it | Not now.";
 
   const ledgerFree = await actionLedger(threadId).catch(() => "");
-  const system = ledgerFree + "\n" + `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You run on a free model WITH real tools: do the work yourself, don't tell Jared what someone else should do.
+  let system = ledgerFree + "\n" + `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You run on a free model WITH real tools: do the work yourself, don't tell Jared what someone else should do.
 How to work:
 - Read before you answer or act: search_mail + read_email (any email or person), run_sql, today, incidents, read_file, meeting_transcript. Anything about a person, an email, an invoice, a task or a call is answered from what you read THIS turn: after search_mail, read_email the 2 or 3 best matches (newest first) before you answer, and give the concrete answer (names, amounts, dates) with where it came from. Never invent numbers, names, files or results. Never use placeholders like X or [Name].
 - Debrief a call (or make its to-dos): call_debrief first, then answer from it. "Who owes what" = who has to do what, not money. To-dos: add_todo, never db_write SQL.
@@ -1641,7 +1789,9 @@ How to work:
 - You can't see pictures yourself. A file he attaches arrives as a text copy plus a ⟦scout-files: …⟧ line; for any question about a picture, video frames or PDF, call look with those paths and a specific question, and answer from what it returns. Say so if look can't open it.
 - ${ADHD_RULE}
 - ${yesRule}
-- mac_run: propose a short, safe, idempotent zsh script with a plain title and why; it waits for his Run tap.
+- mac_run: propose a short, safe, idempotent zsh script with a plain title and why; it waits for his Run tap (on autopilot with auto-run on it starts by itself).
+- A job with independent parts (several incidents, files or services): call delegate FIRST with 1-4 narrow tasks. It runs read-only sub-agents in parallel and hands you their findings; you still do every write. Do not read many items one by one, and do not delegate one simple lookup.
+- Autopilot has one budget, not a chat: spend it on the fix, not on enumerating. Two or three reads, the smallest change, then verify it.
 - Only say something is done if a tool result shows ok:true for it: one in this turn, or one marked OK in "What you already did in this chat" below. Never deny an action that log shows.
 ${vm
     ? "- This is autopilot: Jared is not here, so commit_files, db_write and mac_run are not available. Anything that needs them: say it in your last line (NEEDS_YES)."
@@ -1660,6 +1810,9 @@ STUCK: <what blocks it>`
 
 ${FREE_FACTS}
 ${freeLessons ? `\nWhat you have learned (lessons from past mistakes, best first; follow them before you guess):\n${freeLessons}\n` : ""}
+${vm ? "" : `Real admin pages (the only ones that exist): ${ADMIN_ROUTES}
+If he says a page is not real, believe him and stop repeating it; check src/App.tsx before naming a path again. Never invent a page.
+`}
 Main tables (public schema):
 - turo_trips: reservation_id, guest_first, guest_last, starts_at, ends_at, status, earnings, airport_code, pickup_city.
 - turo_vehicle_state: battery_pct, range_real, inside_temp, locked, charging_state, observed_at (the Tesla).
@@ -1670,8 +1823,8 @@ Main tables (public schema):
 - mac_jobs: title, status, exit_code, output, finished_at (Mac mini jobs).
 - ai_spend: at, provider, job, ok, cost_usd.
 
-Queue waiting on him right now:
-${queue || "(empty)"}
+${vm ? "The incident above is the whole job. Do not work the general queue." : `Queue waiting on him right now:
+${queue || "(empty)"}`}
 
 Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
 
@@ -1703,8 +1856,25 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
 
   const tools = freeToolDefs(autopilot, msgs.slice(1).map((m) => String(m.content ?? "")).join("\n").slice(-6000));
   const allowed = new Set(tools.map((t) => t.function.name));
+  // 2026-10-17: measure the first request the way llmChat does (chars / 3.8 + the reply budget). Groq's gate is 7,000
+  // tokens per minute; over it, every Groq rung is skipped as skipped_size and the run dies in 400 ms with no provider
+  // ever called. Drop the optional blocks (lessons, queue detail, the table cheat-sheet) rather than lose the run.
+  const requestFit = () => Math.ceil((JSON.stringify(msgs).length + JSON.stringify(tools).length) / 3.5) + 1200;
+  if (requestFit() > 6_400) {
+    if (freeLessons) system = system.replace(freeLessons, freeLessons.split("\n").slice(0, 6).join("\n"));
+    if (queue) system = system.replace(queue, queue.split("\n").slice(0, 4).join("\n"));
+    msgs[0] = { role: "system", content: system };
+  }
+  if (requestFit() > 6_400) {
+    system = system.replace(/\nMain tables \(public schema\):[\s\S]*?\n\nQueue waiting on him right now:/, "\n\nQueue waiting on him right now:");
+    msgs[0] = { role: "system", content: system };
+  }
+  if (requestFit() > 6_400 && freeLessons) {
+    system = system.replace(`What you have learned (lessons from past mistakes, best first; follow them before you guess):\n${freeLessons}`, "What you have learned: the matching lesson comes back with any tool that fails.");
+    msgs[0] = { role: "system", content: system };
+  }
   const used: string[] = [];
-  let replied = false, acted = false, fails = 0, nudges = 0;
+  let replied = false, acted = false, fails = 0, nudges = 0, lastErr = "";
   const goal = prior?.goal ?? text.replace(/\s+/g, " ").slice(0, 600);
   // v41 (chief of staff): classify once, in code. A question answers within 8 tool calls; a task gets 25 a round.
   const isQ = classifyAsk(goal) === "question" && !(prior?.pending);   // autopilot texts ("Autopilot fix attempt...") classify as tasks, so only real questions get the 8-call budget
@@ -1770,13 +1940,20 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       msgs.push({ role: "user", content: ANSWER_NOW });
     }
     toolDeadline = Math.min(until - 5000, Date.now() + 60_000);
+    trimForBudget(msgs, 6_400, JSON.stringify(tools).length);
     // v38: the step that writes code runs on the coding ladder (FreeLLM qwen3-coder-480b first) with room for a real edit; reading steps stay fast.
     const codeStep = codeJob && (tries > 0 || used.includes("read_file") || calls.some((x) => x.tool === "read_file"));
     if (codeStep && until - Date.now() < 30_000) break;   // not enough of this round left for a coding call: the next hop does it with a fresh budget
     let r: ChatResult;
     try {
       r = await llmChat({ messages: msgs, tools, trim: rungTrimmer(msgs), toolChoice: forceAnswer ? "none" : "auto", maxTokens: codeStep ? 4000 : 1200, deadlineMs: Math.min(until - Date.now() - 2000, codeStep ? 60_000 : 45_000), task: codeStep ? "code" : "chat", job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
-    } catch {
+    } catch (e) {
+      // 2026-10-17: say WHY no free rung answered. "Isn't answering right now" with no cause hid a size/cooldown skip
+      // for weeks and made a capacity problem look like a stuck job.
+      const un = e as LlmUnavailable;
+      lastErr = un?.tried?.length
+        ? [...new Set(un.tried.map((t) => `${t.provider}/${t.outcome}`))].slice(0, 6).join(", ")
+        : String((e as Error)?.message ?? "unknown").slice(0, 200);
       if (++fails > 1) break;
       continue;
     }
@@ -1882,7 +2059,10 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       }
       if (!allowed.has(c.name)) { answer({ ok: false, error: `"${c.name}" is not one of your tools. Use one from the list.` }); if (++fails > 3) break; continue; }
       const args = { ...c.args } as Record<string, any>;
-      if (autopilot && (args.confirmed === true || AUTOPILOT_NEVER.has(c.name))) {
+      // On autopilot with auto-run on, his standing yes is already given: repair tools get confirmed here (the short
+      // descriptions no longer spell it out, and a missing flag used to turn a real repair into a not_confirmed loop).
+      if (autopilot && autoRunOn && AUTOPILOT_REPAIRS.has(c.name)) args.confirmed = true;
+      if (autopilot && (autopilotBlocked(c.name) || (args.confirmed === true && !autoRunOn))) {
         answer({ ok: false, error: "needs_yes", hint: "Jared is not here, so this waits for his yes. Don't retry it; make your last line NEEDS_YES: <what you'd do, in everyday words>." });
         continue;
       }
@@ -1908,29 +2088,34 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
           continue;
         }
       }
-      if (c.name === "mac_run" && args.action === "propose") args.__free = true;   // never auto-run a free-model script
-      if (c.name === "commit_files" && !autopilot) {
+      // A free-model script normally waits for his Run tap. Autopilot with auto-run on is his standing yes, so it runs.
+      if (c.name === "mac_run" && args.action === "propose" && !(autopilot && autoRunOn)) args.__free = true;
+      if (c.name === "commit_files") {
         // A commit is watched to the end and reverted if the build fails (rule 4). That needs ~90 s of the 150 s request: with less
         // left, save the call and run it first thing next hop (a fresh budget) instead of committing something nobody can watch.
+        // Autopilot has no next hop, so it waits for the next ladder tick instead of committing unwatched.
         if (args.confirmed === true && reqStartedAt + REQ_HARD_MS - Date.now() < COMMIT_NEEDS_MS) {
-          if (JSON.stringify(args).length <= PENDING_CAP) {
+          if (!autopilot && JSON.stringify(args).length <= PENDING_CAP) {
             deferred = { name: c.name, args };
             notes.push(`Saved the commit "${String(args.message ?? "update").slice(0, 80)}" to run first thing next round (not enough time left to watch the build).`);
             answer({ ok: true, deferred: true, note: "Not enough time left in this round to watch the build, so the commit is saved and runs first thing in the next round. Say so in one line and stop." });
           } else {
-            answer({ ok: false, error: "not_enough_time", hint: "Not enough time left in this round to watch the build. Next round, send the same change as smaller edits." });
+            answer({ ok: false, error: "not_enough_time", hint: autopilot
+              ? "Not enough time left in this run to watch the build and revert it. This waits for the next fix-ladder attempt; say what you checked and end STUCK: not enough time to watch the build."
+              : "Not enough time left in this round to watch the build. Next round, send the same change as smaller edits." });
           }
           timeBox = true;
           continue;
         }
-        toolDeadline = Math.min(reqStartedAt + 118_000, Date.now() + 85_000);
+        if (!autopilot) toolDeadline = Math.min(reqStartedAt + 118_000, Date.now() + 85_000);
       }
       let out = await runTool(c.name, args, threadId);
       if ((out as any)?.ok === false && c.name !== "learn") out = await heal(c.name, args, out, {});  // real columns + past lessons
       used.push(c.name);
       newCalls++;
       const ok = (out as any)?.ok !== false;
-      if (ok && !FREE_READS.has(c.name) && !(c.name === "mac_run" && args.action === "get") && !(c.name === "pi_command" && PI_READ_ONLY.has(`${args.target}.${args.action}`))) {
+      // delegate only reads (through its children), so it must not count as an action that lets Scout say "done".
+      if (ok && !FREE_READS.has(c.name) && c.name !== "delegate" && !(c.name === "mac_run" && args.action === "get") && !(c.name === "pi_command" && PI_READ_ONLY.has(`${args.target}.${args.action}`))) {
         acted = true;
         for (const x of calls) x.stale = true;   // a change was made: earlier reads may no longer be true, read again
       }
@@ -1963,7 +2148,9 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     if (fails > 4) break;
   }
 
-  if (!replied) return autopilot ? { why: "The free AI isn't answering right now.", tools: used } : busyPause();
+  if (!replied) return autopilot
+    ? { why: `The free AI isn't answering right now${lastErr ? ` (${lastErr}; request ~${requestFit()} tokens)` : ""}.`, tools: used }
+    : busyPause();
   if (await supersededSince(threadId, opts.since ?? null)) return { why: "", tools: used, stopped: true };
   // Out of steps or time with work in hand: say what was found. Chat offers to keep going for free; autopilot
   // keeps the findings next to the paid offer (a STUCK verdict), so the paid run starts from them.
@@ -2038,6 +2225,10 @@ async function tryTodoMove(threadId: string, text: string): Promise<string | nul
 
 // Set per request from scout_settings.auto_run.
 let autoRunOn = false;
+// 2026-10-17: true only on a fix-ladder call (service key, nobody watching). Used to keep an unattended script
+// away from the handful of commands that cannot be undone.
+let autopilotRun = false;
+const UNSAFE_AUTO_SCRIPT = /\b(?:sudo|doas|mkfs|shutdown|halt|reboot|launchctl\s+(?:unload|bootout|remove))\b|\bdd\s+if=|\brm\s+-rf\s+(?:\/|~|\$HOME)(?:\s|$)|\bgit\s+push\s+(?:-f|--force)\b|\bgit\s+reset\s+--hard\s+origin|\bcurl[^|\n]*\|\s*(?:sh|bash)\b|\bwget[^|\n]*\|\s*(?:sh|bash)\b|>\s*\/dev\/(?:sd|disk)/i;
 let paidUntil: string | null = null; // v30: when the Paid AI switch turns itself off (null = until he turns it off)
 
 async function runTool(name: string, args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
@@ -2045,9 +2236,22 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
   const repo = REPOS[args.repo ?? "site"] ?? REPOS.site;
 
   switch (name) {
+    case "delegate": {
+      out = await delegateTool(args, threadId);
+      break;
+    }
     case "today": {
       const { data, error } = await db.rpc("admin_today");
       out = error ? { ok: false, error: error.message } : { ok: true, queue: data };
+      break;
+    }
+    case "kitchen_chef": {
+      try {
+        const r = await chefCook(db, { ask: String(args.ask ?? ""), count: Number(args.count) || 3, job: "admin-chat", fn: "admin-chat", deadlineMs: 60_000 });
+        out = { ok: true, markdown: chefMarkdown(r), recipes: r.recipes.map((x) => ({ name: x.name, minutes: x.minutes, omni: !!x.omni_steps })) };
+      } catch (e) {
+        out = { ok: false, error: (e as Error).message };
+      }
       break;
     }
     case "incidents": {
@@ -2230,6 +2434,11 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
       break;
     }
     case "mac_run": {
+      // Autopilot with auto-run on is allowed to repair, but not to run the few commands a person cannot undo.
+      if (autopilotRun && UNSAFE_AUTO_SCRIPT.test(`${String(args.script ?? "")}\n${String(args.cwd ?? "")}`)) {
+        out = { ok: false, error: "unsafe_unattended", hint: "That script has a command that cannot be undone without a person (sudo, a force push, a wipe, a reboot). Rewrite it without that step. If the task truly needs it, end with NEEDS_YES: <what you would run, in everyday words>." };
+        break;
+      }
       out = await macRun(args, threadId);
       break;
     }
@@ -2444,8 +2653,14 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
   throw new Error("anthropic: retries exhausted");
 }
 
-// Tools autopilot never runs even without a confirmed flag: they reach Jared or a machine.
-const AUTOPILOT_NEVER = new Set(["mac_run", "notify", "commit_files", "code_job", "db_write", "clear_alerts", "ask_user", "make_video", "send_email", "report_spam"]);
+// Tools autopilot never runs even without a confirmed flag: they reach Jared, spend money or need a person.
+const AUTOPILOT_NEVER = new Set(["notify", "clear_alerts", "ask_user", "make_video", "send_email", "report_spam"]);
+// 2026-10-17 (Jared: "take on all and any tasks"): the fix ladder had no hands, so 251 of its last ~282 attempts ended
+// NEEDS_YES and the same incident came back every 20 minutes. When auto-run is on (his standing yes, the switch in
+// Scout's header) autopilot may now run the repairs too. With auto-run off it behaves exactly as before. Code deploys
+// still wait for his Run tap (isDeploy in mac_run), and nothing here can reach a human.
+const AUTOPILOT_REPAIRS = new Set(["mac_run", "commit_files", "code_job", "db_write", "mac_command", "pi_command"]);
+const autopilotBlocked = (name: string) => AUTOPILOT_NEVER.has(name) || (AUTOPILOT_REPAIRS.has(name) && !autoRunOn);
 
 
 // v66 (2026-10-12): Scout denied sending emails he really sent. Chat history is rebuilt from admin_chat_messages
@@ -2816,6 +3031,7 @@ Deno.serve(async (req) => {
   // v13 autopilot: the fix ladder (service key only) runs Scout as the admin with no one watching.
   // Nothing that needs a yes can run on autopilot; that is enforced below, not left to the model.
   const autopilot = body.autopilot === true && svcCall;
+  autopilotRun = autopilot;
   // v43: the run watchdog (scout_run_rescue, every 2 min) re-fires a free run whose hop chain died mid-job (8 times Oct 7-10:
   // the note froze on "Working…" until he typed Keep going). Service key only, an existing thread, a hop number: it acts as
   // the admin exactly like that hop would have, and stops by itself if he has written since (supersededSince).
@@ -2976,14 +3192,16 @@ Deno.serve(async (req) => {
         await db.from("code_jobs").update({ status: "failed", finished_at: new Date().toISOString() }).eq("thread_id", threadId).eq("status", "needs_yes");
         return await say("Dropped. Nothing was spent.");
       } else if (autopilot) {
-        // v29: the fix ladder tries the free agent first (same autopilot limits: nothing that needs a yes runs).
-        // Paid AI is offered only when free can't finish; a free STUCK keeps its diagnosis and adds the paid offer.
-        const agent = await freeAgent(threadId, text, body.page, { autopilot: true }).catch(() => ({ why: "", tools: [] as string[] }) as { answer?: string; why: string; tools?: string[]; note?: string });
-        if (agent.answer && !/^STUCK:/m.test(agent.answer)) return await say(agent.answer, { free: true, tools: agent.tools ?? [] });
-        // Keep what the free AI found (its STUCK line becomes a plain note), then the one-tap paid offer as the verdict.
-        const diag = agent.answer ? agent.answer.replace(/^STUCK:\s*/m, "Free AI is stuck: ").trim() + "\n"
-          : agent.note ? `The free AI looked (${(agent.tools ?? []).length} checks) and handed off: ${agent.note}\n` : "";
-        return await say(`${diag}NEEDS_YES: Let Scout work on this with paid AI (Claude). It costs a few cents.`, { paid_needed: true, tools: agent.tools ?? [] });
+        // v69: autopilot never spends, so a paid offer here was a lie (251 NEEDS_YES messages, most of them this one).
+        // The free agent now has real hands when auto-run is on; its own verdict is the answer.
+        // Autopilot has no chat user waiting, so it can use 110 s of the 150 s request instead of the chat's 85 s.
+        // The first live run read 7 cards one by one and hit the old 85 s wall before it could make the fix.
+        const agent = await freeAgent(threadId, text, body.page, { autopilot: true, budgetMs: 110_000 }).catch(() => ({ why: "", tools: [] as string[] }) as { answer?: string; why: string; tools?: string[]; note?: string });
+        if (agent.answer) return await say(agent.answer, { free: true, tools: agent.tools ?? [] });
+        const diag = agent.note
+          ? `The free AI looked (${(agent.tools ?? []).length} checks) and could not finish: ${agent.note}`
+          : "The free AI could not reach an answer.";
+        return await say(`${diag}\nSTUCK: ${agent.why || "the free AI did not finish"}`, { free: true, tools: agent.tools ?? [] });
       } else {
         const askFirst = ASKS_FOR_QUESTIONS.test(text);
         // v36: working memory for a free run. A new message starts clean; a hop (or a hand-typed "keep going" within the
@@ -3162,6 +3380,12 @@ Deno.serve(async (req) => {
     else messages.push({ role, content });
   }
   if (!messages.length) messages.push({ role: "user", content: text });
+  // 2026-10-17: Anthropic rejects a conversation that ends on an assistant turn ("This model does not support assistant
+  // message prefill"). A progress note or an auto-carried-on hop can leave one there; it cost 32 dead replies. Close every
+  // paid run with a user turn.
+  if (messages[messages.length - 1]?.role !== "user") {
+    messages.push({ role: "user", content: "(Scout: carry on from the newest message above and finish the job.)" });
+  }
 
   const page = body.page && typeof body.page === "object"
     ? {
@@ -3295,9 +3519,7 @@ Deno.serve(async (req) => {
           extras.push(...lk.docs);
           continue;
         }
-        const blocked = autopilot && (autoRunOn
-          ? c.name === "commit_files"
-          : ((c.input as any)?.confirmed === true || AUTOPILOT_NEVER.has(c.name)));
+        const blocked = autopilot && (autopilotBlocked(c.name) || ((c.input as any)?.confirmed === true && !autoRunOn));
         if (blocked) {
           out = { ok: false, error: "needs_yes", hint: "Autopilot: Jared is not here, so this waits for his yes. Don't retry it. Finish your reply and make the last line NEEDS_YES: <what you would do and what it changes for him, in everyday words a non-technical person understands, one line, no jargon>." };
           results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify(out) });
