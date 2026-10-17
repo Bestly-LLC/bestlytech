@@ -356,7 +356,7 @@ export default function PrivacyPolicy() {
           <li><strong className="text-foreground">youtube.readonly:</strong> to read the connected channel's name and ID, so the client can see which channel is connected, and to confirm that an approved post went live.</li>
         </ul>
         <p className="text-muted-foreground leading-relaxed mb-4">
-          What we store: an encrypted refresh token (kept in a secrets vault, never shown in the app) and the channel ID and channel title. We do not read, copy or keep your other YouTube videos, comments, subscribers, analytics or private data. We only upload a video after the client approves that post in Bestly Studio.
+          What we store: a refresh token (kept in our private database, which is encrypted at rest, and never shown in the app) and the channel ID and channel title. We do not read, copy or keep your other YouTube videos, comments, subscribers, analytics or private data. We only upload a video after the client approves that post in Bestly Studio.
         </p>
         <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
           <li>We do not sell YouTube or Google user data, share it with anyone else, or use it for advertising.</li>
@@ -390,7 +390,7 @@ export default function PrivacyPolicy() {
           <li><strong className="text-foreground">video.upload:</strong> to send a video the client has approved to the client's TikTok drafts. The client opens the draft in TikTok and taps Post. We do not publish on the client's behalf.</li>
         </ul>
         <p className="text-muted-foreground leading-relaxed mb-4">
-          What we store: an encrypted access token and refresh token (kept in a secrets vault, never shown in the app), the TikTok open ID and the display name. We do not read, copy or keep your other TikTok videos, followers, messages or analytics. We only send a video after the client approves that post in Bestly Studio.
+          What we store: an access token and refresh token (kept in our private database, which is encrypted at rest, and never shown in the app), the TikTok open ID and the display name. We do not read, copy or keep your other TikTok videos, followers, messages or analytics. We only send a video after the client approves that post in Bestly Studio.
         </p>
         <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
           <li>We do not sell TikTok user data, share it with anyone else, or use it for advertising.</li>

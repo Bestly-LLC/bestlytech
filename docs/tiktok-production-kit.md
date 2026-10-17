@@ -66,7 +66,7 @@ Replace the "Where do you post?" answer in `faqs` in `src/pages/BestlyStudio.tsx
 Also make sure the Privacy Policy and Terms links are visible in the page body or the site header/footer **without opening a menu** (TikTok rule; the site footer links them, confirm it is visible on `/studio`).
 
 ### Privacy policy (shipped)
-The master policy had no TikTok text. Added section "Bestly Studio: Connected TikTok Accounts" (id `16d`) after the YouTube section, same style: the two scopes, what is stored (access and refresh token in the vault, open ID, display name), nothing sold or shared or used for ads or AI training, how to disconnect and delete (within 30 days, privacy@bestly.tech). Also a "Connected a TikTok account?" block in `public/data-deletion.html` (`#tiktok`). Live after Vercel deploys main.
+The master policy had no TikTok text. Added section "Bestly Studio: Connected TikTok Accounts" (id `16d`) after the YouTube section, same style: the two scopes, what is stored (access and refresh token in our database (encrypted at rest), open ID, display name), nothing sold or shared or used for ads or AI training, how to disconnect and delete (within 30 days, privacy@bestly.tech). Also a "Connected a TikTok account?" block in `public/data-deletion.html` (`#tiktok`). Live after Vercel deploys main.
 
 ## 2. Paste-ready text for the portal
 
@@ -105,7 +105,7 @@ The master policy had no TikTok text. Added section "Bestly Studio: Connected Ti
 - **Sale, sharing, ads, AI training:** none.
 - **Access:** only Bestly staff who run that client's account.
 - **Deletion:** disconnect in the portal stops sending at once; stored data deleted within 30 days on request to privacy@bestly.tech (`https://www.bestly.tech/data-deletion.html#tiktok`).
-- **Honest gap (a follow-up, not a blocker):** like YouTube, portal Disconnect clears use but tokens may remain until deletion on request. Say "disconnect stops all use; deletion is on request within 30 days." Also tokens are stored in the `social_accounts` table, not in Vault (Vault holds only the app key and secret). The privacy section says tokens are in a "secrets vault"; if that wording worries you, edit it before submitting to "encrypted at rest in our database". Checked against code: `studio-social` writes `access_token`/`refresh_token` to `social_accounts`.
+- **Honest gap (a follow-up, not a blocker):** like YouTube, portal Disconnect clears use but tokens may remain until deletion on request. Say "disconnect stops all use; deletion is on request within 30 days." Also tokens are stored in the `social_accounts` table, not in Vault (Vault holds only the app key and secret). The privacy section was corrected on 2026-10-17 to say "kept in our private database, which is encrypted at rest". Checked against code: `studio-social` writes `access_token`/`refresh_token` to `social_accounts`.
 
 ## 3. What the code really calls (for the reviewer questions)
 Confirmed from `supabase/functions/studio-social/index.ts` and the deployed `tiktok-inbox` function (v5; its source is only on Supabase, not in this repo, so a session should pull it into `supabase/functions/tiktok-inbox/`).
