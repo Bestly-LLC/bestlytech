@@ -26,13 +26,54 @@ uses zero Worker quota. Edge Guard puts a splash route on a site only while that
    - Any splash route attached while the site is healthy is detached after 3 healthy checks (undoes a redeploy that
      left it always on). Bell note, no push.
    - Cloudflare 1027/429 seen: removes the splash routes, keeps everything fail open, alerts (once an hour).
+   - **No cached lie about a file that exists** (every 5 minutes, added 2026-10-17). See below.
+   - The cache rule that keeps a 404 out of the cache is still there (once a day).
 5. Writes a heartbeat to `edge_guard_beat` every run. Team Watch reads it through the card's pulse (gap 5 minutes);
    if Edge Guard stops, the card goes yellow then red and Team Watch raises `team.silent.edge-guard`.
 6. Every action is logged: `edge_guard_log` table (at, site, state, action, detail) and
    `~/bestly-agents/edge-guard/edge-guard.log` on the Mac.
 
+## Cached lies — the class that killed /neckpilot (2026-10-17)
+
+Vercel tags **every** `/assets/*` response `public, max-age=31536000, immutable` — including its own 404. A hashed
+asset that 404s for one moment while a deploy swaps builds can therefore become a year-long answer for a file that
+exists, and Cloudflare caches 404/410 for three minutes on its own even with no cache-control at all.
+
+`/neckpilot` was dead for real visitors on 2026-10-17: Chrome got a 404 for a JS chunk it imports, the page fell to
+its error boundary, and **every probe we owned said 200** — `probe-external`, `site-depth-check`, a plain `curl`.
+Redeploying cannot fix it (the filename is content-hashed, so it is identical in every build) and neither can
+rolling back.
+
+The tell is the difference between two requests for the same file: without a cache-buster the edge answers from its
+own copy (`cf-cache-status: hit`), with one it goes to the origin (`miss`). A plain 404 that a busted request says
+is 200 means the edge is the problem. Edge Guard now checks every asset the homepage references that way every five
+minutes, and:
+
+- **detects** it with no Cloudflare permission at all — that is why it lives in Edge Guard and not in the account;
+- **purges** the URL when a token exists (below), then says so;
+- **alerts** either way: a lie, or a file the build genuinely never shipped (a purge cannot help that one — it is
+  Depth Check's deploy-side job).
+
+### The permission this needs
+
+The wrangler OAuth login Edge Guard already holds **cannot do any of it**: its scopes are `zone:read` plus workers,
+d1, pages and friends — no cache purge, no cache rules. Verified 2026-10-17 (purge answers 401, rulesets 403). So
+clearing a cached lie, and enforcing the rule that prevents one, need their own token:
+
+1. Cloudflare dashboard → My Profile → API Tokens → Create Token → Custom token, zone `bestly.tech`:
+   **Zone → Cache Purge: Edit** and **Zone → Cache Rules: Edit**. Nothing else.
+2. Keychain Access → add a password item, name `bestly-cf-cache`, account `bestly.tech`, value = the token.
+
+With that item present Edge Guard purges a poisoned URL, and once a day confirms the cache rule exists and puts it
+back if somebody removed it. Without it, detection and the alert still work, and the heartbeat summary says
+`no cache token (rule unverified)` rather than implying the edge is covered. If the token is refused, that is itself
+an alert, because a check that silently stops checking is worse than no check.
+
 ## Alerts (signed Edge Guard, through `scout_notify`, deduped per incident)
 
+- "Edge Guard: the edge is serving a cached lie" (with the URL and the one-line fix)
+- "Edge Guard: a page is loading a file the build never shipped"
+- "Edge Guard: I could not confirm the rule that keeps 404s out of the cache"
 - "Edge Guard: bestly.tech is down, showing the splash"
 - "Edge Guard: bestly.tech back up after 6 minutes"
 - "Edge Guard: switched a blocking route to fail open"

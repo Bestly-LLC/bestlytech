@@ -259,6 +259,133 @@ def why(res):
     return f"error {res['status']}"
 
 
+# ------------------------------------------------------------------ cached lies at the edge
+# Vercel tags EVERY /assets/* response with `Cache-Control: public, max-age=31536000,
+# immutable` — including its own 404. Cloudflare caches what the origin says is
+# cacheable, so one 404 in the seconds while a deploy swaps builds becomes a
+# year-long answer for a file that exists. On 2026-10-17 that is exactly what
+# happened to a JS chunk /neckpilot imports: the page was dead on arrival in
+# Chrome while every probe we owned said 200, curl included.
+#
+# The tell is the difference between two requests for the same file: without a
+# cache-buster the edge answers from its own copy, with one it goes to the origin.
+# A plain 404 that a busted request says is 200 means the edge is holding a lie.
+# Detection needs no Cloudflare permission at all — that is why it lives here and
+# not in the account. Clearing it does: the wrangler login Edge Guard already has
+# carries zone:read and nothing cache-related (purge answers 401, rulesets 403),
+# so a purge only happens when someone has added the Keychain token below.
+HOME_CACHE_URL = "https://www.bestly.tech"
+ASSET_RE = re.compile(r'["\'](/(?:assets|models)/[A-Za-z0-9_.-]+\.(?:js|css|glb|woff2|png))["\']')
+ASSET_CAP = 12
+CACHE_EVERY = 300          # seconds between asset checks (the probes every minute are enough otherwise)
+CF_CACHE_KEYCHAIN = ("bestly-cf-cache", "bestly.tech")  # Cloudflare API token, Zone: Cache Purge
+BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+
+
+def fetch_status(url, timeout=10):
+    """One GET the way a browser makes it. Returns (status, cf-cache-status)."""
+    req = urllib.request.Request(url, headers={"User-Agent": BROWSER_UA, "Accept": "*/*"})
+    try:
+        with _opener.open(req, timeout=timeout) as r:
+            return r.status, (r.headers.get("cf-cache-status") or "").lower()
+    except urllib.error.HTTPError as e:
+        return e.code, (e.headers.get("cf-cache-status") or "").lower()
+    except Exception:
+        return 0, ""
+
+
+def asset_paths(timeout=10):
+    """Every /assets/ and /models/ file the live homepage asks a browser to load."""
+    req = urllib.request.Request(f"{HOME_CACHE_URL}/?__eg={now()}",
+                                 headers={"User-Agent": BROWSER_UA, "Accept": "text/html"})
+    try:
+        with _opener.open(req, timeout=timeout) as r:
+            html = r.read(400000).decode("utf-8", "replace")
+    except Exception as e:
+        log(f"cache check: could not read the homepage ({e})")
+        return []
+    seen, out = set(), []
+    for m in ASSET_RE.finditer(html):
+        if m.group(1) not in seen:
+            seen.add(m.group(1))
+            out.append(m.group(1))
+    return out[:ASSET_CAP]
+
+
+def check_assets(paths, timeout=10):
+    """Files the edge answers differently from the origin. Only a lie counts:
+    a plain 404 whose origin, asked directly, is fine."""
+    bad = []
+    for p in paths:
+        url = HOME_CACHE_URL + p
+        plain, cf = fetch_status(url, timeout)
+        if plain == 200:
+            continue
+        busted, _ = fetch_status(f"{url}?__eg={now()}", timeout)
+        bad.append({"path": p, "plain": plain, "busted": busted, "cf": cf})
+    return bad
+
+
+def purge_urls(zid, urls):
+    """Cloudflare purge. Returns True, False (token present but refused), or None (no token)."""
+    tok = keychain(*CF_CACHE_KEYCHAIN)
+    if not tok:
+        return None
+    code, resp = http_json(f"{CF}/zones/{zid}/purge_cache", {"files": urls},
+                           {"Authorization": "Bearer " + tok}, method="POST", timeout=20)
+    log(f"cache purge {code}: {json.dumps(resp.get('errors', []))[:160] if code != 200 else 'ok'}")
+    return code == 200 and bool(resp.get("success"))
+
+
+# The prevention, not just the cure. A cache rule cannot test a response code in
+# its expression (that phase runs before the origin answers), but its TTL setting
+# can be per-status: `status_code_ttl` with 404 -> no-store keeps every other
+# response cached exactly as before and refuses to store a 404 at all. Cloudflare
+# caches 404/410 for three minutes on its own even with no cache-control, so
+# without this the window is always open.
+CACHE_RULE_DESC = "Edge Guard: never store a 404 for a built asset"
+CACHE_RULE_EXPR = ('(http.host eq "www.bestly.tech" or http.host eq "bestly.tech") '
+                   'and starts_with(http.request.uri.path, "/assets/")')
+CACHE_RULE = {
+    "description": CACHE_RULE_DESC,
+    "expression": CACHE_RULE_EXPR,
+    "action": "set_cache_settings",
+    "action_parameters": {
+        "cache": True,
+        "edge_ttl": {"mode": "respect_origin", "status_code_ttl": [{"status_code": 404, "value": "no-store"}]},
+    },
+}
+CACHE_PHASE = "http_request_cache_settings"
+RULE_EVERY = 24 * 60 * 60
+
+
+def ensure_cache_rule(zid):
+    """True when the rule is in place (adding it if needed), False when it could not be, None with no token."""
+    tok = keychain(*CF_CACHE_KEYCHAIN)
+    if not tok:
+        return None
+    hdr = {"Authorization": "Bearer " + tok}
+    code, resp = http_json(f"{CF}/zones/{zid}/rulesets/phases/{CACHE_PHASE}/entrypoint", headers=hdr, timeout=20)
+    if code == 404:  # no rules in this phase yet
+        rules = []
+    elif code != 200:
+        log(f"cache rule: could not read the ruleset ({code}) {json.dumps(resp.get('errors', []))[:160]}")
+        return False
+    else:
+        rules = resp.get("result", {}).get("rules", [])
+    if any(r.get("description") == CACHE_RULE_DESC for r in rules):
+        return True
+    # Send the whole array back: this endpoint replaces the phase's rules, so a
+    # rule posted alone would silently delete somebody else's.
+    code, resp = http_json(f"{CF}/zones/{zid}/rulesets/phases/{CACHE_PHASE}/entrypoint",
+                           {"rules": rules + [CACHE_RULE]}, hdr, method="PUT", timeout=20)
+    ok = code == 200 and bool(resp.get("success"))
+    log(f"cache rule: added ({code}){' ok' if ok else ' ' + json.dumps(resp.get('errors', []))[:160]}"
+        f" keeping {len(rules)} existing rule(s)")
+    return ok
+
+
 # ------------------------------------------------------------------ Cloudflare (wrangler OAuth login, token stays in memory)
 class CfAuthError(Exception):
     pass
@@ -503,6 +630,80 @@ def run():
                             "severity": "warning", "push": sev_push(True), "dedupe": f"edge.{dk}still.{name}.{inc['id']}.{t // REMIND_EVERY}"})
             summary_bits.append(f"{name} DOWN ({why(bad[0])}), splash {'on' if mine or missing != g['patterns'] else 'pending'}")
             ok_all = False
+
+    # -- invariant D: no cached lie about a file that exists (the /neckpilot killer)
+    sites_healthy = all(st.get("groups", {}).get(g["name"], {}).get("fails", 0) == 0 for g in GROUPS)
+    if sites_healthy and not test_groups:
+        cst = st.setdefault("cache", {})
+        if now() - int(cst.get("checked_at", 0)) >= CACHE_EVERY:
+            cst["checked_at"] = now()
+            paths = asset_paths()
+            lies = check_assets(paths) if paths else []
+            cst["checked"] = len(paths)
+            cst.pop("lies", None) if not lies else cst.update({"lies": {l["path"]: l for l in lies}})
+            day = time.strftime("%Y%m%d")
+            for lie in lies:
+                url = HOME_CACHE_URL + lie["path"]
+                # A busted request that answers 200 proves the file is there and the
+                # edge is the problem. A busted 404 means the deploy itself is wrong,
+                # which is a different alert and not something a purge can fix.
+                origin_ok = lie["busted"] == 200
+                purged = purge_urls(zid, [url]) if origin_ok else None
+                if purged:
+                    cst.setdefault("purged", {})[lie["path"]] = now()
+                cst.setdefault("alerted", {})[lie["path"]] = day
+                if origin_ok and purged is None:
+                    body = (f"The edge answered {lie['plain']} for {url} (cf-cache-status {lie['cf'] or 'unknown'}) while the "
+                            "origin, asked directly, served it fine — so the cached answer is wrong and every browser gets it. "
+                            "A visitor's page breaks on a file that exists.\n\n"
+                            "I can see this but I cannot clear it: the wrangler login I have carries zone:read and no cache "
+                            "permission, so no purge and no cache rule. Either purge it by hand (Cloudflare → Caching → "
+                            "Configuration → Purge by URL → paste the link above) or add a Cloudflare API token with "
+                            "Zone → Cache Purge to Keychain as bestly-cf-cache and I will clear the next one myself.")
+                elif origin_ok:
+                    body = (f"The edge answered {lie['plain']} for {url} while the origin served it fine. I purged it, so the "
+                            "next request goes back to the origin. A visitor's page was breaking on a file that exists.")
+                else:
+                    body = (f"{url} answers {lie['plain']} from the edge AND {lie['busted']} straight from the origin, so the "
+                            "file is not in the deployment at all — a purge will not help. A page is loading a file the "
+                            "build did not ship. Depth Check reports the deploy side of this.")
+                report("edge", "cache", "purged" if purged else ("detected" if origin_ok else "missing at origin"),
+                       f"{lie['path']} plain={lie['plain']} busted={lie['busted']} cf={lie['cf'] or 'n/a'}",
+                       {"title": "Edge Guard: the edge is serving a cached lie" if origin_ok else
+                                 "Edge Guard: a page is loading a file the build never shipped",
+                        "body": body,
+                        "severity": "warning", "push": True,
+                        "dedupe": f"edge.cache.{re.sub(r'[^a-z0-9]+', '-', lie['path'].lower())}.{day}"})
+                ok_all = ok_all and bool(purged)
+            for k in ("alerted", "purged"):
+                watch = cst.get(k) or {}
+                if len(watch) > 50:
+                    for old in sorted(watch, key=lambda p: watch[p])[:-50]:
+                        watch.pop(old, None)
+            if lies:
+                summary_bits.append(f"{len(lies)} cached lie(s): " + ", ".join(l["path"].split("/")[-1] for l in lies[:3]))
+
+    # -- invariant E: the rule that stops a 404 from ever being stored in the first place.
+    # Once a day, because it only changes when somebody edits it by hand. Needs the same
+    # Keychain token; with no token there is nothing to enforce, and the summary says so
+    # rather than pretending the edge is covered.
+    if cf_ok and not test_groups:
+        cst = st.setdefault("cache", {})
+        if now() - int(cst.get("rule_checked_at", 0)) >= RULE_EVERY:
+            cst["rule_checked_at"] = now()
+            rule_state = ensure_cache_rule(zid)
+            cst["rule_ok"] = rule_state
+            if rule_state is None:
+                summary_bits.append("no cache token (rule unverified)")
+            elif rule_state is False:
+                ok_all = False
+                report("edge", "cache", "rule missing", "could not read or write the cache ruleset",
+                       {"title": "Edge Guard: I could not confirm the rule that keeps 404s out of the cache",
+                        "body": "A 404 cached at the edge is what killed /neckpilot on 2026-10-17. The rule that refuses "
+                                "to store one is either missing or I could not reach it — my token was refused. Check that "
+                                "the bestly-cf-cache token in Keychain still exists and still has Zone → Cache Rules: Edit.",
+                        "severity": "warning", "push": True,
+                        "dedupe": f"edge.cache.rule.{time.strftime('%Y%m%d')}"})
 
     # -- invariant C: Cloudflare 1027 / 429 (the Worker request cap). Remove the Workers, keep fail open, tell Jared once an hour.
     if quota_seen and cf_ok and not test_groups:
