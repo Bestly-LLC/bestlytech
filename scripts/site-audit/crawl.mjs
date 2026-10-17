@@ -72,7 +72,13 @@ const IGNORE = [
 /** The <title> in index.html. Any page still showing it never set its own. */
 const DEFAULT_TITLE = "Bestly — AI Agents That Answer Your Phone and Do the Work";
 
-const browser = await chromium.launch({ channel: "chrome", headless: true });
+// Local runs use the real Chrome. A cloud session has no Chrome channel, only
+// Playwright's bundled Chromium — point CHROME_PATH at it there.
+const browser = await chromium.launch(
+  process.env.CHROME_PATH
+    ? { executablePath: process.env.CHROME_PATH, headless: true }
+    : { channel: "chrome", headless: true },
+);
 const ctx = await browser.newContext({ viewport, isMobile: MOBILE, hasTouch: MOBILE });
 const page = await ctx.newPage();
 
