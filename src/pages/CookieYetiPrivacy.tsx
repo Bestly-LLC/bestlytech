@@ -1,14 +1,7 @@
-import { useEffect } from "react";
 import { AnimatedSection } from "@/components/AnimatedSection";
+import { SEOHead } from "@/components/SEOHead";
 
 export default function CookieYetiPrivacy() {
-  useEffect(() => {
-    document.title = "Cookie Yeti Privacy Policy | Bestly LLC";
-    const metaDescription = document.querySelector('meta[name="description"]');
-    if (metaDescription) {
-      metaDescription.setAttribute("content", "Bestly LLC Privacy Policy for Cookie Yeti. No personal data, no browsing history, no data selling. Anonymous analytics only, and we share only a site's domain to improve the product.");
-    }
-  }, []);
 
   const effectiveDate = "October 1, 2026";
   const lastUpdated = "October 1, 2026";
@@ -124,6 +117,11 @@ export default function CookieYetiPrivacy() {
 
   return (
     <>
+      <SEOHead
+        title="Cookie Yeti Privacy Policy | Bestly LLC"
+        description="Bestly LLC Privacy Policy for Cookie Yeti. No personal data, no browsing history, no data selling. Anonymous analytics only, and we share only a site's domain to improve the product."
+        path="/cookie-yeti/privacy"
+      />
       <div className="mx-auto max-w-4xl px-6 py-16 lg:px-8 lg:py-24">
         <AnimatedSection>
           <header className="mb-12">

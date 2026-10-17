@@ -111,6 +111,8 @@ for (const route of routes) {
   let title = "";
   let h1 = "";
   let textLen = 0;
+  let canonical = "";
+  let noindex = false;
   let overflow = null;
   let missingAlt = [];
   let brokenImages = [];
@@ -120,6 +122,14 @@ for (const route of routes) {
     const resp = await page.goto(BASE + route, { waitUntil: "networkidle", timeout: 45000 });
     status = resp?.status() ?? null;
     await page.waitForTimeout(1200);
+    // A route whose chunk is still compiling lands on the shell with the
+    // homepage's title for a moment. Give it a bounded chance to swap its own
+    // head in before calling the page headless — past eight seconds it is real.
+    if (route !== "/" && (await page.title()) === DEFAULT_TITLE) {
+      await page
+        .waitForFunction((t) => document.title !== t, DEFAULT_TITLE, { timeout: 8000 })
+        .catch(() => {});
+    }
     title = await page.title();
     h1 = ((await page.locator("h1").first().textContent().catch(() => "")) || "").trim();
     textLen = ((await page.locator("body").innerText().catch(() => "")) || "").length;
@@ -138,8 +148,14 @@ for (const route of routes) {
           .map((i) => (i.currentSrc || i.src || "").slice(-80)),
         brokenImages: imgs.filter((i) => i.complete && i.naturalWidth === 0).map((i) => (i.currentSrc || i.src || "").slice(-80)),
         links: [...document.querySelectorAll("a[href]")].map((a) => a.getAttribute("href")),
+        canonical: document.querySelector('link[rel="canonical"]')?.getAttribute("href") ?? "",
+        // ...all of them: index.html ships a static robots tag, so reading only
+        // the first one reported /links and /unsubscribe as indexable.
+        noindex: [...document.querySelectorAll('meta[name="robots"]')].some((m) => /noindex/i.test(m.getAttribute("content") ?? "")),
       };
     });
+    canonical = dom.canonical;
+    noindex = dom.noindex;
     if (dom.wide) overflow = { scrollWidth: dom.scrollWidth, innerWidth: dom.innerWidth };
     missingAlt = dom.missingAlt;
     brokenImages = dom.brokenImages;
@@ -179,6 +195,17 @@ for (const route of routes) {
   const borrowedTitle = route !== "/" && title === DEFAULT_TITLE;
   row.borrowedTitle = borrowedTitle;
 
+  // Same failure one level down: SEOHead's `path` used to default to "", so a
+  // page that did not pass it declared the homepage as its canonical and told
+  // Google it was a duplicate. Fourteen of thirty-two pages did exactly that
+  // until 2026-10-17. An alias route (/cloud for /in-house-cloud) canonicalising
+  // somewhere on purpose is fine — only the homepage and a missing tag are not.
+  let canonicalPath = "";
+  try { canonicalPath = canonical ? new URL(canonical).pathname.replace(/\/+$/, "") : ""; } catch { /* malformed href */ }
+  const borrowedCanonical = !noindex && (!canonical || (route !== "/" && canonicalPath === ""));
+  row.canonical = canonical;
+  row.borrowedCanonical = borrowedCanonical;
+
   const bad =
     status !== 200 ||
     row.consoleErrors.length ||
@@ -186,7 +213,8 @@ for (const route of routes) {
     row.badResponses.length ||
     row.brokenImages.length ||
     row.overflow ||
-    borrowedTitle;
+    borrowedTitle ||
+    borrowedCanonical;
   if (bad) problems.push(row);
 }
 
@@ -224,6 +252,7 @@ for (const r of report) {
   for (const e of r.missingAlt) line(`        no alt:  ${e}`);
   if (r.overflow) line(`        overflow: ${r.overflow.scrollWidth}px in a ${r.overflow.innerWidth}px viewport`);
   if (r.borrowedTitle) line(`        title:   still the homepage's. This page sets no <head>.`);
+  if (r.borrowedCanonical) line(`        canon:   ${r.canonical || "missing"} — this page claims the homepage as its canonical.`);
 }
 
 if (deadLinks.length) {

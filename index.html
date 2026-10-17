@@ -33,7 +33,14 @@
     <meta name="description" content="Bestly builds AI agents for small businesses. Bestly Agent answers every call, day or night, and does the work while it talks: books the appointment, updates your customer list and texts the confirmation. Also makes privacy-first apps and private cloud. Built in Los Angeles." />
     <meta name="author" content="Bestly LLC" />
     <meta name="robots" content="index, follow" />
-    <link rel="canonical" href="https://www.bestly.tech/" />
+    <!-- data-rh marks these as react-helmet's to own. Without it the static
+         canonical/og pair stayed in <head> on every route and each page that did
+         render SEOHead added a SECOND canonical beside it — so /about shipped two
+         canonicals, the homepage's first, and Google indexed the whole marketing
+         site as a duplicate of /. Helmet removes any data-rh tag it did not
+         re-render, which leaves exactly one per page. The values here are the
+         no-JS fallback and are correct for / only. -->
+    <link rel="canonical" href="https://www.bestly.tech/" data-rh="true" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png" />
@@ -62,21 +69,21 @@
          self-hosted at /draco/, so nothing on any page contacts that host. -->
 
     <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Bestly" />
-    <meta property="og:url" content="https://www.bestly.tech/" />
-    <meta property="og:title" content="Bestly — AI Agents That Answer Your Phone and Do the Work" />
-    <meta property="og:description" content="AI agents that answer your business phone 24/7 and do the work while they talk: book appointments, update your customer list, text confirmations. Built in Los Angeles." />
-    <meta property="og:image" content="https://www.bestly.tech/og-agent.png" />
+    <meta property="og:type" content="website" data-rh="true" />
+    <meta property="og:site_name" content="Bestly" data-rh="true" />
+    <meta property="og:url" content="https://www.bestly.tech/" data-rh="true" />
+    <meta property="og:title" content="Bestly — AI Agents That Answer Your Phone and Do the Work" data-rh="true" />
+    <meta property="og:description" content="AI agents that answer your business phone 24/7 and do the work while they talk: book appointments, update your customer list, text confirmations. Built in Los Angeles." data-rh="true" />
+    <meta property="og:image" content="https://www.bestly.tech/og-agent.png" data-rh="true" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
 
     <!-- Twitter -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://www.bestly.tech/" />
-    <meta name="twitter:title" content="Bestly — AI Agents That Answer Your Phone and Do the Work" />
-    <meta name="twitter:description" content="AI agents that answer your business phone 24/7 and do the work while they talk: book appointments, update your customer list, text confirmations. Built in Los Angeles." />
-    <meta name="twitter:image" content="https://www.bestly.tech/og-agent.png" />
+    <meta name="twitter:card" content="summary_large_image" data-rh="true" />
+    <meta name="twitter:url" content="https://www.bestly.tech/" data-rh="true" />
+    <meta name="twitter:title" content="Bestly — AI Agents That Answer Your Phone and Do the Work" data-rh="true" />
+    <meta name="twitter:description" content="AI agents that answer your business phone 24/7 and do the work while they talk: book appointments, update your customer list, text confirmations. Built in Los Angeles." data-rh="true" />
+    <meta name="twitter:image" content="https://www.bestly.tech/og-agent.png" data-rh="true" />
 
     <script type="application/ld+json">
       {

@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,19 +11,10 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AnimatedSection } from "@/components/AnimatedSection";
+import { SEOHead } from "@/components/SEOHead";
 import bestlyLogo from "@/assets/bestly-logo.png";
 
 const PressKit = () => {
-  useEffect(() => {
-    document.title = "Press Kit - Media Resources | Bestly LLC";
-    const metaDescription = document.querySelector('meta[name="description"]');
-    if (metaDescription) {
-      metaDescription.setAttribute(
-        "content",
-        "Official press kit for Bestly LLC. Download brand assets, logos, and access media resources for press coverage."
-      );
-    }
-  }, []);
 
   const products = [
     {
@@ -70,6 +60,11 @@ const PressKit = () => {
 
   return (
     <>
+      <SEOHead
+        title="Press Kit - Media Resources | Bestly LLC"
+        description="Official press kit for Bestly LLC. Download brand assets, logos, and access media resources for press coverage."
+        path="/press"
+      />
       <div className="bg-background">
         {/* Hero Section */}
         <section className="py-20 sm:py-24">

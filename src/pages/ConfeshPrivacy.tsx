@@ -1,14 +1,7 @@
-import { useEffect } from "react";
 import { AnimatedSection } from "@/components/AnimatedSection";
+import { SEOHead } from "@/components/SEOHead";
 
 export default function ConfeshPrivacy() {
-  useEffect(() => {
-    document.title = "Confesh Privacy Policy | Bestly LLC";
-    const metaDescription = document.querySelector('meta[name="description"]');
-    if (metaDescription) {
-      metaDescription.setAttribute("content", "Privacy policy for Confesh: Unscripted by Bestly LLC.");
-    }
-  }, []);
 
   const sections = [
     {
@@ -100,6 +93,11 @@ export default function ConfeshPrivacy() {
 
   return (
     <>
+      <SEOHead
+        title="Confesh Privacy Policy | Bestly LLC"
+        description="Privacy policy for Confesh: Unscripted by Bestly LLC."
+        path="/confesh/privacy"
+      />
       <div className="mx-auto max-w-4xl px-6 py-16 lg:px-8 lg:py-24">
         <AnimatedSection>
           <header className="mb-12">
