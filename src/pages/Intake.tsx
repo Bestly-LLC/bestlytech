@@ -476,6 +476,9 @@ export default function Intake() {
   if (loadState === "error" || !deal) {
     return (
       <div className="mx-auto max-w-2xl px-6 py-20 text-center">
+        {/* Every branch needs its own head: without one this fallback showed the
+            marketing homepage's <title> in the customer's tab. */}
+        <SEOHead title="Technical intake" description="" />
         <CircleAlert className="h-10 w-10 text-destructive mx-auto mb-4" />
         <h1 className="text-2xl font-semibold mb-3">Couldn't load your intake.</h1>
         <p className="text-muted-foreground mb-6">

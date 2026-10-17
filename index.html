@@ -51,9 +51,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-    <!-- 3D hero: start the model download during HTML parse + warm the draco decoder host -->
-    <link rel="preload" href="/models/device-web-split.glb" as="fetch" type="model/gltf-binary" crossorigin />
-    <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+    <!-- The 3D device GLB is NOT preloaded here. It is 2.1 MB and only /cloud
+         (InHouseCloud.tsx) renders it, but a preload in this file is paid by every
+         route: /, /about, /products, /cookie-yeti and the rest were all downloading
+         it in parallel with their own critical assets, and the console warned that
+         the preload went unused on each of them. preloadDeviceGLB() in
+         src/components/cloud/deviceModel.ts injects the tag when the cloud route's
+         chunk loads, which is the earliest point it can actually be used.
+         The www.gstatic.com preconnect went with it: the draco decoder is
+         self-hosted at /draco/, so nothing on any page contacts that host. -->
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />

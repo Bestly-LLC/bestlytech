@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,11 @@ const EmailUnsubscribe = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      {/* Was showing the marketing homepage's <title>. */}
+      <Helmet>
+        <title>Email preferences | Bestly</title>
+        <meta name="robots" content="noindex" />
+      </Helmet>
       <Card className="w-full max-w-md">
         <CardContent className="pt-8 pb-8 text-center space-y-4">
           {state === "loading" && (

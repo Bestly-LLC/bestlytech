@@ -1,10 +1,17 @@
 import { Link } from "react-router-dom";
 import { CheckCircle } from "lucide-react";
 import { AnimatedSection } from "@/components/AnimatedSection";
+import { SEOHead } from "@/components/SEOHead";
 
 export default function DeveloperCompliance() {
   return (
     <>
+      {/* Was inheriting the homepage's <title> and og: tags. */}
+      <SEOHead
+        title="Developer & Platform Compliance"
+        description="How Bestly LLC's apps, browser extensions and integrations comply with Apple, Google, Meta and platform developer policies."
+        path="/developer-compliance"
+      />
       <div className="mx-auto max-w-4xl px-6 py-16 lg:px-8 lg:py-24">
         {/* Page Header */}
         <AnimatedSection>

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { CheckCircle, AlertCircle, Loader2, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AnimatedSection } from "@/components/AnimatedSection";
+import { SEOHead } from "@/components/SEOHead";
 
 type FormState = "idle" | "loading" | "success" | "error";
 
@@ -53,6 +54,12 @@ export default function ReportSite() {
 
   return (
     <>
+      {/* Was inheriting the homepage's <title> and og: tags. */}
+      <SEOHead
+        title="Report a Site"
+        description="Tell Bestly about a site that blocks, breaks or misleads. Reports go straight to the Cookie Yeti queue for review."
+        path="/report-site"
+      />
       <div className="min-h-screen bg-background">
         <section className="border-b border-border bg-secondary/20">
           <div className="mx-auto max-w-3xl px-6 py-16 lg:px-8">
