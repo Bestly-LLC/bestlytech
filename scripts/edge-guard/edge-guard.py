@@ -640,7 +640,10 @@ def run():
             paths = asset_paths()
             lies = check_assets(paths) if paths else []
             cst["checked"] = len(paths)
-            cst.pop("lies", None) if not lies else cst.update({"lies": {l["path"]: l for l in lies}})
+            if lies:
+                cst["lies"] = {l["path"]: l for l in lies}
+            else:
+                cst.pop("lies", None)
             day = time.strftime("%Y%m%d")
             for lie in lies:
                 url = HOME_CACHE_URL + lie["path"]
