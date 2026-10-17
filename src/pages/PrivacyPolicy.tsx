@@ -380,6 +380,28 @@ export default function PrivacyPolicy() {
         </p>
       </>
     )},
+    { id: "16d", title: "Bestly Studio: Connected TikTok Accounts", content: (
+      <>
+        <p className="text-muted-foreground leading-relaxed mb-4">
+          Bestly Studio can send the short videos a client approves to the client's own TikTok drafts. A client connects the account by signing in with TikTok and allowing access (TikTok Login Kit). We ask for two TikTok permissions:
+        </p>
+        <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
+          <li><strong className="text-foreground">user.info.basic:</strong> to read the connected account's TikTok ID and display name, so the client can see which account is connected.</li>
+          <li><strong className="text-foreground">video.upload:</strong> to send a video the client has approved to the client's TikTok drafts. The client opens the draft in TikTok and taps Post. We do not publish on the client's behalf.</li>
+        </ul>
+        <p className="text-muted-foreground leading-relaxed mb-4">
+          What we store: an encrypted access token and refresh token (kept in a secrets vault, never shown in the app), the TikTok open ID and the display name. We do not read, copy or keep your other TikTok videos, followers, messages or analytics. We only send a video after the client approves that post in Bestly Studio.
+        </p>
+        <ul className="list-disc pl-6 text-muted-foreground space-y-2 mb-4">
+          <li>We do not sell TikTok user data, share it with anyone else, or use it for advertising.</li>
+          <li>We do not use it to train AI or machine-learning models.</li>
+          <li>Only the people at Bestly who run the client's account can see the connection, and only to operate it.</li>
+        </ul>
+        <p className="text-muted-foreground leading-relaxed">
+          You can disconnect at any time from your Bestly portal, which stops all sending to your account right away. You can also remove Bestly Studio in TikTok under Settings and privacy, Security and permissions, Apps and services. To have us delete the stored tokens and account details, email privacy@bestly.tech; we delete them within 30 days and confirm by reply. Videos already posted stay on your account until you delete them in TikTok.
+        </p>
+      </>
+    )},
     { id: "17", title: "17. Changes to This Policy", content: (
       <p className="text-muted-foreground leading-relaxed">
         We may update this Privacy Policy from time to time. We will notify you of any material 
