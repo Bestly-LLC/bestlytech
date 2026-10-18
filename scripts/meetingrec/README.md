@@ -55,9 +55,13 @@ it, and stops, transcribes and ingests it when the call empties. Every other roo
   at 12:38:54; `auto-start` 12:39:16 (22 s: the 20 s hold plus the 4 s loop); recorder running 12:39:27 (11 s: wake the display,
   open Start Recording.app); the bot was in the call at 12:39:55 (28 s after the recorder: Chrome, page, login, Join). So the
   first ~35 s of a call are not recorded at all and the per-person Talk tracks start about a minute in; the Mac's own mic and
-  system audio cover the time in between. A seat that leaves stays in Talk's list for up to ~30 s (the session lingers until its
-  last long-poll ends), so the call counts as empty ~30 s after the last person hangs up; the stop starts 90 s after that
+  system audio cover the time in between. A seat that leaves stays in Talk's list for up to ~40 s (the session lingers until its
+  last long-poll ends), so the call counts as empty ~30-40 s after the last person hangs up; the stop starts 90 s after that
   (12:42:48), the bot is out 6 s later, the row is in the admin ~28 s after the stop starts, and the client-folder copy is done ~35 s after that.
+  Measured again at 1:30 PM on 1.10.2 (display awake, Jared at the Mac): second seat in the call 1:31:17, rule held 1:31:28, `auto-start`
+  1:31:51, recorder running 1:31:54 (3 s with the display awake), the bot's Talk tracks from 1:32:22 (28 s later, 54 s after the second
+  person arrived); last person left 1:34:15, that seat left Talk's list ~38 s later, stop 1:36:16 (2 min 01 s after the last person left),
+  bot out 1:36:28, row in the admin 1:36:43 (27 s after the stop), client-folder copy 1:37:05 (49 s after the stop, 3 files, no mic audio).
 - Never: "Scout self-test" rooms, the heal test room, one-to-one rooms, a second recording while one is running, a start
   while the notetaker self-test has Chrome. A recording somebody started by hand is never stopped for them (a reminder
   `recorder.longrec` goes out after 4 hours).
