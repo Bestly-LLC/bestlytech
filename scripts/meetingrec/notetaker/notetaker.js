@@ -10,6 +10,15 @@
 //   <outDir>/track-<n>.webm       one per remote audio track
 //   <outDir>/manifest.json        [{file, name, actor, t0, t1}] (t in epoch ms)
 //   <outDir>/notetaker.log
+//   <outDir>/alive.json           a heartbeat every few seconds; the agent restarts us if it goes stale
+//
+// It only ever JOINS a call that is going on, with another person really in it (Talk says they are in the call and have pinged in
+// the last 30 s). It never starts one (on Oct 6 it pressed "Start call" just after the call had ended and started a second call):
+// it only presses a button that says Join, and only after asking Talk. If it is dropped from the call it gets back in; if it can't,
+// it exits so the agent can start it again (the Sep 29 dropout left a process that sat there recording nothing).
+// Exit codes: 0 stopped cleanly, 1 crashed, 2 bad usage, 3 could not join, 4 no call is going on (nothing was started),
+//             5 was dropped from the call and could not get back in.
+// NT_TEST_DROP_S=<n> (testing only): leave the call by ourselves <n> seconds after joining, to prove the rejoin works.
 
 const { chromium } = require("playwright-core");
 const { execSync } = require("child_process");
@@ -233,48 +242,152 @@ async function main() {
 
   // Join. Talk's page changes between versions, so try several ways and
   // check we really are in the call (a Leave call button) before going on.
+  const callUrl = `${BASE}/call/${token}`;
   const inCall = async () => (await page.getByRole("button", { name: /leave call|end call/i }).count()) > 0;
   const clearOverlays = async () => {
     await page.keyboard.press("Escape").catch(() => {});
     await page.evaluate(() => document.querySelectorAll("#firstrunwizard, .first-run-wizard").forEach((e) => e.remove())).catch(() => {});
   };
+  // Is a call going on in this room right now? true / false, or null when Talk could not say. Asked from inside the page as
+  // our own user (a member of the room). A room we are not in answers 404, and Nextcloud locks a source out after a handful
+  // of those, so after two of them we stop asking.
+  let denied = 0;
+  const callLive = async () => {
+    if (denied >= 2) return null;
+    try {
+      const r = await page.evaluate(async (tok) => {
+        const res = await fetch(`/ocs/v2.php/apps/spreed/api/v4/room/${tok}`, {
+          headers: { "OCS-APIRequest": "true", Accept: "application/json" },
+          credentials: "same-origin",
+        });
+        if (!res.ok) return { status: res.status };
+        const j = await res.json();
+        return { status: 200, hasCall: !!(j.ocs && j.ocs.data && j.ocs.data.hasCall) };
+      }, token);
+      if (r.status === 200) return r.hasCall;
+      if (r.status === 404 || r.status === 403) denied += 1;
+      log("call state unknown, HTTP", r.status);
+    } catch (e) {
+      log("call state unknown:", e.message.split("\n")[0]);
+    }
+    return null;
+  };
+  // How many people other than us are really in the call: a count, or null when Talk could not say. Talk keeps a room's call flag
+  // up for a while after the last browser died, and the page can still say "Join call" for a few seconds after a call has ended,
+  // so before pressing anything we want somebody who is in the call and has pinged Talk in the last 30 seconds.
+  const othersInCall = async () => {
+    try {
+      const r = await page.evaluate(async (tok) => {
+        const res = await fetch(`/ocs/v2.php/apps/spreed/api/v4/room/${tok}/participants`, {
+          headers: { "OCS-APIRequest": "true", Accept: "application/json" },
+          credentials: "same-origin",
+        });
+        if (!res.ok) return { status: res.status };
+        const j = await res.json();
+        return { status: 200, rows: ((j.ocs && j.ocs.data) || []).map((p) => ({ type: p.actorType, id: p.actorId, inCall: p.inCall || 0, ping: p.lastPing || 0 })) };
+      }, token);
+      if (r.status !== 200) return null;
+      const now = Date.now() / 1000;
+      return r.rows.filter((p) => !(p.type === "users" && p.id === USER) && (p.inCall & 1) && (!p.ping || now - p.ping < 30)).length;
+    } catch (e) {
+      log("people in the call unknown:", e.message.split("\n")[0]);
+      return null;
+    }
+  };
+  // The same button says "Start call" when nobody is in a call. We only press one that says Join.
+  const isJoin = async (b) => {
+    const label = [await b.getAttribute("aria-label").catch(() => ""), await b.innerText().catch(() => ""), await b.getAttribute("title").catch(() => "")]
+      .join(" ")
+      .toLowerCase();
+    return /join|enter call/.test(label) && !/start/.test(label);
+  };
   const strategies = [
     ["button.join-call", () => page.locator("button.join-call").first()],
-    ["role join/start call", () => page.getByRole("button", { name: /^(join call|start call)$/i }).first()],
-    ["text join/start call", () => page.locator("button", { hasText: /join call|start call/i }).first()],
-    ["aria-label join/start", () => page.locator("button[aria-label*='join' i], button[aria-label*='start call' i]").first()],
+    ["role join call", () => page.getByRole("button", { name: /^join call$/i }).first()],
+    ["text join call", () => page.locator("button", { hasText: /join call/i }).first()],
+    ["aria-label join", () => page.locator("button[aria-label*='join' i]").first()],
     ["data-testid join", () => page.locator("[data-testid*='join'], [data-testid*='enter-call']").first()],
     ["text join now", () => page.locator("button", { hasText: /join now|enter call/i }).first()],
   ];
-  await page.waitForTimeout(3000);
-  for (let attempt = 0; attempt < 3 && !(await inCall()); attempt++) {
-    await clearOverlays();
-    for (const [how, get] of strategies) {
-      const b = get();
-      if (!(await b.count().catch(() => 0))) continue;
-      await b.click({ timeout: 8000 }).catch(() => {});
-      log("tried join:", how);
-      await page.waitForTimeout(2500);
-      // a device-check dialog may need its own confirm
-      const dlg = page.locator(".modal-container, [role=dialog]").getByRole("button", { name: /join call|start call/i });
-      if (await dlg.count().catch(() => 0)) {
-        await dlg.last().click({ timeout: 8000 }).catch(() => {});
-        log("confirmed in dialog");
+  // The heartbeat the agent watches (alive.json). It is also written while we are still trying to join, so a slow join is
+  // not mistaken for a hung process.
+  const beat = (here) => {
+    try {
+      fs.writeFileSync(path.join(outDir, "alive.json"), JSON.stringify({ at: Date.now(), inCall: here, tracks: Object.keys(tracks).length }));
+    } catch (e) {}
+  };
+  // Press Join until we are in the call. "joined", "not-live" (there is no call to join: nothing was pressed) or "failed".
+  const joinCall = async () => {
+    for (let attempt = 0; attempt < 3 && !(await inCall()); attempt++) {
+      beat(false);
+      if ((await callLive()) === false || (await othersInCall()) === 0) return "not-live";
+      if (attempt > 0) {
+        await page.goto(callUrl, { waitUntil: "domcontentloaded" }).catch(() => {});
         await page.waitForTimeout(3000);
       }
-      if (await inCall()) break;
+      await clearOverlays();
+      for (const [how, get] of strategies) {
+        beat(false);
+        const b = get();
+        if (!(await b.count().catch(() => 0))) continue;
+        if (!(await isJoin(b))) {
+          log("not a Join button, left alone:", how);
+          continue;
+        }
+        // Last look at Talk, right before the press: a Join button can outlive the call it was for by a few seconds, and pressing
+        // it then would start a new call and ring everyone in the room.
+        if ((await callLive()) === false) return "not-live";
+        await b.click({ timeout: 8000 }).catch(() => {});
+        log("tried join:", how);
+        await page.waitForTimeout(2500);
+        // a device-check dialog may need its own confirm (Join only)
+        const dlg = page.locator(".modal-container, [role=dialog]").getByRole("button", { name: /join call/i });
+        if (await dlg.count().catch(() => 0)) {
+          await dlg.last().click({ timeout: 8000 }).catch(() => {});
+          log("confirmed in dialog");
+          await page.waitForTimeout(3000);
+        }
+        if (await inCall()) break;
+      }
+      if (!(await inCall())) await page.waitForTimeout(5000);
     }
-    if (!(await inCall())) await page.waitForTimeout(5000);
+    return (await inCall()) ? "joined" : "failed";
+  };
+  // Mute our own (silent) mic and camera if Talk turned them on.
+  const muteSelf = async () => {
+    for (const label of [/mute audio/i, /disable video/i, /turn off camera/i]) {
+      const b = page.getByRole("button", { name: label });
+      if (await b.count()) await b.first().click().catch(() => {});
+    }
+  };
+  let leaving = false; // we are closing the browser on purpose
+  const bail = async (code) => {
+    leaving = true;
+    writeManifest();
+    await ctx.close().catch(() => {});
+    process.exit(code);
+  };
+  ctx.on("close", () => {
+    if (!leaving) {
+      log("the browser closed by itself");
+      process.exit(5);
+    }
+  });
+  page.on("crash", () => {
+    log("the page crashed");
+    process.exit(5);
+  });
+  await page.waitForTimeout(3000);
+  const first = await joinCall();
+  if (first === "not-live") {
+    log("no call is going on in this room - not joining, and not starting one");
+    await bail(4);
   }
-  if (!(await inCall())) {
+  if (first !== "joined") {
     await diag("could not join the call");
     process.exit(3);
   }
-  // Mute our own (silent) mic and camera if Talk turned them on.
-  for (const label of [/mute audio/i, /disable video/i, /turn off camera/i]) {
-    const b = page.getByRole("button", { name: label });
-    if (await b.count()) await b.first().click().catch(() => {});
-  }
+  await muteSelf();
   log("in call");
   if (DEBUG) await page.screenshot({ path: path.join(outDir, "joined.png") });
 
@@ -296,6 +409,7 @@ async function main() {
     const now = Date.now();
     for (const t of Object.values(tracks)) if (!t.t1) t.t1 = now;
     writeManifest();
+    leaving = true;
     await ctx.close().catch(() => {});
     log("done");
     process.exit(0);
@@ -306,7 +420,65 @@ async function main() {
   let videoKills = 0;
   let debugDumped = false;
   let namingWarned = false;
+  const closeOpenTracks = () => {
+    const now = Date.now();
+    for (const t of Object.values(tracks)) if (!t.t1) t.t1 = now;
+    writeManifest();
+  };
+  const joinedAt = Date.now();
+  const dropAfter = Number(process.env.NT_TEST_DROP_S || 0) * 1000;
+  let dropped = false;
+  let lostAt = 0;
+  let rejoinTries = 0;
+  let nextRejoin = 0;
+  let overLogged = false;
   while (!stopping) {
+    let here = true;
+    try {
+      here = await inCall();
+      if (dropAfter && !dropped && here && Date.now() - joinedAt > dropAfter) {
+        dropped = true;
+        log("TEST: leaving the call by ourselves to prove the rejoin");
+        await page.getByRole("button", { name: /leave call/i }).first().click().catch(() => {});
+        here = false;
+      }
+      if (here) {
+        if (lostAt) {
+          log("back in the call after", Math.round((Date.now() - lostAt) / 1000), "s");
+          lostAt = 0;
+          rejoinTries = 0;
+          overLogged = false;
+          await muteSelf();
+        }
+      } else {
+        if (!lostAt) {
+          lostAt = Date.now();
+          log("not in the call any more");
+        }
+        if (Date.now() - lostAt > (dropped ? 2000 : 8000) && Date.now() >= nextRejoin && !fs.existsSync(path.join(outDir, "STOP"))) {
+          nextRejoin = Date.now() + 15000;
+          closeOpenTracks(); // whatever was recording stopped with the call
+          if ((await callLive()) === false || (await othersInCall()) === 0) {
+            if (!overLogged) log("the call is over - waiting; never starting one");
+            overLogged = true;
+          } else {
+            overLogged = false;
+            rejoinTries += 1;
+            log("rejoining the call, try", rejoinTries);
+            const r = await joinCall();
+            log("rejoin:", r);
+            if (r === "not-live") rejoinTries -= 1; // the call ended while we were trying: that is not a failure to get back in
+            if (r === "failed" && rejoinTries >= 4 && Date.now() - lostAt > 60000) {
+              await diag("dropped from the call and could not get back in");
+              await bail(5);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      log("call check error", e.message.split("\n")[0]);
+    }
+    beat(here);
     try {
       const killed = await page.evaluate(() => (window.__ntKillVideo ? window.__ntKillVideo() : 0));
       if (killed) {
