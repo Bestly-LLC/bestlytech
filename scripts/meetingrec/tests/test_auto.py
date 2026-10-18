@@ -473,6 +473,25 @@ class AutoTickTests(unittest.TestCase):
         self.assertEqual(W.opens, 1)
         self.assertEqual(agent.read_meta(open(f"{H}/.current").read().strip())["room"], TEST_ROOM)
 
+    def test_the_log_says_when_the_rule_holds_and_when_the_call_empties(self):
+        logs, orig_log = [], agent.log
+        agent.log = lambda *a: logs.append(" ".join(str(x) for x in a))
+        self.addCleanup(setattr, agent, "log", orig_log)
+        W.put(ROOM, ["jared", "elizabeth"])
+        run_for(40)
+        self.assertEqual(len([m for m in logs if m.startswith("auto-record: the rule holds in " + ROOM)]), 1, "once, not every loop")
+        W.put(ROOM, [])
+        run_for(30)
+        self.assertEqual(len([m for m in logs if "nobody is in the call" in m]), 1)
+        W.put(ROOM, ["elizabeth"])                          # someone comes back before the 90 seconds are over
+        run_for(10)
+        self.assertEqual(len([m for m in logs if "someone is back" in m]), 1)
+        self.assertEqual(W.stops, 0)
+        W.put(ROOM, [])
+        run_for(100)
+        self.assertEqual(W.stops, 1)
+        self.assertEqual(len([m for m in logs if "nobody is in the call" in m]), 2)
+
     def test_a_test_room_is_recorded_but_never_reported(self):
         # the rehearsal room: the recorder works there like anywhere, but nothing about it reaches Scout's alerts or the Mac's banners
         banners, logs, orig_log = [], [], agent.log
