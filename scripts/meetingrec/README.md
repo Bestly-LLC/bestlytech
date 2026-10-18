@@ -23,9 +23,9 @@ Copies of what runs in `~/MeetingRec` on the Mac mini. The live files are there,
   participant as a separate stream, so it records one track per person, named from Talk's tiles.
   Password is in the Mac keychain (`nextcloud-notetaker`). It leaves and is removed from the room
   when the recording stops.
-- `talk_tracks.py` — transcribes each person's track, shifts it onto the recording clock, merges
-  with Jared's mic. `stop.sh` uses it when the notetaker was in the call and falls back to
-  `name_speakers.py` otherwise (Zoom, phone, one-to-one Talk rooms).
+- `talk_tracks.py` — transcribes each person's track and shifts it onto the recording clock. Jared's lines come from
+  his own Talk track too (1.10.2; the Mac mini's mic only as a fallback, see "Jared's lines" below). `stop.sh` uses it when
+  the notetaker was in the call and falls back to `name_speakers.py` otherwise (Zoom, phone, one-to-one Talk rooms).
 - `notetaker/tester.js` — a fake guest (Chrome fake mic, optional audio file) for testing.
 - `voicebank.py` — Ava's voice bank (2026-10-05). Hourly while idle, the agent runs it: from each meeting's
   `-mic.m4a` (Jared only) it keeps stretches where he talks and the far end (`-system.m4a`) is silent, drops clipped
@@ -63,7 +63,7 @@ it, and stops, transcribes and ingests it when the call empties. Every other roo
   `recorder.longrec` goes out after 4 hours).
 - Switches, no deploy needed: `touch ~/MeetingRec/.auto-off` turns all auto-recording off; `touch ~/MeetingRec/.auto-off-yqne2jpr`
   turns one room off; delete the file to turn it back on. `meeting_recorder_state.info.auto` shows what the agent sees.
-- State files: `.auto` (the recording Scout started), `.meta/<recording>.json` (room, title, auto, ended, verified).
+- State files: `.auto` (the recording Scout started), `.meta/<recording>.json` (room, title, auto, jared_seen, ended, verified).
 - The notetaker never starts a call: `notetaker.js` joins only a live call (it asks Talk first and only presses a button that
   says Join). Exit codes: 0 stopped, 1 crashed, 2 bad usage, 3 could not join, 4 no live call (not a failure, the agent looks
   again in 10 s), 5 dropped and could not get back in. It writes `alive.json` every few seconds; the agent kills one that goes
@@ -72,8 +72,17 @@ it, and stops, transcribes and ingests it when the call empties. Every other roo
   `approval_clients.talk_room`). The audio is also copied (server-side WebDAV COPY) to the client's folder:
   `Bestly/CenteringYOU/Calls/<day>/` for `centering-you`, `Bestly/_admin/test-client-calls/<day>/` for `bestly-test`.
   Never if that folder, or a parent of it, is shared with anybody (it raises `recorder.clientfile` instead).
-- `talk_tracks.py`: when Jared's Mac-mic transcript is empty or far thinner than his Talk track (he joined from another computer or his
-  phone), his Talk track from the bot is used for his lines.
+- Jared's lines (1.10.2, 2026-10-18). Jared joins from Studio on any device, so the Mac mini's mic is not his voice unless he is
+  sitting at it, and in a room nobody is in it only hears the radio (the 12:39 PM rehearsal got 17 "JARED" lines of music). So:
+  his own Talk track (what the bot heard from him) is the source for his lines. The Mac's mic stands in only when that track
+  is missing or empty (fewer than 6 words) AND he was in the call. If he was not in the call (the rehearsal room with two test seats,
+  Eli on his own) the mic is never used: `talk_tracks.py` takes the `JARED` lines out of the plain transcript too (so
+  `name_speakers.py` cannot pick them up), and the ingest takes them out of whatever it is sent as a last safety net.
+  "He was in the call" = he started the recording by hand, or Scout saw him in the call's participants while recording (`jared_seen` in
+  `.meta/<recording>.json`, set at the auto-start and by every 4-second look at the room), or the notetaker recorded a track under his
+  name (`jared_in_call` in `agent.py` and in `talk_tracks.py`, kept the same by tests). The mic *audio* is still recorded and still
+  uploaded to Meeting Recordings; it is only left out of a client's folder, and of every transcript, when he was not in the call.
+  The header of the transcript says which source was used; `meeting_recordings.speakers.jared` is `{in_call, source: talk | mic | none}`.
 - Watchdogs (alerts signed by Scout Notetaker, prefix `recorder.`): `autostart` (two people in an auto room for 2 minutes and
   nothing is recording), `nofile` (no `meeting_recordings` row 45 minutes after a call ended), `clientfile`, `talkread` (the Mac
   cannot read Talk for 5 minutes), `longrec`, `notetaker`, and `offline` (server side, `recorder_offline_watch`: no poll for 15 minutes).
