@@ -473,6 +473,46 @@ class AutoTickTests(unittest.TestCase):
         self.assertEqual(W.opens, 1)
         self.assertEqual(agent.read_meta(open(f"{H}/.current").read().strip())["room"], TEST_ROOM)
 
+    def test_a_test_room_is_recorded_but_never_reported(self):
+        # the rehearsal room: the recorder works there like anywhere, but nothing about it reaches Scout's alerts or the Mac's banners
+        banners, logs, orig_log = [], [], agent.log
+        agent.notify = lambda *a, **k: banners.append(a)
+        agent.log = lambda *a: logs.append(" ".join(str(x) for x in a))
+        self.addCleanup(setattr, agent, "log", orig_log)
+        W.start_fails = 999
+        W.put(TEST_ROOM, [("calltest", "users", True, 0, 2)])
+        run_for(400)
+        self.assertEqual(W.health, [], "a test room's trouble is not reported")
+        self.assertTrue([m for m in logs if m.startswith("watchdog: a test-room call")], logs[-5:])
+        self.assertEqual(len([m for m in logs if m.startswith("watchdog: a test-room call")]), 1, "once, not every loop")
+        W.start_fails = 0
+        run_for(60)
+        self.assertTrue(W.recording)
+        self.assertEqual(banners, [], "no banner on the Mac when a test recording starts")
+        W.put(TEST_ROOM, [])
+        run_for(100)
+        self.assertEqual(W.stops, 1)
+        self.assertEqual(banners, [], "...or when it stops")
+        self.assertEqual(W.health, [])
+        self.assertEqual(agent.auto_summary()["test"], [TEST_ROOM])
+
+    def test_a_real_room_still_shows_banners_and_alerts(self):
+        banners = []
+        agent.notify = lambda *a, **k: banners.append(a)
+        W.put(ROOM, ["jared", "elizabeth"])
+        run_for(40)
+        W.put(ROOM, [])
+        run_for(100)
+        self.assertEqual([b[0] for b in banners], ["Recording", "Recording stopped"])
+
+    def test_a_test_rooms_calls_do_not_hide_a_real_rooms_alert(self):
+        W.start_fails = 999
+        W.put(ROOM, ["jared", "elizabeth"])
+        W.put(TEST_ROOM, [("calltest", "users", True, 0, 2)])
+        run_for(400)
+        self.assertEqual(W.kinds("autostart"), ["problem"])
+        self.assertIn("Centering YOU", [t for (k, _kind, t, _s) in W.health if k == "autostart"][0])
+
     def test_three_recordings_an_hour_at_most(self):
         for _ in range(3):
             W.put(ROOM, ["jared", "elizabeth"])
@@ -642,6 +682,27 @@ class AfterTests(unittest.TestCase):
         self.assertEqual(W.kinds("nofile"), [])
         self.assertFalse(agent.read_meta(self.name).get("verified"))
 
+    def test_a_test_recording_never_alerts_and_never_closes_a_real_alert(self):
+        test_name = "meeting-20261020-0910"
+        for s in ("system", "mic"):
+            open(f"{REC}/{test_name}-{s}.m4a", "w").write("x")
+        agent.write_meta(test_name, room=TEST_ROOM, auto=True, ended=W.clock.now - 7200)
+        # a real recording has an open alert; a test recording being found must not close it, and a lost test recording must not raise one
+        agent.alert_nofile(self.name, "boom")
+        self.assertEqual(W.kinds("nofile"), ["problem"])
+        agent.after_save(test_name, False, "No transcript came out. boom", "tail")
+        agent.verify_tick(W.clock.now)                                  # 45 minutes passed, no row, no transcript
+        agent.auto["verify_next"] = 0
+        agent.verify_tick(W.clock.now)
+        W.rows[test_name] = {"client_slug": "bestly-test", "room": TEST_ROOM}
+        agent.write_meta(test_name, alerted=True, recheck=0)
+        agent.auto["verify_next"] = 0
+        agent.verify_tick(W.clock.now)
+        self.assertEqual(W.kinds("nofile"), ["problem"], "nothing from the test recording, neither a new problem nor a 'resolved'")
+        self.assertEqual(W.kinds("clientfile"), [])
+        copies = [c for c in W.dav_calls if c[0] == "COPY"]
+        self.assertTrue(copies and "test-client-calls" in copies[0][2], "it is still filed in the test client's folder")
+
     def test_other_rooms_are_not_watched(self):
         name = "meeting-20261019-1400"
         open(f"{REC}/{name}-system.m4a", "w").write("x")
@@ -708,6 +769,19 @@ class NotetakerTickTests(unittest.TestCase):
         agent.notetaker_tick()
         self.assertEqual(agent.nt["fails"], 1)
         self.assertEqual(W.kinds("notetaker"), ["problem"])
+
+    def test_a_test_rooms_notetaker_trouble_is_not_reported(self):
+        self.start(TEST_ROOM)
+        W.rooms[TEST_ROOM]["call"] = True
+        orig = agent.talk
+        agent.talk = lambda m, p, d=None, timeout=15: orig(m, p, d, timeout) if m == "GET" else {}
+        agent.notetaker_tick()
+        self.assertEqual(len(self.launched), 1)
+        self.assertEqual(self.launched[0][2], TEST_ROOM)
+        agent.nt["proc"].returncode = agent.NT_LOST_CALL
+        agent.notetaker_tick()
+        self.assertEqual(agent.nt["fails"], 1, "it still counts and retries")
+        self.assertEqual(W.kinds("notetaker"), [], "but says nothing")
 
 
 if __name__ == "__main__":

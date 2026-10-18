@@ -46,6 +46,11 @@ AUTO_ROOMS = {
     # To switch it off sooner: touch ~/MeetingRec/.auto-off-yqne2jpr   (or delete this line)
     "yqne2jpr": {"rule": "any2", "label": "Bestly call test", "until": "2026-10-20T00:00:00-07:00"},
 }
+# Test rooms (Jared, 2026-10-18: "Scout must NOT push me about a test call"). A call in one of these is recorded like any other, but
+# it never raises a Scout alert, never opens or closes a real room's alert (the keys are shared), and never shows a macOS banner.
+# Its trouble is only written to the agent log. Kept apart from AUTO_ROOMS so removing the rehearsal room's line there after Monday
+# does not make an old test recording start alerting.
+TEST_ROOMS = {"yqne2jpr"}
 AUTO_OFF = f"{HOME}/.auto-off"
 AUTO_FILE = f"{HOME}/.auto"                 # {"name", "room", "started"} while a recording Scout started is running
 META_DIR = f"{HOME}/.meta"                  # one small json per recording: which Talk room it was, whether Scout started it,
@@ -326,12 +331,12 @@ def notetaker_tick():
             health("notetaker", "problem", "Notetaker dropped out of a live call",
                    f"Exit {code} on {nt['title']} (try {nt['fails']} of 3). This call falls back to voice matching "
                    "if it can't rejoin.\nTo fix: scripts/meetingrec/notetaker/notetaker.js in the site repo, then run "
-                   "the recorder self-test.\n" + diag_text(out))
+                   "the recorder self-test.\n" + diag_text(out), room=nt["room"], name=nt["name"])
             if nt["fails"] >= 3:
                 nt["status"] = "gave up"
                 nt["next_try"] = time.time() + 10 ** 9
         elif notetaker_names(nt["name"]):
-            health("notetaker", "resolved", "Notetaker worked on a live call", nt["title"] or "", "info")
+            health("notetaker", "resolved", "Notetaker worked on a live call", nt["title"] or "", "info", room=nt["room"], name=nt["name"])
         if not recording_pid() and nt["room"]:
             remove_bot(nt["room"])
             nt.update(room=None, status="done")
@@ -400,7 +405,21 @@ def notetaker_tick():
         write_meta(name, room=token, title=title)       # the ingest files this call under its client from here
 
 
-def health(key, kind, title="", body="", severity="warning", healed=False):
+def quiet_room(token):
+    """True for a test room: nothing about it reaches Scout's alerts, Jared's phone or the Mac's banners."""
+    return bool(token) and token in TEST_ROOMS
+
+
+def quiet_recording(name):
+    return quiet_room(recording_room(name)) if name else False
+
+
+def health(key, kind, title="", body="", severity="warning", healed=False, room=None, name=None):
+    """Tell Scout (the monitor) about trouble or that it is fixed. room / name say which Talk room or recording it is about:
+    a test room's trouble is only logged, and (the keys are shared by every room) it can't open or close a real room's alert."""
+    if quiet_room(room) or quiet_recording(name):
+        log("not reported (test room)", key, kind, title)
+        return
     try:
         call({"op": "health", "key": key, "kind": kind, "title": title, "body": body[:3900],
               "severity": severity, "healed": healed})
@@ -1004,13 +1023,20 @@ def auto_tick():
                 auto_start(tok, cfg, seen[tok])
                 break
 
-    # watchdog: two people have been in the call a while and nothing is recording
-    waiting = [now - t for tok, t in auto["hold"].items() if tok not in auto["blocked"]]
+    # watchdog: two people have been in the call a while and nothing is recording. A test room is watched too, but only in the log.
+    waiting = [now - t for tok, t in auto["hold"].items() if tok not in auto["blocked"] and not quiet_room(tok)]
     held = max(waiting) if waiting else 0
+    test_held = [t for tok, t in auto["hold"].items() if tok not in auto["blocked"] and quiet_room(tok)]
+    if test_held and now - min(test_held) >= AUTO_ALERT_S and not recording:
+        if not auto.get("test_alert"):
+            auto["test_alert"] = True
+            log("watchdog: a test-room call has gone", int(now - min(test_held)), "s with nothing recording (not reported)", auto["last_error"] or "")
+    else:
+        auto["test_alert"] = False
     if held >= AUTO_ALERT_S and not recording:
         if not auto["alert_open"]:
             auto["alert_open"] = True
-            tok = next(t for t, s in auto["hold"].items() if t not in auto["blocked"])
+            tok = next(t for t, s in auto["hold"].items() if t not in auto["blocked"] and not quiet_room(t))
             who = ", ".join(p["name"] for p in seen.get(tok) or [])
             since = datetime.fromtimestamp(auto["hold"][tok]).strftime("%-I:%M %p")
             why = auto["last_error"] or ("Scout is still saving the last call." if busy["stage"] or auto["stopping"] else "")
@@ -1028,7 +1054,7 @@ def auto_summary():
     """A small picture of the auto-recorder for the admin (meeting_recorder_state.info.auto)."""
     on = auto_rooms_on()
     return {"on": sorted(on), "rooms": {t: auto["rooms"].get(t) for t in on}, "blocked": sorted(auto["blocked"]),
-            "err": auto["last_error"], "talk_fails": auto["fails"]}
+            "test": sorted(t for t in on if quiet_room(t)), "err": auto["last_error"], "talk_fails": auto["fails"]}
 
 
 # ── After a recording: client folder, and "did the admin really get it" ─────────
@@ -1136,7 +1162,7 @@ def file_under_client(name, slug):
         health("clientfile", "problem", "A call was not filed in the client's folder",
                f"{name} was not copied into {folder} because {', '.join(shared)} is shared with someone, and a call's transcript "
                "should not be seen by the client. It is still in Meeting Recordings and on the Mac mini. To file calls there again, "
-               "stop sharing that folder (or move the Calls folder out of it).")
+               "stop sharing that folder (or move the Calls folder out of it).", name=name)
         return None
     path = ""
     for part in f"{folder}/{day}".split("/"):
@@ -1153,12 +1179,12 @@ def file_under_client(name, slug):
     if bad:
         health("clientfile", "problem", "A call was not filed in the client's folder",
                f"{name}: could not copy {', '.join(bad)} into {folder}/{day}/. The files are still in Meeting Recordings/{day}/ "
-               "and on the Mac mini. Scout tries again.")
+               "and on the Mac mini. Scout tries again.", name=name)
         return False
     with open(f"{HOME}/.client-filed", "a") as f:
         f.write(name + "\n")
     log("filed under", folder, name, len(files), "files")
-    health("clientfile", "resolved", "Calls are being filed in the client's folder", name, "info")
+    health("clientfile", "resolved", "Calls are being filed in the client's folder", name, "info", name=name)
     return True
 
 
@@ -1167,7 +1193,8 @@ def alert_nofile(name, why, tail=""):
     when = t.strftime("%-I:%M %p on %b %-d") if t else ""
     health("nofile", "problem", "A call was recorded but Scout does not have it yet",
            f"{name}{' (started ' + when + ')' if when else ''} did not reach the admin. {why}\n"
-           f"Nothing is lost: the audio is on the Mac mini in ~/MeetingRec/recordings (files start with {name}).\n{tail[-500:]}", "error")
+           f"Nothing is lost: the audio is on the Mac mini in ~/MeetingRec/recordings (files start with {name}).\n{tail[-500:]}", "error",
+           name=name)
 
 
 def after_save(name, saved, err=None, tail=""):
@@ -1186,7 +1213,7 @@ def after_save(name, saved, err=None, tail=""):
     if watched and filed is not False:
         write_meta(name, verified=True)
         if m.get("alerted"):
-            health("nofile", "resolved", "Scout has the call now", name, "info")
+            health("nofile", "resolved", "Scout has the call now", name, "info", name=name)
 
 
 def check_row(name, m, now):
@@ -1201,7 +1228,7 @@ def check_row(name, m, now):
             return
         write_meta(name, verified=True)
         if m.get("alerted"):
-            health("nofile", "resolved", "Scout has the call now", name, "info")
+            health("nofile", "resolved", "Scout has the call now", name, "info", name=name)
         return
     if os.path.exists(f"{REC}/{name}-transcript.txt"):          # the transcript is here but never went up: send it now
         try:
@@ -1324,7 +1351,8 @@ def do_start(payload):
                     except OSError:
                         pass
                 nt["next_try"] = 0          # the notetaker joins the call right away
-                notify("Recording", "Scout is recording this call.", ", ".join(roster) if roster else name)
+                if not quiet_room(room):
+                    notify("Recording", "Scout is recording this call.", ", ".join(roster) if roster else name)
                 return True, {"name": name, "roster": roster, "room": room}, None
         log("recording did not start, try", attempt, read(f"{REC}/{name}.log")[-200:].replace("\n", " "))
     tail = read(f"{REC}/{name}.log")[-600:]
@@ -1441,8 +1469,9 @@ def do_stop(cmd_id):
         after_save(name, saved, err, tail)
     except Exception as e:  # noqa: BLE001
         log("after-save failed", name, e)
-    notify("Recording stopped", "Transcript is ready in Bestly admin." if ok else (err or "Stop failed."),
-           name, "Glass" if ok else "Basso")
+    if not quiet_recording(name):
+        notify("Recording stopped", "Transcript is ready in Bestly admin." if ok else (err or "Stop failed."),
+               name, "Glass" if ok else "Basso")
     log("stop", name, "ok" if ok else err)
 
 
