@@ -1195,6 +1195,7 @@ export type Database = {
           approvers: string[]
           brand_note: string | null
           calendar_autopost: boolean
+          call_ui_enabled: boolean
           claim_gate_ack: Json | null
           client_yes_is_final: boolean
           code_next: number
@@ -1202,6 +1203,7 @@ export type Database = {
           contact_email: string | null
           contact_name: string | null
           created_at: string
+          debrief_live_until: string | null
           guide_only: boolean
           id: string
           intake_emails: string[]
@@ -1224,6 +1226,7 @@ export type Database = {
           approvers?: string[]
           brand_note?: string | null
           calendar_autopost?: boolean
+          call_ui_enabled?: boolean
           claim_gate_ack?: Json | null
           client_yes_is_final?: boolean
           code_next?: number
@@ -1231,6 +1234,7 @@ export type Database = {
           contact_email?: string | null
           contact_name?: string | null
           created_at?: string
+          debrief_live_until?: string | null
           guide_only?: boolean
           id?: string
           intake_emails?: string[]
@@ -1253,6 +1257,7 @@ export type Database = {
           approvers?: string[]
           brand_note?: string | null
           calendar_autopost?: boolean
+          call_ui_enabled?: boolean
           claim_gate_ack?: Json | null
           client_yes_is_final?: boolean
           code_next?: number
@@ -1260,6 +1265,7 @@ export type Database = {
           contact_email?: string | null
           contact_name?: string | null
           created_at?: string
+          debrief_live_until?: string | null
           guide_only?: boolean
           id?: string
           intake_emails?: string[]
@@ -4448,6 +4454,93 @@ export type Database = {
           },
         ]
       }
+      call_board_log: {
+        Row: {
+          actor: string
+          at: string
+          audited: boolean
+          client_slug: string | null
+          detail: string | null
+          id: number
+          ok: boolean | null
+          op: string
+        }
+        Insert: {
+          actor: string
+          at?: string
+          audited?: boolean
+          client_slug?: string | null
+          detail?: string | null
+          id?: number
+          ok?: boolean | null
+          op: string
+        }
+        Update: {
+          actor?: string
+          at?: string
+          audited?: boolean
+          client_slug?: string | null
+          detail?: string | null
+          id?: number
+          ok?: boolean | null
+          op?: string
+        }
+        Relationships: []
+      }
+      call_board_nc: {
+        Row: {
+          at: string
+          k: string
+          lease_ts: string | null
+          n: number
+          until_ts: string | null
+          v: Json
+        }
+        Insert: {
+          at?: string
+          k: string
+          lease_ts?: string | null
+          n?: number
+          until_ts?: string | null
+          v?: Json
+        }
+        Update: {
+          at?: string
+          k?: string
+          lease_ts?: string | null
+          n?: number
+          until_ts?: string | null
+          v?: Json
+        }
+        Relationships: []
+      }
+      call_board_watch_state: {
+        Row: {
+          fails: number
+          id: boolean
+          last_detail: Json | null
+          last_layer: string | null
+          last_ok_at: string | null
+          last_run_at: string | null
+        }
+        Insert: {
+          fails?: number
+          id?: boolean
+          last_detail?: Json | null
+          last_layer?: string | null
+          last_ok_at?: string | null
+          last_run_at?: string | null
+        }
+        Update: {
+          fails?: number
+          id?: boolean
+          last_detail?: Json | null
+          last_layer?: string | null
+          last_ok_at?: string | null
+          last_run_at?: string | null
+        }
+        Relationships: []
+      }
       call_consents: {
         Row: {
           captured_at: string
@@ -4483,6 +4576,75 @@ export type Database = {
           source?: string
         }
         Relationships: []
+      }
+      call_debriefs: {
+        Row: {
+          client_id: string
+          created_at: string
+          dismissed_at: string | null
+          id: string
+          last_sent_ids: string[]
+          meeting_id: string
+          notified_at: string | null
+          quiet: boolean
+          remind_at: string | null
+          reminded_at: string | null
+          sent_at: string | null
+          sent_by: string | null
+          sent_count: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          dismissed_at?: string | null
+          id?: string
+          last_sent_ids?: string[]
+          meeting_id: string
+          notified_at?: string | null
+          quiet?: boolean
+          remind_at?: string | null
+          reminded_at?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_count?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          dismissed_at?: string | null
+          id?: string
+          last_sent_ids?: string[]
+          meeting_id?: string
+          notified_at?: string | null
+          quiet?: boolean
+          remind_at?: string | null
+          reminded_at?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_count?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_debriefs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "approval_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_debriefs_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: true
+            referencedRelation: "meeting_recordings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       car_charge_sessions: {
         Row: {
@@ -7464,6 +7626,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      client_upgrade_ack: {
+        Row: {
+          client_id: string
+          kind: string
+          seen_at: string
+        }
+        Insert: {
+          client_id: string
+          kind: string
+          seen_at?: string
+        }
+        Update: {
+          client_id?: string
+          kind?: string
+          seen_at?: string
+        }
+        Relationships: []
       }
       client_uploads: {
         Row: {
@@ -13690,12 +13870,14 @@ export type Database = {
       }
       meeting_recordings: {
         Row: {
+          client_slug: string | null
           created_at: string
           debriefed_at: string | null
           id: string
           line_count: number | null
           name: string
           people: string[]
+          room: string | null
           roster: string[]
           source: string
           speakers: Json
@@ -13706,12 +13888,14 @@ export type Database = {
           transcript: string | null
         }
         Insert: {
+          client_slug?: string | null
           created_at?: string
           debriefed_at?: string | null
           id?: string
           line_count?: number | null
           name: string
           people?: string[]
+          room?: string | null
           roster?: string[]
           source?: string
           speakers?: Json
@@ -13722,12 +13906,14 @@ export type Database = {
           transcript?: string | null
         }
         Update: {
+          client_slug?: string | null
           created_at?: string
           debriefed_at?: string | null
           id?: string
           line_count?: number | null
           name?: string
           people?: string[]
+          room?: string | null
           roster?: string[]
           source?: string
           speakers?: Json
@@ -28870,6 +29056,177 @@ export type Database = {
         Returns: Json
       }
       calendar_post_platforms: { Args: { p_item: string }; Returns: Json }
+      call_b64u: { Args: { p: string }; Returns: string }
+      call_board_audit: {
+        Args: {
+          p_actor: string
+          p_client: string
+          p_detail: string
+          p_ok: boolean
+          p_op: string
+        }
+        Returns: undefined
+      }
+      call_board_gate: {
+        Args: {
+          p_actor: string
+          p_limit: number
+          p_op: string
+          p_window_s: number
+        }
+        Returns: boolean
+      }
+      call_board_nc_clear: {
+        Args: { p_global?: boolean; p_room?: string }
+        Returns: Json
+      }
+      call_board_nc_enter: {
+        Args: {
+          p_held?: boolean
+          p_lease_ms?: number
+          p_room: string
+          p_state?: boolean
+          p_ttl_ms?: number
+          p_uid: string
+        }
+        Returns: Json
+      }
+      call_board_nc_fail: {
+        Args: {
+          p_diag?: Json
+          p_kind: string
+          p_ra?: number
+          p_room: string
+          p_status?: number
+          p_uid: string
+        }
+        Returns: Json
+      }
+      call_board_nc_ok: {
+        Args: { p_room: string; p_state?: Json; p_uid: string }
+        Returns: Json
+      }
+      call_board_nc_status: { Args: never; Returns: Json }
+      call_board_nc_sweep: { Args: { p_dry?: boolean }; Returns: Json }
+      call_board_seat_enter: {
+        Args: {
+          p_bad_ms?: number
+          p_lease_ms?: number
+          p_ok_ms?: number
+          p_uid: string
+        }
+        Returns: Json
+      }
+      call_board_seat_set: {
+        Args: {
+          p_bad_ms?: number
+          p_ok: boolean
+          p_ok_ms?: number
+          p_uid: string
+          p_unsure?: boolean
+        }
+        Returns: Json
+      }
+      call_board_watch_report: {
+        Args: { p_detail: Json; p_layer: string; p_ok: boolean }
+        Returns: Json
+      }
+      call_board_watch_stale: { Args: never; Returns: Json }
+      call_board_watch_tick: { Args: never; Returns: number }
+      call_debrief_at: { Args: { p: string }; Returns: string }
+      call_debrief_client: {
+        Args: { m: Database["public"]["Tables"]["meeting_recordings"]["Row"] }
+        Returns: {
+          access_token: string
+          active: boolean
+          approvers: string[]
+          brand_note: string | null
+          calendar_autopost: boolean
+          call_ui_enabled: boolean
+          claim_gate_ack: Json | null
+          client_yes_is_final: boolean
+          code_next: number
+          code_prefix: string | null
+          contact_email: string | null
+          contact_name: string | null
+          created_at: string
+          debrief_live_until: string | null
+          guide_only: boolean
+          id: string
+          intake_emails: string[]
+          kind: string
+          name: string
+          notify_email: boolean
+          people: string[]
+          publish_mode: string
+          sandbox: boolean
+          slug: string
+          social_brand: string | null
+          talk_room: string | null
+          todo_work_days: number[]
+          tz: string | null
+          week_start: string
+        }
+        SetofOptions: {
+          from: "meeting_recordings"
+          to: "approval_clients"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      call_debrief_coverage: {
+        Args: { m: Database["public"]["Tables"]["meeting_recordings"]["Row"] }
+        Returns: number
+      }
+      call_debrief_create: { Args: { p_meeting: string }; Returns: Json }
+      call_debrief_dismiss: { Args: { p_id: string }; Returns: Json }
+      call_debrief_get: { Args: { p_id: string }; Returns: Json }
+      call_debrief_is_quiet: {
+        Args: {
+          c: Database["public"]["Tables"]["approval_clients"]["Row"]
+          m: Database["public"]["Tables"]["meeting_recordings"]["Row"]
+        }
+        Returns: boolean
+      }
+      call_debrief_item_json: {
+        Args: { t: Database["public"]["Tables"]["client_todos"]["Row"] }
+        Returns: Json
+      }
+      call_debrief_item_remove: { Args: { p_item: string }; Returns: Json }
+      call_debrief_item_restore: { Args: { p_item: string }; Returns: Json }
+      call_debrief_item_update: {
+        Args: {
+          p_detail: string
+          p_due: string
+          p_item: string
+          p_title: string
+        }
+        Returns: Json
+      }
+      call_debrief_list: { Args: never; Returns: Json }
+      call_debrief_live_since: { Args: never; Returns: string }
+      call_debrief_move_owner: {
+        Args: { p_item: string; p_to: string }
+        Returns: Json
+      }
+      call_debrief_person: {
+        Args: { c: Database["public"]["Tables"]["approval_clients"]["Row"] }
+        Returns: string
+      }
+      call_debrief_safe_date: { Args: { p: string }; Returns: string }
+      call_debrief_sec: { Args: { p: string }; Returns: number }
+      call_debrief_send: {
+        Args: { p_id: string; p_items: string[] }
+        Returns: Json
+      }
+      call_debrief_snooze: { Args: { p_id: string }; Returns: Json }
+      call_debrief_t12: { Args: { t: string }; Returns: string }
+      call_debrief_ts_for: {
+        Args: { p_quote: string; p_summary: Json }
+        Returns: string
+      }
+      call_debrief_undo_send: { Args: { p_id: string }; Returns: Json }
+      call_debrief_watch: { Args: never; Returns: Json }
       call_gate: {
         Args: {
           p_checked_at: string
@@ -28916,6 +29273,16 @@ export type Database = {
         Returns: string
       }
       call_phone_key: { Args: { p_phone: string }; Returns: string }
+      call_ticket_make: {
+        Args: { p_now?: string; p_room: string; p_uid: string }
+        Returns: string
+      }
+      call_ticket_secret_get: { Args: never; Returns: string }
+      call_ticket_verify: {
+        Args: { p_now?: string; p_ticket: string }
+        Returns: Json
+      }
+      call_watch_ok: { Args: { p_key: string }; Returns: boolean }
       car_alerts_sweep: { Args: never; Returns: Json }
       car_battery_health_public: { Args: never; Returns: Json }
       car_battery_health_store: { Args: { p_health: Json }; Returns: undefined }
@@ -29534,6 +29901,14 @@ export type Database = {
         }[]
       }
       client_todos_board: { Args: { p_token: string }; Returns: Json }
+      client_upgrade_ack: {
+        Args: { p_kind?: string; p_token: string }
+        Returns: Json
+      }
+      client_upgrade_get: {
+        Args: { p_kind?: string; p_token: string }
+        Returns: Json
+      }
       client_upload_begin: {
         Args: {
           p_ask: string
@@ -31669,6 +32044,7 @@ export type Database = {
         Args: { _action_type: string; _domain: string; _selector: string }
         Returns: undefined
       }
+      recorder_offline_watch: { Args: never; Returns: undefined }
       recut_components_of: { Args: { p_text: string }; Returns: string[] }
       reminders_todo_sync: {
         Args: { p_known?: string[]; p_ops?: Json }
@@ -32594,6 +32970,34 @@ export type Database = {
       }
       staff_recovery_redeem: { Args: { p_token: string }; Returns: Json }
       staff_recovery_start: { Args: { p_who: string }; Returns: Json }
+      starnet_beat_t: {
+        Args: { p_ok: boolean; p_summary: string; p_token: string }
+        Returns: Json
+      }
+      starnet_notify_t: {
+        Args: {
+          p_body?: string
+          p_level?: string
+          p_tag?: string
+          p_title: string
+          p_token: string
+          p_url?: string
+        }
+        Returns: string
+      }
+      starnet_raise_t: {
+        Args: {
+          p_body?: string
+          p_healed?: boolean
+          p_key: string
+          p_kind: string
+          p_needs_jared?: string
+          p_severity?: string
+          p_title?: string
+          p_token: string
+        }
+        Returns: Json
+      }
       store_bestly_secret: {
         Args: { p_name: string; p_value: string }
         Returns: string
@@ -34741,6 +35145,7 @@ export type Database = {
       wall_pi_signs: { Args: { p_token: string }; Returns: Json }
       wall_pi_snapshot: { Args: { p_token: string }; Returns: Json }
       wall_pi_trips: { Args: { p_token: string }; Returns: Json }
+      wall_pi_turo_wx: { Args: { p_token: string }; Returns: Json }
       wall_pi_vision_keys: { Args: { p_token: string }; Returns: Json }
       wall_quick_get: { Args: { p_token: string }; Returns: Json }
       wall_quick_set: {
@@ -34844,6 +35249,8 @@ export type Database = {
         Args: { p_new: string; p_old: string; p_sig: unknown }
         Returns: string
       }
+      zz_r3_approval_board: { Args: { p_token: string }; Returns: Json }
+      zz_r3_studio_clients: { Args: { p_token: string }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "partner"
