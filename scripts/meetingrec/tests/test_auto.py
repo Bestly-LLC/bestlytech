@@ -84,6 +84,11 @@ class World:
         self.talk_down = False
         self.recording = False
         self.start_fails = 0          # how many `open` calls do nothing before one works
+        self.open_rcs = []            # scripted `open` failures, one per call: (returncode, stderr); empty = every open works
+        self.evicted = set()          # paths iCloud has evicted (dataless)
+        self.brctl_works = True       # does `brctl download` bring an evicted file back
+        self.cat_works = True         # does reading it (cat) bring it back, when brctl did not
+        self.fetches = []             # (command, path) of every brctl download / cat the agent ran
         self.opens = 0
         self.stops = 0
         self.health = []
@@ -140,8 +145,17 @@ class World:
         return "999" if self.recording else None
 
     def run(self, cmd, **kw):
+        if cmd[0] == agent.BRCTL:                         # asking iCloud for an evicted file
+            self.fetches.append(("brctl", cmd[-1]))
+            if self.brctl_works:
+                self.evicted.discard(cmd[-1])
+            return types.SimpleNamespace(returncode=0, stdout="", stderr="")
         if cmd[0] == "open":                              # Start Recording.app opened: start.sh runs
             self.opens += 1
+            if self.open_rcs:
+                rc, err = self.open_rcs.pop(0)
+                if rc:
+                    return types.SimpleNamespace(returncode=rc, stdout="", stderr=err)
             if self.opens > self.start_fails:
                 name = open(f"{H}/.pending-name").read().strip()
                 roster = open(f"{H}/.pending-roster").read().strip()
@@ -157,6 +171,11 @@ class World:
 
     def popen(self, cmd, **kw):
         """node notetaker.js (a FakeBot), or stop.sh: stops the recorder, writes the transcript."""
+        if cmd[0] == "/bin/cat":                          # a read of an evicted file: macOS fetches it from iCloud
+            self.fetches.append(("cat", cmd[-1]))
+            if self.cat_works:
+                self.evicted.discard(cmd[-1])
+            return types.SimpleNamespace(poll=lambda: 0, kill=lambda: None)
         if len(cmd) > 1 and str(cmd[1]).endswith("notetaker.js"):
             bot = FakeBot(cmd)
             self.bots.append(bot)
@@ -240,6 +259,10 @@ def setup_world():
     agent.stop_running_elsewhere = lambda: False
     agent.subprocess = types.SimpleNamespace(run=W.run, Popen=W.popen, PIPE=-1, STDOUT=-2, DEVNULL=-3)
     agent.find_start_app = lambda: "/Applications/Start Recording.app"
+    agent._flags = lambda p: agent.SF_DATALESS if p in W.evicted else 0
+    agent.start_fetch.update(busy=False, next=0.0)
+    if os.path.exists(agent.START_ALERT):
+        os.remove(agent.START_ALERT)
     agent.call = W.call
     agent.dav = W.dav
     agent.shared_paths = lambda folder: list(W.shared)
@@ -1308,6 +1331,152 @@ class JaredInCallTests(unittest.TestCase):
         copied = [c[1].rsplit("/", 1)[1] for c in W.dav_calls if c[0] == "COPY"]
         self.assertEqual(sorted(copied), [f"{n}-system.m4a", f"{n}-transcript.txt"])
 
+
+APP = os.path.join(TMP, "Desktop", "Start Recording.app")
+APP_FILES = [os.path.join(APP, "Contents", "MacOS", "applet"), os.path.join(APP, "Contents", "Info.plist")]
+
+
+class StartAppTests(unittest.TestCase):
+    """1.10.4: iCloud evicts Start Recording.app from the Desktop when the disk is nearly full, and macOS then refuses to open it
+    ("Resource deadlock avoided", 2026-10-18 3:28 and 3:30 PM). It is fetched back before every open, and an open that still
+    fails is reported to Scout at once."""
+
+    def setUp(self):
+        setup_world()
+        for f in APP_FILES:
+            os.makedirs(os.path.dirname(f), exist_ok=True)
+            open(f, "w").write("x")
+        agent.find_start_app = lambda: APP
+
+    def evict(self, *files):
+        W.evicted.update(files or APP_FILES)
+
+    def test_nothing_evicted_means_no_fetch_and_no_delay(self):
+        t0 = W.clock.now
+        ok, _r, _e = agent.do_start({"roster": []})
+        self.assertTrue(ok)
+        self.assertEqual(W.fetches, [])
+        self.assertEqual(W.opens, 1)
+        self.assertLess(W.clock.now - t0, 5)
+
+    def test_the_flag_that_means_evicted(self):
+        self.assertEqual(agent.SF_DATALESS, 0x40000000)      # SF_DATALESS in <sys/stat.h>
+        self.assertEqual(agent.evicted_files(APP), [])
+        self.evict(APP_FILES[0])
+        self.assertEqual(agent.evicted_files(APP), [APP_FILES[0]])
+        self.assertEqual(agent.evicted_files("/nowhere/Start Recording.app"), [])
+
+    def test_an_evicted_app_is_fetched_back_then_opened(self):
+        self.evict()
+        ok, _r, _e = agent.do_start({"roster": []})
+        self.assertTrue(ok)
+        self.assertEqual(sorted({p for _c, p in W.fetches}), sorted(APP_FILES))
+        self.assertEqual(W.evicted, set())
+        self.assertEqual(W.opens, 1, "opened once, after the fetch")
+        self.assertEqual(W.kinds("startapp"), [])
+        self.assertIn("Start Recording.app was evicted to iCloud", open(agent.LOG).read())
+
+    def test_an_app_iCloud_will_not_return_is_still_opened_and_the_failure_is_reported(self):
+        self.evict()
+        W.brctl_works = False
+        W.cat_works = False
+        W.open_rcs = [(1, "Resource deadlock avoided"), (1, "Resource deadlock avoided")]
+        t0 = W.clock.now
+        ok, _r, err = agent.do_start({"roster": [], "room": ROOM, "auto": True})
+        self.assertFalse(ok)
+        self.assertEqual(W.opens, 2, "tried to open it, then once more")
+        self.assertIn("would not open", err)
+        self.assertIn("Resource deadlock avoided", err)
+        self.assertEqual(W.kinds("startapp"), ["problem"], "reported at once, not after the 2-minute watchdog")
+        self.assertLess(W.clock.now - t0, 120)
+        self.assertFalse(os.path.exists(f"{H}/.pending-name"))
+        sev = [sv for (k, _kd, _t, sv) in W.health if k == "startapp"]
+        self.assertEqual(sev, ["error"])
+
+    def test_a_failed_open_is_tried_once_more_after_fetching_again(self):
+        W.open_rcs = [(1, "Resource deadlock avoided")]
+        ok, _r, _e = agent.do_start({"roster": [], "room": ROOM})
+        self.assertTrue(ok)
+        self.assertEqual(W.opens, 2)
+        self.assertGreaterEqual(len(W.fetches), 1, "the second try asks iCloud again even when nothing looks evicted")
+        self.assertEqual(W.kinds("startapp"), [], "it worked on the retry: nothing to report")
+
+    def test_the_alert_closes_when_a_recording_starts_again(self):
+        W.open_rcs = [(1, "x"), (1, "x")]
+        ok, _r, _e = agent.do_start({"roster": [], "room": ROOM})
+        self.assertFalse(ok)
+        self.assertTrue(os.path.exists(agent.START_ALERT))
+        ok, _r, _e = agent.do_start({"roster": [], "room": ROOM})
+        self.assertTrue(ok)
+        self.assertEqual(W.kinds("startapp"), ["problem", "resolved"])
+        self.assertFalse(os.path.exists(agent.START_ALERT))
+
+    def test_no_resolved_call_when_nothing_was_open(self):
+        ok, _r, _e = agent.do_start({"roster": [], "room": ROOM})
+        self.assertTrue(ok)
+        self.assertEqual(W.kinds("startapp"), [])
+
+    def test_a_test_rooms_failed_open_is_never_reported(self):
+        W.open_rcs = [(1, "x"), (1, "x")]
+        ok, _r, _e = agent.do_start({"roster": [], "room": TEST_ROOM, "auto": True})
+        self.assertFalse(ok)
+        self.assertEqual(W.kinds("startapp"), [])
+        self.assertIn("not reported (test room)", open(agent.LOG).read())
+
+    def test_a_missing_app_is_reported_at_once(self):
+        agent.find_start_app = lambda: None
+        ok, _r, err = agent.do_start({"roster": [], "room": ROOM})
+        self.assertFalse(ok)
+        self.assertIn("Can't find Start Recording.app", err)
+        self.assertEqual(W.kinds("startapp"), ["problem"])
+
+    def test_reading_the_files_is_the_second_resort_when_brctl_does_nothing(self):
+        self.evict()
+        W.brctl_works = False
+        ok, _took, _note = agent.fetch_start_app(APP)
+        self.assertTrue(ok)
+        self.assertEqual(W.evicted, set())
+        kinds = [c for c, _p in W.fetches]
+        self.assertIn("cat", kinds)
+        first_cat = kinds.index("cat")
+        self.assertTrue(all(k == "brctl" for k in kinds[:first_cat]) and first_cat >= len(APP_FILES), "brctl for every file first")
+
+    def test_the_wait_for_iCloud_is_bounded(self):
+        self.evict()
+        W.brctl_works = False
+        W.cat_works = False
+        t0 = W.clock.now
+        ok, took, note = agent.fetch_start_app(APP)
+        self.assertFalse(ok)
+        self.assertGreaterEqual(took, agent.APP_FETCH_S)
+        self.assertLess(W.clock.now - t0, agent.APP_FETCH_S + 30)
+
+    def test_the_rule_holding_starts_the_fetch_before_the_recording_does(self):
+        self.evict()
+        W.put(ROOM, ["jared", "elizabeth"])
+        run_for(3)                                     # the rule holds, AUTO_HOLD_S is 8: nothing recording yet
+        self.assertFalse(W.recording)
+        self.assertEqual(W.evicted, set(), "the app was fetched back while the hold was running")
+        run_for(10)
+        self.assertTrue(W.recording)
+        self.assertEqual(W.opens, 1)
+
+    def test_nothing_is_fetched_when_nothing_is_evicted_during_a_hold(self):
+        W.put(ROOM, ["jared", "elizabeth"])
+        run_for(12)
+        self.assertTrue(W.recording)
+        self.assertEqual(W.fetches, [])
+
+    def test_the_hourly_check_brings_it_back_and_says_so_when_it_cannot(self):
+        self.evict()
+        agent.check_start_app()
+        self.assertEqual(W.evicted, set(), "brought back long before a call needs it")
+        self.assertFalse([t for (k, _kd, t, _s) in W.health if k == "start_app" and "stuck in iCloud" in (t or "")])
+        self.evict()
+        W.brctl_works = False
+        W.cat_works = False
+        agent.check_start_app()
+        self.assertTrue([t for (k, kd, t, _s) in W.health if k == "start_app" and kd == "problem" and "stuck in iCloud" in (t or "")])
 
 if __name__ == "__main__":
     unittest.main()
