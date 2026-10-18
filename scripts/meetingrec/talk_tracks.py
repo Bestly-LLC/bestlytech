@@ -195,9 +195,6 @@ for t in others:
     if t.get("t1"):
         people[t["name"].strip()]["minutes"] += round((t["t1"] - t["t0"]) / 60000.0, 1)
 
-if not rows:
-    sys.exit(3)
-
 # Jared's lines: his own Talk track first. The Mac's mic stands in only when that track is missing or empty (and, because mic_rows
 # is empty for a call he was not in, only for a call he was in).
 jared_tracks = [t for t in tracks if is_jared(t["name"])]
@@ -211,6 +208,10 @@ elif mic_rows:
 else:
     jared_rows, jared_src = [], "none"
 rows += jared_rows
+if not rows:
+    sys.exit(3)
+# (1.10.3) the others can be silent (a muted seat, a test seat) while Jared's own Talk track has speech: that is still a named
+# transcript, not a reason to fall back to the mic and voice matching.
 
 rows.sort(key=lambda r: r[0])
 out = []
