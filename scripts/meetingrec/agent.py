@@ -14,7 +14,7 @@ Standard library only: it runs on the system python3.
 import base64, glob, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
 
-VERSION = "1.10.0"  # 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
+VERSION = "1.10.1"  # 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -900,6 +900,7 @@ def auto_start(tok, cfg, people):
     if ok:
         auto["last_error"] = None
         auto["last_human"] = time.time()
+        auto["empty_logged"] = False
         auto["blocked"].add(tok)
         return
     auto["starts"].pop()                # it did not start: that one does not count
@@ -998,6 +999,8 @@ def auto_tick():
         ok = rule_holds(cfg["rule"], people)
         if ok:
             auto["false_since"].pop(tok, None)
+            if tok not in auto["hold"]:
+                log("auto-record: the rule holds in", tok, [p["name"] for p in people][:6])
             auto["hold"].setdefault(tok, now)
             if recording:
                 auto["blocked"].add(tok)    # a recording is running: don't start another, and don't restart it if it ends mid-call
@@ -1011,9 +1014,16 @@ def auto_tick():
     # the recording Scout started: stop it when the call is empty
     if cur and not busy["stage"] and not auto["stopping"] and seen.get(cur["room"]) is not None:
         if seen[cur["room"]] or auto["last_human"] is None:
+            if auto.get("empty_logged"):
+                log("auto-record: someone is back in the call", cur["room"])
+            auto["empty_logged"] = False
             auto["last_human"] = now
-        elif now - auto["last_human"] >= AUTO_EMPTY_S:
-            auto_stop(cur, "everyone has left the call")
+        else:
+            if not auto.get("empty_logged"):
+                auto["empty_logged"] = True
+                log("auto-record: nobody is in the call", cur["room"], f"- stopping in {AUTO_EMPTY_S} s unless someone comes back")
+            if now - auto["last_human"] >= AUTO_EMPTY_S:
+                auto_stop(cur, "everyone has left the call")
 
     # start
     if not auto_idle() and now >= auto.get("retry_at", 0):
