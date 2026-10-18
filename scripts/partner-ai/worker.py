@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Partner assistant worker (Mac mini, launchd tech.bestly.partner-ai).
+"""Partner assistant worker. Since 1.3.0 (2026-10-18) it runs on jared-pc (Windows, Ollama on the PC GPU),
+started and kept alive by Task Scheduler "Bestly\\Ollama Watchdog"; it used to run on the Mac mini (launchd
+tech.bestly.partner-ai, now retired). Portable: standard library only, OLLAMA_URL env to point elsewhere.
 
 Answers questions from the /partner "Ask" tab with the local model in Ollama, so the chat costs
 nothing: no paid API. Polls partner_ai_claim every 2s (Postgres RPC, not an edge function, so
@@ -14,7 +16,7 @@ Standard library only. Key in ~/PartnerAI/.key (also in Supabase Vault as partne
 import json, os, re, time, traceback, urllib.error, urllib.request
 from datetime import datetime
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 HOME = os.path.expanduser("~/PartnerAI")
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co/rest/v1/rpc/"
 ANON = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"  # publishable key: apikey header only (key switch 2026-09-24)
@@ -34,7 +36,9 @@ Bestly runs its own tools on cloud.bestly.tech: Deck (Bestly Ops board), Talk, F
 
 
 def log(*a):
-    with open(LOG, "a") as f:
+    if os.path.exists(LOG) and os.path.getsize(LOG) > 1_000_000:
+        os.replace(LOG, LOG + ".1")
+    with open(LOG, "a", encoding="utf-8") as f:
         f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S ") + " ".join(str(x) for x in a) + "\n")
 
 
@@ -52,7 +56,8 @@ def write(reply_id, text, done=False, error=None):
 
 def context(job):
     name = job.get("name") or "Partner"
-    lines = [f"You are Scout, the Bestly assistant (named after the binoculars logo), chatting with {name}. If asked who you are, you are Scout. Today is {datetime.now():%A, %B %-d, %Y}.", "", ABOUT, ""]
+    now = datetime.now()  # no %-d: Windows strftime rejects it (worker runs on jared-pc since 1.3.0)
+    lines = [f"You are Scout, the Bestly assistant (named after the binoculars logo), chatting with {name}. If asked who you are, you are Scout. Today is {now:%A, %B} {now.day}, {now.year}.", "", ABOUT, ""]
     calls = job.get("calls") or []
     if calls:
         lines.append(f"Recent calls {name} was on (newest first):")
