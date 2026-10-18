@@ -19,7 +19,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 R = f"{HERE}/recordings"
 FFMPEG = f"{HERE}/bin/ffmpeg"
 SCRIBE = f"{HERE}/bin/talkscribe"
-JARED_NAMES = {"jared", "jared best"}  # display names that are Jared himself (his mic covers him)
+# Display names that are Jared himself: "Jared", "Jared Best", and the same with a note after it ("Jared (Studio)", "Jared - phone").
+JARED_RE = re.compile(r"^jared(\s+best)?(\s*[(\[\-\u2013\u2014].*)?$", re.I)
+
+
+def is_jared(n):
+    return bool(JARED_RE.match((n or "").strip()))
+
 
 name = sys.argv[1]
 tdir = f"{R}/{name}-talk"
@@ -71,7 +77,7 @@ if unnamed and manifest.get("token"):
         print("chat fallback failed:", e, file=sys.stderr)
 
 tracks = [t for t in manifest.get("tracks", []) if t.get("name") and os.path.exists(f"{tdir}/{t['file']}")]
-others = [t for t in tracks if t["name"].strip().lower() not in JARED_NAMES]
+others = [t for t in tracks if not is_jared(t["name"])]
 if not others:
     sys.exit(3)
 if started is None:
@@ -125,25 +131,41 @@ if not rows:
     sys.exit(3)
 
 # Jared: his own mic track, transcribed by stop.sh
+mic_rows = []
 try:
     for line in open(f"/tmp/{name}.jared.tsv"):
         p = line.rstrip("\n").split("\t")
         if len(p) >= 3 and p[2].strip():
-            rows.append((float(p[0]), "JARED", p[2].strip()))
+            mic_rows.append((float(p[0]), "JARED", p[2].strip()))
 except OSError:
     pass
 
-# If the mic recording stopped early or is unreadable, Jared's own Talk track
-# (what everyone else heard) fills in from where the mic ends.
+
+def words(rs):
+    return sum(len(r[2].split()) for r in rs)
+
+
+# The Mac's mic only hears Jared when he is on this Mac. If he joined from another computer or his phone (Studio), or the mic
+# recording stopped early or is empty, his own Talk track (what everyone else heard from him) is the record instead.
 mic_end = media_seconds(f"{R}/{name}-mic.m4a")
+mic_words = words(mic_rows)
+jared_tracks = [t for t in tracks if is_jared(t["name"])]
+jared_minutes = sum(((t.get("t1") or t["t0"]) - t["t0"]) / 60000.0 for t in jared_tracks)
+runs_past_mic = any(not t.get("t1") or ((t["t1"] / 1000.0) - started) > mic_end + 5 for t in jared_tracks)
+talk_rows = None
+if jared_tracks and (mic_words < max(25, 3 * jared_minutes) or runs_past_mic):
+    talk_rows = []
+    for t in jared_tracks:
+        talk_rows += track_rows(t, "JARED") or []
 jared_filled = 0
-for t in tracks:
-    if t["name"].strip().lower() not in JARED_NAMES:
-        continue
-    t_end = ((t.get("t1") or t["t0"]) / 1000.0) - started
-    if t.get("t1") and t_end <= mic_end + 5:
-        continue                     # the mic already covers this whole track
-    for r in track_rows(t, "JARED") or []:
+jared_from_talk = False
+if talk_rows is not None and words(talk_rows) >= 2 * mic_words + 10:
+    rows += talk_rows                # the mic had little or nothing of him: use his Talk audio for the whole call
+    jared_from_talk = True
+    jared_filled = len(talk_rows)
+else:
+    rows += mic_rows
+    for r in talk_rows or []:        # the mic recording ended early: his Talk audio fills in from where it ends
         if r[0] > mic_end - 1:
             rows.append(r)
             jared_filled += 1
@@ -155,8 +177,11 @@ for t, lab, txt in rows:
     out.append(f"[{t // 60:02d}:{t % 60:02d}] {lab}: {txt}")
 
 hdr = ["# Names come straight from Nextcloud Talk: the notetaker recorded each person on their own track.",
-       "# JARED = your own mic."]
-if jared_filled:
+       "# JARED = your Talk audio (what everyone else heard)." if jared_from_talk else "# JARED = your own mic."]
+if jared_from_talk:
+    hdr.append(f"# The Mac's mic had almost nothing of you (you were probably on another device), so all {jared_filled} of your lines "
+               "come from your Talk audio.")
+elif jared_filled:
     hdr.append(f"# Your mic recording ended at {int(mic_end) // 60:02d}:{int(mic_end) % 60:02d}; "
                f"{jared_filled} of your lines after that come from your Talk audio.")
 if fallback_used:
