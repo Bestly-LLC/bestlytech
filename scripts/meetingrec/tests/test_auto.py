@@ -1,4 +1,5 @@
-"""Tests for the auto-record parts of agent.py (Lane M, 2026-10-18). Standard library only; run with the Mac's python3 (3.9):
+"""Tests for the auto-record parts of agent.py (Lane M, 2026-10-18; the early notetaker and the faster looks are 1.10.3). Standard library
+only; run with the Mac's python3 (3.9):
 
     cd scripts/meetingrec && python3 -m unittest discover -s tests -v
 
@@ -6,6 +7,7 @@ Talk, the Start Recording app, stop.sh, Supabase and Nextcloud are all faked; th
 """
 import json
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -53,6 +55,25 @@ class SyncThread:
         self.target(*self.args)
 
 
+class FakeBot:
+    """notetaker.js as agent.notetaker_launch starts it: a process that is alive until a test gives it an exit code."""
+    def __init__(self, cmd):
+        self.cmd = cmd
+        self.token, self.out = cmd[2], cmd[3]
+        self.returncode = None
+        self.killed = False
+
+    def poll(self):
+        return self.returncode
+
+    def kill(self):
+        self.killed = True
+        self.returncode = -9
+
+    def stop_file(self):
+        return os.path.exists(f"{self.out}/STOP")
+
+
 class World:
     """Everything outside agent.py: the Talk server, the Mac's recorder, Supabase, Nextcloud."""
     def __init__(self):
@@ -74,19 +95,36 @@ class World:
         self.shared = []
         self.dav_code = {}
         self.transcript_text = "[00:00] JARED: hello\n" * 30
+        self.bots = []                # notetaker.js processes started (FakeBot)
+        self.bot_adds = []            # rooms the notetaker was added to
+        self.bot_in = set()           # rooms the notetaker is a participant of
+        self.looks = 0                # reads of the room list = looks at Talk
 
     # ---- Talk
     def talk(self, method, path, data=None, timeout=15):
         if self.talk_down:
             raise OSError("talk is down")
         if method == "GET" and (path == "/room" or path.startswith("/room?")):
+            self.looks += 1
             return [{"token": t, "type": r["type"], "displayName": r["name"], "name": r["name"], "hasCall": r["call"],
                      "participantFlags": 0} for t, r in self.rooms.items()]
         if method == "GET" and path.startswith("/room/") and path.endswith("/participants"):
             tok = path.split("/")[2]
-            return [{"actorType": t, "actorId": a, "displayName": a.title(), "inCall": 7 if inc else 0,
+            rows = [{"actorType": t, "actorId": a, "displayName": a.title(), "inCall": 7 if inc else 0,
                      "lastPing": self.clock.now - age, "sessionIds": ["s%d" % i for i in range(n)],
                      "attendeeId": i} for i, (a, t, inc, age, n) in enumerate(self.rooms[tok]["people"])]
+            if tok in self.bot_in:
+                rows.append({"actorType": "users", "actorId": agent.BOT_USER, "displayName": "Scout (notetaker)", "inCall": 0,
+                             "lastPing": self.clock.now, "sessionIds": [], "attendeeId": 999})
+            return rows
+        if method == "POST" and path.startswith("/room/") and path.endswith("/participants"):
+            tok = path.split("/")[2]
+            self.bot_adds.append(tok)
+            self.bot_in.add(tok)
+            return {}
+        if method == "DELETE" and path.startswith("/room/") and "/attendees?attendeeId=999" in path:
+            self.bot_in.discard(path.split("/")[2])
+            return {}
         raise AssertionError("unexpected Talk call %s %s" % (method, path))
 
     def put(self, tok, people):
@@ -118,7 +156,11 @@ class World:
         return types.SimpleNamespace(returncode=0, stdout="", stderr="")
 
     def popen(self, cmd, **kw):
-        """stop.sh: stops the recorder, writes the transcript."""
+        """node notetaker.js (a FakeBot), or stop.sh: stops the recorder, writes the transcript."""
+        if len(cmd) > 1 and str(cmd[1]).endswith("notetaker.js"):
+            bot = FakeBot(cmd)
+            self.bots.append(bot)
+            return bot
         name = open(f"{H}/.current").read().strip()
         self.stops += 1
         self.recording = False
@@ -172,12 +214,19 @@ def setup_world():
                 if os.path.isfile(fp):
                     os.remove(fp)
     open(f"{H}/.agent-key", "w").write("test-key")
+    for f in os.listdir(REC):
+        if os.path.isdir(os.path.join(REC, f)):
+            shutil.rmtree(os.path.join(REC, f))                 # the notetaker folders of the last test (this is the test's own temp dir)
+    if os.path.isdir(agent.NT_DIR):
+        for f in os.listdir(agent.NT_DIR):
+            if os.path.isfile(os.path.join(agent.NT_DIR, f)):
+                os.remove(os.path.join(agent.NT_DIR, f))        # no notetaker.js unless a test puts one there
     agent.auto.clear()
     agent.auto.update({"next": 0, "fails": 0, "hold": {}, "false_since": {}, "blocked": set(), "rooms": {}, "last_human": None,
                        "stopping": False, "last_error": None, "alert_open": False, "talk_alert": False, "long_alert": False,
-                       "retry_at": 0, "verify_next": 0})
+                       "retry_at": 0, "verify_next": 0, "arms": [], "live_since": None})
     agent.busy.update(stage=None, name=None)
-    agent.nt.update(proc=None, name=None, room=None, title=None, next_try=0, status="off", fails=0, t0=0)
+    agent.nt.update(proc=None, name=None, room=None, title=None, next_try=0, status="off", fails=0, t0=0, stop_at=None, armed=None)
     agent.heal["selftest"] = None
     agent.heal["test_room"] = None
     agent.AUTO_ROOMS.clear()
@@ -294,11 +343,11 @@ class AutoTickTests(unittest.TestCase):
     def setUp(self):
         setup_world()
 
-    def test_starts_once_after_twenty_seconds_with_the_room_and_roster(self):
+    def test_starts_once_after_eight_seconds_with_the_room_and_roster(self):
         W.put(ROOM, ["jared", "elizabeth"])
-        run_for(15)
-        self.assertEqual(W.opens, 0, "20 seconds have not passed yet")
-        run_for(20)
+        run_for(6)
+        self.assertEqual(W.opens, 0, "8 seconds have not passed yet")
+        run_for(10)
         self.assertEqual(W.opens, 1)
         self.assertTrue(W.recording)
         cur = json.load(open(agent.AUTO_FILE))
@@ -312,9 +361,9 @@ class AutoTickTests(unittest.TestCase):
 
     def test_the_eli_and_jared_room_records_and_has_no_client(self):
         W.put(BDC, ["jared", "eli"])
-        run_for(15)
+        run_for(6)
         self.assertEqual(W.opens, 0)
-        run_for(25)
+        run_for(10)
         self.assertEqual(W.opens, 1)
         cur = json.load(open(agent.AUTO_FILE))
         name = cur["name"]
@@ -343,11 +392,11 @@ class AutoTickTests(unittest.TestCase):
 
     def test_a_blip_does_not_start_a_recording(self):
         W.put(ROOM, ["jared", "elizabeth"])
-        run_for(10)
+        run_for(5)
         W.put(ROOM, ["jared"])
         run_for(10)
         W.put(ROOM, ["jared", "elizabeth"])
-        run_for(15)
+        run_for(5)
         self.assertEqual(W.opens, 0)
 
     def test_stops_after_ninety_seconds_with_nobody_in_the_call(self):
@@ -801,6 +850,362 @@ class NotetakerTickTests(unittest.TestCase):
         agent.notetaker_tick()
         self.assertEqual(agent.nt["fails"], 1, "it still counts and retries")
         self.assertEqual(W.kinds("notetaker"), [], "but says nothing")
+
+
+class LookTests(unittest.TestCase):
+    """1.10.3: how often Scout looks at Talk. Until 1.10.2 a look every 4 seconds really happened every ~8, so a call could be up to
+    8 seconds old before Scout noticed it, on top of the 20-second hold."""
+
+    def setUp(self):
+        setup_world()
+
+    def looks_in(self, seconds):
+        before = W.looks
+        run_for(seconds)
+        return W.looks - before
+
+    def test_a_quiet_room_is_looked_at_every_six_seconds(self):
+        run_for(2)
+        self.assertEqual(self.looks_in(60), 10)
+
+    def test_someone_waiting_in_a_call_is_looked_at_every_two_seconds_for_ten_minutes_then_every_four(self):
+        W.put(ROOM, ["elizabeth"])                      # alone: the rule does not hold, nothing records
+        run_for(2)
+        self.assertEqual(self.looks_in(60), 30)
+        run_for(560)
+        self.assertEqual(self.looks_in(60), 15, "ten minutes in: someone waiting alone is not looked at every 2 seconds for an hour")
+        W.put(ROOM, [])
+        run_for(20)
+        W.put(ROOM, ["elizabeth"])                      # a new call: fast again
+        run_for(2)
+        self.assertEqual(self.looks_in(60), 30)
+
+    def test_a_recording_in_progress_is_looked_at_every_four_seconds(self):
+        W.put(ROOM, ["jared", "elizabeth"])
+        run_for(30)
+        self.assertTrue(W.recording)
+        self.assertEqual(self.looks_in(60), 15)
+
+    def test_the_main_loop_sleeps_until_whichever_is_due_first(self):
+        self.assertEqual(agent.loop_nap(100.0, 103.0, 102.0), 2.0, "a look at Talk is due first")
+        self.assertEqual(agent.loop_nap(100.0, 101.0, 109.0), 1.0, "the poll of Scout is due first")
+        self.assertEqual(agent.loop_nap(100.0, 90.0, 80.0), 0.25, "overdue: a quarter of a second, not a busy loop")
+        self.assertEqual(agent.loop_nap(100.0, 190.0, 190.0), agent.POLL_S, "never longer than a poll")
+
+    def test_the_timing_as_shipped(self):
+        # what the first-audio target (under 30 s after the second person joins) rests on: see the README, "Timing"
+        self.assertLessEqual(agent.AUTO_HOLD_S, 8)
+        self.assertLess(agent.AUTO_ARM_S, agent.AUTO_HOLD_S)
+        self.assertLessEqual(agent.AUTO_LOOK_FAST_S, 2)
+        self.assertLessEqual(agent.AUTO_LOOK_IDLE_S, 6)
+
+
+class EarlyNotetakerTests(unittest.TestCase):
+    """1.10.3: the notetaker is started 2 seconds into the 8-second hold, in parallel with the recorder, instead of after the recorder
+    is up. It joins the recording that starts, or is called back."""
+
+    def setUp(self):
+        setup_world()
+        os.makedirs(agent.NT_DIR, exist_ok=True)
+        open(f"{agent.NT_DIR}/notetaker.js", "w").write("//")
+        agent.selftest_lock = threading.Lock()
+
+    def go(self, seconds):
+        """The agent's loop: a look at Talk, then the notetaker's turn."""
+        for _ in range(int(seconds)):
+            W.clock.advance(1)
+            agent.auto_tick()
+            agent.notetaker_tick()
+
+    def current(self):
+        return open(f"{H}/.current").read().strip()
+
+    def test_the_notetaker_starts_before_the_recorder_and_the_recording_is_given_its_name(self):
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.go(2)
+        self.assertEqual(W.bots, [], "the rule has held for a second only")
+        self.go(2)
+        self.assertEqual(len(W.bots), 1, "2 seconds into the hold the notetaker starts")
+        self.assertEqual(W.bot_adds, [ROOM])
+        self.assertEqual(W.opens, 0, "...before the recorder")
+        armed = dict(agent.nt["armed"])
+        self.assertEqual((armed["room"], W.bots[0].token), (ROOM, ROOM))
+        self.assertEqual(W.bots[0].out, f"{REC}/{armed['name']}-talk")
+        self.go(10)
+        self.assertEqual(W.opens, 1)
+        self.assertEqual(self.current(), armed["name"], "the recording is called what the notetaker's folder is called")
+        self.assertEqual(len(W.bots), 1, "one notetaker, not two")
+        self.assertIsNone(agent.nt["armed"], "it is part of the recording now")
+        self.assertFalse(W.bots[0].stop_file(), "and it is left alone")
+        self.go(60)
+        self.assertEqual((len(W.bots), W.opens), (1, 1))
+        self.assertEqual(agent.read_meta(armed["name"])["room"], ROOM)
+
+    def test_the_notetaker_starts_with_the_recorder_when_the_first_look_was_late(self):
+        # a restart (or a Talk that did not answer) can leave the first look after the 8 seconds: the notetaker starts right then
+        W.put(ROOM, ["jared", "elizabeth"])
+        agent.auto["hold"][ROOM] = W.clock.now - 30
+        agent.auto["rooms"] = {}
+        self.go(1)
+        self.assertEqual(W.opens, 1)
+        self.assertEqual(len(W.bots), 1)
+        self.assertEqual(W.bots[0].out, f"{REC}/{self.current()}-talk")
+
+    def test_a_blip_calls_the_early_notetaker_back_and_a_new_call_starts_another(self):
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.go(5)
+        self.assertEqual(len(W.bots), 1)
+        W.put(ROOM, ["jared"])                          # she drops out for a moment
+        self.go(4)
+        self.assertTrue(W.bots[0].stop_file(), "told to leave")
+        self.assertIsNone(agent.nt["armed"])
+        self.assertEqual(W.opens, 0, "no recording for a blip")
+        W.bots[0].returncode = 0                        # it leaves
+        self.go(1)
+        self.assertEqual(W.bot_in, set(), "and is taken out of the room")
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.go(30)
+        self.assertEqual(W.opens, 1)
+        self.assertEqual(len(W.bots), 2)
+        self.assertEqual(W.bots[1].out, f"{REC}/{self.current()}-talk")
+        self.assertFalse(W.bots[1].stop_file())
+
+    def test_the_room_switching_off_calls_it_back(self):
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.go(5)
+        self.assertEqual(len(W.bots), 1)
+        open(f"{H}/.auto-off", "w").close()
+        self.go(2)
+        self.assertTrue(W.bots[0].stop_file())
+        self.assertIsNone(agent.nt["armed"])
+        self.assertEqual(W.opens, 0)
+
+    def test_nothing_starts_early_when_nothing_may_start(self):
+        W.put(ROOM, ["jared", "elizabeth"])
+        agent.busy["stage"] = "transcribing"            # the last call is still being saved
+        self.go(15)
+        self.assertEqual((W.bots, W.opens), ([], 0))
+        agent.busy["stage"] = None
+        agent.auto["hold"].clear()
+        self.go(30)
+        self.assertEqual((len(W.bots), W.opens), (1, 1))
+
+    def test_a_recording_started_by_hand_gets_no_early_notetaker(self):
+        W.recording = True
+        open(f"{H}/.current", "w").write("meeting-20261020-0855")
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.go(20)
+        self.assertEqual(W.bot_adds, [ROOM], "the normal path adds the notetaker to the call, once")
+        self.assertEqual(len(W.bots), 1)
+        self.assertEqual(W.bots[0].out, f"{REC}/meeting-20261020-0855-talk")
+        self.assertEqual(W.opens, 0)
+
+    def test_no_early_notetaker_past_the_hourly_limit(self):
+        W.put(ROOM, ["jared", "elizabeth"])
+        agent.auto["arms"] = [W.clock.now] * agent.AUTO_MAX_ARMS         # six this hour already
+        self.go(8)
+        self.assertEqual((W.bots, W.opens), ([], 0), "no early one")
+        self.go(10)
+        self.assertEqual(W.opens, 1, "the recording starts all the same")
+        self.assertEqual(len(W.bots), 1, "and the normal path starts the notetaker after the recorder, as before")
+
+    def test_no_early_notetaker_without_the_script(self):
+        os.remove(f"{agent.NT_DIR}/notetaker.js")
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.go(20)
+        self.assertEqual((W.bots, W.opens), ([], 1))
+
+    def test_a_recorder_that_does_not_start_calls_the_notetaker_back_and_the_retry_starts_another(self):
+        W.start_fails = 999
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.go(20)
+        self.assertEqual(len(W.bots), 1)
+        self.assertTrue(W.bots[0].stop_file(), "no recorder: no notetaker sitting in the call")
+        self.assertIsNone(agent.nt["armed"])
+        self.assertEqual(W.opens, 2, "two tries")
+        W.bots[0].returncode = 0
+        W.start_fails = 0
+        W.opens = 0
+        self.go(60)
+        self.assertEqual(W.opens, 1)
+        self.assertEqual(len(W.bots), 2)
+        self.assertEqual(W.bots[1].out, f"{REC}/{self.current()}-talk")
+        self.assertFalse(W.bots[1].stop_file())
+
+    def test_a_notetaker_waiting_too_long_is_called_back(self):
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.go(5)
+        self.assertIsNotNone(agent.nt["armed"])
+        agent.auto["retry_at"] = W.clock.now + 10 ** 6   # the start is held back; the rule keeps holding
+        agent.auto["hold"][ROOM] = W.clock.now
+        W.clock.advance(agent.AUTO_ARM_MAX_S + 1)
+        agent.auto["next"] = 0
+        agent.auto_tick()
+        self.assertTrue(W.bots[0].stop_file())
+        self.assertIsNone(agent.nt["armed"])
+
+    def test_notetaker_tick_alone_calls_back_one_that_nothing_else_does(self):
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.go(5)
+        self.assertIsNotNone(agent.nt["armed"])
+        agent.notetaker_tick()
+        self.assertFalse(W.bots[0].stop_file(), "an early notetaker is not stopped just because nothing is recording yet")
+        W.clock.advance(agent.AUTO_ARM_MAX_S + 31)
+        agent.notetaker_tick()
+        self.assertTrue(W.bots[0].stop_file(), "...but not forever")
+        self.assertIsNone(agent.nt["armed"])
+
+    def test_an_early_notetaker_that_dies_is_not_a_failure(self):
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.go(5)
+        W.bots[0].returncode = 1
+        self.go(1)
+        self.assertEqual(agent.nt["fails"], 0)
+        self.assertEqual(W.kinds("notetaker"), [])
+        self.go(30)
+        self.assertEqual(W.opens, 1)
+        self.assertEqual(len(W.bots), 2, "the normal path started another one for the recording")
+        self.assertEqual(W.bots[1].out, f"{REC}/{self.current()}-talk")
+        self.assertEqual(agent.nt["fails"], 0)
+
+    def test_a_recording_with_another_name_calls_the_early_notetaker_back(self):
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.go(5)
+        self.assertEqual(len(W.bots), 1)
+        W.recording = True                              # somebody pressed Start Recording by hand
+        open(f"{H}/.current", "w").write("meeting-20261020-0855")
+        agent.notetaker_tick()
+        self.assertTrue(W.bots[0].stop_file(), "it was writing into a folder nobody will read")
+        self.assertIsNone(agent.nt["armed"])
+        W.bots[0].returncode = 0
+        self.go(30)
+        self.assertEqual(len(W.bots), 2)
+        self.assertEqual(W.bots[1].out, f"{REC}/meeting-20261020-0855-talk")
+        self.assertEqual(W.opens, 0, "and Scout does not start a second recording")
+
+    def test_a_name_that_is_taken_is_not_reused(self):
+        n = "meeting-20261020-0900"
+        os.makedirs(f"{REC}/{n}-talk")                  # the notetaker's folder does not make the name taken
+        self.assertTrue(agent.name_is_free(n))
+        open(f"{REC}/{n}-mic.m4a", "w").write("x")
+        self.assertFalse(agent.name_is_free(n))
+        ok, r, _ = agent.do_start({"roster": [], "name": n})
+        self.assertTrue(ok)
+        self.assertNotEqual(r["name"], n, "a recording never reuses the name of one that exists")
+        W.recording = False
+        ok, r, _ = agent.do_start({"roster": [], "name": "../../etc/passwd"})
+        self.assertTrue(ok)
+        self.assertRegex(r["name"], r"^meeting-\d{8}-\d{4}$")
+
+    def test_the_summary_says_which_room_a_notetaker_was_started_early_for(self):
+        self.assertIsNone(agent.auto_summary()["armed"])
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.go(5)
+        self.assertEqual(agent.auto_summary()["armed"], ROOM)
+
+    def test_a_notetaker_left_over_from_before_a_restart_is_asked_to_leave(self):
+        mine, other = f"{REC}/meeting-20261020-0900-talk", "/tmp/scout-selftest-123"
+        os.makedirs(mine)
+        listing = (f"4242 /Users/x/.local/node/bin/node {agent.NT_DIR}/notetaker.js {ROOM} {mine}\n"
+                   f"4343 /Users/x/.local/node/bin/node {agent.NT_DIR}/notetaker.js abcdefgh {other}\n")
+        agent.subprocess.run = lambda cmd, **kw: types.SimpleNamespace(returncode=0, stdout=listing, stderr="")
+        agent.stop_orphan_notetakers()
+        self.assertTrue(os.path.exists(f"{mine}/STOP"))
+        self.assertFalse(os.path.exists(f"{other}/STOP"), "the self-test's notetaker cleans up after itself")
+
+    def test_no_restart_and_no_self_test_while_one_is_on_its_way(self):
+        called = []
+        saved = {k: getattr(agent, k) for k in ("sync_code", "run_selftest", "run_voicebank", "upkeep_checks", "talk_version")}
+        agent.sync_code = lambda: called.append("sync") or False
+        agent.run_selftest = lambda *a, **k: called.append("selftest")
+        agent.run_voicebank = lambda: None
+        agent.upkeep_checks = lambda: None
+        agent.talk_version = lambda: ""
+        for k, v in saved.items():
+            self.addCleanup(setattr, agent, k, v)
+        agent.heal.update(next_sync=0, next_version_check=0, next_voicebank=10 ** 12, next_upkeep=10 ** 12)
+        agent.nt["armed"] = {"room": ROOM, "name": "meeting-20261020-0900", "at": W.clock.now}
+        agent.heal_tick()
+        self.assertEqual(called, [])
+        agent.nt["armed"] = None
+        agent.heal_tick()
+        self.assertEqual(called, ["sync"])
+
+
+class MainLoopTests(unittest.TestCase):
+    """The real main() loop on the fake clock: how often it polls Scout and looks at Talk, and the first seconds of a call end to end."""
+
+    class Stop(BaseException):
+        pass
+
+    def setUp(self):
+        setup_world()
+        os.makedirs(agent.NT_DIR, exist_ok=True)
+        open(f"{agent.NT_DIR}/notetaker.js", "w").write("//")
+        agent.selftest_lock = threading.Lock()
+        agent.heal.update(next_sync=10 ** 12, next_version_check=10 ** 12, next_voicebank=10 ** 12, next_upkeep=10 ** 12)
+        agent.mailspam_job["next"] = 10 ** 12
+        self.events = []                      # (seconds since the start, what) from the fake world
+
+    def run_main(self, seconds):
+        """agent.main() for `seconds` of fake time."""
+        import signal
+        old = signal.getsignal(signal.SIGTERM)
+        self.addCleanup(signal.signal, signal.SIGTERM, old)
+        t0 = W.clock.now
+        real_sleep = W.clock.sleep
+
+        def sleep(s):
+            real_sleep(s)
+            if W.clock.now - t0 >= seconds:
+                raise self.Stop()
+        W.clock.sleep = sleep
+        orig_run, orig_popen, orig_talk = agent.subprocess.run, agent.subprocess.Popen, agent.talk
+
+        def run(cmd, **kw):
+            if cmd[0] == "open":
+                self.events.append((W.clock.now - t0, "recorder start"))
+            return orig_run(cmd, **kw)
+
+        def popen(cmd, **kw):
+            if len(cmd) > 1 and str(cmd[1]).endswith("notetaker.js"):
+                self.events.append((W.clock.now - t0, "notetaker start"))
+            return orig_popen(cmd, **kw)
+        agent.subprocess.run, agent.subprocess.Popen = run, popen
+        try:
+            with self.assertRaises(self.Stop):
+                agent.main()
+        finally:
+            agent.subprocess.run, agent.subprocess.Popen, agent.talk = orig_run, orig_popen, orig_talk
+        return t0
+
+    def polls(self):
+        return len([c for c in W.calls if c.get("op") == "poll"])
+
+    def test_scout_is_polled_every_three_seconds_and_talk_looked_at_every_two_while_someone_waits(self):
+        W.put(ROOM, ["elizabeth"])
+        self.run_main(61)
+        self.assertAlmostEqual(W.looks, 30, delta=2)
+        self.assertAlmostEqual(self.polls(), 20, delta=2)
+
+    def test_a_quiet_room_is_polled_every_three_seconds_and_looked_at_every_six(self):
+        self.run_main(61)
+        self.assertAlmostEqual(W.looks, 10, delta=2)
+        self.assertAlmostEqual(self.polls(), 20, delta=2)
+
+    def test_the_first_seconds_of_a_call_end_to_end(self):
+        t0 = W.clock.now
+        W.put(ROOM, ["jared", "elizabeth"])
+        self.run_main(60)
+        by = dict((what, t) for t, what in reversed(self.events))       # the first time of each
+        self.assertLess(by["notetaker start"], 5, self.events)           # 2 s into the hold, plus the look that finds it
+        self.assertLess(by["notetaker start"], by["recorder start"], "the notetaker goes first")
+        self.assertGreater(by["recorder start"], 8 - 1)                  # the 8-second hold
+        self.assertLess(by["recorder start"], 13, self.events)
+        self.assertEqual([what for _t, what in self.events].count("notetaker start"), 1, "one notetaker")
+        self.assertTrue(W.recording)
+        self.assertEqual(W.bots[0].out, f"{REC}/{open(f'{H}/.current').read().strip()}-talk")
+        self.assertEqual(t0, 1_800_000_000.0)
 
 
 class JaredInCallTests(unittest.TestCase):

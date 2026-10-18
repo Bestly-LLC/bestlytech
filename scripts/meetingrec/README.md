@@ -17,7 +17,8 @@ Copies of what runs in `~/MeetingRec` on the Mac mini. The live files are there,
 
 ## Notetaker (exact names on Talk calls)
 
-- `notetaker/notetaker.js` — while a recording runs, the agent finds the Talk room with a live
+- `notetaker/notetaker.js` — while a recording runs (and, since 1.10.3, a few seconds before an auto-started one), the agent finds
+  the Talk room with a live
   call, adds the Nextcloud user `scout-notetaker` ("Scout (notetaker)") to it, and runs this in
   headless Chrome (playwright-core, system Chrome). Talk sends every person's audio to every
   participant as a separate stream, so it records one track per person, named from Talk's tiles.
@@ -48,10 +49,29 @@ it, and stops, transcribes and ingests it when the call empties. Every other roo
   Monday, Oct 19, 2026 (`until` in `AUTO_ROOMS`). Humans are `users`, `guests`, `emails` and `federated_users` attendees that
   Talk says are in the call (`inCall` bit 1) and have pinged in the last 75 s. `scout-notetaker` and `cowork-bot` never count.
   Talk's `hasCall` is only used to decide whether to look closer: it can stay true for days (Sep 29).
-- Timing. The rule must hold 20 s before the recording starts (`AUTO_HOLD_S`). With no human in the call for 90 s
+- Timing (1.10.3, 2026-10-18). The rule must hold 8 s before the recording starts (`AUTO_HOLD_S`; it was 20 s), and 2 s before the
+  notetaker starts (`AUTO_ARM_S`, see "The notetaker starts early" below). Scout looks at Talk every 2 s while a call is going in one of
+  its rooms and nothing is recording yet (`AUTO_LOOK_FAST_S`, for at most 10 minutes, `AUTO_FAST_MAX_S`, so one person waiting alone is
+  not looked at every 2 s for an hour), every 4 s while a call or a recording is going, and every 6 s when nothing is going on. (Until
+  1.10.2 the "4 seconds" was really ~8: the main loop slept 3 s after every poll of Scout.) With no human in the call for 90 s
   (`AUTO_EMPTY_S`) or after 4 hours (`AUTO_CAP_S`) the normal `do_stop` runs (transcribe, upload, ingest, bot removed from the
   room). After a recording the rule has to be false for 30 s before the next auto-start; at most 3 auto-starts an hour.
-- Measured in the rehearsal room (2026-10-18, 12:38 PM, two `calltest` seats, one with speech): the second seat was in the call
+- The notetaker starts early (1.10.3). Until 1.10.2 it started only once the recorder was verified (3-11 s after the start), took ~21 s
+  to get into the call, and the 20 s hold came first, so the per-person Talk tracks began ~54-65 s after the second person arrived
+  (108 s after the call went live). Now `arm_bot` starts it `AUTO_ARM_S` into the hold: it adds `scout-notetaker` to the room and runs
+  `notetaker.js` for a recording name chosen then (`new_recording_name()`); `do_start` is given that name (`payload["name"]`) so the
+  recording and the notetaker's `<name>-talk` folder match. It joins the call in parallel with the recorder starting. It is called
+  back (STOP file in its folder, then removed from the room) when the rule stops holding before the recorder starts (a blip under
+  8 s), when the room is switched off, when the recorder does not start, when a different recording starts, or after 60 s
+  (`AUTO_ARM_MAX_S`; `notetaker_tick` has its own 90 s safety net). An early notetaker that exits by itself before its recording
+  exists is not counted as a failure (the normal path starts another when the recording does). At most 6 early starts an hour
+  (`AUTO_MAX_ARMS`) and none when a start would not be allowed anyway (a recording or stop running, the self-test, 3 starts this
+  hour, no `notetaker.js`). While one is on its way `heal_tick` does not sync or restart the agent, and a self-test asked for by Scout
+  waits. When the agent itself starts and nothing is recording, a `notetaker.js` still running from before (its agent died) is asked
+  to leave. Side effect: a rule that holds 2-8 s and then drops adds the bot to the room and removes it again (two chat system
+  messages in that room). The bot is not kept in the rooms permanently: that would save about a second and leave a bot in the
+  client's room all day.
+- Measured in the rehearsal room (2026-10-18, 12:38 PM, 1.10.1, two `calltest` seats, one with speech): the second seat was in the call
   at 12:38:54; `auto-start` 12:39:16 (22 s: the 20 s hold plus the 4 s loop); recorder running 12:39:27 (11 s: wake the display,
   open Start Recording.app); the bot was in the call at 12:39:55 (28 s after the recorder: Chrome, page, login, Join). So the
   first ~35 s of a call are not recorded at all and the per-person Talk tracks start about a minute in; the Mac's own mic and
@@ -59,9 +79,10 @@ it, and stops, transcribes and ingests it when the call empties. Every other roo
   last long-poll ends), so the call counts as empty ~30-40 s after the last person hangs up; the stop starts 90 s after that
   (12:42:48), the bot is out 6 s later, the row is in the admin ~28 s after the stop starts, and the client-folder copy is done ~35 s after that.
   Measured again at 1:30 PM on 1.10.2 (display awake, Jared at the Mac): second seat in the call 1:31:17, rule held 1:31:28, `auto-start`
-  1:31:51, recorder running 1:31:54 (3 s with the display awake), the bot's Talk tracks from 1:32:22 (28 s later, 54 s after the second
-  person arrived); last person left 1:34:15, that seat left Talk's list ~38 s later, stop 1:36:16 (2 min 01 s after the last person left),
-  bot out 1:36:28, row in the admin 1:36:43 (27 s after the stop), client-folder copy 1:37:05 (49 s after the stop, 3 files, no mic audio).
+  1:31:51, recorder running 1:31:54 (3 s with the display awake), the bot's Talk tracks from 1:32:22 (28 s later; 54 s after the rule held,
+  65 s after the second seat's own join, 108 s after the call went live); last person left 1:34:15, that seat left Talk's list ~38 s later,
+  stop 1:36:16 (2 min 01 s after the last person left), bot out 1:36:28, row in the admin 1:36:43 (27 s after the stop), client-folder
+  copy 1:37:05 (49 s after the stop, 3 files, no mic audio).
 - Never: "Scout self-test" rooms, the heal test room, one-to-one rooms, a second recording while one is running, a start
   while the notetaker self-test has Chrome. A recording somebody started by hand is never stopped for them (a reminder
   `recorder.longrec` goes out after 4 hours).
@@ -96,3 +117,5 @@ it, and stops, transcribes and ingests it when the call empties. Every other roo
 - Tests: `cd scripts/meetingrec && python3 -W ignore -m unittest discover -s tests` (runs on the system python 3.9, no network).
 - Rollback: `git revert` the 1.10 commits on `main` (the Mac pulls `agent.py` within 10 minutes), or in a hurry
   `touch ~/MeetingRec/.auto-off` and the agent keeps working as 1.9 did. Backup of the 1.9.0 files: `~/MeetingRec/.backup-1.9.0-2026-10-18/`.
+  1.10.3 alone: `git revert` its commit (it touches `agent.py`, `notetaker/notetaker.js`, the tests and this file only); the Mac keeps
+  `agent.py.last-good` and `notetaker/notetaker.js.last-good` from the sync, and a failed boot self-test restores them by itself.
