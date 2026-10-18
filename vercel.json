@@ -18,6 +18,14 @@
       "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/site-go?s=:slug"
     },
     {
+      "source": "/review",
+      "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/trustpilot-review"
+    },
+    {
+      "source": "/r/badge.png",
+      "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/trustpilot-badge"
+    },
+    {
       "source": "/pay/:token",
       "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/maya-pay?t=:token"
     },

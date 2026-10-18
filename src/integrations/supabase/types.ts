@@ -1414,6 +1414,9 @@ export type Database = {
           move_override: Json | null
           needs_render_at: string | null
           needs_render_why: string | null
+          parked_at: string | null
+          parked_reason: string | null
+          parked_upload: string | null
           platform: string | null
           platforms: string[] | null
           position: number
@@ -1459,6 +1462,9 @@ export type Database = {
           move_override?: Json | null
           needs_render_at?: string | null
           needs_render_why?: string | null
+          parked_at?: string | null
+          parked_reason?: string | null
+          parked_upload?: string | null
           platform?: string | null
           platforms?: string[] | null
           position?: number
@@ -1504,6 +1510,9 @@ export type Database = {
           move_override?: Json | null
           needs_render_at?: string | null
           needs_render_why?: string | null
+          parked_at?: string | null
+          parked_reason?: string | null
+          parked_upload?: string | null
           platform?: string | null
           platforms?: string[] | null
           position?: number
@@ -6871,6 +6880,81 @@ export type Database = {
         }
         Relationships: []
       }
+      client_feed_brands: {
+        Row: {
+          brand: string
+          consecutive_failures: number
+          created_at: string
+          label: string | null
+          last_error: string | null
+          last_error_at: string | null
+          last_ok_at: string | null
+          published: boolean
+          stale_after_hours: number
+        }
+        Insert: {
+          brand: string
+          consecutive_failures?: number
+          created_at?: string
+          label?: string | null
+          last_error?: string | null
+          last_error_at?: string | null
+          last_ok_at?: string | null
+          published?: boolean
+          stale_after_hours?: number
+        }
+        Update: {
+          brand?: string
+          consecutive_failures?: number
+          created_at?: string
+          label?: string | null
+          last_error?: string | null
+          last_error_at?: string | null
+          last_ok_at?: string | null
+          published?: boolean
+          stale_after_hours?: number
+        }
+        Relationships: []
+      }
+      client_feed_posts: {
+        Row: {
+          brand: string
+          caption: string | null
+          created_at: string
+          image_url: string | null
+          media_type: string | null
+          permalink: string
+          posted_at: string | null
+          remote_id: string
+          studio_post_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand: string
+          caption?: string | null
+          created_at?: string
+          image_url?: string | null
+          media_type?: string | null
+          permalink: string
+          posted_at?: string | null
+          remote_id: string
+          studio_post_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand?: string
+          caption?: string | null
+          created_at?: string
+          image_url?: string | null
+          media_type?: string | null
+          permalink?: string
+          posted_at?: string | null
+          remote_id?: string
+          studio_post_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       client_passkeys: {
         Row: {
           client_slug: string
@@ -7409,6 +7493,7 @@ export type Database = {
           purpose: string
           question_key: string | null
           ready_at: string | null
+          review_prev: string | null
           review_state: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -7448,6 +7533,7 @@ export type Database = {
           purpose?: string
           question_key?: string | null
           ready_at?: string | null
+          review_prev?: string | null
           review_state?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -7487,6 +7573,7 @@ export type Database = {
           purpose?: string
           question_key?: string | null
           ready_at?: string | null
+          review_prev?: string | null
           review_state?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -8761,6 +8848,30 @@ export type Database = {
           previous?: Json
           reason?: string
           selector?: string | null
+        }
+        Relationships: []
+      }
+      cy_report_keys: {
+        Row: {
+          active: boolean
+          created_at: string
+          key_hash: string
+          label: string
+          retired_at: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          key_hash: string
+          label: string
+          retired_at?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          key_hash?: string
+          label?: string
+          retired_at?: string | null
         }
         Relationships: []
       }
@@ -10604,6 +10715,13 @@ export type Database = {
           subhead?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "hoku_post_render_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "client_feed_public"
+            referencedColumns: ["studio_post_id"]
+          },
           {
             foreignKeyName: "hoku_post_render_post_id_fkey"
             columns: ["post_id"]
@@ -12722,6 +12840,7 @@ export type Database = {
           last_detail: Json | null
           last_heartbeat_at: string | null
           rate_usd_hr: number
+          report_key_hash: string | null
           start_requested_at: string | null
           updated_at: string | null
         }
@@ -12739,6 +12858,7 @@ export type Database = {
           last_detail?: Json | null
           last_heartbeat_at?: string | null
           rate_usd_hr?: number
+          report_key_hash?: string | null
           start_requested_at?: string | null
           updated_at?: string | null
         }
@@ -12756,6 +12876,7 @@ export type Database = {
           last_detail?: Json | null
           last_heartbeat_at?: string | null
           rate_usd_hr?: number
+          report_key_hash?: string | null
           start_requested_at?: string | null
           updated_at?: string | null
         }
@@ -14346,6 +14467,53 @@ export type Database = {
         }
         Relationships: []
       }
+      pantry_events: {
+        Row: {
+          action: string
+          after_status: string | null
+          at: string
+          before_status: string | null
+          id: number
+          item_id: string | null
+          item_name: string | null
+          said: string | null
+          snapshot: Json | null
+          source: string
+        }
+        Insert: {
+          action: string
+          after_status?: string | null
+          at?: string
+          before_status?: string | null
+          id?: number
+          item_id?: string | null
+          item_name?: string | null
+          said?: string | null
+          snapshot?: Json | null
+          source: string
+        }
+        Update: {
+          action?: string
+          after_status?: string | null
+          at?: string
+          before_status?: string | null
+          id?: number
+          item_id?: string | null
+          item_name?: string | null
+          said?: string | null
+          snapshot?: Json | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pantry_events_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "pantry_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pantry_items: {
         Row: {
           added_at: string
@@ -14424,24 +14592,54 @@ export type Database = {
       pantry_recipes: {
         Row: {
           active: boolean
+          ask: string | null
+          chef_note: string | null
+          created_at: string
           how: string
           id: number
+          ingredients: Json
+          minutes: number | null
           name: string
           needs: string[]
+          omni_note: string | null
+          omni_steps: Json | null
+          serves: number | null
+          source: string
+          steps: Json
         }
         Insert: {
           active?: boolean
+          ask?: string | null
+          chef_note?: string | null
+          created_at?: string
           how: string
           id?: number
+          ingredients?: Json
+          minutes?: number | null
           name: string
           needs: string[]
+          omni_note?: string | null
+          omni_steps?: Json | null
+          serves?: number | null
+          source?: string
+          steps?: Json
         }
         Update: {
           active?: boolean
+          ask?: string | null
+          chef_note?: string | null
+          created_at?: string
           how?: string
           id?: number
+          ingredients?: Json
+          minutes?: number | null
           name?: string
           needs?: string[]
+          omni_note?: string | null
+          omni_steps?: Json | null
+          serves?: number | null
+          source?: string
+          steps?: Json
         }
         Relationships: []
       }
@@ -14935,6 +15133,13 @@ export type Database = {
           tries?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "permalink_heals_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "client_feed_public"
+            referencedColumns: ["studio_post_id"]
+          },
           {
             foreignKeyName: "permalink_heals_post_id_fkey"
             columns: ["post_id"]
@@ -19531,6 +19736,33 @@ export type Database = {
         }
         Relationships: []
       }
+      site_depth_beat: {
+        Row: {
+          at: string
+          checks: number
+          cleared: number
+          id: number
+          ok: boolean
+          raised: number
+        }
+        Insert: {
+          at?: string
+          checks?: number
+          cleared?: number
+          id?: number
+          ok?: boolean
+          raised?: number
+        }
+        Update: {
+          at?: string
+          checks?: number
+          cleared?: number
+          id?: number
+          ok?: boolean
+          raised?: number
+        }
+        Relationships: []
+      }
       site_links: {
         Row: {
           created_at: string
@@ -19968,6 +20200,13 @@ export type Database = {
             foreignKeyName: "social_content_bank_post_id_fkey"
             columns: ["post_id"]
             isOneToOne: false
+            referencedRelation: "client_feed_public"
+            referencedColumns: ["studio_post_id"]
+          },
+          {
+            foreignKeyName: "social_content_bank_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "social_posts"
             referencedColumns: ["id"]
           },
@@ -20030,6 +20269,13 @@ export type Database = {
             foreignKeyName: "social_post_dims_post_id_fkey"
             columns: ["post_id"]
             isOneToOne: true
+            referencedRelation: "client_feed_public"
+            referencedColumns: ["studio_post_id"]
+          },
+          {
+            foreignKeyName: "social_post_dims_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
             referencedRelation: "social_posts"
             referencedColumns: ["id"]
           },
@@ -20064,6 +20310,13 @@ export type Database = {
           staff_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "social_post_events_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "client_feed_public"
+            referencedColumns: ["studio_post_id"]
+          },
           {
             foreignKeyName: "social_post_events_post_id_fkey"
             columns: ["post_id"]
@@ -21286,6 +21539,27 @@ export type Database = {
           talk_from_hour?: number
           talk_to_hour?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      studio_flags: {
+        Row: {
+          key: string
+          note: string | null
+          updated_at: string
+          value: boolean
+        }
+        Insert: {
+          key: string
+          note?: string | null
+          updated_at?: string
+          value?: boolean
+        }
+        Update: {
+          key?: string
+          note?: string | null
+          updated_at?: string
+          value?: boolean
         }
         Relationships: []
       }
@@ -24245,6 +24519,60 @@ export type Database = {
         }
         Relationships: []
       }
+      trustpilot_invites: {
+        Row: {
+          customer_email: string
+          id: string
+          sent_at: string
+          source: string
+        }
+        Insert: {
+          customer_email: string
+          id?: string
+          sent_at?: string
+          source: string
+        }
+        Update: {
+          customer_email?: string
+          id?: string
+          sent_at?: string
+          source?: string
+        }
+        Relationships: []
+      }
+      trustpilot_reviews: {
+        Row: {
+          created_at: string
+          id: string
+          msg_id: string
+          received_at: string
+          reviewer_first_name: string | null
+          snippet: string | null
+          stars: number
+          title: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          msg_id: string
+          received_at: string
+          reviewer_first_name?: string | null
+          snippet?: string | null
+          stars: number
+          title?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          msg_id?: string
+          received_at?: string
+          reviewer_first_name?: string | null
+          snippet?: string | null
+          stars?: number
+          title?: string | null
+        }
+        Relationships: []
+      }
       turo_allstar_rules: {
         Row: {
           checked_at: string
@@ -26687,6 +27015,19 @@ export type Database = {
         }
         Relationships: []
       }
+      client_feed_public: {
+        Row: {
+          brand: string | null
+          caption: string | null
+          image_url: string | null
+          media_type: string | null
+          permalink: string | null
+          posted_at: string | null
+          remote_id: string | null
+          studio_post_id: string | null
+        }
+        Relationships: []
+      }
       hoku_stock: {
         Row: {
           available: number | null
@@ -26785,6 +27126,14 @@ export type Database = {
           state: string | null
           status: string | null
           updated_at: string | null
+        }
+        Relationships: []
+      }
+      trustpilot_stats: {
+        Row: {
+          avg_rating: number | null
+          last_review_at: string | null
+          review_count: number | null
         }
         Relationships: []
       }
@@ -28332,7 +28681,31 @@ export type Database = {
         Returns: Json
       }
       ava_watch: { Args: never; Returns: Json }
+      basil_chef_pantry: { Args: never; Returns: Json }
+      basil_chef_save: {
+        Args: { p_ask?: string; p_recipes: Json }
+        Returns: Json
+      }
+      basil_kitchen: { Args: never; Returns: Json }
+      basil_kitchen_add: {
+        Args: { p_category?: string; p_location?: string; p_name: string }
+        Returns: Json
+      }
+      basil_kitchen_arrived: { Args: never; Returns: Json }
+      basil_kitchen_chef_recent: { Args: { p_limit?: number }; Returns: Json }
+      basil_kitchen_edit: {
+        Args: { p_id: string; p_location?: string; p_use_soon?: boolean }
+        Returns: Json
+      }
+      basil_kitchen_ideas: { Args: { p_skip?: string[] }; Returns: Json }
+      basil_kitchen_recipe: { Args: { p_name: string }; Returns: Json }
+      basil_kitchen_set: {
+        Args: { p_id: string; p_status: string }
+        Returns: Json
+      }
+      basil_kitchen_undo: { Args: { p_event_id: number }; Returns: Json }
       basil_tick: { Args: never; Returns: Json }
+      basil_voice: { Args: { p_text: string }; Returns: Json }
       basil_watchdog: { Args: never; Returns: Json }
       battery_health_tick: { Args: never; Returns: Json }
       bell_title: {
@@ -28543,6 +28916,7 @@ export type Database = {
         Returns: string
       }
       call_phone_key: { Args: { p_phone: string }; Returns: string }
+      car_alerts_sweep: { Args: never; Returns: Json }
       car_battery_health_public: { Args: never; Returns: Json }
       car_battery_health_store: { Args: { p_health: Json }; Returns: undefined }
       car_border_zone: {
@@ -28617,6 +28991,7 @@ export type Database = {
       car_health_check_now: { Args: never; Returns: Json }
       car_in_ca: { Args: { p_lat: number; p_lon: number }; Returns: boolean }
       car_keeper_on: { Args: never; Returns: boolean }
+      car_key_poll_at: { Args: never; Returns: string }
       car_owner_drive: {
         Args: {
           p_cur_at: string
@@ -28677,6 +29052,10 @@ export type Database = {
       car_telemetry_record: {
         Args: { p_data: Json; p_kind: string; p_token: string }
         Returns: undefined
+      }
+      car_telemetry_relay_key: {
+        Args: { p_pubkey: string; p_token: string }
+        Returns: Json
       }
       car_telemetry_start: {
         Args: { p_force?: boolean; p_token: string }
@@ -29032,6 +29411,11 @@ export type Database = {
         Returns: boolean
       }
       client_course_watch: { Args: { p_final?: boolean }; Returns: Json }
+      client_feed_note_failure: {
+        Args: { p_brand: string; p_error: string }
+        Returns: undefined
+      }
+      client_feed_watch: { Args: never; Returns: number }
       client_feedback_watch: { Args: never; Returns: Json }
       client_ideas_watch: { Args: never; Returns: Json }
       client_item_publish: {
@@ -29084,6 +29468,10 @@ export type Database = {
       }
       client_social_state: { Args: { p_client: string }; Returns: Json }
       client_social_state_for: { Args: { p_token: string }; Returns: Json }
+      client_social_stop_platform: {
+        Args: { p_platform: string; p_token: string }
+        Returns: Json
+      }
       client_talk_ctx: { Args: { p_token: string }; Returns: Json }
       client_terms_accept: {
         Args: {
@@ -29100,6 +29488,20 @@ export type Database = {
       client_thumb_broken: {
         Args: { p_item: string; p_token: string; p_url: string }
         Returns: Json
+      }
+      client_todo_autotick_done: {
+        Args: { p_evidence: Json; p_todo: string }
+        Returns: Json
+      }
+      client_todo_autotick_open: {
+        Args: never
+        Returns: {
+          client_slug: string
+          kind: string
+          libresign_uuid: string
+          mercury_invoice_id: string
+          todo_id: string
+        }[]
       }
       client_todo_due: {
         Args: { p_due: string; p_id: string; p_token: string }
@@ -29339,6 +29741,16 @@ export type Database = {
         }
         Returns: Json
       }
+      cy_report_site_issue_k: {
+        Args: {
+          p_domain: string
+          p_key: string
+          p_platform?: string
+          p_reason: string
+          p_version?: string
+        }
+        Returns: Json
+      }
       cy_selector_cookie_like: {
         Args: { p_selector: string }
         Returns: boolean
@@ -29454,6 +29866,42 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      etsy_beat_t: {
+        Args: { p_ok: boolean; p_summary: string; p_token: string }
+        Returns: Json
+      }
+      etsy_notify_t: {
+        Args: {
+          p_body?: string
+          p_tag?: string
+          p_title: string
+          p_token: string
+          p_urgent?: boolean
+          p_url?: string
+        }
+        Returns: string
+      }
+      etsy_raise_t: {
+        Args: {
+          p_body?: string
+          p_healed?: boolean
+          p_key: string
+          p_kind: string
+          p_needs_jared?: string
+          p_severity?: string
+          p_title?: string
+          p_token: string
+        }
+        Returns: Json
+      }
+      etsy_secret_put_t: {
+        Args: { p_name: string; p_token: string; p_value: string }
+        Returns: boolean
+      }
+      etsy_secret_t: {
+        Args: { p_name: string; p_token: string }
+        Returns: string
+      }
       expire_stale_home_hub_commands: { Args: never; Returns: undefined }
       extra_driver_admin: {
         Args: { p_action: string; p_id: number }
@@ -29533,6 +29981,7 @@ export type Database = {
       get_cmp_distribution: { Args: never; Returns: Json }
       get_community_overview: { Args: never; Returns: Json }
       get_confidence_distribution: { Args: never; Returns: Json }
+      get_cookie_yeti_public_stats: { Args: never; Returns: Json }
       get_cookieyeti_timeline: { Args: { days_back?: number }; Returns: Json }
       get_daily_pattern_activity: { Args: { p_days?: number }; Returns: Json }
       get_dashboard_overview: { Args: never; Returns: Json }
@@ -30380,6 +30829,10 @@ export type Database = {
       ltx_quote: { Args: { p_seconds?: number }; Returns: Json }
       ltx_render_s: { Args: { p_seconds: number }; Returns: number }
       ltx_report: { Args: { p_detail?: Json; p_event: string }; Returns: Json }
+      ltx_report_k: {
+        Args: { p_detail?: Json; p_event: string; p_key: string }
+        Returns: Json
+      }
       ltx_request: {
         Args: {
           p_prompt: string
@@ -30826,11 +31279,42 @@ export type Database = {
           uses_soon: number
         }[]
       }
+      pantry_dinner_ideas_ex: {
+        Args: { p_limit?: number; p_skip?: string[] }
+        Returns: {
+          how: string
+          minutes: number
+          name: string
+          omni: boolean
+          serves: number
+          uses_soon: number
+        }[]
+      }
+      pantry_find_existing: { Args: { p_name: string }; Returns: string }
+      pantry_guess_location: { Args: { p_name: string }; Returns: string }
       pantry_ingest_receipt: { Args: { p_mail_id: string }; Returns: Json }
       pantry_is_grocery_mail: {
         Args: { p_from: string; p_subject: string }
         Returns: boolean
       }
+      pantry_mark_delivered: {
+        Args: { p_older?: string; p_source: string; p_why: string }
+        Returns: number
+      }
+      pantry_match: { Args: { p_q: string; p_want?: string }; Returns: string }
+      pantry_norm: { Args: { p: string }; Returns: string }
+      pantry_say_status: { Args: { s: string }; Returns: string }
+      pantry_set: {
+        Args: {
+          p_id: string
+          p_said?: string
+          p_source: string
+          p_status: string
+        }
+        Returns: Json
+      }
+      pantry_settle_deliveries: { Args: never; Returns: number }
+      pantry_tokens: { Args: { p: string }; Returns: string[] }
       partner_agenda_add: {
         Args: {
           p_labs_id?: string
@@ -31709,6 +32193,10 @@ export type Database = {
         Args: { p_supabase?: string; p_vercel?: string }
         Returns: Json
       }
+      security_tokens_save_cloudflare: {
+        Args: { p_token: string }
+        Returns: Json
+      }
       security_tokens_status: { Args: never; Returns: Json }
       semver_key: { Args: { p: string }; Returns: number[] }
       sent_mail_watchdog: { Args: never; Returns: Json }
@@ -31973,6 +32461,7 @@ export type Database = {
         }
         Returns: Json
       }
+      site_depth_watch: { Args: never; Returns: Json }
       site_link_get: { Args: { p_slug: string }; Returns: string }
       site_link_put_t: {
         Args: { p_job?: string; p_slug: string; p_token: string; p_url: string }
@@ -32824,6 +33313,10 @@ export type Database = {
         }
         Returns: Json
       }
+      studio_item_park: {
+        Args: { p_item: string; p_reason: string; p_upload: string }
+        Returns: boolean
+      }
       studio_item_platforms: {
         Args: { p_item: string; p_platforms: string[]; p_token: string }
         Returns: Json
@@ -32869,6 +33362,18 @@ export type Database = {
       studio_item_set_thumb: {
         Args: { p_item: string; p_token: string; p_url: string }
         Returns: Json
+      }
+      studio_item_unpark: {
+        Args: { p_item: string; p_why: string }
+        Returns: boolean
+      }
+      studio_item_unpark_for_ask: {
+        Args: { p_ask: string; p_why: string }
+        Returns: boolean
+      }
+      studio_item_unpark_for_take: {
+        Args: { p_upload: string }
+        Returns: boolean
       }
       studio_lane_of: { Args: { p_item: string }; Returns: string }
       studio_legacy_posts: {
@@ -33124,6 +33629,10 @@ export type Database = {
           p_token: string
           p_when?: string
         }
+        Returns: Json
+      }
+      studio_post_put_back: {
+        Args: { p_item: string; p_token: string }
         Returns: Json
       }
       studio_posting_gate: { Args: { p_item: string }; Returns: Json }
@@ -33399,6 +33908,10 @@ export type Database = {
         Args: { p_note: string; p_token: string; p_upload: string }
         Returns: Json
       }
+      studio_take_unapprove: {
+        Args: { p_token: string; p_upload: string }
+        Returns: Json
+      }
       studio_takes_for_edit: { Args: never; Returns: Json }
       studio_talk: {
         Args: { p_limit?: number; p_room?: string; p_token: string }
@@ -33460,6 +33973,7 @@ export type Database = {
         Returns: Json
       }
       studio_try_uuid: { Args: { t: string }; Returns: string }
+      studio_tt_approved: { Args: never; Returns: boolean }
       studio_ui_contract_check: { Args: never; Returns: Json }
       studio_ui_contract_request: { Args: never; Returns: number }
       studio_unpromote: {
@@ -33524,6 +34038,7 @@ export type Database = {
       studio_yt_live_set: { Args: { p_on: boolean }; Returns: Json }
       studio_yt_ready: { Args: never; Returns: boolean }
       studio_yt_switch_on: { Args: { p_brand: string }; Returns: undefined }
+      studio_yt_verified: { Args: never; Returns: boolean }
       submit_intake: { Args: { p_id: string }; Returns: Json }
       supercharge_audit: { Args: never; Returns: Json }
       supercharge_audit_data: { Args: never; Returns: Json }
