@@ -5,7 +5,8 @@
 //     op: start {roster[]} | stop | selftest | state | transcript {id|name} | recent
 //   agent (~/MeetingRec/agent.py)   header x-recorder-key, checked against
 //                                    meeting_recorder_state.key_sha256
-//     op: poll {state} | result {command_id, ok, result, error} | ingest {...}
+//     op: poll {state} | result {command_id, ok, result, error} | ingest {..., room?}
+//         | meeting_exists {name} -> {exists, deleted, row}   (the agent's "did the admin really get it" check)
 //         | health {key, kind: problem|resolved, severity, title, body, healed}
 //           -> bestly_raise('recorder.<key>'), so the monitor, the bell, ntfy and
 //              Scout's incident list all see recorder trouble the same way.
@@ -291,20 +292,33 @@ async function asAgent(key: string, body: Record<string, any>) {
     const name = String(body.name ?? "");
     if (!/^meeting-\d{8}-\d{4}/.test(name)) return J({ ok: false, error: "bad name" }, 400);
     const transcript = String(body.transcript ?? "").slice(0, 2_000_000);
-    const { error } = await db.from("meeting_recordings").upsert(
-      {
-        name,
-        started_at: body.started_at ?? null,
-        stopped_at: body.stopped_at ?? null,
-        roster: Array.isArray(body.roster) ? body.roster : [],
-        speakers: body.speakers ?? {},
-        transcript,
-        line_count: transcript ? transcript.split("\n").filter((l) => l.startsWith("[")).length : 0,
-      },
-      { onConflict: "name" },
-    );
+    const row: Record<string, unknown> = {
+      name,
+      started_at: body.started_at ?? null,
+      stopped_at: body.stopped_at ?? null,
+      roster: Array.isArray(body.roster) ? body.roster : [],
+      speakers: body.speakers ?? {},
+      transcript,
+      line_count: transcript ? transcript.split("\n").filter((l) => l.startsWith("[")).length : 0,
+    };
+    // The Talk room the call was in (Scout started the recording for a known room, or the notetaker joined one). The database
+    // turns it into the client (meeting_client trigger: approval_clients.talk_room) in the SAME insert, so scout-daily's 'call'
+    // step, which the insert fires, already sees client_slug. Only set when sent, so a re-ingest never blanks it.
+    const room = String(body.room ?? "");
+    if (/^[a-z0-9]{4,32}$/.test(room)) row.room = room;
+    const { error } = await db.from("meeting_recordings").upsert(row, { onConflict: "name" });
     if (error) return J({ ok: false, error: error.message }, 500);
     return J({ ok: true });
+  }
+
+  if (op === "meeting_exists") {
+    const name = String(body.name ?? "");
+    if (!/^meeting-\d{8}-\d{4}/.test(name)) return J({ ok: false, error: "bad name" }, 400);
+    const { data, error } = await db.from("meeting_recordings").select("id, client_slug, room, tasks_at, line_count").eq("name", name).limit(1);
+    if (error) return J({ ok: false, error: error.message }, 500);
+    // A recording Jared deleted from the admin is kept out on purpose (meeting_skip_deleted): it is not a missing one.
+    const { data: gone } = await db.from("meeting_deleted").select("name").eq("name", name).limit(1);
+    return J({ ok: true, exists: !!data?.length, deleted: !!gone?.length, row: data?.[0] ?? null });
   }
 
   return J({ ok: false, error: `unknown op ${op}` }, 400);
