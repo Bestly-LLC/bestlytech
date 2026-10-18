@@ -660,6 +660,8 @@ async function call(id: string, force = false, until = Date.now() + CALL_BUDGET_
   // Last step (2026-10-18): a client's call (Centering YOU, or the bestly-test sandbox) gets a debrief for Jared's OK. The database writes the
   // client's own to-dos as DRAFTS (nothing reaches her board until Jared presses Send) and sends ONE Scout push with a link to review them.
   // Everything above (Deck cards, Jared's and Eli's to-dos) is unchanged. If the step fails, the watchdog (call_debrief_watch) finishes it.
+  // A sandbox client's debrief is quiet unless its live window is open (approval_clients.debrief_live_until): no push, so the plain notice below still goes out.
+  // A recording in a room no client owns (an Eli or Jared room) gets no debrief at all: debrief.client is false and nothing changes for it.
   let debrief: any = null;
   let debriefErr = "";
   try {
@@ -674,7 +676,7 @@ async function call(id: string, force = false, until = Date.now() + CALL_BUDGET_
       summaryText + (deckErr ? ` (Deck: ${deckErr})` : ""), false, `scout.call.${r.id}`);
   }
   return { ok: true, commitments: commitments.length, mine, chunks: n, unverified_dropped: dropped, deck: d ? d.board.title : null, deck_error: deckErr || null,
-    debrief: debrief?.client ? { id: debrief.debrief_id, status: debrief.status, drafts: debrief.drafts, notified: debrief.notified } : null, debrief_error: debriefErr || null };
+    debrief: debrief?.client ? { id: debrief.debrief_id, status: debrief.status, drafts: debrief.drafts, notified: debrief.notified, quiet: debrief.quiet } : null, debrief_error: debriefErr || null };
 }
 
 // op call_sweep (cron every 20 min): finish recordings that never got debriefed, are still partial, or were saved as a template echo.
