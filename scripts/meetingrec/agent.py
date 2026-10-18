@@ -14,7 +14,7 @@ Standard library only: it runs on the system python3.
 import base64, glob, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
 
-VERSION = "1.10.2"  # 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
+VERSION = "1.10.3"  # 1.10.3: the first audio of a call reaches the notetaker sooner (8 s hold, the notetaker starts early and in parallel with the recorder, faster looks at Talk). 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -27,7 +27,8 @@ NT_DIR = f"{HOME}/notetaker"
 TALK_API = "https://cloud.bestly.tech/ocs/v2.php/apps/spreed/api/v4"
 BOT_USER = "scout-notetaker"
 # The notetaker: joins the Talk call and records each person on their own track.
-nt = {"proc": None, "name": None, "room": None, "title": None, "next_try": 0, "status": "off", "fails": 0, "t0": 0, "stop_at": None}
+nt = {"proc": None, "name": None, "room": None, "title": None, "next_try": 0, "status": "off", "fails": 0, "t0": 0, "stop_at": None,
+      "armed": None}      # armed: {room, name, at} while a notetaker started ahead of its recording (arm_bot) waits for it, else None
 NT_NOT_LIVE = 4         # notetaker.js exit code: there was no live call to join (it never starts one)
 NT_LOST_CALL = 5        # notetaker.js exit code: it was dropped from the call and could not get back in
 
@@ -55,7 +56,15 @@ AUTO_OFF = f"{HOME}/.auto-off"
 AUTO_FILE = f"{HOME}/.auto"                 # {"name", "room", "started"} while a recording Scout started is running
 META_DIR = f"{HOME}/.meta"                  # one small json per recording: which Talk room it was, whether Scout started it,
                                             # when it ended, and whether its row in the admin has been seen (verified)
-AUTO_HOLD_S = 20         # the rule must hold this long before a recording starts
+AUTO_HOLD_S = 8          # the rule must hold this long before a recording starts (20 s until 1.10.2)
+AUTO_ARM_S = 2           # ...but the notetaker (Chrome, the page, the login: ~10 s) starts this far into the hold, so it is already on its way
+                         # to the call when the recorder starts. A rule that drops before AUTO_HOLD_S calls it back.
+AUTO_ARM_MAX_S = 60      # a notetaker started early that has not seen a recording start this long is called back
+AUTO_MAX_ARMS = 6        # at most this many early notetaker starts an hour (a flapping call must not keep launching Chrome)
+AUTO_LOOK_FAST_S = 2     # look at Talk this often while a call is going in one of our rooms and nothing is recording yet
+AUTO_FAST_MAX_S = 600    # ...but only for this long: someone waiting alone in a call is looked at every AUTO_LOOK_S after that
+AUTO_LOOK_S = 4          # look this often while a call or a recording is going
+AUTO_LOOK_IDLE_S = 6     # look this often when nothing is going on (10 s until 1.10.2)
 AUTO_EMPTY_S = 90         # no human in the call this long -> stop and transcribe
 AUTO_CAP_S = 4 * 3600     # a recording Scout started never runs longer than this
 AUTO_REARM_S = 30         # after a recording, the rule must be false this long before the next auto-start
@@ -71,7 +80,7 @@ AUTO_LONG_S = 4 * 3600    # a recording somebody started by hand has run this lo
 AUTO_MAX_STARTS = 3       # at most this many auto-started recordings per hour
 auto = {"next": 0, "fails": 0, "hold": {}, "false_since": {}, "blocked": set(), "rooms": {}, "last_human": None,
         "stopping": False, "last_error": None, "alert_open": False, "talk_alert": False, "long_alert": False,
-        "retry_at": 0, "verify_next": 0, "jared_marked": None}
+        "retry_at": 0, "verify_next": 0, "jared_marked": None, "arms": [], "live_since": None}
 
 # Self-healing. The notetaker drives Talk's web page, so a Talk update can break it.
 #  - code sync: the scripts below are pulled from the repo (main) every 10 minutes,
@@ -335,8 +344,86 @@ def notetaker_stuck():
     return time.time() - (nt.get("t0") or time.time()) > 300     # it never got past joining
 
 
+def stop_orphan_notetakers():
+    """A notetaker whose agent died is still sitting in its call. With no recording running it has no reason to be there (since 1.10.3 one
+    is also started a few seconds before its recording): ask it to leave with the STOP file. Called once, when the agent starts."""
+    try:
+        out = subprocess.run(["pgrep", "-fl", r"notetaker\.js"], capture_output=True, text=True).stdout
+    except Exception as e:  # noqa: BLE001
+        log("orphaned notetaker look failed", e)
+        return
+    for line in (out or "").splitlines():
+        m = re.search(r"notetaker\.js\s+(\S+)\s+(\S+-talk)\s*$", line.strip())
+        if m and m.group(2).startswith(REC + "/"):          # the self-test's notetaker lives in /tmp and cleans up after itself
+            try:
+                open(f"{m.group(2)}/STOP", "w").close()
+                log("a notetaker left over from before the restart was asked to leave:", m.group(2))
+            except OSError:
+                pass
+
+
+def notetaker_launch(name, token, title, armed=None):
+    """Add the notetaker to the Talk room and start notetaker.js for the recording called `name`. `armed` is set when this happens
+    before the recording exists (arm_bot): it then waits for it, instead of being stopped because nothing is recording yet."""
+    try:
+        talk("POST", f"/room/{token}/participants", {"newParticipant": BOT_USER, "source": "users"}, timeout=8)
+    except urllib.error.HTTPError:
+        pass                        # already a participant
+    out = f"{REC}/{name}-talk"
+    os.makedirs(out, exist_ok=True)
+    try:
+        os.remove(f"{out}/STOP")
+    except OSError:
+        pass
+    nt["proc"] = subprocess.Popen([NODE, f"{NT_DIR}/notetaker.js", token, out], cwd=NT_DIR,
+                                  stdout=subprocess.DEVNULL, stderr=open(f"{out}/stderr.log", "a"))
+    nt.update(name=name, room=token, title=title, status="in call", t0=time.time(), stop_at=None, armed=armed)
+    log("notetaker joining", token, title, *(["(early, before the recorder is up)"] if armed else []))
+
+
+def arm_bot(tok, cfg):
+    """The rule has held a moment in tok and the recording is about to start: start the notetaker now. Chrome, the Talk page and the
+    join take ~15 s, the recorder 3-11 s, and until 1.10.2 the notetaker only began once the recorder was verified, so the first
+    minute of a call was in nobody's tracks. Started here it is on its way into the call while the recording starts, and the recording
+    is given the name chosen here (do_start takes payload["name"]). Called back (cancel_armed) when the rule stops holding, the recorder
+    does not start, or something else gets recorded first. Does nothing when a start would not be allowed anyway."""
+    now = time.time()
+    if nt.get("armed") or nt["proc"] or not os.path.exists(f"{NT_DIR}/notetaker.js") or selftest_lock.locked():
+        return
+    auto["starts"] = [t for t in auto.get("starts", []) if now - t < 3600]
+    auto["arms"] = [t for t in auto.get("arms", []) if now - t < 3600]
+    if len(auto["starts"]) >= AUTO_MAX_STARTS or len(auto["arms"]) >= AUTO_MAX_ARMS:
+        return
+    name = new_recording_name()
+    auto["arms"].append(now)
+    try:
+        notetaker_launch(name, tok, cfg.get("label") or tok, armed={"room": tok, "name": name, "at": now})
+    except Exception as e:  # noqa: BLE001
+        nt["armed"] = None
+        log("could not start the notetaker early (the normal start still follows the recording)", e)
+        return
+    log("notetaker started early for", tok, name)
+
+
+def cancel_armed(why):
+    """Call back a notetaker that was started early (arm_bot) and whose recording is not coming. It leaves by itself (the STOP file),
+    notetaker_tick takes it out of the room once it has."""
+    a = nt.get("armed")
+    if not a:
+        return
+    nt["armed"] = None
+    log("notetaker called back before its recording started:", why)
+    if nt["proc"]:
+        try:
+            open(f"{REC}/{a['name']}-talk/STOP", "w").close()
+        except OSError:
+            pass
+        nt["stop_at"] = nt.get("stop_at") or time.time()
+
+
 def notetaker_tick():
-    """While a recording runs, get the notetaker into the Talk call and keep it there."""
+    """While a recording runs, get the notetaker into the Talk call and keep it there. (auto_tick may have started one a few seconds
+    ahead of the recording, see arm_bot: it is part of the recording once that starts, and called back if it never does.)"""
     name = read(f"{HOME}/.current")
     if nt["proc"] and nt["proc"].poll() is not None:
         code = nt["proc"].returncode
@@ -344,11 +431,18 @@ def notetaker_tick():
         nt["proc"] = None
         out = f"{REC}/{nt['name']}-talk"
         ran = time.time() - (nt.get("t0") or time.time())
+        early = bool(nt.get("armed")) and not recording_pid()       # started ahead of a recording that has not started
         if code == NT_NOT_LIVE:
             # No live call to join. The notetaker never starts a call (that is how it double-started one on Oct 6),
             # so this is not a failure: look again in a few seconds.
             nt["status"] = "waiting for the call"
             nt["next_try"] = time.time() + 10
+        elif code != 0 and early:
+            # Nobody is waiting for it yet and the recording may never come: not a failure. When the recording starts the normal path
+            # below starts a new one (do_start sets next_try to 0).
+            nt["status"] = "waiting for the recording"
+            nt["next_try"] = 0
+            log("the early notetaker exited", code, "before its recording started; not counted as a failure")
         elif code != 0:
             if ran > 300:
                 nt["fails"] = 0         # it was in the call for a while first: a new drop, not a broken page
@@ -366,8 +460,14 @@ def notetaker_tick():
             remove_bot(nt["room"])
             nt.update(room=None, status="done")
     rec = recording_pid()
+    a = nt.get("armed")
+    if a and not rec and time.time() - a["at"] > AUTO_ARM_MAX_S + 30:
+        cancel_armed("its recording never started (auto_tick did not call it back)")      # a safety net: it must not sit in a call
+        a = None
     if not rec:
         if nt["proc"]:
+            if a:
+                return          # started early by arm_bot: the recorder is on its way; auto_tick calls it back if it is not
             open(f"{REC}/{nt['name']}-talk/STOP", "w").close()
             nt["stop_at"] = nt.get("stop_at") or time.time()
             if time.time() - nt["stop_at"] > 90:        # it should have left by now; a stuck one would hold Chrome's profile
@@ -375,13 +475,20 @@ def notetaker_tick():
                 nt["proc"].kill()
         return
     nt["stop_at"] = None
+    if a:
+        if a["name"] == name:
+            nt["armed"] = None          # the recording it was started for is running: it is part of it now
+        else:
+            # Some other recording started (by hand, or Scout's "Record a call"): this notetaker is writing into a folder nobody will
+            # read. Call it back; the normal path below starts one for the recording that is really running once it has left.
+            cancel_armed("a different recording started")
     if nt["proc"] and nt["proc"].poll() is None and notetaker_stuck():
         # Alive but no heartbeat: it is hung (the Sep 29 dropout left one sitting there recording nothing). Kill it; the exit is
         # handled above on the next loop, and a new one joins the call.
         log("notetaker stopped reporting; killing it so a new one can join")
         nt["proc"].kill()
         return
-    if nt["name"] != name:
+    if nt["name"] != name and not (nt["proc"] and nt["proc"].poll() is None and nt["stop_at"]):
         nt.update(name=name, room=None, title=None, next_try=0, status="looking", fails=0)
     if nt["proc"] or time.time() < nt["next_try"] or not os.path.exists(f"{NT_DIR}/notetaker.js"):
         return
@@ -412,20 +519,7 @@ def notetaker_tick():
         nt["status"] = "no talk call"
         return
     token, title = room
-    try:
-        talk("POST", f"/room/{token}/participants", {"newParticipant": BOT_USER, "source": "users"})
-    except urllib.error.HTTPError:
-        pass                        # already a participant
-    out = f"{REC}/{name}-talk"
-    os.makedirs(out, exist_ok=True)
-    try:
-        os.remove(f"{out}/STOP")
-    except OSError:
-        pass
-    nt["proc"] = subprocess.Popen([NODE, f"{NT_DIR}/notetaker.js", token, out], cwd=NT_DIR,
-                                  stdout=subprocess.DEVNULL, stderr=open(f"{out}/stderr.log", "a"))
-    nt.update(room=token, title=title, status="in call", t0=time.time())
-    log("notetaker joining", token, title)
+    notetaker_launch(name, token, title)
     if not meta.get("room"):
         write_meta(name, room=token, title=title)       # the ingest files this call under its client from here
 
@@ -760,6 +854,8 @@ def heal_tick():
     """Idle-time upkeep: code sync, Talk version watch, daily self-test."""
     if recording_pid() or busy["stage"] or (heal["selftest"] or {}).get("status") == "running":
         return
+    if nt.get("armed"):
+        return                      # a notetaker is on its way into a call whose recording is about to start: no restart, no self-test (Chrome's profile)
     now = time.time()
     reason = None
     if now >= heal["next_sync"]:
@@ -916,10 +1012,19 @@ def auto_start(tok, cfg, people):
         auto["last_error"] = f"Scout already started {AUTO_MAX_STARTS} recordings in the last hour, so it will not start another by itself."
         auto["retry_at"] = now + 60
         return
+    # The notetaker is started in parallel with the recorder, not after it: normally arm_bot started it a few seconds ago (when the
+    # rule had held AUTO_ARM_S); if it did not (a late first look, a restart), it is started right here, before do_start wakes the display.
+    if nt.get("armed") and nt["armed"]["room"] != tok:
+        cancel_armed("another room is recorded first")
+    arm_bot(tok, cfg)
+    armed = nt.get("armed")
     log("auto-start", tok, roster)
     auto["starts"].append(now)
+    payload = {"roster": roster, "room": tok, "auto": True, "title": cfg.get("label")}
+    if armed:
+        payload["name"] = armed["name"]
     try:
-        ok, _result, err = do_start({"roster": roster, "room": tok, "auto": True, "title": cfg.get("label")})
+        ok, _result, err = do_start(payload)
     except Exception as e:  # noqa: BLE001
         ok, err = False, str(e)
     if ok:
@@ -928,11 +1033,17 @@ def auto_start(tok, cfg, people):
         auto["empty_logged"] = False
         auto["blocked"].add(tok)
         mark_jared((_result or {}).get("name"), people)
+        if armed:
+            if (_result or {}).get("name") == armed["name"]:
+                nt["armed"] = None      # the notetaker belongs to this recording now
+            else:
+                cancel_armed("the recording is called " + str((_result or {}).get("name")))
         return
     auto["starts"].pop()                # it did not start: that one does not count
     auto["last_error"] = str(err or "unknown")[:300]
     auto["retry_at"] = time.time() + 30
     log("auto-start failed", auto["last_error"])
+    cancel_armed("the recorder did not start")
 
 
 def auto_stop(cur, why):
@@ -985,7 +1096,8 @@ def auto_tick():
         auto["long_alert"] = False
         health("longrec", "resolved", "That long recording has stopped", "", "info")
     if not watch:
-        auto["next"] = now + 10
+        cancel_armed("auto-record is switched off")
+        auto["next"] = now + AUTO_LOOK_IDLE_S
         return
     # One look at Talk: which of our rooms have a call. A room jared isn't in is skipped: reading it would be a failed room
     # read, and Nextcloud locks Talk out for a while after ten of those (Oct 18). noStatusUpdate: reading the list from this
@@ -1011,7 +1123,16 @@ def auto_tick():
         auto["talk_alert"] = False
         health("talkread", "resolved", "Scout can see Talk calls again", "", "info")
     live = any(seen[t] for t in seen if seen[t])
-    auto["next"] = now + (4 if (live or cur) else 10)
+    # How soon to look again. A call going in one of our rooms with nothing recording yet is the moment that matters: until the
+    # recorder and the notetaker are in, the call is in nobody's tracks. So look every AUTO_LOOK_FAST_S then, but only for
+    # AUTO_FAST_MAX_S (one person waiting alone for an hour is not looked at every 2 seconds for an hour).
+    if live and not recording and not cur:
+        auto["live_since"] = auto.get("live_since") or now
+        fast = now - auto["live_since"] < AUTO_FAST_MAX_S
+    else:
+        auto["live_since"] = None
+        fast = False
+    auto["next"] = now + (AUTO_LOOK_FAST_S if fast else AUTO_LOOK_S if (live or cur) else AUTO_LOOK_IDLE_S)
 
     # the rule, per room
     for tok in [t for t in auto["hold"] if t not in rooms]:
@@ -1055,13 +1176,25 @@ def auto_tick():
             if now - auto["last_human"] >= AUTO_EMPTY_S:
                 auto_stop(cur, "everyone has left the call")
 
-    # start
+    # A notetaker started early (arm_bot) is called back when the rule stopped holding (a blip, or the room was switched off), when
+    # another recording took over, or when its recording has not started after AUTO_ARM_MAX_S.
+    a = nt.get("armed")
+    if a:
+        if a["room"] not in auto["hold"] or a["room"] in auto["blocked"]:
+            cancel_armed("the rule stopped holding in " + a["room"])
+        elif now - a["at"] > AUTO_ARM_MAX_S:
+            cancel_armed(f"its recording did not start within {AUTO_ARM_MAX_S} s")
+
+    # start: the notetaker goes first (AUTO_ARM_S into the hold), the recording AUTO_HOLD_S into it
     if not auto_idle() and now >= auto.get("retry_at", 0):
         for tok, cfg in rooms.items():
             t0 = auto["hold"].get(tok)
-            if t0 and tok not in auto["blocked"] and now - t0 >= AUTO_HOLD_S:
-                auto_start(tok, cfg, seen[tok])
-                break
+            if t0 and tok not in auto["blocked"]:
+                if now - t0 >= AUTO_HOLD_S:
+                    auto_start(tok, cfg, seen[tok])
+                    break
+                if now - t0 >= AUTO_ARM_S:
+                    arm_bot(tok, cfg)
 
     # watchdog: two people have been in the call a while and nothing is recording. A test room is watched too, but only in the log.
     waiting = [now - t for tok, t in auto["hold"].items() if tok not in auto["blocked"] and not quiet_room(tok)]
@@ -1094,7 +1227,8 @@ def auto_summary():
     """A small picture of the auto-recorder for the admin (meeting_recorder_state.info.auto)."""
     on = auto_rooms_on()
     return {"on": sorted(on), "rooms": {t: auto["rooms"].get(t) for t in on}, "blocked": sorted(auto["blocked"]),
-            "test": sorted(t for t in on if quiet_room(t)), "err": auto["last_error"], "talk_fails": auto["fails"]}
+            "test": sorted(t for t in on if quiet_room(t)), "err": auto["last_error"], "talk_fails": auto["fails"],
+            "armed": (nt.get("armed") or {}).get("room")}
 
 
 # ── After a recording: client folder, and "did the admin really get it" ─────────
@@ -1339,6 +1473,14 @@ def snapshot():
     return s
 
 
+def name_is_free(name):
+    """Is meeting-YYYYMMDD-HHMM unused: nothing recorded, ingested or logged under it? The notetaker's own folder (<name>-talk) does not
+    count against it: arm_bot makes that before the recording exists."""
+    taken = set(read(INGESTED).split())
+    others = [p for p in glob.glob(f"{REC}/{name}-*") if not os.path.basename(p).startswith(f"{name}-talk")]
+    return name not in taken and not others and not os.path.exists(f"{REC}/{name}.log")
+
+
 def new_recording_name():
     """meeting-YYYYMMDD-HHMM for right now. If that name is taken (two recordings in one minute), the next free minute:
     a second recording must never overwrite the first one's files or its row in the admin."""
@@ -1355,7 +1497,7 @@ def new_recording_name():
 
 def do_start(payload):
     """Start the recorder. payload: roster (names besides Jared), room (the Talk room, when known: no guessing which call it is),
-    auto (Scout started it by itself), title."""
+    auto (Scout started it by itself), title, name (the name arm_bot gave the notetaker's folder; used when it is still free)."""
     if recording_pid():
         return False, {"note": "already recording"}, "Already recording."
     if busy["stage"] or stop_running_elsewhere():
@@ -1363,7 +1505,9 @@ def do_start(payload):
     roster = [r for r in payload.get("roster", []) if re.fullmatch(r"[a-z0-9-]{1,32}", r)]
     room = str(payload.get("room") or "")
     room = room if re.fullmatch(r"[a-z0-9]{4,32}", room) else None
-    name = new_recording_name()
+    name = str(payload.get("name") or "")
+    if not (re.fullmatch(r"meeting-\d{8}-\d{4}", name) and name_is_free(name)):
+        name = new_recording_name()
     app = find_start_app()
     if not app:
         return False, {"name": name}, "Can't find Start Recording.app (looked on the Desktop and in Applications)."
@@ -1534,7 +1678,7 @@ def handle(cmd):
             ok, result, err = False, None, str(e)
         call({"op": "result", "command_id": cid, "ok": ok, "result": result, "error": err})
     elif action == "selftest":
-        if recording_pid() or busy["stage"]:
+        if recording_pid() or busy["stage"] or nt.get("armed"):
             call({"op": "result", "command_id": cid, "ok": False, "error": "Busy recording; try when idle."})
             return
         def go():
@@ -1686,9 +1830,18 @@ def watch_backend(ok):
     ntfy(f"Bestly backend down {mins} min", msg)
 
 
+def loop_nap(now, poll_due, look_due):
+    """How long the main loop sleeps: until the next poll of Scout or the next look at Talk, whichever comes first (never longer than
+    POLL_S, never shorter than a quarter of a second). Until 1.10.2 it slept POLL_S after every loop, so the 4-second look at Talk
+    happened every ~8 seconds."""
+    return max(0.25, min(POLL_S, min(poll_due, look_due) - now))
+
+
 def main():
     log("agent", VERSION, "up")
     orphan_job()
+    if not recording_pid():
+        stop_orphan_notetakers()
     if os.path.exists(f"{HOME}/.agent-updated"):
         try:
             heal["updated"] = [tuple(x) for x in json.loads(read(f"{HOME}/.agent-updated") or "[]")]
@@ -1698,6 +1851,7 @@ def main():
         threading.Thread(target=run_selftest, args=(f"agent updated to {VERSION}",), daemon=True).start()
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     last_sweep = 0
+    poll_due = 0.0
     while True:
         try:
             try:
@@ -1718,24 +1872,27 @@ def main():
                     threading.Thread(target=run_mailspam, daemon=True).start()
             except Exception as e:  # noqa: BLE001
                 log("mailspam start failed", e)
-            r = call({"op": "poll", "state": snapshot(), "can_run_jobs": job["id"] is None})
-            watch_backend(True)
-            if r.get("job") and job["id"] is None:
-                job["id"] = r["job"]["id"]
-                threading.Thread(target=run_job, args=(r["job"],), daemon=True).start()
-            if r.get("command"):
-                handle(r["command"])
-                continue            # poll again right away so Scout sees the change
-            if time.time() - last_sweep > 30:
-                last_sweep = time.time()
-                threading.Thread(target=sweep_transcripts, daemon=True).start()
+            if time.time() >= poll_due:         # Scout is asked every POLL_S; the look at Talk comes round more often than that
+                poll_due = time.time() + POLL_S
+                r = call({"op": "poll", "state": snapshot(), "can_run_jobs": job["id"] is None})
+                watch_backend(True)
+                if r.get("job") and job["id"] is None:
+                    job["id"] = r["job"]["id"]
+                    threading.Thread(target=run_job, args=(r["job"],), daemon=True).start()
+                if r.get("command"):
+                    handle(r["command"])
+                    poll_due = 0.0
+                    continue            # poll again right away so Scout sees the change
+                if time.time() - last_sweep > 30:
+                    last_sweep = time.time()
+                    threading.Thread(target=sweep_transcripts, daemon=True).start()
         except Exception as e:  # noqa: BLE001
             log("poll error", e)
             watch_backend(False)
             if "--debug" in sys.argv:
                 traceback.print_exc()
             time.sleep(10)
-        time.sleep(POLL_S)
+        time.sleep(loop_nap(time.time(), poll_due, auto["next"]))
 
 
 if __name__ == "__main__":
