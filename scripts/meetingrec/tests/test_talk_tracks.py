@@ -218,6 +218,24 @@ class TalkTrackTests(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertEqual(out.count("] JARED:"), 6)
 
+    def test_silent_others_do_not_hide_his_talk_track(self):
+        # 2026-10-18 device test: the other seat sent silence, so there were no rows from anyone else and the script gave up (exit 3),
+        # and the mic ended up as his lines although his Talk track had the speech.
+        mic = [(i * 10, "mic mic mic mic mic mic mic mic mic mic mic mic") for i in range(10)]
+        self.sb.setup([("Call test seat (Nimbus)", 0, 600, []), ("Jared", 0, 600, [(100, TALK), (200, TALK)])],
+                      mic_minutes=10, jared_tsv=mic, meta={"auto": True, "jared_seen": True})
+        code, out, err = self.sb.run()
+        self.assertEqual(code, 0, err)
+        self.assertEqual(out.count("] JARED:"), 2)
+        self.assertNotIn("mic mic", out)
+        self.assertEqual(self.sb.speakers()["jared"], {"in_call": True, "source": "talk"})
+
+    def test_everyone_silent_is_still_nothing_usable(self):
+        self.sb.setup([("Call test seat (Nimbus)", 0, 600, []), ("Jared", 0, 600, [])], mic_minutes=10, jared_tsv=[],
+                      meta={"auto": True, "jared_seen": True})
+        code, out, err = self.sb.run()
+        self.assertEqual(code, 3)
+
     def test_no_track_for_him_and_no_mic(self):
         self.sb.setup([("Elizabeth", 0, 600, [(5, TALK), (65, TALK)])], mic_minutes=10, jared_tsv=[], meta={"auto": True, "jared_seen": True})
         code, out, err = self.sb.run()
