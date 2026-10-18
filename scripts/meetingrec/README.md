@@ -23,10 +23,12 @@ day `open` could not start `~/Desktop/Start Recording.app` ("Resource deadlock a
 
 - Before every `open` (`do_start`), `fetch_start_app` looks at the bundle's flags (a few `lstat`s, no delay when nothing is evicted).
   If anything is evicted it asks iCloud with `brctl download` for every file at once, then also reads the files (`cat`) from the second
-  round, and waits (40 s at most, `APP_FETCH_S`) until nothing is evicted. The agent log says "Start Recording.app was evicted to
+  round, and waits (90 s at most, `APP_FETCH_S`) until nothing is evicted. The agent log says "Start Recording.app was evicted to
   iCloud ... Fetching it back" and "... is on disk again after N s".
 - `warm_start_app`: the moment the auto-record rule starts to hold, an evicted app is fetched in the background, so it is usually
-  back before the 8 s hold ends. The hourly `check_start_app` does the same and tells Scout (`recorder.start_app`) if iCloud will not hand it back.
+  back before the 8 s hold ends. The same background fetch runs every 5 minutes while idle (`heal_tick`), so the app is on disk long before a call,
+  and the hourly `check_start_app` tells Scout (`recorder.start_app`) if iCloud will not hand it back. iCloud can be slow: on 2026-10-18 three tiny files
+  took over 70 s while a 33 GB iCloud Drive download sat stuck at 99%.
 - A failed `open` (non-zero exit) is logged with macOS's own words, fetched again, and tried once more at once. If the app still will
   not open, or cannot be found, Scout is told right away (`recorder.startapp`, severity error, owned by Scout Notetaker; a test room only logs).
   The alert closes itself (marker `~/MeetingRec/.startapp-alert`) when a recording starts.
