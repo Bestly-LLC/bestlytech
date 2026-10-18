@@ -30,3 +30,17 @@ export function askScout(text: string, opts: Omit<ScoutAsk, "text"> = {}) {
 export function openScout() {
   window.dispatchEvent(new Event(SCOUT_OPEN_EVENT));
 }
+
+/**
+ * Open the call debrief (Scout's review of a recorded call, waiting on Jared's OK) from anywhere in the admin:
+ *
+ *   openDebrief(id)   that one
+ *   openDebrief()     the newest one waiting
+ *
+ * CallDebriefHost (mounted once in AdminLayout) listens. The same sheet also opens from /admin?debrief=<id>.
+ */
+export const DEBRIEF_OPEN_EVENT = "bestly:debrief-open";
+
+export function openDebrief(id?: string | null) {
+  window.dispatchEvent(new CustomEvent<{ id: string | null }>(DEBRIEF_OPEN_EVENT, { detail: { id: id ?? null } }));
+}
