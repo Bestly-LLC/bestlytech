@@ -1,0 +1,13 @@
+SYNTHETIC
+FROM: noreply.notifications@trustpilot.com
+SUBJECT: Jordan left a 5-star review
+EXPECT: stars=5 title=None snippet="Private and simple." name=Jordan
+---
+Jordan left a review for bestly.tech
+
+5 stars
+
+Private and simple.
+
+Reply [https://businessapp.b2b.trustpilot.com/q]
+Trustpilot A/S

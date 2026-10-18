@@ -1,0 +1,20 @@
+SYNTHETIC (no real "new review" email exists yet; modeled on Trustpilot's business notification layout)
+FROM: noreply.notifications@trustpilot.com
+SUBJECT: New 5-star review from Dana M. for bestly.tech
+EXPECT: stars=5 title="Fast, private, worth it" name=Dana
+---
+You have a new review
+
+Dana M. gave bestly.tech 5 stars
+
+Rated 5 out of 5 stars
+Fast, private, worth it
+Set up took ten minutes and nothing was sent to a big cloud. Support answered the same day.
+
+Reply to this review
+[https://businessapp.b2b.trustpilot.com/reviews/abc123?token=SECRET]
+Report this review
+
+Visit Trustpilot [https://www.trustpilot.com] | Help Center
+Trustpilot A/S
+50 West 23rd St. Suite 1000, New York, NY 10010

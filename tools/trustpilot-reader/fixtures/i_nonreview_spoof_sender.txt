@@ -1,0 +1,8 @@
+SYNTHETIC (right words, wrong sender domain: parser must refuse)
+FROM: reviews@trustpilot-support.example.net
+SUBJECT: New 5-star review from Dana for bestly.tech
+EXPECT: NotReview
+---
+Rated 5 out of 5 stars
+Amazing
+Buy my thing.
