@@ -1,0 +1,12 @@
+SYNTHETIC (text deliberately contains money words; must never reach the phone as an interrupt)
+FROM: noreply.notifications@trustpilot.com
+SUBJECT: New 1-star review from Sam for bestly.tech
+EXPECT: stars=1 title="Wanted a refund" name=Sam
+---
+You have a new review
+
+Rated 1 out of 5 stars
+Wanted a refund
+I was charged $5 twice and the payment page was confusing.
+
+Reply to this review [https://businessapp.b2b.trustpilot.com/y]

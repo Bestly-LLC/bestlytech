@@ -1,0 +1,13 @@
+REAL, links and tokens removed (2026-10-15)
+FROM: noreply.notifications@trustpilot.com
+SUBJECT: bestly.tech, thanks for joining Trustpilot
+EXPECT: NotReview
+---
+Welcome! Thanks for signing up
+
+WELCOME TO TRUSTPILOT!
+
+Hi bestly.tech,Welcome to Trustpilot. We’re happy to have you on board! Now it’s
+easier than ever to read, write, and share your reviews.Customize your profile
+Bought something recently?Share your experience to empower others to shop with
+confidence and help companies improve.Write a review

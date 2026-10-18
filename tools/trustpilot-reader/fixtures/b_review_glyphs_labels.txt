@@ -1,0 +1,18 @@
+SYNTHETIC
+FROM: noreply.notifications@trustpilot.com
+SUBJECT: You've got a new review
+EXPECT: stars=4 title="Good, with one gripe" name=Marcus
+---
+Hi bestly.tech,
+
+Marcus left a review.
+
+★★★★☆
+
+Title: Good, with one gripe
+Review: The app does what it says. I wish the export button were easier to find,
+but support fixed my question fast.
+
+Reply to review [https://businessapp.b2b.trustpilot.com/x]
+Manage notification settings [https://www.trustpilot.com/settings]
+Trustpilot A/S

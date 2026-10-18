@@ -1,0 +1,15 @@
+SYNTHETIC
+FROM: noreply.notifications@trustpilot.com
+SUBJECT: bestly.tech received a new review
+EXPECT: stars=3 title="Okay so far" name=Priya
+---
+New review
+
+Priya
+US
+3 stars
+Okay so far
+Does the job. Pricing page could be clearer.
+
+View review [https://www.trustpilot.com/reviews/abc]
+Unsubscribe [https://www.trustpilot.com/unsub]

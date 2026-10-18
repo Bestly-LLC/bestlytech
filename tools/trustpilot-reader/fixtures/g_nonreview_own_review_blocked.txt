@@ -1,0 +1,12 @@
+REAL (2026-10-15, from jared@bestly.tech INBOX; about a review Jared wrote of another company)
+FROM: fabricatedreview@trustpilot.com
+SUBJECT: bestly.tech, your review didn’t make it online, or it was taken offline
+EXPECT: NotReview
+---
+Hi bestly.tech, We’re getting in touch because your review of inventoryproof.com
+didn’t make it online
+[https://help.trustpilot.com/s/article/Why-we-delay-posting-reviews?language=en_US],
+or it was taken offline after appearing on our platform, and we want to explain why.
+In this case, your review may have been flagged for one or more reasons:
+ * You may have multiple Trustpilot user accounts or a temporary email address
+Thanks for your cooperation,Trust Team

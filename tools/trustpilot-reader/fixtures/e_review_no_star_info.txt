@@ -1,0 +1,8 @@
+SYNTHETIC (must be Unparseable, never guessed)
+FROM: noreply.notifications@trustpilot.com
+SUBJECT: You have a new review
+EXPECT: Unparseable
+---
+A customer wrote a review of bestly.tech.
+Read it on Trustpilot.
+Reply to this review [https://businessapp.b2b.trustpilot.com/z]
