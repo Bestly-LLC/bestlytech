@@ -142,6 +142,29 @@ const RPCS: RpcDef[] = [
       return null;
     },
   },
+  {
+    name: "get_trustpilot_public_summary",
+    // The homepage section, the In-House Cloud line and the footer all render
+    // nothing until the first real Trustpilot review exists, and they render
+    // nothing on an error too. So a dead RPC looks exactly like "no reviews yet".
+    // Zero reviews is correct today, so this checks the SHAPE only: it proves the
+    // function exists, runs, and answers what the component reads.
+    check: (body) => {
+      const o = asObject(body);
+      if (!o) return `expected an object, got ${body === null ? "null" : typeof body}`;
+      for (const field of ["avg_rating", "review_count", "last_review_at", "reviews"]) {
+        if (!(field in o)) return `missing ${field}`;
+      }
+      const count = num(o.review_count);
+      if (!Number.isFinite(count) || count < 0) return "review_count is not a number";
+      const reviews = asArray(o.reviews);
+      if (!reviews) return "reviews is not an array";
+      if (count > 0 && reviews.length === 0) return "review_count is above 0 but reviews came back empty";
+      if (count === 0 && reviews.length > 0) return "review_count is 0 but reviews came back with rows";
+      if (count > 0 && !Number.isFinite(num(o.avg_rating))) return "avg_rating is missing while reviews exist";
+      return null;
+    },
+  },
 ];
 
 function keyFor(kind: string, name: string): string {

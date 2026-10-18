@@ -21432,6 +21432,93 @@ export type Database = {
           },
         ]
       }
+      studio_clips: {
+        Row: {
+          ai_generated: boolean
+          approved_at: string | null
+          brand: string
+          consent_ref: string | null
+          cost_usd: number | null
+          created_at: string
+          has_text: boolean
+          has_voice: boolean
+          height: number | null
+          id: string
+          kind: string
+          last_used_at: string | null
+          media_url: string | null
+          note: string | null
+          people: string
+          poster_url: string | null
+          prompt: string | null
+          seconds: number | null
+          source: string
+          source_ref: string | null
+          status: string
+          tags: string[]
+          title: string
+          used_count: number
+          uses: string[]
+          width: number | null
+        }
+        Insert: {
+          ai_generated?: boolean
+          approved_at?: string | null
+          brand: string
+          consent_ref?: string | null
+          cost_usd?: number | null
+          created_at?: string
+          has_text?: boolean
+          has_voice?: boolean
+          height?: number | null
+          id?: string
+          kind: string
+          last_used_at?: string | null
+          media_url?: string | null
+          note?: string | null
+          people?: string
+          poster_url?: string | null
+          prompt?: string | null
+          seconds?: number | null
+          source: string
+          source_ref?: string | null
+          status?: string
+          tags?: string[]
+          title: string
+          used_count?: number
+          uses?: string[]
+          width?: number | null
+        }
+        Update: {
+          ai_generated?: boolean
+          approved_at?: string | null
+          brand?: string
+          consent_ref?: string | null
+          cost_usd?: number | null
+          created_at?: string
+          has_text?: boolean
+          has_voice?: boolean
+          height?: number | null
+          id?: string
+          kind?: string
+          last_used_at?: string | null
+          media_url?: string | null
+          note?: string | null
+          people?: string
+          poster_url?: string | null
+          prompt?: string | null
+          seconds?: number | null
+          source?: string
+          source_ref?: string | null
+          status?: string
+          tags?: string[]
+          title?: string
+          used_count?: number
+          uses?: string[]
+          width?: number | null
+        }
+        Relationships: []
+      }
       studio_connectors: {
         Row: {
           calls: number
@@ -25986,6 +26073,54 @@ export type Database = {
         }
         Relationships: []
       }
+      venture_scores: {
+        Row: {
+          created_at: string
+          ev_usd: number | null
+          id: string
+          idea: string
+          inputs: Json
+          latency_ms: number | null
+          model: string | null
+          outputs: Json
+          p_first_dollar_14d: number | null
+          p_success_90d: number | null
+          scorer: string
+          spend_ok: boolean | null
+          tokens_in: number | null
+        }
+        Insert: {
+          created_at?: string
+          ev_usd?: number | null
+          id?: string
+          idea: string
+          inputs?: Json
+          latency_ms?: number | null
+          model?: string | null
+          outputs?: Json
+          p_first_dollar_14d?: number | null
+          p_success_90d?: number | null
+          scorer: string
+          spend_ok?: boolean | null
+          tokens_in?: number | null
+        }
+        Update: {
+          created_at?: string
+          ev_usd?: number | null
+          id?: string
+          idea?: string
+          inputs?: Json
+          latency_ms?: number | null
+          model?: string | null
+          outputs?: Json
+          p_first_dollar_14d?: number | null
+          p_success_90d?: number | null
+          scorer?: string
+          spend_ok?: boolean | null
+          tokens_in?: number | null
+        }
+        Relationships: []
+      }
       vesta_watch: {
         Row: {
           db_fails: number
@@ -30394,6 +30529,7 @@ export type Database = {
         Args: { p_limit?: number; p_order?: string }
         Returns: Json
       }
+      get_trustpilot_public_summary: { Args: never; Returns: Json }
       get_unresolved_reports: { Args: { p_limit?: number }; Returns: Json }
       get_weatherkit_credentials: {
         Args: never
@@ -32998,6 +33134,7 @@ export type Database = {
         }
         Returns: Json
       }
+      starnet_team_snapshot_t: { Args: { p_token: string }; Returns: Json }
       store_bestly_secret: {
         Args: { p_name: string; p_value: string }
         Returns: string
@@ -33405,6 +33542,51 @@ export type Database = {
         Returns: Json
       }
       studio_clients: { Args: { p_token: string }; Returns: Json }
+      studio_clip_pick: {
+        Args: {
+          p_brand: string
+          p_exclude?: string[]
+          p_kind: string
+          p_n?: number
+          p_use?: string
+        }
+        Returns: {
+          ai_generated: boolean
+          approved_at: string | null
+          brand: string
+          consent_ref: string | null
+          cost_usd: number | null
+          created_at: string
+          has_text: boolean
+          has_voice: boolean
+          height: number | null
+          id: string
+          kind: string
+          last_used_at: string | null
+          media_url: string | null
+          note: string | null
+          people: string
+          poster_url: string | null
+          prompt: string | null
+          seconds: number | null
+          source: string
+          source_ref: string | null
+          status: string
+          tags: string[]
+          title: string
+          used_count: number
+          uses: string[]
+          width: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "studio_clips"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      studio_clip_used: { Args: { p_ids: string[] }; Returns: number }
+      studio_clip_watch: { Args: never; Returns: Json }
       studio_connect_step: {
         Args: {
           p_info?: Json
