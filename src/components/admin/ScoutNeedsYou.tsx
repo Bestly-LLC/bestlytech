@@ -10,7 +10,10 @@ import {
   ChevronDown,
   ArrowUpRight,
   Sparkles,
+  Binoculars,
 } from "lucide-react";
+import { openDebrief } from "./scoutBus";
+import { debriefIdFromRow } from "./debrief/link";
 
 /**
  * What the red badge on the Scout button is counting (2026-10-06, Jared: "I get these alerts but when I click
@@ -57,6 +60,7 @@ export function useNeedsYou(open: boolean) {
 }
 
 function kindOf(r: TodayRow) {
+  if (debriefIdFromRow(r)) return { Icon: Binoculars, tint: "text-[#0A84FF]", label: "Call" };
   const s = `${r.key} ${r.source ?? ""} ${r.title}`.toLowerCase();
   if (r.key.startsWith("sec:") || s.includes("security")) return { Icon: ShieldAlert, tint: "text-[#FF453A]", label: "Security" };
   if (r.key.startsWith("down:") || /still down|down for/.test(s)) return { Icon: ServerCrash, tint: "text-[#FF9F0A]", label: "Down" };
@@ -141,6 +145,8 @@ export function NeedsYouCard({
               const k = kindOf(r);
               const isOpen = openKey === r.key;
               const age = waited(r.since);
+              // A call debrief opens right here as the review sheet, so Jared stays on the page he was on.
+              const debriefId = debriefIdFromRow(r);
               return (
                 <li key={r.key}>
                   {/* One line per item; tap it for the detail and the buttons (progressive disclosure keeps
@@ -170,16 +176,30 @@ export function NeedsYouCard({
                           </p>
                         )}
                         <div className="mt-2.5 flex flex-wrap gap-2">
+                          {debriefId && (
+                            <button
+                              type="button"
+                              aria-label="Review the call debrief"
+                              onClick={() => openDebrief(debriefId)}
+                              className="scout-press inline-flex min-h-9 items-center gap-1.5 rounded-full bg-white px-3.5 text-[0.8125rem] font-semibold text-black"
+                            >
+                              <Binoculars className="h-3.5 w-3.5" aria-hidden />
+                              {r.action_label || "Review"}
+                            </button>
+                          )}
                           <button
                             type="button"
                             disabled={disabled}
                             onClick={() => onAsk(r)}
-                            className="scout-press inline-flex min-h-9 items-center gap-1.5 rounded-full bg-white px-3.5 text-[0.8125rem] font-semibold text-black disabled:opacity-40"
+                            className={cn(
+                              "scout-press inline-flex min-h-9 items-center gap-1.5 rounded-full px-3.5 text-[0.8125rem] disabled:opacity-40",
+                              debriefId ? "border border-white/15 font-medium text-white hover:bg-white/[0.06]" : "bg-white font-semibold text-black",
+                            )}
                           >
                             <Sparkles className="h-3.5 w-3.5" aria-hidden />
                             Ask Scout
                           </button>
-                          {r.url && (
+                          {r.url && !debriefId && (
                             <button
                               type="button"
                               onClick={() => onOpen(r.url!)}

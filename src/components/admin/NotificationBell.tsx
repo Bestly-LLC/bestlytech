@@ -21,6 +21,8 @@ function hhmm(t: string) {
 import { copyForClaude } from "@/lib/copyForClaude";
 import { enablePush, disablePush, sendTestPush, syncPushOnLoad, type PushState } from "@/lib/webPush";
 import { Lines } from "@/components/Lines";
+import { openDebrief } from "@/components/admin/scoutBus";
+import { debriefIdFromUrl } from "@/components/admin/debrief/link";
 
 /*
  * Header bell: admin_notifications, filled by database triggers (new leads from each funnel,
@@ -136,6 +138,9 @@ export function NotificationBell() {
       const { error } = await supabase.from("admin_notifications" as any).update({ read_at: at } as any).eq("id", n.id).select("id");
       if (error) setItems((xs) => xs.map((x) => (x.id === n.id ? { ...x, read_at: null } : x)));
     }
+    // A finished call's debrief opens as the debrief itself, not as a reading pane about it.
+    const debriefId = debriefIdFromUrl(n.url);
+    if (debriefId) { openDebrief(debriefId); return; }
     // Open the alert in a reading pane with suggested next moves for Scout (it has a link to the page).
     setPane({ ...n, kindLabel: metaFor(n).label });
   }, []);
@@ -153,6 +158,8 @@ export function NotificationBell() {
         if (n.silent) return;
         if (quietRef.current && !urgent) return;
         if (soundRef.current) playNotifySound();
+        // "Your call is ready to review" shows itself as the debrief pop-up: a second toast would say the same thing twice.
+        if (debriefIdFromUrl(n.url)) return;
         toast(n.title, {
           description: n.body ? <Lines>{n.body}</Lines> : undefined,
           action: n.url ? { label: "Open", onClick: () => go(n) } : undefined,
