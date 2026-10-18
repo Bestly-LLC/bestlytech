@@ -1,8 +1,10 @@
 // trustpilot-badge — bestly.tech/r/badge.png, the live Trustpilot rating
 // badge for Jared's email signature. Renders a small transparent PNG from
 // trustpilot_stats (filled by the Pi's IMAP reader off Trustpilot's own
-// "new review" emails — no scraping, no paid TrustBox). Bestly-drawn stars
-// only: no Trustpilot logo or star art anywhere in this file.
+// "new review" emails — no scraping, no paid TrustBox). v2 (2026-10-18): a
+// small white pill with Trustpilot's OFFICIAL logo and star images (brand
+// assets v4.1.0, unaltered); drawing code lives in badge.ts. 264x36 pt,
+// rendered at 3x (792x108 px).
 //
 // GET /trustpilot-badge -> image/png, Cache-Control: max-age=3600.
 // On a DB failure, serves the last good PNG stored in email-assets/trustpilot/
@@ -12,6 +14,7 @@
 import satori from "npm:satori@0.12.1";
 import { initWasm, Resvg } from "npm:@resvg/resvg-wasm@2.6.2";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { Badge, H_PT, PT, W_PT, starsKey, type Img, type Stats } from "./badge.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback. Same pattern
 // as social-render — trustpilot_reviews has RLS on with no anon policies, so
@@ -24,10 +27,40 @@ const ASSETS = `${SB}/storage/v1/object/public/social-media/assets`;
 const FALLBACK_BUCKET = "email-assets";
 const FALLBACK_PATH = "trustpilot/badge-last-good.png";
 
-// Dimensions per plan: drawn at 2x retina, displayed at 300x60.
-const W = 600, H = 120;
-const NAVY = "rgb(15,33,51)";
-const ACCENT = "rgb(76,95,201)";
+// ── official Trustpilot brand assets (v4.1.0), used unaltered ──────────────
+// Fetched from Trustpilot's CDN once per isolate; copies are kept in
+// email-assets/trustpilot/brand/ and read from there if the CDN is down.
+const TP = "https://cdn.trustpilot.net/brand-assets/4.1.0";
+const assetCache: Record<string, Promise<Img>> = {};
+function toImg(svgText: string): Img {
+  const m = svgText.match(/viewBox="\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)\s*"/);
+  if (!m) throw new Error("no viewBox");
+  const bytes = new TextEncoder().encode(svgText);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return { uri: "data:image/svg+xml;base64," + btoa(bin), aspect: Number(m[1]) / Number(m[2]) };
+}
+function brandAsset(cdnPath: string, name: string): Promise<Img> {
+  if (!assetCache[name]) {
+    assetCache[name] = (async () => {
+      const store = db.storage.from(FALLBACK_BUCKET);
+      try {
+        const r = await fetch(`${TP}/${cdnPath}`);
+        if (!r.ok) throw new Error("cdn " + r.status);
+        const text = await r.text();
+        const img = toImg(text);
+        store.upload(`trustpilot/brand/${name}`, new Blob([text], { type: "image/svg+xml" }), { contentType: "image/svg+xml", upsert: true }).catch(() => {});
+        return img;
+      } catch (_e) {
+        const { data, error } = await store.download(`trustpilot/brand/${name}`);
+        if (error || !data) throw new Error("brand asset unavailable: " + name);
+        return toImg(await data.text());
+      }
+    })();
+    assetCache[name].catch(() => { delete assetCache[name]; });
+  }
+  return assetCache[name];
+}
 
 // ── fonts + wasm, once per isolate ──────────────────────────────────────────
 const fontCache: Record<string, Promise<ArrayBuffer>> = {};
@@ -55,66 +88,18 @@ async function fonts() {
   })));
 }
 
-// deno-lint-ignore no-explicit-any
-const h = (type: string, props: Record<string, any> | null, ...children: any[]) => {
-  const kids = children.filter((c) => c != null && c !== false);
-  const p: Record<string, any> = { ...(props || {}) };
-  if (kids.length === 1) p.children = kids[0];
-  else if (kids.length > 1) p.children = kids;
-  return { type, props: p };
-};
-
-// A single Bestly-drawn five-point star. `fill` 0..1 is how much of it is
-// filled, drawn as a clipped overlay rather than any third-party star glyph.
-function Star(fill: number, size: number) {
-  const path = "M12 1.6l3.09 6.26 6.91 1-5 4.87 1.18 6.88L12 17.3l-6.18 3.31L7 13.73l-5-4.87 6.91-1z";
-  const pct = Math.max(0, Math.min(1, fill)) * 100;
-  return h("div", { style: { position: "relative", width: size, height: size, display: "flex" } },
-    h("svg", { width: size, height: size, viewBox: "0 0 24 24", style: { position: "absolute", left: 0, top: 0 } },
-      h("path", { d: path, fill: "rgba(15,33,51,0.18)" })),
-    h("div", { style: { position: "absolute", left: 0, top: 0, width: size, height: size, overflow: "hidden", display: "flex" } },
-      h("div", { style: { width: `${pct}%`, height: size, display: "flex" } },
-        h("svg", { width: size, height: size, viewBox: "0 0 24 24" },
-          h("path", { d: path, fill: ACCENT })))));
-}
-
-function Stars(avg: number, size = 22) {
-  const stars = [];
-  for (let i = 0; i < 5; i++) stars.push(Star(Math.max(0, Math.min(1, avg - i)), size));
-  return h("div", { style: { display: "flex", gap: 3, alignItems: "center" } }, ...stars);
-}
-
-// Badge content. No box, no hard edges — the "feathered" look the signature
-// calls for comes from having nothing but soft type and the stars, not from
-// a pill or border that would need blurring.
-function Badge(stats: { avg: number | null; count: number } | null) {
-  const hasReviews = !!stats && stats.count > 0;
-  const label = !hasReviews
-    ? "Be our first review on Trustpilot"
-    : null;
-  return h("div", { style: {
-    width: W, height: H, display: "flex", alignItems: "center", gap: 14,
-    fontFamily: "InterTight", padding: "0 8px",
-  } },
-    hasReviews ? Stars(stats!.avg ?? 0) : null,
-    h("div", { style: { display: "flex", flexDirection: "column", justifyContent: "center" } },
-      hasReviews
-        ? h("div", { style: { display: "flex", alignItems: "baseline", gap: 6, whiteSpace: "nowrap" } },
-            h("span", { style: { fontSize: 30, fontWeight: 700, color: NAVY } }, String(stats!.avg)),
-            h("span", { style: { fontSize: 18, fontWeight: 600, color: NAVY, opacity: 0.85 } }, "average"))
-        : h("span", { style: { fontSize: 22, fontWeight: 700, color: NAVY } }, label),
-      hasReviews
-        ? h("span", { style: { fontSize: 18, fontWeight: 600, color: NAVY, opacity: 0.7, marginTop: 2 } },
-            `${stats!.count} review${stats!.count === 1 ? "" : "s"} on Trustpilot`)
-        : h("span", { style: { fontSize: 16, fontWeight: 600, color: NAVY, opacity: 0.7, marginTop: 2 } }, "trustpilot.com")));
-}
-
-async function renderPng(stats: { avg: number | null; count: number } | null): Promise<Uint8Array> {
+async function renderPng(stats: Stats): Promise<Uint8Array> {
   await ensureWasm();
-  const f = await fonts();
+  const hasReviews = !!stats && stats.count > 0;
+  const [f, logo, stars] = await Promise.all([
+    fonts(),
+    brandAsset("logo-black.svg", "logo-black.svg"),
+    hasReviews ? brandAsset(`stars/stars-${starsKey(stats!.avg)}.svg`, `stars-${starsKey(stats!.avg)}.svg`) : Promise.resolve(null),
+  ]);
+  const w = W_PT * PT, hgt = H_PT * PT;
   // deno-lint-ignore no-explicit-any
-  const svg = await satori(Badge(stats) as any, { width: W, height: H, fonts: f });
-  const raster = new Resvg(svg, { fitTo: { mode: "width", value: W } }).render();
+  const svg = await satori(Badge(stats, { logo, stars }) as any, { width: w, height: hgt, fonts: f });
+  const raster = new Resvg(svg, { fitTo: { mode: "width", value: w } }).render();
   return raster.asPng();
 }
 
@@ -132,7 +117,7 @@ Deno.serve(async (req) => {
   try {
     const { data, error } = await db.from("trustpilot_stats").select("avg_rating,review_count").maybeSingle();
     if (error) throw error;
-    const stats = { avg: data?.avg_rating ?? null, count: data?.review_count ?? 0 };
+    const stats: Stats = { avg: data?.avg_rating ?? null, count: data?.review_count ?? 0 };
     const png = await renderPng(stats);
     // Best-effort: keep the fallback fresh. Never let this fail the response.
     db.storage.from(FALLBACK_BUCKET).upload(FALLBACK_PATH, png, { contentType: "image/png", upsert: true }).catch(() => {});
