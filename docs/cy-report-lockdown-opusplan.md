@@ -94,6 +94,17 @@ The key in step 3 ships inside the extension, so anyone who unzips it has it (se
   new key) and a clean cut-off for old builds, not authentication. Step 2 is the real abuse guard.
 * `cy_site_guard_list` stays public on purpose (read-only, returns domains only).
 
+## Leftover from the step 1 test (harmless, run once in the SQL editor)
+
+The connector cancelled the cleanup twice. One test report and one retired test key remain:
+
+```sql
+do $$ begin
+  delete from public.cy_site_guard_reports where domain = 'cy-k-selftest.invalid';
+  delete from public.cy_report_keys where label = 'selftest-2026-10-18';
+end $$;
+```
+
 ## Undo
 
 * Step 1: `drop function if exists public.cy_report_site_issue_k(text,text,text,text,text);`
