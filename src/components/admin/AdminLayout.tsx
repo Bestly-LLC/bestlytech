@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical } from "lucide-react";
 import { Scout } from "./Scout";
+import { CallDebriefHost } from "./debrief/CallDebriefHost";
 import { startAdminLoaderDeck } from "@/components/loader/loaderDeck";
 
 const BREADCRUMB_MAP: Record<string, string> = {
@@ -269,6 +270,7 @@ export function AdminLayout() {
             <MobileNav />
             <CommandPalette />
             <Scout />
+            <CallDebriefHost />
           </div>
         </div>
       </SidebarProvider>
