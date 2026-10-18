@@ -70,6 +70,9 @@ it, and stops, transcribes and ingests it when the call empties. Every other roo
 - Watchdogs (alerts signed by Scout Notetaker, prefix `recorder.`): `autostart` (two people in an auto room for 2 minutes and
   nothing is recording), `nofile` (no `meeting_recordings` row 45 minutes after a call ended), `clientfile`, `talkread` (the Mac
   cannot read Talk for 5 minutes), `longrec`, `notetaker`, and `offline` (server side, `recorder_offline_watch`: no poll for 15 minutes).
+- Test rooms (`TEST_ROOMS` in `agent.py`, today `yqne2jpr`): recorded like any other room, but they never raise a Scout alert (the
+  watchdogs only write to `agent.log`), never open or close a real room's alert (the `recorder.*` keys are shared by every room), and
+  never show a macOS banner. Jared's rule, 2026-10-18: Scout must not push him about a test call.
 - Tests: `cd scripts/meetingrec && python3 -W ignore -m unittest discover -s tests` (runs on the system python 3.9, no network).
 - Rollback: `git revert` the 1.10 commits on `main` (the Mac pulls `agent.py` within 10 minutes), or in a hurry
   `touch ~/MeetingRec/.auto-off` and the agent keeps working as 1.9 did. Backup of the 1.9.0 files: `~/MeetingRec/.backup-1.9.0-2026-10-18/`.
