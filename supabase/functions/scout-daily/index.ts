@@ -5,6 +5,8 @@
 //   op drafts   replies worth sending from the last 48h of synced mail   -> kind draft
 //   op call     {id, force} a finished transcript -> commitments on the Bestly Ops Deck board -> kind call.
 //               v19: chunked map-reduce, resumable; {ok:false, retry:true} means "partial, the sweep will finish it"
+//               v24 (2026-10-18): last step for a client's call: call_debrief_create() drafts her to-dos (nothing reaches her board until
+//               Jared presses Send) and sends one Scout push; Jared's and Eli's to-dos and the Deck cards are unchanged
 //   op call_sweep  cron every 20 min: debriefs recordings that are unprocessed, partial or saved as a template echo (max 2 per run)
 //   op wrap     what got done, what rolls over, tomorrow's first move    -> kind wrap
 //   op run      {job, force} the same, started from the admin home page (admin JWT)
@@ -648,17 +650,31 @@ async function call(id: string, force = false, until = Date.now() + CALL_BUDGET_
       day, kind: "call", title: String(c.task).slice(0, 140), why: `${owner}${due ? ` · due ${due}` : ""} · from ${r.name}`,
       source_key: key, url: card?.url ?? null,
       action: { owner, due, meeting: r.name, meeting_id: r.id, deck_card: card?.id ?? null, deck_url: card?.url ?? null,
-        quote: c.quote ? String(c.quote).slice(0, 200) : null },
+        quote: c.quote ? String(c.quote).slice(0, 200) : null, ts: c.ts ?? null },
     }, { onConflict: "day,kind,source_key", ignoreDuplicates: true });
   }
   await db.from("meeting_recordings").update({
     summary: { status: "done", summary: summaryText, topics: m.topics, decisions: m.decisions, commitments, numbers: m.numbers, questions: m.questions,
       chunks_total: n, unverified_dropped: dropped, deck_error: deckErr || null },
   }).eq("id", id);
+  // Last step (2026-10-18): a client's call (Centering YOU, or the bestly-test sandbox) gets a debrief for Jared's OK. The database writes the
+  // client's own to-dos as DRAFTS (nothing reaches her board until Jared presses Send) and sends ONE Scout push with a link to review them.
+  // Everything above (Deck cards, Jared's and Eli's to-dos) is unchanged. If the step fails, the watchdog (call_debrief_watch) finishes it.
+  let debrief: any = null;
+  let debriefErr = "";
+  try {
+    const { data: dd, error: de } = await db.rpc("call_debrief_create", { p_meeting: r.id });
+    if (de) debriefErr = String(de.message).slice(0, 300); else debrief = dd;
+  } catch (e) { debriefErr = (e as Error).message.slice(0, 300); }
   const who = (r.roster ?? []).map((x: string) => x[0]?.toUpperCase() + x.slice(1)).join(", ") || "the call";
-  await notify(`Call with ${who}: ${commitments.length} to-do${commitments.length === 1 ? "" : "s"}${d ? " on Deck" : ""}, ${mine} yours`,
-    summaryText + (deckErr ? ` (Deck: ${deckErr})` : ""), false, `scout.call.${r.id}`);
-  return { ok: true, commitments: commitments.length, mine, chunks: n, unverified_dropped: dropped, deck: d ? d.board.title : null, deck_error: deckErr || null };
+  // The plain "Call with ..." notice stays for internal calls (and as the fallback if the debrief step or its push failed); a client call that got
+  // its "ready to review" push does not also get this one.
+  if (!(debrief?.client && debrief?.notified)) {
+    await notify(`Call with ${who}: ${commitments.length} to-do${commitments.length === 1 ? "" : "s"}${d ? " on Deck" : ""}, ${mine} yours`,
+      summaryText + (deckErr ? ` (Deck: ${deckErr})` : ""), false, `scout.call.${r.id}`);
+  }
+  return { ok: true, commitments: commitments.length, mine, chunks: n, unverified_dropped: dropped, deck: d ? d.board.title : null, deck_error: deckErr || null,
+    debrief: debrief?.client ? { id: debrief.debrief_id, status: debrief.status, drafts: debrief.drafts, notified: debrief.notified } : null, debrief_error: debriefErr || null };
 }
 
 // op call_sweep (cron every 20 min): finish recordings that never got debriefed, are still partial, or were saved as a template echo.
