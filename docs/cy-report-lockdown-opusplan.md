@@ -73,7 +73,21 @@ The key in step 3 ships inside the extension, so anyone who unzips it has it (se
 3. Bump to 1.2.6 (both manifests, Safari `MARKETING_VERSION`). Ship Chrome Web Store + App Store (Mac and iOS).
 4. Smoke: trip the scroll guard on a test page with the new build; confirm a `1.2.6` row lands.
 
-**Status 2026-10-17 (6:10 PM PT): built and tested, NOT shipped.**
+**Status 2026-10-17 (6:33 PM PT): SUBMITTED to all three stores, in review.**
+
+* App Store: 1.2.6 (114) Mac and iOS, Waiting for Review since 6:31 PM PT (review submissions `a6aa27fc…` Mac,
+  `47078e2b…` iOS). Build VALID, encryption exempt, What's New: "Security fix for how Cookie Yeti reports websites
+  it should leave alone." 1.2.5 stays live until approval. Scripts: `~/cy-ship/1.2.6/` (`export-cloud.sh`,
+  `export.sh`, `submit.py`, `poll_submit.sh`, `verify.py`).
+* Chrome Web Store: 1.2.6 zip uploaded and published via `cws-publish/publish.py` at 6:29 PM PT (status OK, draft
+  now 1.2.6). It replaces the pending 1.2.5 appeal; the public listing still showed 1.1.6.
+* `cy_extension_releases`: mac / ios / chrome all `1.2.6 / in_review`.
+* Signing gotcha: since Sep 27 the team's Apple Distribution identity lives in the ArriveKey build keychain, which is
+  locked and whose password file (`~/.appstoreconnect/build_keychain_pw`) no longer opens it. Xcode then signs
+  locally and codesign fails with `errSecInternalComponent` (exit 70). `export-cloud.sh` hides that keychain from the
+  search list during export so Xcode cloud-signs like 1.2.5, then restores the list.
+
+Build notes (6:10 PM PT, before shipping):
 
 * Key: generated on the Mac, never printed. Vault `cy_report_key_v1`; `cy_report_keys` row `ext-1.2.6`
   (sha256 `e1cd91b9ca1d…`), hashed inside the database from the Vault copy, so the two cannot drift.
@@ -89,7 +103,7 @@ The key in step 3 ships inside the extension, so anyone who unzips it has it (se
   test page, and lets only the keyed RPC reach Supabase. Page restored, site paused, `{"ok": true, "site_off": false}`,
   and a `1.2.6 / chrome / scroll_jump` row landed. That test row was then removed so step 4 counts only real users.
   Safari cannot be driven by Playwright; its file is byte-identical to the tested one.
-* Left to do: export + upload both archives, submit Mac + iOS for review, upload the Chrome zip and submit.
+* Shipped 6:29 to 6:31 PM PT (see status above).
 
 ### 4. Dual run, then revoke (cloud chat, weeks later)
 
