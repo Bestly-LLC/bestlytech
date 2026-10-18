@@ -616,7 +616,7 @@ class AfterTests(unittest.TestCase):
         for s in ("system", "mic"):
             open(f"{REC}/{self.name}-{s}.m4a", "w").write("x")
         open(f"{REC}/{self.name}-transcript.txt", "w").write("[00:00] JARED: hi\n")
-        agent.write_meta(self.name, room=ROOM, auto=True)
+        agent.write_meta(self.name, room=ROOM, auto=True, jared_seen=True)
 
     def test_filed_under_the_client_folder_once(self):
         W.rows[self.name] = {"client_slug": "centering-you", "room": ROOM}
@@ -801,6 +801,107 @@ class NotetakerTickTests(unittest.TestCase):
         agent.notetaker_tick()
         self.assertEqual(agent.nt["fails"], 1, "it still counts and retries")
         self.assertEqual(W.kinds("notetaker"), [], "but says nothing")
+
+
+class JaredInCallTests(unittest.TestCase):
+    """1.10.2: the Mac mini's mic is only ever Jared's voice on a call he is in. A call he is not in (the rehearsal room with two test
+    seats, Eli on his own) must not get a JARED line from it, in the transcript or in the client's folder."""
+
+    def setUp(self):
+        setup_world()
+
+    def test_the_rule_in_one_table(self):
+        n = "meeting-20261020-0900"
+        agent.write_meta(n, room=TEST_ROOM, auto=True)
+        self.assertFalse(agent.jared_in_call(n), "Scout started it, and never saw him in the call")
+        agent.write_meta(n, jared_seen=True)
+        self.assertTrue(agent.jared_in_call(n))
+        m = "meeting-20261020-1000"
+        agent.write_meta(m, room=TEST_ROOM)
+        self.assertTrue(agent.jared_in_call(m), "started by hand: Jared started it, he is on the call")
+        self.assertTrue(agent.jared_in_call("meeting-20250101-0000"), "nothing is known about an old recording: keep the mic")
+        k = "meeting-20261020-1100"
+        agent.write_meta(k, room=TEST_ROOM, auto=True)
+        os.makedirs(f"{REC}/{k}-talk")
+        json.dump({"token": TEST_ROOM, "tracks": [{"file": "track-1.webm", "name": "Elizabeth"}]}, open(f"{REC}/{k}-talk/manifest.json", "w"))
+        self.assertFalse(agent.jared_in_call(k), "the notetaker only recorded Elizabeth")
+        json.dump({"token": TEST_ROOM, "tracks": [{"file": "track-1.webm", "name": "Elizabeth"},
+                                                  {"file": "track-2.webm", "name": "Jared (Studio)"}]}, open(f"{REC}/{k}-talk/manifest.json", "w"))
+        self.assertTrue(agent.jared_in_call(k), "a track under his name: he was there")
+
+    def test_a_call_scout_starts_with_jared_in_it_notes_that_he_is_in_it(self):
+        W.put(ROOM, ["jared", "elizabeth"])
+        run_for(40)
+        name = json.load(open(agent.AUTO_FILE))["name"]
+        self.assertTrue(agent.read_meta(name)["jared_seen"])
+
+    def test_the_rehearsal_room_with_two_test_seats_never_notes_it(self):
+        W.put(TEST_ROOM, ["calltest", ("calltest2", "guests", True, 0, 1)])
+        run_for(60)
+        name = json.load(open(agent.AUTO_FILE))["name"]
+        self.assertIsNone(agent.read_meta(name).get("jared_seen"))
+        self.assertFalse(agent.jared_in_call(name))
+
+    def test_jared_walking_in_later_is_noted(self):
+        W.put(TEST_ROOM, ["calltest", ("calltest2", "guests", True, 0, 1)])
+        run_for(60)
+        name = json.load(open(agent.AUTO_FILE))["name"]
+        self.assertFalse(agent.jared_in_call(name))
+        W.put(TEST_ROOM, ["calltest", ("calltest2", "guests", True, 0, 1), ("Jared (Studio)", "guests", True, 0, 1)])
+        run_for(10)
+        self.assertTrue(agent.read_meta(name)["jared_seen"])
+        self.assertTrue(agent.jared_in_call(name))
+
+    def test_a_room_he_is_only_a_member_of_does_not_count(self):
+        W.put(TEST_ROOM, ["calltest", ("calltest2", "guests", True, 0, 1), ("jared", "users", False, 0, 1)])     # in the room, not in the call
+        run_for(60)
+        name = json.load(open(agent.AUTO_FILE))["name"]
+        self.assertFalse(agent.jared_in_call(name))
+
+    def test_the_ingest_leaves_the_mics_lines_out_of_a_call_jared_was_not_in(self):
+        W.transcript_text = ("# JARED = your own mic.\n[00:05] ELIZABETH: first thing\n[00:09] JARED: music in the room\n"
+                             "[00:20] ELIZABETH: second thing\n[00:30] JARED: more music\n")
+        W.put(TEST_ROOM, ["calltest", ("calltest2", "guests", True, 0, 1)])
+        run_for(40)
+        W.put(TEST_ROOM, [])
+        run_for(130)
+        ing = [c for c in W.calls if c.get("op") == "ingest"]
+        self.assertEqual(len(ing), 1)
+        text = ing[0]["transcript"]
+        self.assertNotIn("] JARED:", text)
+        self.assertIn("[00:05] ELIZABETH: first thing", text)
+        self.assertIn("[00:20] ELIZABETH: second thing", text)
+        self.assertTrue(text.startswith("# Jared was not in this call"))
+
+    def test_the_ingest_keeps_his_lines_when_he_was_in_the_call(self):
+        W.transcript_text = "[00:05] ELIZABETH: first thing\n[00:09] JARED: my answer\n"
+        W.put(ROOM, ["jared", "elizabeth"])
+        run_for(40)
+        W.put(ROOM, [])
+        run_for(130)
+        ing = [c for c in W.calls if c.get("op") == "ingest"]
+        self.assertEqual(len(ing), 1)
+        self.assertIn("[00:09] JARED: my answer", ing[0]["transcript"])
+
+    def test_the_ingest_keeps_his_lines_on_a_recording_started_by_hand(self):
+        ok, r, _ = agent.do_start({"roster": ["eli"], "room": TEST_ROOM})
+        self.assertTrue(ok)
+        W.transcript_text = "[00:05] ELI: first thing\n[00:09] JARED: my answer\n"
+        agent.do_stop(None)
+        ing = [c for c in W.calls if c.get("op") == "ingest"]
+        self.assertEqual(len(ing), 1)
+        self.assertIn("[00:09] JARED: my answer", ing[0]["transcript"])
+
+    def test_the_mic_recording_of_a_call_jared_was_not_in_is_not_filed_in_the_client_folder(self):
+        n = "meeting-20261020-0930"
+        for sfx in ("system", "mic"):
+            open(f"{REC}/{n}-{sfx}.m4a", "w").write("x")
+        open(f"{REC}/{n}-transcript.txt", "w").write("[00:00] THEM: hi\n")
+        agent.write_meta(n, room=TEST_ROOM, auto=True)
+        W.rows[n] = {"client_slug": "bestly-test", "room": TEST_ROOM}
+        agent.after_save(n, True)
+        copied = [c[1].rsplit("/", 1)[1] for c in W.dav_calls if c[0] == "COPY"]
+        self.assertEqual(sorted(copied), [f"{n}-system.m4a", f"{n}-transcript.txt"])
 
 
 if __name__ == "__main__":

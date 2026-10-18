@@ -14,7 +14,7 @@ Standard library only: it runs on the system python3.
 import base64, glob, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
 
-VERSION = "1.10.1"  # 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
+VERSION = "1.10.2"  # 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -71,7 +71,7 @@ AUTO_LONG_S = 4 * 3600    # a recording somebody started by hand has run this lo
 AUTO_MAX_STARTS = 3       # at most this many auto-started recordings per hour
 auto = {"next": 0, "fails": 0, "hold": {}, "false_since": {}, "blocked": set(), "rooms": {}, "last_human": None,
         "stopping": False, "last_error": None, "alert_open": False, "talk_alert": False, "long_alert": False,
-        "retry_at": 0, "verify_next": 0}
+        "retry_at": 0, "verify_next": 0, "jared_marked": None}
 
 # Self-healing. The notetaker drives Talk's web page, so a Talk update can break it.
 #  - code sync: the scripts below are pulled from the repo (main) every 10 minutes,
@@ -286,6 +286,31 @@ def notetaker_names(name):
         return sorted({t["name"] for t in m.get("tracks", []) if t.get("name")})
     except (OSError, ValueError):
         return []
+
+
+def jared_in_call(name):
+    """Was Jared in this call? The Mac mini's mic is his voice only when he is at this Mac, so on a call he was not in (the
+    rehearsal room, Eli on his own) nothing it heard may reach a transcript. Yes when he started the recording by hand (or nothing is
+    known about it: older recordings), when Scout saw him in the call's participants while it recorded (meta jared_seen), or when the
+    notetaker recorded a track under his name. talk_tracks.py has the same rule (jared_in_call); keep them the same."""
+    m = read_meta(name)
+    if not m.get("auto") or m.get("jared_seen"):
+        return True
+    return any(is_jared({"type": "", "id": "", "name": n}) for n in notetaker_names(name))
+
+
+def mark_jared(name, people):
+    """Note on the recording that Jared is in its call (talk_tracks.py and the ingest read it)."""
+    if name and auto.get("jared_marked") != name and any(is_jared(p) for p in people or []):
+        write_meta(name, jared_seen=True)
+        auto["jared_marked"] = name
+
+
+def without_mic_lines(text):
+    """The transcript minus the lines the Mac's mic wrote (JARED). Returns (text, how many lines went)."""
+    lines = text.split("\n")
+    keep = [ln for ln in lines if not re.match(r"\[\d+:\d+\] JARED: ", ln)]
+    return "\n".join(keep), len(lines) - len(keep)
 
 
 def room_live(token):
@@ -902,6 +927,7 @@ def auto_start(tok, cfg, people):
         auto["last_human"] = time.time()
         auto["empty_logged"] = False
         auto["blocked"].add(tok)
+        mark_jared((_result or {}).get("name"), people)
         return
     auto["starts"].pop()                # it did not start: that one does not count
     auto["last_error"] = str(err or "unknown")[:300]
@@ -1010,6 +1036,10 @@ def auto_tick():
                 auto["blocked"].discard(tok)
         auto["rooms"][tok] = {"live": bool(listing[tok].get("hasCall")), "people": len(people),
                               "jared": any(is_jared(p) for p in people), "ok": ok, "names": [p["name"] for p in people][:6]}
+
+    # Remember that Jared is in the call: the Mac's mic may only stand in for him on a call he is in (talk_tracks.py, ingest)
+    if cur:
+        mark_jared(cur["name"], seen.get(cur["room"]))
 
     # the recording Scout started: stop it when the call is empty
     if cur and not busy["stage"] and not auto["stopping"] and seen.get(cur["room"]) is not None:
@@ -1163,6 +1193,8 @@ def file_under_client(name, slug):
     day = f"{m.group(1)}-{m.group(2)}-{m.group(3)}" if m else datetime.now().strftime("%Y-%m-%d")
     files = [f"{name}-{s}" for s in ("system.m4a", "mic.m4a", "room.m4a", "transcript.txt", "transcript-named.txt", "transcript-turns.txt")]
     files = [f for f in files if os.path.exists(f"{REC}/{f}")]
+    if not jared_in_call(name):
+        files = [f for f in files if not f.endswith("-mic.m4a")]        # the Mac's mic only heard a room Jared was not on the call from
     if not files:
         return None
     shared = shared_paths(folder)
@@ -1380,6 +1412,13 @@ def ingest(name):
     text = read(named) or read(plain)
     if not text:
         return False
+    if not jared_in_call(name):
+        # Safety net: talk_tracks.py already left the Mac mic's lines out, but the fallback paths (no Talk tracks, a crash) must not
+        # let them through either. On a call Jared was not in they are the room, not him.
+        text, left_out = without_mic_lines(text)
+        if left_out:
+            text = "# Jared was not in this call, so the Mac mini's mic lines were left out.\n" + text
+            log("ingest: Jared was not in", name, "- left out", left_out, "mic lines")
     speakers = {}
     try:
         speakers = json.load(open(f"/tmp/{name}-speakers.json"))
