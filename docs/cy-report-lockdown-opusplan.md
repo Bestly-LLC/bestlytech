@@ -73,6 +73,24 @@ The key in step 3 ships inside the extension, so anyone who unzips it has it (se
 3. Bump to 1.2.6 (both manifests, Safari `MARKETING_VERSION`). Ship Chrome Web Store + App Store (Mac and iOS).
 4. Smoke: trip the scroll guard on a test page with the new build; confirm a `1.2.6` row lands.
 
+**Status 2026-10-17 (6:10 PM PT): built and tested, NOT shipped.**
+
+* Key: generated on the Mac, never printed. Vault `cy_report_key_v1`; `cy_report_keys` row `ext-1.2.6`
+  (sha256 `e1cd91b9ca1d…`), hashed inside the database from the Vault copy, so the two cannot drift.
+* Code: cookie-yeti-unified `66020d1` on GitHub main. Both `cy-failsafe.js` copies byte-identical, key embedded;
+  docs copy here keeps `__CY_REPORT_KEY__`.
+* Version: 1.2.6 / build 114. The real Safari version lives in three Info.plists
+  (`Cookie Yeti (iOS)`, `Cookie Yeti (macOS)`, `Cookie Yeti Extension`); the old `Cookie Yeti.xcodeproj`
+  `MARKETING_VERSION` was a stale 1.2.3 and is now 1.2.6 too. The release project is `Cookie Yeti Unified.xcodeproj`.
+* Builds on the Mac: `chrome-extension/Cookie-Yeti-Chrome-Store-v1.2.6.zip`; archives
+  `~/cy-ship/1.2.6/mac.xcarchive` and `ios.xcarchive` (archive only, `~/cy-ship/1.2.6/build.sh`). Each was checked
+  for 1.2.6 (114) and the embedded key hash.
+* Smoke: `~/cy-ship/1.2.6/test-report.js` loads the shipped Chrome zip unpacked, trips the scroll guard on a routed
+  test page, and lets only the keyed RPC reach Supabase. Page restored, site paused, `{"ok": true, "site_off": false}`,
+  and a `1.2.6 / chrome / scroll_jump` row landed. That test row was then removed so step 4 counts only real users.
+  Safari cannot be driven by Playwright; its file is byte-identical to the tested one.
+* Left to do: export + upload both archives, submit Mac + iOS for review, upload the Chrome zip and submit.
+
 ### 4. Dual run, then revoke (cloud chat, weeks later)
 
 * Watchdog, owned by Cookie Yeti, pg_cron weekly, `cy_report_dualrun_watch()`:
@@ -94,9 +112,9 @@ The key in step 3 ships inside the extension, so anyone who unzips it has it (se
   new key) and a clean cut-off for old builds, not authentication. Step 2 is the real abuse guard.
 * `cy_site_guard_list` stays public on purpose (read-only, returns domains only).
 
-## Leftover from the step 1 test (harmless, run once in the SQL editor)
+## Leftover from the step 1 test (DONE 2026-10-17, run from the Mac with `supabase db query --linked`)
 
-The connector cancelled the cleanup twice. One test report and one retired test key remain:
+The connector cancelled the cleanup three times; the Mac's linked Supabase CLI ran it fine. Kept for the record:
 
 ```sql
 do $$ begin
