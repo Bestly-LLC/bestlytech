@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Shield, CheckCircle2 } from "lucide-react";
 import bestlyLogo from "@/assets/bestly-logo.png";
+import { TrustpilotProof } from "@/components/TrustpilotProof";
 
 const footerNavigation = {
   company: [
@@ -45,6 +46,8 @@ export function Footer() {
               <span>{badge.label}</span>
             </div>
           ))}
+          {/* Renders nothing until the first real Trustpilot review exists */}
+          <TrustpilotProof variant="footer" />
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">

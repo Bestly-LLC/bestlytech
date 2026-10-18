@@ -8,6 +8,7 @@ import { GradientText } from "@/components/ui/GradientText";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 import { InteractivePricingCalculator } from "@/components/InteractivePricingCalculator";
 import { CloudScrollHero } from "@/components/cloud/CloudScrollHero";
+import { TrustpilotProof } from "@/components/TrustpilotProof";
 import { ThirteenServices } from "@/components/cloud/ThirteenServices";
 import { CloudPrivacySeal } from "@/components/cloud/CloudPrivacySeal";
 import { CloudDockCTA } from "@/components/cloud/CloudDockCTA";
@@ -190,6 +191,9 @@ export default function InHouseCloud() {
 
       {/* A+B. Hero + What's Inside — one continuous scroll-scrubbed 3D shot */}
       <CloudScrollHero />
+
+      {/* Trustpilot line: renders nothing until the first real review exists */}
+      <TrustpilotProof variant="inline" className="flex justify-center border-b border-border bg-background px-6 py-3" />
 
       {/* C/D. The thirteen services — card grid */}
       <ThirteenServices />

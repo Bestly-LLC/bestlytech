@@ -8,6 +8,7 @@ import { TiltCard } from "@/components/wow/TiltCard";
 import { RevealText, RevealOnScroll } from "@/components/wow/RevealText";
 import { Marquee } from "@/components/wow/Marquee";
 import { BottomWordmark } from "@/components/wow/BottomWordmark";
+import { TrustpilotProof } from "@/components/TrustpilotProof";
 
 import glossyApps from "@/assets/glossy-apps.png";
 import glossyAi from "@/assets/glossy-ai.png";
@@ -254,6 +255,9 @@ export default function Index() {
           </RevealOnScroll>
         </div>
       </section>
+
+      {/* ---------- Trustpilot (renders nothing until the first real review exists) ---------- */}
+      <TrustpilotProof variant="section" />
 
       {/* ---------- Founder note + final CTA ---------- */}
       <section className="wow-bg-cream text-[hsl(0_0%_8%)]">
