@@ -15,6 +15,26 @@ Copies of what runs in `~/MeetingRec` on the Mac mini. The live files are there,
 - `stop_app.applescript` — source of `Stop & Transcribe.app` (wrapped in a 3h AppleEvent timeout;
   the old one threw -1712 on long calls).
 
+## Start Recording.app can be evicted by iCloud (1.10.4, 2026-10-18)
+
+iCloud "Desktop & Documents" is on and the Mac mini's disk runs near full (97% on 2026-10-18), so macOS evicts files from the Desktop
+(a "dataless" file: name and size stay, the bytes are in iCloud, `SF_DATALESS` 0x40000000 in `st_flags`). At 3:28 and 3:30 PM that
+day `open` could not start `~/Desktop/Start Recording.app` ("Resource deadlock avoided") and an auto-started recording did not start.
+
+- Before every `open` (`do_start`), `fetch_start_app` looks at the bundle's flags (a few `lstat`s, no delay when nothing is evicted).
+  If anything is evicted it asks iCloud with `brctl download` for every file at once, then also reads the files (`cat`) from the second
+  round, and waits (40 s at most, `APP_FETCH_S`) until nothing is evicted. The agent log says "Start Recording.app was evicted to
+  iCloud ... Fetching it back" and "... is on disk again after N s".
+- `warm_start_app`: the moment the auto-record rule starts to hold, an evicted app is fetched in the background, so it is usually
+  back before the 8 s hold ends. The hourly `check_start_app` does the same and tells Scout (`recorder.start_app`) if iCloud will not hand it back.
+- A failed `open` (non-zero exit) is logged with macOS's own words, fetched again, and tried once more at once. If the app still will
+  not open, or cannot be found, Scout is told right away (`recorder.startapp`, severity error, owned by Scout Notetaker; a test room only logs).
+  The alert closes itself (marker `~/MeetingRec/.startapp-alert`) when a recording starts.
+- Why the app was NOT moved out of the Desktop (for example to `~/MeetingRec/`): macOS gave it Screen Recording **by path**
+  (`kTCCServiceScreenCapture`, `client_type 1`, in the system `/Library/Application Support/com.apple.TCC/TCC.db`: `.../Desktop/Start Recording.app` and
+  `.../Contents/MacOS/applet`; the app is ad-hoc signed, no team ID). A moved copy has a different path, so Jared would have to click Allow again.
+  Do not move it unless that click is acceptable. Rollback of 1.10.4: revert the commit; the Mac pulls the old `agent.py` within 10 minutes.
+
 ## Notetaker (exact names on Talk calls)
 
 - `notetaker/notetaker.js` — while a recording runs (and, since 1.10.3, a few seconds before an auto-started one), the agent finds

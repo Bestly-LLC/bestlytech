@@ -14,7 +14,7 @@ Standard library only: it runs on the system python3.
 import base64, glob, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
 
-VERSION = "1.10.3"  # 1.10.3: the first audio of a call reaches the notetaker sooner (8 s hold, the notetaker starts early and in parallel with the recorder, faster looks at Talk). 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
+VERSION = "1.10.4"  # 1.10.4: Start Recording.app is fetched back from iCloud before every open (the full disk evicted it on 2026-10-18 and macOS answered "Resource deadlock avoided"); an open that still fails is reported to Scout at once. 1.10.3: the first audio of a call reaches the notetaker sooner (8 s hold, the notetaker starts early and in parallel with the recorder, faster looks at Talk). 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -116,6 +116,119 @@ def find_start_app():
         if hits:
             return hits[0]
     return None
+
+
+# iCloud Desktop & Documents is on, and the Mac mini's disk is nearly full (97% on 2026-10-18), so macOS evicts files from the Desktop
+# to make room. An evicted ("dataless") file keeps its name and size but its bytes are in iCloud. On 2026-10-18 at 3:28 and 3:30 PM
+# `open` could not start Start Recording.app ("Resource deadlock avoided") because its files had been evicted, and a real call would
+# not have been recorded. The app cannot simply live somewhere else: macOS gave it Screen Recording by PATH (client_type 1 in the
+# system TCC.db: /Users/jaredbest/Desktop/Start Recording.app and .../Contents/MacOS/applet), so a moved copy would need Jared to click
+# Allow again. So it stays on the Desktop and is fetched back before every open.
+SF_DATALESS = 0x40000000    # st_flags bit: the file's bytes are not on this disk
+APP_FETCH_S = 40            # the most do_start waits for iCloud to hand the app back before it tries to open it anyway
+BRCTL = "/usr/bin/brctl"
+START_ALERT = f"{HOME}/.startapp-alert"     # present while a "could not open Start Recording.app" alert is open
+start_fetch = {"busy": False, "next": 0.0}
+
+
+def _flags(path):
+    try:
+        return getattr(os.lstat(path), "st_flags", 0)
+    except OSError:
+        return 0
+
+
+def evicted_files(app):
+    """The files of the Start Recording bundle (and the bundle itself) that macOS has moved out to iCloud. A folder that cannot be
+    listed counts too: that is what an evicted folder looks like to a process that may not fetch it."""
+    out, unreadable = [], []
+    if not os.path.exists(app):
+        return out
+    if _flags(app) & SF_DATALESS:
+        out.append(app)
+    for root, dirs, files in os.walk(app, onerror=unreadable.append):
+        for n in dirs + files:
+            p = os.path.join(root, n)
+            if _flags(p) & SF_DATALESS:
+                out.append(p)
+    out.extend(getattr(e, "filename", None) or app for e in unreadable)
+    return out
+
+
+def fetch_start_app(app, budget=APP_FETCH_S, force=False):
+    """Make sure every byte of Start Recording.app is on this disk before it is opened. Asks iCloud with `brctl download`, then reads
+    the files (reading makes macOS fetch them too), and waits until nothing is evicted any more. Nothing evicted: returns at once,
+    having touched nothing. force=True asks iCloud again even when nothing looks evicted (the open failed anyway).
+    Returns (ok, seconds, note)."""
+    t0 = time.time()
+    missing = evicted_files(app)
+    if not missing and not force:
+        return True, 0.0, ""
+    if missing:
+        log("Start Recording.app was evicted to iCloud:", len(missing), "files. Fetching it back.")
+    note = ""
+    rnd = 0
+    while True:
+        rnd += 1
+        targets = missing or [app]
+        for p in targets:                   # all the requests go out first: iCloud fetches them side by side
+            try:
+                r = subprocess.run([BRCTL, "download", p], capture_output=True, text=True, timeout=20)
+                if r.returncode != 0:
+                    note = (r.stderr or "").strip()[:160] or f"brctl exit {r.returncode}"
+            except Exception as e:  # noqa: BLE001
+                note = f"brctl: {e}"[:160]
+        readers = []
+        if rnd >= 2:                        # brctl alone did not do it: reading a file makes macOS fetch it too (all at once)
+            for p in targets:
+                if os.path.isfile(p):
+                    try:
+                        readers.append(subprocess.Popen(["/bin/cat", p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+                    except Exception as e:  # noqa: BLE001
+                        note = f"cat: {e}"[:160]
+        for _ in range(16):                 # up to 8 s per round for the files to turn real
+            missing = evicted_files(app)
+            if not missing:
+                break
+            time.sleep(0.5)
+        for rd in readers:
+            try:
+                if rd.poll() is None:
+                    rd.kill()
+            except Exception:  # noqa: BLE001
+                pass
+        if not missing or time.time() - t0 >= budget:
+            break
+    took = round(time.time() - t0, 1)
+    if missing:
+        log("Start Recording.app is still evicted after", took, "s:", len(missing), "files.", note)
+        return False, took, note or "iCloud did not hand the files back"
+    log("Start Recording.app is on disk again after", took, "s")
+    return True, took, ""
+
+
+def warm_start_app():
+    """The rule has started to hold in an auto-record room: if the app has been evicted, begin fetching it now, in the background,
+    so it is back by the time do_start opens it (AUTO_HOLD_S later). Cheap when nothing is evicted (a handful of stats)."""
+    now = time.time()
+    if start_fetch["busy"] or now < start_fetch["next"]:
+        return
+    start_fetch["next"] = now + 2
+    app = find_start_app()
+    if not app or not evicted_files(app):
+        return
+    start_fetch["busy"] = True
+    start_fetch["next"] = now + 20
+
+    def run():
+        try:
+            fetch_start_app(app)
+        except Exception as e:  # noqa: BLE001
+            log("warm-up fetch failed", e)
+        finally:
+            start_fetch["busy"] = False
+
+    threading.Thread(target=run, daemon=True).start()
 
 busy = {"stage": None}          # set while this agent is running stop.sh
 # Shell jobs from Scout. Scout proposes, Jared taps Run in the admin, the server
@@ -734,6 +847,15 @@ def check_start_app():
     app = find_start_app()
     heal["start_app"] = app
     home_desk = os.path.expanduser("~/Desktop/Start Recording.app")
+    if app:
+        # Hourly: if iCloud evicted the app, bring it back long before a call needs it (do_start also checks, right before every open).
+        fetched, took, note = fetch_start_app(app)
+        if not fetched:
+            health("start_app", "problem", "Start Recording.app is stuck in iCloud",
+                   f"iCloud has evicted Start Recording.app from the Desktop and did not hand it back in {took:.0f} s ({note}). "
+                   "Scout tries again before every recording, and again in an hour. The disk is nearly full, which is why iCloud evicts it.",
+                   "warning")
+            return
     if not app:
         health("start_app", "problem", "Start Recording.app is missing",
                "Neither Jared nor Scout can start a call recording: Start Recording.app is not on the Desktop or in "
@@ -1190,6 +1312,7 @@ def auto_tick():
         for tok, cfg in rooms.items():
             t0 = auto["hold"].get(tok)
             if t0 and tok not in auto["blocked"]:
+                warm_start_app()        # fetch the app back from iCloud now if it was evicted: it is opened AUTO_HOLD_S into the hold
                 if now - t0 >= AUTO_HOLD_S:
                     auto_start(tok, cfg, seen[tok])
                     break
@@ -1510,8 +1633,15 @@ def do_start(payload):
         name = new_recording_name()
     app = find_start_app()
     if not app:
+        start_app_alert(room, name, "Start Recording.app is not on the Desktop or in Applications, so Scout cannot start a recording.")
         return False, {"name": name}, "Can't find Start Recording.app (looked on the Desktop and in Applications)."
+    open_err = fetch_err = ""       # why macOS would not open the app / why iCloud would not hand it back, when they would not
     for attempt in (1, 2):
+        # iCloud may have evicted the app from the Desktop (full disk): get its bytes back first. Nothing evicted = a few stats, no delay.
+        fetched, took, fetch_note = fetch_start_app(app, force=(attempt == 2 and bool(open_err)))
+        fetch_err = "" if fetched else f"iCloud did not hand its files back ({fetch_note})"
+        log("start: opening Start Recording.app, try", attempt, "-", "files are on disk" if fetched else fetch_err,
+            f"(fetched in {took} s)" if took else "")
         # macOS only lets "Start Recording.app" capture the call (Screen Recording
         # permission belongs to that app), so hand it the names and open it.
         with open(f"{HOME}/.pending-name", "w") as f:
@@ -1522,7 +1652,14 @@ def do_start(payload):
         # keep it awake while the recorder starts, and give it a moment to come up before opening the app.
         subprocess.run(["/bin/sh", "-c", "caffeinate -u -t 15 >/dev/null 2>&1 &"], timeout=10)
         time.sleep(1.5)
-        subprocess.run(["open", "-g", app], capture_output=True, text=True, timeout=30)
+        opened = subprocess.run(["open", "-g", app], capture_output=True, text=True, timeout=30)
+        if opened.returncode != 0:
+            open_err = ((opened.stderr or opened.stdout or "").strip() or f"open exit {opened.returncode}")[:200]
+            log("open Start Recording.app failed, try", attempt, "-", open_err, "|", fetch_err or "files are on disk")
+            if attempt == 1:
+                continue            # the second try fetches the app again first, then opens it right away
+            break                   # nothing was opened, so there is nothing to wait for
+        open_err = ""
         for _ in range(15):
             time.sleep(1)
             if recording_pid():
@@ -1539,6 +1676,7 @@ def do_start(payload):
                 nt["next_try"] = 0          # the notetaker joins the call right away
                 if not quiet_room(room):
                     notify("Recording", "Scout is recording this call.", ", ".join(roster) if roster else name)
+                start_app_resolved()
                 return True, {"name": name, "roster": roster, "room": room}, None
         log("recording did not start, try", attempt, read(f"{REC}/{name}.log")[-200:].replace("\n", " "))
     tail = read(f"{REC}/{name}.log")[-600:]
@@ -1547,7 +1685,37 @@ def do_start(payload):
             os.remove(f"{HOME}/{f}")
         except OSError:
             pass
+    if open_err:
+        # The app would not open even after it was fetched back and tried again: say so at once, do not wait for the 2-minute watchdog.
+        start_app_alert(room, name, f"macOS said: {open_err}" + (f" Also: {fetch_err}." if fetch_err else ""))
+        return False, {"name": name}, f"Start Recording.app would not open. {open_err}".strip()
     return False, {"name": name}, f"Recording didn't start. {tail}".strip()
+
+
+def start_app_alert(room, name, why):
+    """Tell Scout (the monitor; Scout Notetaker owns recorder.* alerts) that a recording could not be started because of the app,
+    right away. A test room only logs. Cleared by start_app_resolved when a recording starts."""
+    when = datetime.now().strftime("%-I:%M %p")
+    try:
+        open(START_ALERT, "w").write(when)
+    except OSError:
+        pass
+    health("startapp", "problem", "Scout could not start a recording: Start Recording.app would not open",
+           f"At {when} the Mac mini could not open Start Recording.app, so a call may not be recording. {why}\n"
+           "Scout made sure the app was on the disk (iCloud evicts Desktop files when the disk is nearly full) and tried to open it twice. "
+           "To record now: tap Start Recording on the Mac mini's Desktop, or ask Scout to start recording.",
+           "error", room=room, name=name)
+
+
+def start_app_resolved():
+    """A recording started, so the app opens again: close the alert if one was open (the marker file survives an agent restart)."""
+    if not os.path.exists(START_ALERT):
+        return
+    try:
+        os.remove(START_ALERT)
+    except OSError:
+        pass
+    health("startapp", "resolved", "Start Recording.app opens again", "Scout started a recording.", "info")
 
 
 def ingest(name):
