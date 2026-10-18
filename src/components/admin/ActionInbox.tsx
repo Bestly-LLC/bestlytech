@@ -20,6 +20,7 @@ import {
   MoreHorizontal,
   VolumeX,
   ChevronDown,
+  Binoculars,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -29,6 +30,8 @@ import {
 import { AskScoutButton } from "./AskScoutButton";
 import { toast } from "sonner";
 import { Lines } from "@/components/Lines";
+import { openDebrief } from "./scoutBus";
+import { debriefIdFromRow } from "./debrief/link";
 
 /**
  * Everything waiting on the operator, from one server-side rule set.
@@ -341,6 +344,12 @@ export function ActionInbox() {
   const [openItem, setOpenItem] = useState<ActionItem | null>(null);
   /** Duplicate groups the operator expanded to see each notice. */
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
+  /** A call debrief opens as the review sheet in place; everything else opens its own popup. */
+  const openOne = (it: ActionItem) => {
+    const debriefId = debriefIdFromRow({ key: it.id, url: it.href });
+    if (debriefId) openDebrief(debriefId);
+    else setOpenItem(it);
+  };
   const toggleGroup = (gid: string) => setOpenGroups((s) => { const n = new Set(s); if (n.has(gid)) n.delete(gid); else n.add(gid); return n; });
   /** A Refresh in flight: the rules already ran; `run` is the AI pass still judging `pending` items. */
   const [checking, setChecking] = useState<{ run: string | null; pending: number } | null>(null);
@@ -378,7 +387,7 @@ export function ActionInbox() {
       return {
         id: r.key,
         severity: severityFromRow[r.severity] ?? "info",
-        icon: sourceIcon[r.source] ?? AlertCircle,
+        icon: debriefIdFromRow(r) ? Binoculars : (sourceIcon[r.source] ?? AlertCircle),
         title: r.title,
         detail: r.detail || undefined,
         ageMs: r.since ? now - new Date(r.since).getTime() : 0,
@@ -644,7 +653,7 @@ export function ActionInbox() {
             if (n === 1) {
               return (
                 <li key={g.gid}>
-                  <button type="button" onClick={() => setOpenItem(item)} className={rowBtn}
+                  <button type="button" onClick={() => openOne(item)} className={rowBtn}
                     aria-label={`${severityWord[item.severity]}: ${item.title}`}>
                     <Icon className="h-4 w-4 shrink-0 text-white/55" aria-hidden />
                     <div className="min-w-0 flex-1">
@@ -687,7 +696,7 @@ export function ActionInbox() {
                     <ul className={divider}>
                       {g.items.map((it) => (
                         <li key={it.id}>
-                          <button type="button" onClick={() => setOpenItem(it)} className={cn(rowBtn, "min-h-[44px] py-2.5 pl-10")}
+                          <button type="button" onClick={() => openOne(it)} className={cn(rowBtn, "min-h-[44px] py-2.5 pl-10")}
                             aria-label={`${it.title}, ${it.since ? clock12(it.since) : timeAgo(it.ageMs) + " ago"}`}>
                             <div className="min-w-0 flex-1">
                               <p className={cn(text.detail, "break-words text-white/80")}>
