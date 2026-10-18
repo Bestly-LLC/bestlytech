@@ -19,7 +19,8 @@
  *   6. Heuristic clicks get the same 8-second watch as pattern clicks, and a budget of 4 per site
  *      per 10 minutes. Popups that keep reopening pause the site.
  *   7. A paused site stays paused for 3 days on this device (not just this tab), and is reported to
- *      the server (cy_report_site_issue). 3 reports in 7 days switch the site off for every user for
+ *      the server (cy_report_site_issue_k, with this release's REPORT_KEY; 1.2.6+). 3 reports in 7 days
+ *      switch the site off for every user for
  *      14 days (doubling on repeat), then it retries by itself. The extension pulls that list every
  *      12 hours (cy_site_guard_list). Bestly's own sites are always off.
  *
@@ -30,7 +31,10 @@
 
   var SB = "https://rcqfqhguwpmaarseifqg.supabase.co";
   var LOOP_ENDPOINT = SB + "/functions/v1/report-pattern-loop";
-  var SITE_ISSUE_ENDPOINT = SB + "/rest/v1/rpc/cy_report_site_issue";
+  var SITE_ISSUE_ENDPOINT = SB + "/rest/v1/rpc/cy_report_site_issue_k";
+  // One key per release (server table cy_report_keys). Not a secret: it ships in the bundle. It lets the
+  // server rotate keys and cut off old builds. The bestlytech docs copy keeps a placeholder.
+  var REPORT_KEY = "__CY_REPORT_KEY__";
   var GUARD_LIST_ENDPOINT = SB + "/rest/v1/rpc/cy_site_guard_list";
   var ANON_KEY = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw";
   var STORE_KEY = "__cookieYetiFailsafe";
@@ -219,7 +223,7 @@
     if (reportedSite[domain + "|" + reason]) return; // once per page per reason
     reportedSite[domain + "|" + reason] = true;
     var info = buildInfo();
-    post(SITE_ISSUE_ENDPOINT, { p_domain: domain, p_reason: reason, p_version: info.version, p_platform: info.platform === "unknown" ? null : info.platform });
+    post(SITE_ISSUE_ENDPOINT, { p_key: REPORT_KEY, p_domain: domain, p_reason: reason, p_version: info.version, p_platform: info.platform === "unknown" ? null : info.platform });
   }
 
   function pauseSite(domain, selector, reason) {
