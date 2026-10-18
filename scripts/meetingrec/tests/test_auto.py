@@ -1388,7 +1388,7 @@ class StartAppTests(unittest.TestCase):
         self.assertIn("would not open", err)
         self.assertIn("Resource deadlock avoided", err)
         self.assertEqual(W.kinds("startapp"), ["problem"], "reported at once, not after the 2-minute watchdog")
-        self.assertLess(W.clock.now - t0, 120)
+        self.assertLess(W.clock.now - t0, 150, "90 s for iCloud on the first try, a little more on the second")
         self.assertFalse(os.path.exists(f"{H}/.pending-name"))
         sev = [sv for (k, _kd, _t, sv) in W.health if k == "startapp"]
         self.assertEqual(sev, ["error"])
@@ -1450,6 +1450,43 @@ class StartAppTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertGreaterEqual(took, agent.APP_FETCH_S)
         self.assertLess(W.clock.now - t0, agent.APP_FETCH_S + 30)
+
+    def test_idle_upkeep_fetches_an_evicted_app_every_five_minutes(self):
+        self.evict()
+        agent.heal.pop("next_warm", None)
+        agent.heal["next_sync"] = agent.heal["next_version_check"] = agent.heal["next_upkeep"] = agent.heal["next_voicebank"] = 10 ** 12
+        agent.heal_tick()
+        self.assertEqual(W.evicted, set(), "fetched back by the idle upkeep, with no call going on")
+        self.evict()
+        agent.heal_tick()
+        self.assertNotEqual(W.evicted, set(), "not again within five minutes")
+        W.clock.advance(301)
+        agent.heal_tick()
+        self.assertEqual(W.evicted, set())
+
+    def test_a_read_that_is_still_running_is_not_killed_between_rounds(self):
+        killed = []
+
+        class Slow:
+            def poll(self):
+                return None
+
+            def kill(self):
+                killed.append(1)
+
+        spawned = []
+        orig = W.popen
+        W.popen = lambda cmd, **kw: (spawned.append(cmd[-1]), Slow())[1] if cmd[0] == "/bin/cat" else orig(cmd, **kw)
+        agent.subprocess.Popen = W.popen
+        try:
+            self.evict()
+            W.brctl_works = False
+            W.cat_works = False
+            agent.fetch_start_app(APP, budget=30)
+        finally:
+            W.popen = orig
+        self.assertEqual(sorted(spawned), sorted(APP_FILES), "one reader per file, not one per round")
+        self.assertEqual(len(killed), len(APP_FILES), "all of them killed once, at the very end")
 
     def test_the_rule_holding_starts_the_fetch_before_the_recording_does(self):
         self.evict()

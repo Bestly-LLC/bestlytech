@@ -125,7 +125,9 @@ def find_start_app():
 # system TCC.db: /Users/jaredbest/Desktop/Start Recording.app and .../Contents/MacOS/applet), so a moved copy would need Jared to click
 # Allow again. So it stays on the Desktop and is fetched back before every open.
 SF_DATALESS = 0x40000000    # st_flags bit: the file's bytes are not on this disk
-APP_FETCH_S = 40            # the most do_start waits for iCloud to hand the app back before it tries to open it anyway
+APP_FETCH_S = 90            # the most do_start waits for iCloud to hand the app back before it tries to open it anyway
+APP_WARM_S = 180            # ...and the most a background fetch (warm_start_app) keeps trying. iCloud was slow on 2026-10-18: three tiny
+                            # files took over 70 s while a 33 GB download sat stuck at 99%
 BRCTL = "/usr/bin/brctl"
 START_ALERT = f"{HOME}/.startapp-alert"     # present while a "could not open Start Recording.app" alert is open
 start_fetch = {"busy": False, "next": 0.0}
@@ -168,37 +170,39 @@ def fetch_start_app(app, budget=APP_FETCH_S, force=False):
         log("Start Recording.app was evicted to iCloud:", len(missing), "files. Fetching it back.")
     note = ""
     rnd = 0
-    while True:
-        rnd += 1
-        targets = missing or [app]
-        for p in targets:                   # all the requests go out first: iCloud fetches them side by side
-            try:
-                r = subprocess.run([BRCTL, "download", p], capture_output=True, text=True, timeout=20)
-                if r.returncode != 0:
-                    note = (r.stderr or "").strip()[:160] or f"brctl exit {r.returncode}"
-            except Exception as e:  # noqa: BLE001
-                note = f"brctl: {e}"[:160]
-        readers = []
-        if rnd >= 2:                        # brctl alone did not do it: reading a file makes macOS fetch it too (all at once)
-            for p in targets:
-                if os.path.isfile(p):
-                    try:
-                        readers.append(subprocess.Popen(["/bin/cat", p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
-                    except Exception as e:  # noqa: BLE001
-                        note = f"cat: {e}"[:160]
-        for _ in range(16):                 # up to 8 s per round for the files to turn real
-            missing = evicted_files(app)
-            if not missing:
+    readers = {}                            # path -> a running `cat`: left alone until the files are back (killing a read cancels the fetch)
+    try:
+        while True:
+            rnd += 1
+            targets = missing or [app]
+            for p in targets:               # all the requests go out first: iCloud fetches them side by side
+                try:
+                    r = subprocess.run([BRCTL, "download", p], capture_output=True, text=True, timeout=20)
+                    if r.returncode != 0:
+                        note = (r.stderr or "").strip()[:160] or f"brctl exit {r.returncode}"
+                except Exception as e:  # noqa: BLE001
+                    note = f"brctl: {e}"[:160]
+            if rnd >= 2:                    # brctl alone did not do it: reading a file makes macOS fetch it too (all at once)
+                for p in targets:
+                    if os.path.isfile(p) and (p not in readers or readers[p].poll() is not None):
+                        try:
+                            readers[p] = subprocess.Popen(["/bin/cat", p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        except Exception as e:  # noqa: BLE001
+                            note = f"cat: {e}"[:160]
+            for _ in range(16):             # up to 8 s per round for the files to turn real
+                missing = evicted_files(app)
+                if not missing:
+                    break
+                time.sleep(0.5)
+            if not missing or time.time() - t0 >= budget:
                 break
-            time.sleep(0.5)
-        for rd in readers:
+    finally:
+        for rd in readers.values():
             try:
                 if rd.poll() is None:
                     rd.kill()
             except Exception:  # noqa: BLE001
                 pass
-        if not missing or time.time() - t0 >= budget:
-            break
     took = round(time.time() - t0, 1)
     if missing:
         log("Start Recording.app is still evicted after", took, "s:", len(missing), "files.", note)
@@ -208,8 +212,9 @@ def fetch_start_app(app, budget=APP_FETCH_S, force=False):
 
 
 def warm_start_app():
-    """The rule has started to hold in an auto-record room: if the app has been evicted, begin fetching it now, in the background,
-    so it is back by the time do_start opens it (AUTO_HOLD_S later). Cheap when nothing is evicted (a handful of stats)."""
+    """If the app has been evicted, begin fetching it in the background. Called when the auto-record rule starts to hold (so it is back
+    by the time do_start opens it, AUTO_HOLD_S later) and every five minutes by heal_tick (so it is on disk long before any call).
+    Cheap when nothing is evicted (a handful of stats)."""
     now = time.time()
     if start_fetch["busy"] or now < start_fetch["next"]:
         return
@@ -222,7 +227,7 @@ def warm_start_app():
 
     def run():
         try:
-            fetch_start_app(app)
+            fetch_start_app(app, budget=APP_WARM_S)
         except Exception as e:  # noqa: BLE001
             log("warm-up fetch failed", e)
         finally:
@@ -980,6 +985,12 @@ def heal_tick():
         return                      # a notetaker is on its way into a call whose recording is about to start: no restart, no self-test (Chrome's profile)
     now = time.time()
     reason = None
+    if now >= heal.get("next_warm", 0):
+        heal["next_warm"] = now + 300       # keep Start Recording.app on disk: if iCloud evicted it, it is fetched back now, not at the start of a call
+        try:
+            warm_start_app()
+        except Exception as e:  # noqa: BLE001
+            log("warm-up check failed", e)
     if now >= heal["next_sync"]:
         heal["next_sync"] = now + 600
         if sync_code():
@@ -1638,7 +1649,8 @@ def do_start(payload):
     open_err = fetch_err = ""       # why macOS would not open the app / why iCloud would not hand it back, when they would not
     for attempt in (1, 2):
         # iCloud may have evicted the app from the Desktop (full disk): get its bytes back first. Nothing evicted = a few stats, no delay.
-        fetched, took, fetch_note = fetch_start_app(app, force=(attempt == 2 and bool(open_err)))
+        # the first try may wait the full APP_FETCH_S for iCloud; the second only a little more (it opens the app right after either way)
+        fetched, took, fetch_note = fetch_start_app(app, budget=APP_FETCH_S if attempt == 1 else 15, force=(attempt == 2 and bool(open_err)))
         fetch_err = "" if fetched else f"iCloud did not hand its files back ({fetch_note})"
         log("start: opening Start Recording.app, try", attempt, "-", "files are on disk" if fetched else fetch_err,
             f"(fetched in {took} s)" if took else "")
