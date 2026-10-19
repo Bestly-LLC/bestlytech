@@ -1,0 +1,174 @@
+X-Unsent: 1
+Subject: From InventoryProof Support
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<!doctype html><html lang=3D"en"><head><meta charset=3D"utf-8"><meta name=
+=3D"viewport" content=3D"width=3Ddevice-width,initial-scale=3D1"><meta name=
+=3D"color-scheme" content=3D"light dark"><meta name=3D"supported-color-sche=
+mes" content=3D"light dark"><title>InventoryProof Message</title><style>
+  body, table, td, a { -webkit-text-size-adjust:100%; -ms-text-size-adjust:=
+100%; }
+  a { text-decoration:none; }
+  .btn:hover { background:#0551ad !important; }
+  @media (max-width:600px) {
+    .card-pad { padding:32px 24px !important; }
+    .h1 { font-size:24px !important; }
+    .hero-num { font-size:44px !important; }
+    .callout-pad { padding:28px 20px 26px !important; }
+    .callout-text { font-size:18px !important; }
+    .btn-m { min-width:0 !important; padding:14px 22px !important; }
+  }
+  /* Apple Mail / iOS dark mode. The Trustpilot callout stays light on purp=
+ose. */
+  @media (prefers-color-scheme: dark) {
+    .bg { background:#0f1729 !important; }
+    .card { background:#161f30 !important; border-color:#243049 !important;=
+ }
+    .panel { background:#0f1729 !important; border-color:#243049 !important=
+; }
+    .divider { border-color:#243049 !important; }
+    .t-strong { color:#f5f7fa !important; }
+    .t-body { color:#c4ccd8 !important; }
+    .t-muted { color:#97a3b6 !important; }
+    .t-link { color:#5aa2f8 !important; }
+    .pill { background:#13305a !important; color:#9cc6fb !important; }
+  }
+</style></head><body style=3D"margin:0;padding:0">
+<div class=3D"bg" style=3D"margin:0;padding:0;background:#f5f7fa;">
+
+  <table role=3D"presentation" class=3D"bg" width=3D"100%" cellpadding=3D"0=
+" cellspacing=3D"0" border=3D"0" style=3D"background:#f5f7fa;">
+    <tr>
+      <td align=3D"center" style=3D"padding:40px 16px 48px;">
+
+        <!-- Brand -->
+        <table role=3D"presentation" width=3D"100%" cellpadding=3D"0" cells=
+pacing=3D"0" border=3D"0" style=3D"max-width:560px;">
+          <tr>
+            <td align=3D"center" style=3D"padding:0 0 24px;">
+              <a href=3D"https://www.inventoryproof.com" style=3D"text-deco=
+ration:none;">
+                <img src=3D"https://rcqfqhguwpmaarseifqg.supabase.co/storag=
+e/v1/object/public/email-assets/inventoryproof-icon.png" width=3D"56" heigh=
+t=3D"56" alt=3D"InventoryProof" style=3D"display:block;width:56px;height:56=
+px;border:0;border-radius:14px;margin:0 auto;">
+              </a>
+              <div class=3D"t-strong" style=3D"padding-top:12px;font-family=
+:Manrope,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial=
+,sans-serif;font-size:17px;font-weight:700;letter-spacing:-0.01em;color:#06=
+61d0;">InventoryProof</div>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Card -->
+        <table role=3D"presentation" class=3D"card" width=3D"100%" cellpadd=
+ing=3D"0" cellspacing=3D"0" border=3D"0" style=3D"max-width:560px;backgroun=
+d:#ffffff;border:1px solid #e1e7ef;border-radius:20px;">
+          <tr>
+            <td class=3D"card-pad" style=3D"padding:40px 40px 36px;font-fam=
+ily:Manrope,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar=
+ial,sans-serif;">
+              <p class=3D"t-body" style=3D"margin:0 0 16px;font-size:16px;l=
+ine-height:1.6;color:#3d4a5c;">Hi [Name],</p>
+              <p class=3D"t-body" style=3D"margin:0 0 16px;font-size:16px;l=
+ine-height:1.6;color:#3d4a5c;">[Write your message here. Press Return for a=
+ new paragraph.]</p>
+              <p class=3D"t-body" style=3D"margin:0 0 16px;font-size:16px;l=
+ine-height:1.6;color:#3d4a5c;">[Add more detail if you need it, or delete t=
+his line.]</p>
+              <table role=3D"presentation" class=3D"callout" width=3D"100%"=
+ cellpadding=3D"0" cellspacing=3D"0" border=3D"0" style=3D"margin-top:32px;=
+background:#ebf4fe;border:1px solid #cfe3fc;border-radius:18px;">
+                <tr>
+                  <td align=3D"center" class=3D"callout-pad" style=3D"paddi=
+ng:32px 32px 30px;">
+                    <a href=3D"https://www.trustpilot.com/evaluate/inventor=
+yproof.com" style=3D"text-decoration:none;"><img src=3D"https://rcqfqhguwpm=
+aarseifqg.supabase.co/storage/v1/object/public/email-assets/trustpilot-logo=
+-black.png" width=3D"130" height=3D"32" alt=3D"Trustpilot" style=3D"display=
+:block;width:130px;height:32px;border:0;margin:0 auto;"></a>
+                    <p class=3D"callout-text" style=3D"margin:20px 0 24px;f=
+ont-size:20px;line-height:1.45;font-weight:700;letter-spacing:-0.01em;color=
+:#1d2530;">Enjoying InventoryProof? We&#x27;d love to hear what you think. =
+A quick review on Trustpilot helps other homeowners find us.</p>
+                    <table role=3D"presentation" cellpadding=3D"0" cellspac=
+ing=3D"0" border=3D"0" style=3D"margin:0 auto;">
+                      <tr>
+                        <td align=3D"center" style=3D"border-radius:12px;bo=
+rder:1.5px solid #1d2530;background:#ffffff;">
+                          <a class=3D"btn-m" href=3D"https://www.trustpilot=
+.com/evaluate/inventoryproof.com" style=3D"display:inline-block;min-width:2=
+00px;padding:14px 28px;font-family:Manrope,-apple-system,BlinkMacSystemFont=
+,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:20=
+px;font-weight:700;color:#1d2530;text-align:center;border-radius:12px;">Lea=
+ve a review</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              <table role=3D"presentation" cellpadding=3D"0" cellspacing=3D=
+"0" border=3D"0" style=3D"margin:28px auto 0;">
+                <tr>
+                  <td class=3D"btn" align=3D"center" style=3D"border-radius=
+:12px;background:#0661d0;">
+                    <a class=3D"btn-m" href=3D"https://www.inventoryproof.c=
+om/auth" style=3D"display:inline-block;min-width:200px;padding:15px 28px;fo=
+nt-family:Manrope,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvet=
+ica,Arial,sans-serif;font-size:16px;line-height:20px;font-weight:700;color:=
+#ffffff;text-align:center;border-radius:12px;">Log in to your account</a>
+                  </td>
+                </tr>
+              </table>
+              <p style=3D"margin:8px 0 0;text-align:center;"><a class=3D"t-=
+link" href=3D"https://www.inventoryproof.com/forgot-password" style=3D"disp=
+lay:inline-block;padding:12px 4px;font-size:15px;line-height:20px;font-weig=
+ht:700;color:#0661d0;">Forgot password</a><span class=3D"t-muted" style=3D"=
+padding:0 10px;color:#97a3b6;">&middot;</span><a class=3D"t-link" href=3D"m=
+ailto:support@inventoryproof.com" style=3D"display:inline-block;padding:12p=
+x 4px;font-size:15px;line-height:20px;font-weight:700;color:#0661d0;">Conta=
+ct support</a></p>
+              <table role=3D"presentation" width=3D"100%" cellpadding=3D"0"=
+ cellspacing=3D"0" border=3D"0" style=3D"margin-top:32px;">
+                <tr>
+                  <td class=3D"divider" style=3D"border-top:1px solid #e1e7=
+ef;padding-top:24px;">
+                    <p class=3D"t-body" style=3D"margin:0;font-size:16px;li=
+ne-height:1.5;color:#3d4a5c;">Thanks,</p>
+                    <p class=3D"t-strong" style=3D"margin:4px 0 0;font-size=
+:16px;line-height:1.5;font-weight:700;color:#1d2530;">Jared</p>
+                    <p class=3D"t-muted" style=3D"margin:0;font-size:14px;l=
+ine-height:1.5;color:#65758b;">InventoryProof Support</p>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+        </table>
+
+        <!-- Footer -->
+        <table role=3D"presentation" width=3D"100%" cellpadding=3D"0" cells=
+pacing=3D"0" border=3D"0" style=3D"max-width:560px;">
+          <tr>
+            <td align=3D"center" class=3D"t-muted" style=3D"padding:28px 24=
+px 0;font-family:Manrope,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto=
+,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#65758b;">
+              Record a video of your home. Get an itemized inventory of eve=
+rything you own.<br>
+              <a class=3D"t-link" href=3D"https://www.inventoryproof.com" s=
+tyle=3D"color:#0661d0;font-weight:600;">inventoryproof.com</a>
+              <span style=3D"padding:0 6px;">&middot;</span>Bestly LLC
+            </td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</div>
+</body></html>
