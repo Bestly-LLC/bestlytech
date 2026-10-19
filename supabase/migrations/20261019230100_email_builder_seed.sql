@@ -378,7 +378,7 @@ select $t$inventoryproof$t$, $t$InventoryProof Message$t$, $t$From InventoryProo
             <td class="card-pad" style="padding:40px 40px 36px;font-family:Manrope,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
               <p class="t-body" style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#3d4a5c;">Hi [Name],</p>
               <p class="t-body" style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#3d4a5c;">[Write your message here. Press Return for a new paragraph.]</p>
-              <p class="t-body" style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#3d4a5c;">[Add more detail if you need it, or delete this line.]</p>
+              <p class="t-body" style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#3d4a5c;">[Add more detail if you need it, or remove this line.]</p>
               <table role="presentation" class="callout" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:32px;background:#ebf4fe;border:1px solid #cfe3fc;border-radius:18px;">
                 <tr>
                   <td align="center" class="callout-pad" style="padding:32px 32px 30px;">
