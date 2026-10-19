@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Copy, Download, Inbox, Mail, RefreshCw } from "lucide-react";
+import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { Lines } from "@/components/Lines";
 import { cardCls, focusRing } from "@/components/admin/ui";
@@ -291,6 +292,11 @@ export default function AdminTemplates() {
       <PageHeader
         title="Email templates"
         description="Branded emails for Bestly and InventoryProof. Open one in Mail to write from it, or download it."
+        actions={
+          <Link to="/admin/emails" className={cn(btnBase, "bg-[#0A84FF] text-white hover:bg-[#3395ff]", focusRing)}>
+            Write a new email with AI
+          </Link>
+        }
       />
 
       <div role="group" aria-label="Filter by brand" className="flex flex-wrap gap-2">
