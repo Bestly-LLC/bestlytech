@@ -98,7 +98,7 @@ const RoofGuardInfoEmail = ({ contact_name, company_name, eli_email, eli_phone, 
 
           <Section style={footer}>
             <Text style={footerBrand}>Bestly LLC</Text>
-            <Text style={footerMuted}>733 North Kings Road #205, Los Angeles, CA 90069</Text>
+            <Text style={footerMuted}>5850 W 3rd St, Ste E PMB1012, Los Angeles, CA 90036</Text>
             <Text style={footerMuted}>
               Sent because you asked for it on a recorded call with Ava.
             </Text>

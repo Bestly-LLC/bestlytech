@@ -59,7 +59,7 @@ const PrivacyVerifyEmail = ({ first_name, ask, requested_on, short_link, code }:
 
           <Section style={footer}>
             <Text style={footerBrand}>Bestly LLC</Text>
-            <Text style={footerMuted}>733 North Kings Road #205, Los Angeles, CA 90069</Text>
+            <Text style={footerMuted}>5850 W 3rd St, Ste E PMB1012, Los Angeles, CA 90036</Text>
             <Text style={footerMuted}>Sent because a data request was made with your email address.</Text>
           </Section>
         </Container>

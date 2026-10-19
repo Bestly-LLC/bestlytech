@@ -507,7 +507,7 @@ async function opRetry(a: A): Promise<Response> {
 
 /* ───────────────────────── damages file ───────────────────────── */
 
-const BUSINESS = { name: "Bestly LLC", person: "Jared Best", address: "733 North Kings Road #205, Los Angeles, CA 90069", email: "jared@bestly.tech" };
+const BUSINESS = { name: "Bestly LLC", person: "Jared Best", address: "5850 W 3rd St, Ste E PMB1012, Los Angeles, CA 90036", email: "jared@bestly.tech" };
 
 async function claimEvidence(claimId: string) {
   const { data: claim } = await db.from("spam_claims").select("*").eq("id", claimId).maybeSingle();

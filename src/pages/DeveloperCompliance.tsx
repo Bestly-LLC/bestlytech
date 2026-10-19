@@ -36,7 +36,7 @@ export default function DeveloperCompliance() {
                   { label: "Legal Entity Name", value: "Bestly LLC" },
                   { label: "Entity Type", value: "Limited Liability Company (LLC)" },
                   { label: "Jurisdiction", value: "United States" },
-                  { label: "Business Location", value: "Los Angeles, CA, United States" },
+                  { label: "Business Address", value: "5850 W 3rd St, Ste E PMB1012, Los Angeles, CA 90036" },
                   { label: "Official Domain", value: <a href="https://bestly.tech" className="text-primary hover:underline">bestly.tech</a> },
                   { label: "D-U-N-S Number", value: "Available upon request" },
                 ].map((item) => (
