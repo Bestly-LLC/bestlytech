@@ -162,3 +162,9 @@ project_id = "rcqfqhguwpmaarseifqg"
 
 [functions.basil-chef]
     verify_jwt = false
+
+[functions.email-builder]
+  verify_jwt = false
+
+[functions.email-builder-send]
+  verify_jwt = false
