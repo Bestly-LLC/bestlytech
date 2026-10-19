@@ -435,7 +435,7 @@ export default function Contact() {
                 <div className="space-y-4 text-muted-foreground">
                   <div className="flex gap-3">
                     <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />
-                    <span>Los Angeles, CA, United States</span>
+                    <span>5850 W 3rd St, Ste E PMB1012<br />Los Angeles, CA 90036</span>
                   </div>
                 </div>
               </div>

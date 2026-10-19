@@ -31,7 +31,7 @@ const errText = (j: Any) => clip(((j.errors as Any[]) ?? []).map((e) => e.detail
 // ---- What we tell the carrier (kept in code so a re-file after a rejection starts from the same reviewed text) ----
 const BRAND = {
   entityType: "PRIVATE_PROFIT", displayName: "Bestly", companyName: "Bestly LLC",
-  phone: "+18165007236", street: "733 North Kings Road #205", city: "Los Angeles", state: "CA", postalCode: "90069", country: "US",
+  phone: "+18165007236", street: "5850 W 3rd St, Ste E PMB1012", city: "Los Angeles", state: "CA", postalCode: "90036", country: "US",
   email: "jared@bestly.tech", website: "https://www.bestly.tech", vertical: "TRANSPORTATION",
 };
 const CAMPAIGN = {

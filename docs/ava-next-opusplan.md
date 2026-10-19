@@ -77,7 +77,7 @@ Every incident row gets a **status** and **buttons**:
 **Not needed today.** RoofGuard only dials verified business landlines, and the pilot is waiting on Bill. It becomes required before Ava calls anything that might be a home or cell number for sales.
 
 When it's needed (about 10 minutes, Jared does it, since it means creating an account in Bestly's name):
-1. Go to **telemarketing.donotcall.gov** and create an organization profile: **Bestly LLC, 733 North Kings Road #205, Los Angeles, CA 90069**, contact Jared, phone (816) 500-7236, email jared@bestly.tech. Entity type: **seller** (Bestly calls for its own programs; if Bestly calls *for* LBMC, also list LBMC as the seller you call for).
+1. Go to **telemarketing.donotcall.gov** and create an organization profile: **Bestly LLC, 5850 W 3rd St, Ste E PMB1012, Los Angeles, CA 90036**, contact Jared, phone (816) 500-7236, email jared@bestly.tech. Entity type: **seller** (Bestly calls for its own programs; if Bestly calls *for* LBMC, also list LBMC as the seller you call for).
 2. Pick **up to 5 area codes (free)**. Start with the area codes of the states RoofGuard will call. More area codes cost a yearly fee per code.
 3. You'll get a **Subscription Account Number (SAN)**. Put the SAN and the login into the Settings sheet; it saves to the vault.
 4. Then we build the monthly scrub (a Pi job downloads the area-code files every 31 days, which is the legal maximum) and the compliance gate checks it (see `ava-calling-compliance-opusplan.md`).

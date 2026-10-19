@@ -299,7 +299,8 @@ export default function TermsOfService() {
         </p>
         <div className="bg-secondary/30 p-4 rounded-lg text-muted-foreground">
           <p><strong className="text-foreground">Bestly LLC</strong></p>
-          <p>Los Angeles, CA, United States</p>
+          <p>5850 W 3rd St, Ste E PMB1012</p>
+          <p>Los Angeles, CA 90036</p>
           <p>Email: <a href="mailto:support@bestly.tech" className="text-foreground underline">support@bestly.tech</a></p>
         </div>
       </>

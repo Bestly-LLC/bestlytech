@@ -35,7 +35,8 @@ export default function PrivacyPolicy() {
         </p>
         <div className="bg-secondary/30 p-4 rounded-lg text-muted-foreground">
           <p><strong className="text-foreground">Bestly LLC</strong></p>
-          <p>Los Angeles, CA, United States</p>
+          <p>5850 W 3rd St, Ste E PMB1012</p>
+          <p>Los Angeles, CA 90036</p>
           <p>Email: <a href="mailto:privacy@bestly.tech" className="text-foreground underline">privacy@bestly.tech</a></p>
         </div>
       </>
@@ -418,7 +419,8 @@ export default function PrivacyPolicy() {
         </p>
         <div className="bg-secondary/30 p-4 rounded-lg text-muted-foreground">
           <p><strong className="text-foreground">Bestly LLC</strong></p>
-          <p>Los Angeles, CA, United States</p>
+          <p>5850 W 3rd St, Ste E PMB1012</p>
+          <p>Los Angeles, CA 90036</p>
           <p>Email: <a href="mailto:privacy@bestly.tech" className="text-foreground underline">privacy@bestly.tech</a></p>
         </div>
       </>

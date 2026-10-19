@@ -63,7 +63,8 @@ export function Footer() {
               Los Angeles.
             </p>
             <p className="mt-4 text-sm text-muted-foreground">
-              Los Angeles, CA, United States
+              5850 W 3rd St, Ste E PMB1012<br />
+              Los Angeles, CA 90036
             </p>
           </div>
 

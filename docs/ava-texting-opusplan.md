@@ -29,7 +29,7 @@
 | Who | Channel | Why it's clean |
 |---|---|---|
 | Said yes on a live call | **Text** | Prior express consent, recorded. The 10DLC campaign registers honestly as a verbal/IVR opt-in flow, which is a routinely approved pattern |
-| Voicemail only, or never answered | **Email** | CAN-SPAM is **opt-out** for business email: no prior consent needed. Needs truthful headers, a clear ad identification, Bestly's physical address (733 N Kings Rd #205) and a working unsubscribe honored within 10 business days. No private right of action — FTC enforcement only |
+| Voicemail only, or never answered | **Email** | CAN-SPAM is **opt-out** for business email: no prior consent needed. Needs truthful headers, a clear ad identification, Bestly's physical address (5850 W 3rd St, Ste E PMB1012, Los Angeles, CA 90036) and a working unsubscribe honored within 10 business days. No private right of action — FTC enforcement only |
 | Everyone | Direct mail, LinkedIn, in person | No TCPA, CEMA or carrier surface at all |
 
 **Ringless voicemail is the worst option on the table, not a workaround** — the FCC held it is a "call" requiring prior express consent, and combined with the AI-voice ruling below it is a facial violation with strict liability.
