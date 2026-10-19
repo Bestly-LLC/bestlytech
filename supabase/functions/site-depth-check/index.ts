@@ -291,6 +291,36 @@ Deno.serve(async (req) => {
     }),
   );
 
+  // ---- 2b. Email templates (2026-10-19) ---------------------------------
+  // /admin/templates and every email sent from those templates load these files
+  // from bestly.tech. A missing file here answers 200 with index.html (SPA
+  // rewrite), so check the content type, not just the status.
+  const EMAIL_FILES: Array<[string, RegExp]> = [
+    ["/email-templates/templates.json", /json/i],
+    ["/email-templates/assets/bestly-header.gif", /^image\//i],
+    ["/email-templates/assets/jared-headshot.gif", /^image\//i],
+    ["/email-templates/assets/inventoryproof-icon.png", /^image\//i],
+    ["/email-templates/assets/cookieyeti-icon.png", /^image\//i],
+    ["/og-agent.png", /^image\//i],
+  ];
+  await Promise.all(
+    EMAIL_FILES.map(async ([path, type]) => {
+      const { res, err } = await fetchWithRetry(`${SITE}${path}`, { method: "HEAD" });
+      const key = keyFor("email", path);
+      const ct = res?.headers.get("content-type") ?? "";
+      if (res && res.status < 400 && type.test(ct)) {
+        findings.push({ key, ok: true, severity: "info", title: `${path} resolves`, body: "", needs: null });
+        return;
+      }
+      findings.push({
+        key, ok: false, severity: "error",
+        title: `An email template file is missing: ${path}`,
+        body: `${err ?? `HTTP ${res?.status}, content-type ${ct || "none"}`}. Emails written from /admin/templates show a broken image or the page lists nothing.`,
+        needs: "Run python3 tools/email-templates/build.py, commit public/email-templates/, and redeploy.",
+      });
+    }),
+  );
+
   // ---- 3. Data paths -----------------------------------------------------
   const anonHeaders = { ...keyHeaders(PUBLISHABLE_KEY), "Content-Type": "application/json" };
   await Promise.all(

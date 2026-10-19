@@ -57,6 +57,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/turo": "Turo Watch",
   "/admin/playbook": "Scout's playbook",
   "/admin/skills": "Claude Skills",
+  "/admin/templates": "Email templates",
   "/admin/scout-lab": "Scout Lab",
 };
 

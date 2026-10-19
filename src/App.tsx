@@ -127,6 +127,7 @@ const ScoutAI = lazyPage(() => import("./pages/admin/ScoutAI"));
 const Team = lazyPage(() => import("./pages/admin/Team"));
 const ScoutLab = lazyPage(() => import("./pages/admin/ScoutLab"));
 const AdminSkills = lazyPage(() => import("./pages/admin/AdminSkills"));
+const AdminTemplates = lazyPage(() => import("./pages/admin/AdminTemplates"));
 const AdminNotFound = lazyPage(() => import("./pages/admin/AdminNotFound"));
 
 /** Redirects an old route to a section tab, carrying over the query string (e.g. ?q= for Granted Access). */
@@ -313,6 +314,7 @@ const App = () => {
                   <Route path="turo/settings" element={<LaxPassRedirect />} />
                   <Route path="playbook" element={<AdminPlaybook />} />
                   <Route path="skills" element={<AdminSkills />} />
+                  <Route path="templates" element={<AdminTemplates />} />
                   <Route path="*" element={<AdminNotFound />} />
                 </Route>
 

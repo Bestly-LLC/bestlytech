@@ -86,6 +86,7 @@ const opsItems = [
   { title: "Security", url: "/admin/security", icon: ShieldCheck },
   { title: "Spam Desk", url: "/admin/spam", icon: ShieldAlert },
   { title: "Scout AI", url: "/admin/scout-ai", icon: KeyRound },
+  { title: "Email templates", url: "/admin/templates", icon: Mail },
   { title: "Claude Skills", url: "/admin/skills", icon: BookMarked },
   { title: "Scout's playbook", url: "/admin/playbook", icon: BookOpen },
 ];

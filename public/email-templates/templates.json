@@ -1,0 +1,46 @@
+[
+  {
+    "slug": "bestly-support",
+    "name": "Bestly Support",
+    "brand": "Bestly",
+    "kind": "Support reply",
+    "use": "Answer a customer question. Ends with ads for Bestly Agent, Cookie Yeti and InventoryProof.",
+    "subject": "Re: your question",
+    "html": "/email-templates/bestly-support.html",
+    "eml": "/email-templates/bestly-support.eml",
+    "updated": "2026-10-19"
+  },
+  {
+    "slug": "bestly-letter",
+    "name": "Bestly Letter",
+    "brand": "Bestly",
+    "kind": "Personal note",
+    "use": "A personal note from Jared with his signature. Good for thank-yous and follow-ups.",
+    "subject": "A note from Jared at Bestly",
+    "html": "/email-templates/bestly-letter.html",
+    "eml": "/email-templates/bestly-letter.eml",
+    "updated": "2026-10-19"
+  },
+  {
+    "slug": "inventoryproof-support",
+    "name": "InventoryProof Account Check",
+    "brand": "InventoryProof",
+    "kind": "Support reply",
+    "use": "Show a customer their account summary, like proof they were never charged. Asks them to update their review.",
+    "subject": "About your InventoryProof account",
+    "html": "/email-templates/inventoryproof-support.html",
+    "eml": "/email-templates/inventoryproof-support.eml",
+    "updated": "2026-10-19"
+  },
+  {
+    "slug": "inventoryproof-message",
+    "name": "InventoryProof Message",
+    "brand": "InventoryProof",
+    "kind": "General reply",
+    "use": "Any reply from InventoryProof Support. Includes a Trustpilot review button and a log-in link.",
+    "subject": "From InventoryProof Support",
+    "html": "/email-templates/inventoryproof-message.html",
+    "eml": "/email-templates/inventoryproof-message.eml",
+    "updated": "2026-10-19"
+  }
+]
