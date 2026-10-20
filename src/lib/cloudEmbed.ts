@@ -40,6 +40,7 @@ export const EMBEDDED: boolean = typeof window !== "undefined" && onAdminPath() 
 export function guardFraming(): void {
   if (typeof window === "undefined" || !onAdminPath() || !isFramed() || framedByCloud()) return;
   const here = window.location.origin + window.location.pathname + "?direct=1";
+  try { window.stop(); } catch { /* ignore */ }
   try { document.documentElement.innerHTML = ""; } catch { /* nothing to blank */ }
   try { window.top!.location.replace(here); } catch { /* the browser may refuse top navigation; the page stays blank */ }
   throw new Error("Bestly Admin: blocked frame");
