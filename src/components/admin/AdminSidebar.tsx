@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { AdminMark } from "@/components/AdminMark";
-import { BookOpen, ChefHat, GripVertical, Network, Plane, Plus, Projector } from "lucide-react";
+import { BookOpen, ChefHat, DoorOpen, GripVertical, Network, Plane, Plus, Projector } from "lucide-react";
 import { Fragment, useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
@@ -66,6 +66,7 @@ const homeHubItems = [
   { title: "Emergency", url: "/admin/emergency", icon: Siren },
   { title: "Overview", url: "/admin/home-hub", icon: Server },
   { title: "Kitchen", url: "/admin/home-hub/kitchen", icon: ChefHat },
+  { title: "Callbox", url: "/admin/home-hub/callbox", icon: DoorOpen },
   { title: "Pi-hole", url: "/admin/home-hub/pihole", icon: Shield },
   { title: "Home Assistant", url: "/admin/home-hub/home-assistant", icon: House },
   { title: "Homebridge", url: "/admin/home-hub/homebridge", icon: Boxes },

@@ -63,6 +63,7 @@ const TuroEntry = lazyPage(() => import("./pages/TuroEntry"));
 const DriverKey = lazyPage(() => import("./pages/DriverKey"));
 const ApproveDriver = lazyPage(() => import("./pages/ApproveDriver"));
 const AvaApprove = lazyPage(() => import("./pages/AvaApprove"));
+const CallboxTap = lazyPage(() => import("./pages/CallboxTap"));
 const EmailUnsubscribe = lazyPage(() => import("./pages/EmailUnsubscribe"));
 const PrivacyConfirm = lazyPage(() => import("./pages/PrivacyConfirm"));
 const Status = lazyPage(() => import("./pages/Status"));
@@ -106,6 +107,7 @@ const HomeHubHomeAssistant = lazyPage(() => import("./pages/admin/HomeHubHomeAss
 const HomeHubHomebridge = lazyPage(() => import("./pages/admin/HomeHubHomebridge"));
 const HomeHubAccess = lazyPage(() => import("./pages/admin/HomeHubAccess"));
 const HomeHubKitchen = lazyPage(() => import("./pages/admin/HomeHubKitchen"));
+const HomeHubCallbox = lazyPage(() => import("./pages/admin/HomeHubCallbox"));
 const StreetSweeping = lazyPage(() => import("./pages/admin/StreetSweeping"));
 const Emergency = lazyPage(() => import("./pages/admin/Emergency"));
 const Vesta = lazyPage(() => import("./pages/admin/Vesta"));
@@ -233,6 +235,8 @@ const App = () => {
                 <Route path="/xa/:token" element={<ApproveDriver />} />
                 {/* Ava asked on a call; the approval is a Face ID tap here, in the signed-in admin (signed out goes to passkey login and back) */}
                 <Route path="/y/:code" element={<AdminRoute><AvaApprove /></AdminRoute>} />
+                {/* Someone is at the building callbox and Ava is holding them; Jared taps Open or Send them off (signed out goes to login and back) */}
+                <Route path="/b/:code" element={<AdminRoute><CallboxTap /></AdminRoute>} />
                 <Route path="/lax/:slug" element={<LaxGuest />} />
                 <Route path="/unsubscribe" element={<EmailUnsubscribe />} />
                 <Route path="/p/:token" element={<PrivacyConfirm />} />
@@ -284,6 +288,7 @@ const App = () => {
                   <Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
                   <Route path="home-hub/access" element={<HomeHubAccess />} />
                   <Route path="home-hub/kitchen" element={<HomeHubKitchen />} />
+                  <Route path="home-hub/callbox" element={<HomeHubCallbox />} />
                   <Route path="street-sweeping" element={<StreetSweeping />} />
                   <Route path="emergency" element={<Emergency />} />
                   <Route path="vesta" element={<Vesta />} />
