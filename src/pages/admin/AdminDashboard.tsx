@@ -62,7 +62,7 @@ export default function AdminDashboard() {
         actions={
           <div className="flex items-center gap-1">
             <HealthDot reasons={reasons} since={cc.data?.issues?.[0]?.since} />
-            <ActionMenu label="More actions" items={[{ label: "Refresh now", icon: RefreshCw, onSelect: refreshAll }]} />
+            <ActionMenu label="More actions" className="h-11 w-11 sm:h-9 sm:w-9" items={[{ label: "Refresh now", icon: RefreshCw, onSelect: refreshAll }]} />
           </div>
         }
       />

@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { LoadError, Pill, RowLink, SectionHeader, cardCls, divider, focusRing, hairline, inset, rowCls, text } from "@/components/admin/ui";
 import {
+  glue,
   ageWords, dayShort, monthDay, nextRun, stamp, time12, usd, whenShort, type CcBundle, type Live, type Wx,
 } from "@/lib/commandCenter";
 import type { NextEvent } from "@/pages/partner/PartnerExtras";
@@ -87,7 +88,7 @@ export function LeadCards({ cc, wx, needs, meetings }: { cc: Live<CcBundle>; wx:
   const moneySub = m
     ? <>
         {m.runway_date ? <>Runs to about {nowrap(monthDay(m.runway_date + "T12:00:00Z"))} if nothing comes in (estimate). </> : null}
-        {m.next_deposit ? <>Next in: {nowrap(usd(m.next_deposit.amount))} {whenShort(m.next_deposit.expected_at)}.</> : null}
+        {m.next_deposit ? <>Next deposit about {nowrap(usd(m.next_deposit.amount))} ({whenShort(m.next_deposit.expected_at)}).</> : null}
       </>
     : "Waiting for the first Mercury update.";
 
@@ -195,7 +196,7 @@ const Group = ({ title, children }: { title: string; children: ReactNode }) => (
 );
 const KV = ({ k, v, sub }: { k: ReactNode; v: ReactNode; sub?: ReactNode }) => (
   <li className={cn(rowCls, "items-start justify-between")}>
-    <div className="min-w-0"><p className={text.title}>{k}</p>{sub && <p className={cn(text.detail, "mt-0.5")}>{sub}</p>}</div>
+    <div className="min-w-0"><p className={text.title}>{k}</p>{sub && <p className={cn(text.detail, "mt-0.5")}>{typeof sub === "string" ? glue(sub) : sub}</p>}</div>
     <p className="shrink-0 text-[15px] font-medium tabular-nums text-white">{v}</p>
   </li>
 );

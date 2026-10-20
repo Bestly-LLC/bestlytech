@@ -268,17 +268,22 @@ export function chips(wx: Wx): { id: "uv" | "air" | "rain"; label: string; tone:
 }
 
 /** One plain sentence for the top of the weather card. */
+/** Keep a number with its unit on one line: "24 hours", "11 AM", "72 °F" never break apart. */
+export function glue(s: string): string {
+  return s.replace(/(\d)[ ](?=(?:AM|PM|°F|mph|%|hours?|days?|min|psi|mi)\b)/g, "$1\u00a0");
+}
+
 export function headline(wx: Wx): string {
   const cond = wx.now.cond.charAt(0).toUpperCase() + wx.now.cond.slice(1).toLowerCase();
   const soon = wx.hours.find((h) => h.rain >= 50);
   if (soon) {
     const dt = soon.t - Date.now();
     const when = dt < 36e5 ? "within the hour" : `around ${hour12(soon.t)}${ptDateKey(soon.t) === ptDateKey(Date.now()) ? "" : " " + dayLong(soon.t)}`;
-    return `${cond}. Rain likely ${when}.`;
+    return glue(`${cond}. Rain likely ${when}.`);
   }
   const later = wx.days.find((d) => d.rain >= 50);
-  if (later) return `${cond}. No rain in the next 24 hours, then ${later.cond.toLowerCase()} ${ptDateKey(later.t) === ptDateKey(Date.now()) ? "today" : "on " + dayLong(later.t + 12 * 36e5)}.`;
-  return `${cond}. No rain in sight for 5 days.`;
+  if (later) return glue(`${cond}. No rain in the next 24 hours, then ${later.cond.toLowerCase()} ${ptDateKey(later.t) === ptDateKey(Date.now()) ? "today" : "on " + dayLong(later.t + 12 * 36e5)}.`);
+  return glue(`${cond}. No rain in sight for 5 days.`);
 }
 
 /* ───────── calendar items on the weather ───────── */
