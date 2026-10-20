@@ -16,6 +16,8 @@ export interface Draft {
   brief: string; recipient_name: string; recipient_email: string; source: "built" | "template"; status: "draft" | "sent";
   /** Imported template files have no blocks; their saved HTML is shown as is. */
   fixedHtml?: string;
+  /** When it was last sent (ISO), for the "Sent to ..." banner. */
+  sentAt?: string;
 }
 
 export const emptyDraft = (kit: string): Draft => ({ kit, title: "", subject: "", preheader: "", blocks: [], brief: "", recipient_name: "", recipient_email: "", source: "built", status: "draft" });
@@ -23,6 +25,7 @@ export const emptyDraft = (kit: string): Draft => ({ kit, title: "", subject: ""
 export const draftFromRow = (r: LibraryRow): Draft => ({
   id: r.id, kit: r.brand_kit, title: r.title, subject: r.subject, preheader: r.preheader ?? "", blocks: (r.blocks ?? []) as Block[], brief: r.brief ?? "",
   recipient_name: r.recipient_name ?? "", recipient_email: r.recipient_email ?? "", source: r.source, status: r.status,
+  sentAt: r.status === "sent" ? r.updated_at : undefined,
   fixedHtml: r.source === "template" || !(r.blocks ?? []).length ? r.html : undefined,
 });
 

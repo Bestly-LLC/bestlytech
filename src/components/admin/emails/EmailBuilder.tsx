@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, Download, Loader2, Mail, Monitor, Moon, Plus, Redo2, Save, Send, Smartphone, Sparkles, Sun, Trash2, Undo2, Wand2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, CheckCircle2, ArrowUp, Download, Loader2, Mail, Monitor, Moon, Plus, Redo2, Save, Send, Smartphone, Sparkles, Sun, Trash2, Undo2, Wand2 } from "lucide-react";
 import { Lines } from "@/components/Lines";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,8 @@ import type { EmailApi, LibraryRow } from "@/lib/email/api";
 import { PreviewFrame, type EditMsg } from "./PreviewFrame";
 import { ButtonDialog } from "./ButtonDialog";
 import { SendDialog } from "./SendDialog";
+import { ContactField } from "./ContactField";
+import { WhenText } from "./WhenText";
 import { BLOCK_LABEL, cleanHtml, docOf, download, emptyDraft, makeEml, newBlock, previewSource, slugify, textOf, type Draft } from "./emailUtils";
 
 type Snap = { subject: string; preheader: string; blocks: Block[] };
@@ -18,7 +20,7 @@ const QUICK = ["Make it shorter", "Make it friendlier", "Explain it more simply"
 const seg = (on: boolean) =>
   cn("inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-full px-4 text-[14px] font-medium transition-colors active:scale-[0.97]", on ? "bg-white/[0.16] text-white" : "text-white/60 hover:text-white", focusRing);
 
-export function EmailBuilder({ api, initial, onSaved }: { api: EmailApi; initial: Draft; onSaved: (r: LibraryRow) => void }) {
+export function EmailBuilder({ api, initial, onSaved, onSentDone }: { api: EmailApi; initial: Draft; onSaved: (r: LibraryRow) => void; onSentDone?: (row: LibraryRow, to: string, name: string) => void }) {
   const { toast } = useToast();
   const [draft, setDraft] = useState<Draft>(initial);
   const [pane, setPane] = useState<"write" | "preview">("write");
@@ -147,6 +149,15 @@ export function EmailBuilder({ api, initial, onSaved }: { api: EmailApi; initial
 
   return (
     <div className="space-y-4">
+      {draft.status === "sent" && !sendOpen && (
+        <p role="status" className="flex items-start gap-2.5 rounded-2xl bg-[#30D158]/10 px-4 py-3 text-[14px] leading-snug text-white/85 ring-1 ring-[#30D158]/20">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#30D158]" aria-hidden="true" />
+          <span className="[overflow-wrap:anywhere]">
+            Sent{(draft.recipient_name || draft.recipient_email) ? ` to ${draft.recipient_name || draft.recipient_email}` : ""}
+            {draft.sentAt && <> on <WhenText iso={draft.sentAt} withDay /></>}
+          </span>
+        </p>
+      )}
       {/* phone: switch between writing and looking */}
       <div role="tablist" aria-label="Builder view" className="flex rounded-full bg-white/[0.06] p-1 lg:hidden">
         {(["write", "preview"] as const).map((p) => (
@@ -170,12 +181,12 @@ export function EmailBuilder({ api, initial, onSaved }: { api: EmailApi; initial
                 className={`${field} mt-1 resize-y leading-relaxed`} />
             </label>
             <div className="space-y-3">
-              <label className="block text-[13px] text-white/60">Their name (optional)
-                <input value={draft.recipient_name} onChange={(e) => setDraft((d) => ({ ...d, recipient_name: e.target.value }))} className={`${field} mt-1`} autoComplete="off" />
-              </label>
-              <label className="block text-[13px] text-white/60">Their email (optional)
-                <input value={draft.recipient_email} onChange={(e) => setDraft((d) => ({ ...d, recipient_email: e.target.value }))} inputMode="email" className={`${field} mt-1`} autoComplete="off" />
-              </label>
+              <ContactField label="Their name (optional)" value={draft.recipient_name} suggest={api.suggestContacts}
+                onText={(v) => setDraft((d) => ({ ...d, recipient_name: v }))}
+                onPick={(h) => setDraft((d) => ({ ...d, recipient_name: h.name ?? d.recipient_name, recipient_email: h.email }))} />
+              <ContactField label="Their email (optional)" value={draft.recipient_email} inputMode="email" suggest={api.suggestContacts}
+                onText={(v) => setDraft((d) => ({ ...d, recipient_email: v }))}
+                onPick={(h) => setDraft((d) => ({ ...d, recipient_name: h.name ?? d.recipient_name, recipient_email: h.email }))} />
             </div>
             {locked ? (
               <p className={cn("text-[13px]", secondary)}><Lines>This is an imported template file, so it cannot be rewritten here. You can download it or send it as is. To write a new email in this look, pick it from the library with Start from this.</Lines></p>
@@ -310,7 +321,7 @@ export function EmailBuilder({ api, initial, onSaved }: { api: EmailApi; initial
               <div className={cn(card, "space-y-3")}>
                 <div className="flex flex-wrap gap-2">
                   {!locked && <button type="button" onClick={save} disabled={!!busy} className={btnTinted}>{busy === "save" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}Save</button>}
-                  <button type="button" onClick={openSend} disabled={!!busy || !draft.subject} className={btnPrimary}><Send className="h-4 w-4" aria-hidden="true" />Send</button>
+                  <button type="button" onClick={openSend} disabled={!!busy || !draft.subject} className={btnPrimary}><Send className="h-4 w-4" aria-hidden="true" />{draft.status === "sent" ? "Send again" : "Send"}</button>
                   <button type="button" onClick={dlEml} disabled={!!busy} className={btnTinted}>{busy === "eml" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Mail className="h-4 w-4" aria-hidden="true" />}Download .eml</button>
                   <button type="button" onClick={dlHtml} className={btnTinted}><Download className="h-4 w-4" aria-hidden="true" />Download .html</button>
                   <button type="button" onClick={dlSafari} className={btnTinted}><Download className="h-4 w-4" aria-hidden="true" />Open for Safari share</button>
@@ -334,7 +345,8 @@ export function EmailBuilder({ api, initial, onSaved }: { api: EmailApi; initial
       {saved && (
         <SendDialog api={api} open={sendOpen} onClose={() => setSendOpen(false)} libraryId={saved.id} html={saved.html} subject={draft.subject}
           defaultTo={draft.recipient_email} defaultName={draft.recipient_name} fromLine={fromLine}
-          onSent={(to, name) => { setDraft((d) => ({ ...d, recipient_email: to, recipient_name: name, status: "sent" })); onSaved({ ...saved, status: "sent" }); }} />
+          onSent={(to, name) => { setDraft((d) => ({ ...d, recipient_email: to, recipient_name: name, status: "sent", sentAt: new Date().toISOString() })); onSaved({ ...saved, status: "sent" }); }}
+          onFinished={(to, name) => onSentDone?.({ ...saved, status: "sent", recipient_email: to, recipient_name: name || null, updated_at: new Date().toISOString() }, to, name)} />
       )}
     </div>
   );

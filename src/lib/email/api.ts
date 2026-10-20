@@ -25,6 +25,7 @@ export interface LibraryRow {
 
 export interface GenResult { ok: boolean; doc?: EmailDoc; warnings?: string[]; model?: string; provider?: string; attempts?: number; error?: string; detail?: string }
 export interface SendResult { ok: boolean; id?: string | null; error?: string; changed?: boolean; detail?: string }
+export interface ContactHit { name: string | null; email: string; source: "client" | "icloud" | "recent"; detail: string | null }
 export interface VersionRow { id: number; version: number; subject: string | null; blocks: Block[] | null; html: string | null; created_at: string }
 
 export interface EmailApi {
@@ -42,6 +43,8 @@ export interface EmailApi {
   exportEml: (i: { html: string; text: string; subject: string; to?: string }) => Promise<{ ok: boolean; eml?: string; inlined?: number; skipped?: string[]; error?: string }>;
   send: (i: { library_id: string; to: string; to_name?: string; subject: string; html_sha: string; attempt: string }) => Promise<SendResult>;
   kitFromClient?: (slug: string) => Promise<string>;
+  /** Type-ahead for the To fields: clients, iCloud contacts and recent recipients, already ranked. */
+  suggestContacts?: (q: string) => Promise<ContactHit[]>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,6 +98,13 @@ export function createEmailApi(state: { dbReady: boolean; kits: Kit[]; library: 
     makeImage: (kit, prompt) => invoke("email-builder", { op: "image", kit, prompt }),
     exportEml: (i) => invoke("email-builder", { op: "export_eml", ...i }),
     send: (i) => invoke<SendResult>("email-builder-send", i),
+    async suggestContacts(q) {
+      try {
+        const { data, error } = await sb.rpc("email_contact_suggest", { p_q: q, p_limit: 8 });
+        if (error || !Array.isArray(data)) return [];
+        return data as ContactHit[];
+      } catch { return []; }
+    },
     async kitFromClient(slug) {
       const { data, error } = await sb.rpc("email_kit_for_client", { p_slug: slug });
       if (error) throw new Error(error.message);
