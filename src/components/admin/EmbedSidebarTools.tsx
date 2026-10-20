@@ -1,18 +1,17 @@
 /**
  * Admin inside Bestly Cloud: the admin's own top bar is hidden (Cloud's header is the one header),
  * so the things that lived there move into the sidebar header row, next to the "Admin" mark:
- * search (Cmd-K), the bell, and one overflow menu (theme, sound, text size, collapse, sign out).
+ * search (Cmd-K), the bell, and one overflow menu (sound, text size, collapse, sign out).
  * On a phone the sidebar is the More sheet, so these are one tap from the bottom bar. 44 px targets there.
  */
 import { useState } from "react";
-import { Command, LogOut, Minus, MoreHorizontal, PanelLeft, Plus, Moon, Sun, Volume2, VolumeX } from "lucide-react";
+import { Command, LogOut, Minus, MoreHorizontal, PanelLeft, Plus, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useSidebar } from "@/components/ui/sidebar";
 import { NotificationBell } from "./NotificationBell";
 import { OPEN_ADMIN_PALETTE_EVENT } from "./CommandPalette";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
-import { useAdminTheme } from "@/hooks/useAdminTheme";
 import { useAdminTextSize } from "@/hooks/useAdminTextSize";
 import { notifySoundMuted, setNotifySoundMuted, playNotifySound } from "@/lib/notifySound";
 import { cn } from "@/lib/utils";
@@ -22,7 +21,6 @@ const btn = "h-11 w-11 md:h-8 md:w-8 shrink-0 border-0 text-white/60 hover:text-
 export function EmbedSidebarTools({ collapsed }: { collapsed: boolean }) {
   const { isMobile, setOpenMobile, toggleSidebar } = useSidebar();
   const { signOut } = useAdminAuth();
-  const { bento, toggle: toggleTheme } = useAdminTheme();
   const textSize = useAdminTextSize();
   const [muted, setMuted] = useState(notifySoundMuted());
 
@@ -44,10 +42,7 @@ export function EmbedSidebarTools({ collapsed }: { collapsed: boolean }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuItem className="min-h-11 md:min-h-0" onSelect={toggleTheme}>
-            {bento ? <Moon className="mr-2 h-4 w-4" /> : <Sun className="mr-2 h-4 w-4" />}
-            {bento ? "Dark theme" : "Light theme"}
-          </DropdownMenuItem>
+          {/* No theme item on purpose: Cloud's light/dark control in its header is the only one, and the admin follows it. */}
           <DropdownMenuItem
             className="min-h-11 md:min-h-0"
             onSelect={(e) => {

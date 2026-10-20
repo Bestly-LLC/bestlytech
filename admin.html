@@ -63,6 +63,22 @@
             try { document.documentElement.innerHTML = ""; } catch (e) {}
             try { window.top.location.replace(loc.origin + loc.pathname + "?direct=1"); } catch (e) {}
             window.__bestlyBlockedFrame = true;
+          } else {
+            // Framed by Cloud: take its theme from the frame URL (?theme=light|dark|system) before anything paints.
+            // Without the query (a page load inside the frame) use the last one Cloud sent, then the OS.
+            // Cloud's header control is the only theme control; useAdminTheme keeps following it live.
+            var th = null;
+            try {
+              var tq = new URLSearchParams(loc.search).get("theme");
+              if (tq === "light" || tq === "dark") th = tq;
+              else if (tq !== "system") {
+                var ts = sessionStorage.getItem("bestly-cloud-theme");
+                if (ts === "light" || ts === "dark") th = ts;
+              }
+            } catch (e) {}
+            if (!th) { try { th = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"; } catch (e) { th = "light"; } }
+            window.__bestlyEmbedTheme = th;
+            document.documentElement.setAttribute("data-embed-theme", th);
           }
           return;
         }
@@ -92,6 +108,9 @@
     </script>
 
     <style>
+      /* Inside Cloud: the page behind the app is the right colour from the first frame (the script above sets the attribute). */
+      html[data-embed-theme="dark"]{background-color:#000;color-scheme:dark}
+      html[data-embed-theme="light"]{background-color:#F3F2EE;color-scheme:light}
       #boot-splash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#fbfaf8;z-index:2147483647}
       #boot-splash.is-admin{background:#000}
       #boot-splash.is-admin.is-bento{background:#F3F2EE}
@@ -125,6 +144,7 @@
       // Only the theme is decided at runtime here; the app identity above is static.
       var adminLight = true;
       try { adminLight = localStorage.getItem("bestly-admin-theme") !== "dark"; } catch (e) {}
+      if (window.__bestlyEmbedTheme) adminLight = window.__bestlyEmbedTheme !== "dark"; // inside Cloud: Cloud decides
       document.getElementById("boot-splash").className = adminLight ? "is-admin is-bento" : "is-admin";
       var tc = document.querySelector('meta[name="theme-color"]');
       if (tc) tc.setAttribute("content", adminLight ? "#F3F2EE" : "#000000");

@@ -69,6 +69,52 @@ export function listenForCloud(go: (path: string) => void): () => void {
 }
 
 /**
+ * Light/dark inside Cloud. Cloud's own header control is the ONE control (and the "System" setting in Cloud's
+ * Appearance); the admin only follows it.
+ * - First paint: the frame URL carries ?theme=light|dark (or system). admin.html reads it before anything paints
+ *   and leaves the answer in window.__bestlyEmbedTheme. In-frame page loads without the query use the last one
+ *   Cloud sent (sessionStorage, this tab only).
+ * - Live: Cloud posts {type:"bestly-theme", theme:"light"|"dark"} to the frame. Parent to frame only; the frame
+ *   never replies. Accepted only from exactly https://cloud.bestly.tech and only from our parent window, and
+ *   only that exact shape (two keys, two allowed values). Anything else is ignored.
+ */
+export type CloudTheme = "light" | "dark";
+const THEME_STORE = "bestly-cloud-theme";
+const isCloudTheme = (v: unknown): v is CloudTheme => v === "light" || v === "dark";
+const osTheme = (): CloudTheme => {
+  try { return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"; } catch { return "light"; }
+};
+
+export function initialCloudTheme(): CloudTheme {
+  const early = (window as unknown as { __bestlyEmbedTheme?: unknown }).__bestlyEmbedTheme;
+  if (isCloudTheme(early)) return early;
+  try {
+    const q = new URLSearchParams(window.location.search).get("theme");
+    if (isCloudTheme(q)) return q;
+    if (q !== "system") {
+      const s = sessionStorage.getItem(THEME_STORE);
+      if (isCloudTheme(s)) return s;
+    }
+  } catch { /* private mode: fall through to the OS */ }
+  return osTheme();
+}
+
+export function listenForCloudTheme(apply: (t: CloudTheme) => void): () => void {
+  if (!EMBEDDED) return () => {};
+  const onMessage = (e: MessageEvent) => {
+    if (e.origin !== CLOUD_ORIGIN || e.source !== window.parent) return;
+    const d = e.data as Record<string, unknown> | null;
+    if (!d || typeof d !== "object" || Array.isArray(d)) return;
+    const keys = Object.keys(d);
+    if (keys.length !== 2 || d.type !== "bestly-theme" || !isCloudTheme(d.theme)) return;
+    try { sessionStorage.setItem(THEME_STORE, d.theme); } catch { /* private mode */ }
+    apply(d.theme);
+  };
+  window.addEventListener("message", onMessage);
+  return () => window.removeEventListener("message", onMessage);
+}
+
+/**
  * Apple sign-in cannot run inside a frame (Apple refuses to be framed), so in the frame it leaves for
  * the top-level admin and leaves this flag behind. When the admin loads signed-in at the top level and
  * the flag is set, it hops back into Cloud (AdminLayout). Not a session bridge: nothing is carried across.
