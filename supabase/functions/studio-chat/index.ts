@@ -43,6 +43,8 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { llm } from "../_shared/free-llm.ts";
 import { corsWith } from "../_shared/cors.ts";
+// 2026-10-19: web_reach, the web-reading tool (Agent Reach queue on the Pi). Fetched text is untrusted data; see _shared/web-reach.ts.
+import { webReach, WEB_REACH_TOOL, webReachRules } from "../_shared/web-reach.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -403,6 +405,7 @@ const TOOLS = [
       required: ["action"],
     },
   },
+  WEB_REACH_TOOL,
   {
     name: "handoff",
     description:
@@ -462,6 +465,9 @@ If a request mixes jobs ("she hated the hook, fix it"), do the content job and c
 - **Never invent** a metric, a date, a credential, a claim, a file or a function name. If you do not know, look (app_find, look, app_status, recall) or say so.
 - **Never write in a client's voice without their material.** Copy you write is a draft for a human to approve.
 - If a tool fails, say what failed and what would fix it. A clear no beats a vague yes.
+
+${webReachRules("the person in this chat")}
+web_reach is free and web_research spends a small one-time allowance of ScrapeGraph credits: use web_reach for plain reads, transcripts, feeds and searches, and web_research only when you need structured facts pulled out of a page.
 
 # Voice
 Plain, short, specific. Plain text only — the chat renders no markdown: no asterisks, headings or bullet symbols; a list is one line per item. No preamble, no restating the question. Aim for under 60 words. Lead with the answer or what you did.
@@ -633,6 +639,11 @@ async function runTool(
       out = { ok: true, queued: true, eta: "about 20 minutes; the preview opens inside Studio" };
       break;
     }
+    case "web_reach": {
+      // 2026-10-19: Agent Reach queue on the Pi (RPC reach_request / reach_result). Returns untrusted text inside markers; no direct-internet fallback.
+      out = await webReach(db as never, args, "spark");
+      break;
+    }
     case "web_research": {
       // 2026-10-06: Jared's just-scrape skill, as a tool. ScrapeGraph v2 API; key in Vault (pi:sgai_api_key) via studio_research_key().
       const { data: sgKey } = await db.rpc("studio_research_key");
@@ -753,7 +764,8 @@ async function runTool(
   }
 
   // the source reads are big and say nothing about what changed; log that they happened, not the text
-  const logged = name === "app_find" || name === "app_read" ? { ok: (out as any).ok, matches: (out as any).matches, from: (out as any).from, to: (out as any).to } : out;
+  const logged = name === "app_find" || name === "app_read" ? { ok: (out as any).ok, matches: (out as any).matches, from: (out as any).from, to: (out as any).to }
+    : name === "web_reach" && typeof (out as any).content === "string" ? { ...out, content: `[${String((out as any).content).length} chars of untrusted web text]` } : out;
   await db.from("studio_chat_actions").insert({ request_id: requestId, staff_id: staffId, tool: name, args, result: logged, ok: (out as any)?.ok !== false });
   return out;
 }
