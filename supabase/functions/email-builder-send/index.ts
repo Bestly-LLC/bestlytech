@@ -73,14 +73,18 @@ Deno.serve(async (req) => {
   const toHeader = toName ? `${toName} <${to}>` : to;
 
   const since = new Date(); since.setUTCHours(0, 0, 0, 0);
-  const { count } = await db.from("email_send_log").select("id", { count: "exact", head: true }).eq("status", "sent").gte("created_at", since.toISOString());
+  const { count } = await db.from("email_send_log").select("id", { count: "exact", head: true }).eq("template_name", "email-builder").eq("status", "sent").gte("created_at", since.toISOString());
   if ((count ?? 0) >= DAILY_MAX) return J({ ok: false, error: `Daily send limit reached (${DAILY_MAX}).` }, 429);
 
   if (b.dry_run === true) return J({ ok: true, dry_run: true, from, to: toHeader, reply_to: replyTo, bcc, subject, html_bytes: row.html.length, sha });
 
   const key = Deno.env.get("RESEND_API_KEY");
   const log = (status: "sent" | "failed", providerId: string | null, err: string | null) =>
-    db.from("email_send_log").insert({ library_id: row.id, to_email: to, to_name: toName || null, subject, from_email: fromEmail, provider: "resend", provider_id: providerId, status, error: err, html_sha: sha, sent_by: uid });
+    // email_send_log is the shared transactional log: builder details ride in metadata.
+    db.from("email_send_log").insert({
+      template_name: "email-builder", recipient_email: to, message_id: providerId, status, error_message: err,
+      metadata: { library_id: row.id, to_name: toName || null, subject, from_email: fromEmail, provider: "resend", html_sha: sha, sent_by: uid },
+    }).then(({ error }) => { if (error) console.error("email_send_log insert failed:", error.message); });
   if (!key) {
     await log("failed", null, "RESEND_API_KEY is not set");
     await raiseSend("Email builder: send failed", "RESEND_API_KEY is not set on this project. Nothing was sent.");
@@ -99,6 +103,6 @@ Deno.serve(async (req) => {
     return J({ ok: false, error: "The mail service refused it. Nothing was sent.", detail: msg }, 200);
   }
   await log("sent", j?.id ?? null, null);
-  await db.from("email_library").update({ status: "sent", recipient_email: to, recipient_name: toName || null }).eq("id", row.id);
+  await db.from("email_library").update({ status: "sent", recipient_email: to, recipient_name: toName || null, sent_at: new Date().toISOString() }).eq("id", row.id);
   return J({ ok: true, id: j?.id ?? null, from, to: toHeader });
 });
