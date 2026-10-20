@@ -100,16 +100,16 @@ const DENY_MODEL = /^(dots|ling-|fusion$|auto$|claude-)|note-preview|qwen3[.\d]*
 const FREELLM_PREFERRED = ["gpt-oss-120b", "deepseek-v4-flash", "nemotron-3-super-120b", "gemini-3.8-flash", "qwen3.8-27b", "gemini-3.6-flash", "command-a-2"];
 const FREELLM_PREFERRED_CODE = ["qwen3-coder-480b", "qwen3-coder-30b-a3b-instruct", "gpt-oss-120b", "deepseek-v4-flash", "nemotron-3-super-120b", "gemini-3.8-flash"];
 const FREELLM_LAST = "auto:smartest";   // never bare "auto" (it picked dots-3-note-preview)
-const FREELLM_RUNGS_MAX = 4;
+const FREELLM_RUNGS_MAX = 6;   // v83 (2026-10-19): 4 -> 6, so a few 429ing models no longer empty the FreeLLM part of the ladder
 
-interface Health { ok: boolean | null; benched: number }
+interface Health { ok: boolean | null; benched: number; fails: number }
 let _health: { at: number; v: Map<string, Health> } | null = null;
 async function modelHealth(): Promise<Map<string, Health>> {
   if (_health && Date.now() - _health.at < 60_000) return _health.v;
   const v = new Map<string, Health>();
   try {
-    const { data } = await db().from("llm_model_health").select("model, ok_tool_calls, benched_until").limit(500);
-    for (const r of (data ?? []) as any[]) v.set(r.model, { ok: r.ok_tool_calls, benched: r.benched_until ? Date.parse(r.benched_until) : 0 });
+    const { data } = await db().from("llm_model_health").select("model, ok_tool_calls, benched_until, fails_24h").limit(500);
+    for (const r of (data ?? []) as any[]) v.set(r.model, { ok: r.ok_tool_calls, benched: r.benched_until ? Date.parse(r.benched_until) : 0, fails: Number(r.fails_24h) || 0 });
   } catch { /* table missing or blip: fall back to the static list */ }
   _health = { at: Date.now(), v };
   return v;
@@ -131,6 +131,16 @@ async function freellmChain(code: boolean): Promise<Rung[]> {
   // A model the prober has never seen is only trusted if it is on the preferred list and the prober has run at all.
   const known = h.size > 0;
   const picks = order.filter((m) => usable(m) && (!known || h.get(m)?.ok === true || (h.get(m) === undefined && false)));
+  // v83 (2026-10-19): the static order kept sending every turn to the same 429ing model first. Probed-ok models now line up by
+  // their failures in the last 24 h (llm_model_health.fails_24h, capped at 50 so one awful day doesn't bury a model forever),
+  // with the preferred-list position as the tiebreaker. A code task still tries the coder models first, in their own order.
+  if (picks.length) {
+    const pos = (m: string) => { const i = FREELLM_PREFERRED.indexOf(m); return i < 0 ? FREELLM_PREFERRED.length + order.indexOf(m) : i; };
+    const head = code ? FREELLM_PREFERRED_CODE.filter((m) => picks.includes(m)) : [];
+    const tail = picks.filter((m) => !head.includes(m))
+      .sort((a, b) => (Math.min(h.get(a)?.fails ?? 0, 50) - Math.min(h.get(b)?.fails ?? 0, 50)) || (pos(a) - pos(b)));
+    picks.splice(0, picks.length, ...head, ...tail);
+  }
   const fallback = picks.length ? picks : order.filter(usable);
   const rungs: Rung[] = fallback.slice(0, FREELLM_RUNGS_MAX).map((m) => ({ provider: "freellm", model: m, maxIn: FREELLM_MAX }));
   // v-next (2026-10-13): the router rung can be benched too (30 s timeouts, 0 ok in 12 calls on Oct 11-13); it used to be added unconditionally.
@@ -140,7 +150,7 @@ async function freellmChain(code: boolean): Promise<Rung[]> {
 /** Record that a model misbehaved (text tool call, loop, empty). Benched in-process now and in llm_model_health for a while. */
 async function strike(model: string, why: string, minutes = 60) {
   modelSkip.set(model, Date.now() + Math.min(minutes, 30) * 60_000);
-  if (_health) _health.v.set(model, { ok: _health.v.get(model)?.ok ?? null, benched: Date.now() + minutes * 60_000 });
+  if (_health) _health.v.set(model, { ok: _health.v.get(model)?.ok ?? null, benched: Date.now() + minutes * 60_000, fails: _health.v.get(model)?.fails ?? 0 });
   try { await db().rpc("llm_model_strike", { p_model: model, p_reason: why, p_bench_minutes: minutes }); } catch { /* best effort */ }
 }
 
@@ -201,15 +211,18 @@ async function vettedAnswer(answered: string, requested: string): Promise<boolea
  * most 2 attempts and ~25 s, and one "All models exhausted" 429 or timeout ends it: the other FreeLLM rungs would fail the same way
  * (Oct 11-13: 288 x 429, 52 timeouts, while Groq and Cloudflare, which sit behind it in the ladder, were barely reached).
  */
-const FL_MAX_ATTEMPTS = 2, FL_MAX_MS = 25_000;
+const FL_MAX_ATTEMPTS = 5, FL_MAX_MS = 25_000;   // v83: 2 -> 5 attempts (a 429 on one model says nothing about the next)
 interface FlBudget { on: boolean; attempts: number; spentMs: number; bail: boolean }
 const newFlBudget = (on: boolean): FlBudget => ({ on, attempts: 0, spentMs: 0, bail: false });
 const flBlocked = (b: FlBudget) => b.on && (b.bail || b.attempts >= FL_MAX_ATTEMPTS || b.spentMs >= FL_MAX_MS);
 /** The wait a FreeLLM attempt may take: what is left of the request's 25 s (at least 4 s), else the caller's own cap. */
 const flWait = (b: FlBudget, left: number, cap: number) => Math.min(left, cap, b.on ? Math.max(4000, FL_MAX_MS - b.spentMs) : cap);
+const FL_UNREACHABLE = /error sending request|dns error|connection (refused|reset)|failed to lookup/i;
 function flNote(b: FlBudget, ms: number, f?: Fail) {
   b.attempts++; b.spentMs += ms;
-  if (f && (f.outcome === "timeout" || (f.outcome === "rate_limited" && /models? exhausted/i.test(f.message)))) b.bail = true;
+  // v83 (2026-10-19): only "FreeLLM itself is unreachable" ends FreeLLM for this request: a timeout or a network error. A 429
+  // ("models exhausted" included: FreeLLM says that about the one model asked for), a 404, 413 or 502 is about one model, so try the next.
+  if (f && (f.outcome === "timeout" || (f.outcome === "error" && FL_UNREACHABLE.test(f.message)))) b.bail = true;
 }
 
 /* ───────── text tool-call rescue + reply scrub ───────── */
@@ -351,12 +364,24 @@ async function cooldown(p: Provider, seconds: number, why: string) {
  * Now a Groq 429 only benches that model: for its retry-after on a per-minute limit, an hour on a per-day one.
  */
 const modelSkip = new Map<string, number>();
+/** Seconds in Groq's "try again in 1h2m3.5s" (any of h/m/s, at least one); NaN when the message has none. Exported for tests. */
+export function groqWait(msg: string): number {
+  const m = String(msg ?? "").match(/try again in\s+((?:\d+(?:\.\d+)?\s*(?:ms|h|m|s)\s*)+)/i);
+  if (!m) return NaN;
+  const unit: Record<string, number> = { h: 3600, m: 60, s: 1, ms: 0.001 };
+  let t = 0;
+  for (const [, n, u] of m[1].matchAll(/(\d+(?:\.\d+)?)\s*(ms|h|m|s)/gi)) t += Number(n) * unit[u.toLowerCase()];
+  return t;
+}
 async function rateLimited(rung: Rung, f: Fail) {
   if (rung.provider === "groq") {
     const daily = /per day|\b(TPD|RPD)\b/i.test(f.message);
     const tooBig = /request too large/i.test(f.message);
-    const wait = Number(f.message.match(/try again in ([\d.]+)s/i)?.[1] ?? NaN);
-    const secs = daily ? 3600 : tooBig ? 60 : Number.isFinite(wait) ? Math.max(1, Math.min(wait + 0.5, 120)) : Math.max(5, Math.min(f.retryAfter || 20, 120));
+    // v83 (2026-10-19): Groq writes waits like "try again in 1h2m3.5s" or "12m5s", not only "7.2s". A daily limit now sits out
+    // the wait Groq names (60 s to 24 h) instead of a flat hour.
+    const wait = groqWait(f.message);
+    const secs = daily ? (Number.isFinite(wait) ? Math.max(60, Math.min(wait + 1, 86_400)) : 3600)
+      : tooBig ? 60 : Number.isFinite(wait) ? Math.max(1, Math.min(wait + 0.5, 120)) : Math.max(5, Math.min(f.retryAfter || 20, 120));
     modelSkip.set(rung.model, Date.now() + secs * 1000);
     return;
   }
@@ -956,7 +981,13 @@ async function postChat(url: string, key: string, body: Record<string, unknown>,
     const ra = Number(r.headers.get("retry-after")) || 60;
     throw new Fail("rate_limited", `429 ${(await r.text()).slice(0, 200)}`, ra);
   }
-  if (!r.ok) throw new Fail("error", `${r.status} ${(await r.text()).slice(0, 240)}`);
+  if (!r.ok) {
+    const t = (await r.text()).slice(0, 240);
+    // v83 (2026-10-19): Groq's 400 tool_use_failed / json_validate_failed means this model wrote a bad tool call, not that the
+    // provider is broken: count it as an invalid answer so the ladder moves on like any other bad reply.
+    if (r.status === 400 && /tool_use_failed|json_validate_failed/i.test(t)) throw new Fail("invalid", `${r.status} ${t}`);
+    throw new Fail("error", `${r.status} ${t}`);
+  }
   return await r.json();
 }
 
@@ -1107,7 +1138,10 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       if (f.outcome === "rate_limited") await rateLimited(rung, f);
       if (rung.provider === "freellm") {
         flNote(fl, ms, f);
-        if (f.outcome === "rate_limited" || f.outcome === "timeout") await liveFail(rung.model, `${f.outcome} ${f.message.slice(0, 80)}`);
+        // v83 (2026-10-19): a model FreeLLM no longer serves sits out a day; "too large" is about this request, not the model.
+        if (/not found or removed upstream/i.test(f.message)) await strike(rung.model, "stale", 24 * 60);
+        else if (/too large|\b413\b/i.test(f.message)) { /* the prompt was too big for it: no strike */ }
+        else if (f.outcome === "rate_limited" || f.outcome === "timeout") await liveFail(rung.model, `${f.outcome} ${f.message.slice(0, 80)}`);
       }
     }
   }
