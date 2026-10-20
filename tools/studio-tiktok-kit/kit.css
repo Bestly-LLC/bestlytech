@@ -1,0 +1,114 @@
+/* TikTok posting kit. One stylesheet for Studio's "Post to TikTok" panel and the standalone phone page
+   (bestly.tech/k/<code>). Reads Studio's own tokens (--panel-2, --ink, --accent ...) and falls back to the same values. */
+.tkk{
+  --k-card:var(--panel-2,#212928); --k-line:var(--line-2,rgba(236,242,241,.16)); --k-hair:var(--line,rgba(236,242,241,.09));
+  --k-ink:var(--ink,#ECF2F1); --k-dim:var(--dim,#9BAAA7); --k-faint:var(--faint,#8E9D9A);
+  --k-acc:var(--accent,#5FC0B6); --k-acc2:var(--accent-2,rgba(95,192,182,.16)); --k-on:var(--on-accent,#08201E);
+  --k-ok:var(--ok,#8CC49C); --k-stop:var(--stop,#E8867A); --k-warn:var(--warn,#E0AC6A);
+  --k-ease:cubic-bezier(.2,.7,.2,1);
+  display:grid;gap:10px;font:14px/1.5 var(--ui,-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif);
+  color:var(--k-ink);-webkit-font-smoothing:antialiased;
+}
+.tkk *{box-sizing:border-box}
+.tkk button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;text-align:left}
+.tkk button:disabled{opacity:.45;cursor:not-allowed}
+.tkk :focus-visible{outline:2px solid var(--k-acc);outline-offset:2px;border-radius:12px}
+.tkk .nw{white-space:nowrap}
+.tkk svg{width:20px;height:20px;flex:none;display:block;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* the hint under Open TikTok */
+.tkk .k-open{display:flex;align-items:center;justify-content:center;gap:9px;min-height:52px;padding:0 18px;border-radius:14px;
+  background:var(--k-acc);color:var(--k-on);font-weight:600;font-size:16px;letter-spacing:-.01em;text-decoration:none;text-align:center;
+  transition:transform .12s var(--k-ease),filter .12s}
+.tkk .k-open:active{transform:scale(.98);filter:brightness(.94)}
+.tkk .k-open svg{width:18px;height:18px}
+.tkk .k-hint{margin:-2px 2px 2px;text-wrap:balance;color:var(--k-dim);font-size:13px;line-height:1.5;text-align:center}
+.tkk .k-wait{padding:11px 14px;border-radius:12px;background:color-mix(in srgb,var(--k-warn) 13%,transparent);color:var(--k-ink);font-size:13.5px;line-height:1.5}
+.tkk .k-wait b{font-weight:600}
+.tkk .k-wait button{display:inline;color:var(--k-acc);font-weight:600;text-decoration:underline;text-underline-offset:2px;padding:6px 0}
+.tkk .k-err{padding:11px 14px;border-radius:12px;background:color-mix(in srgb,var(--k-stop) 12%,transparent);color:var(--k-ink);font-size:13.5px;line-height:1.5}
+
+/* tap-to-copy cards: the whole card is the button */
+.tkk .k-card{position:relative;display:block;width:100%;padding:12px 14px 12px;border-radius:14px;background:var(--k-card);
+  border:1px solid var(--k-hair);transition:transform .12s var(--k-ease),border-color .15s,background .15s}
+.tkk .k-card:active{transform:scale(.985)}
+.tkk .k-card:hover{border-color:var(--k-line)}
+.tkk .k-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.tkk .k-lbl{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--k-faint)}
+.tkk .k-copy{margin-left:auto;display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 11px 0 9px;border-radius:99px;
+  background:var(--k-acc2);color:var(--k-acc);font-size:13px;font-weight:600;white-space:nowrap;transition:background .15s,color .15s}
+.tkk .k-copy svg{width:15px;height:15px}
+.tkk .k-do,.tkk .k-did{align-items:center;gap:6px}
+.tkk .k-do{display:inline-flex}
+.tkk .k-copy .k-did{display:none}
+.tkk .k-card.copied{border-color:color-mix(in srgb,var(--k-ok) 55%,transparent);background:color-mix(in srgb,var(--k-ok) 9%,var(--k-card))}
+.tkk .k-card.copied .k-copy{background:color-mix(in srgb,var(--k-ok) 20%,transparent);color:var(--k-ok)}
+.tkk .k-card.copied .k-copy .k-do{display:none}
+.tkk .k-card.copied .k-copy .k-did{display:inline-flex;align-items:center;gap:6px;animation:kpop .22s var(--k-ease)}
+@keyframes kpop{from{transform:scale(.86);opacity:.4}to{transform:none;opacity:1}}
+.tkk .k-val{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.5;color:var(--k-ink)}
+.tkk .k-val.tags{color:var(--k-acc);font-weight:500}
+.tkk .k-sub{margin-top:5px;font-size:12.5px;line-height:1.45;color:var(--k-dim)}
+.tkk .k-count{margin-top:6px;font-size:12px;color:var(--k-faint);font-variant-numeric:tabular-nums}
+
+/* Copy all: the one big action */
+.tkk .k-all{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:52px;padding:0 18px;border-radius:14px;
+  border:1.5px solid var(--k-acc);color:var(--k-acc);font-weight:600;font-size:16px;letter-spacing:-.01em;text-align:center;
+  transition:transform .12s var(--k-ease),background .15s,color .15s,border-color .15s}
+.tkk .k-all:active{transform:scale(.98)}
+.tkk .k-all.copied{background:var(--k-ok);border-color:var(--k-ok);color:#0B1F12}
+.tkk .k-all .k-do{gap:9px}
+.tkk .k-all .k-did{display:none}
+.tkk .k-all.copied .k-do{display:none}
+.tkk .k-all.copied .k-did{display:inline-flex;align-items:center;gap:9px}
+
+/* cover */
+.tkk .k-cover{display:flex;gap:14px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--k-card);border:1px solid var(--k-hair)}
+.tkk .k-cover img{width:84px;aspect-ratio:9/16;object-fit:cover;border-radius:9px;background:#000;flex:none;border:1px solid var(--k-hair)}
+.tkk .k-cbody{min-width:0;flex:1;display:grid;gap:6px;align-content:start}
+.tkk .k-ctitle{font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--k-ink)}
+.tkk .k-cnote{font-size:13px;line-height:1.5;color:var(--k-dim)}
+.tkk .k-save{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border-radius:12px;background:var(--k-acc2);color:var(--k-acc);
+  font-weight:600;font-size:14px;margin-top:2px;justify-self:start;transition:transform .12s var(--k-ease)}
+.tkk .k-save:active{transform:scale(.98)}
+.tkk .k-save svg{width:17px;height:17px}
+
+/* checklist */
+.tkk .k-list{display:grid;border-radius:14px;background:var(--k-card);border:1px solid var(--k-hair);overflow:hidden}
+.tkk .k-lhead{display:flex;align-items:baseline;gap:8px;padding:12px 14px 6px}
+.tkk .k-lhead .k-n{margin-left:auto;font-size:12.5px;color:var(--k-dim);font-variant-numeric:tabular-nums}
+.tkk .k-step{display:flex;align-items:center;gap:13px;width:100%;min-height:56px;padding:9px 14px;border-top:1px solid var(--k-hair);transition:background .15s}
+.tkk .k-step:first-of-type{border-top:0}
+.tkk .k-step:active{background:var(--k-acc2)}
+.tkk .k-box{width:26px;height:26px;flex:none;border-radius:8px;border:1.8px solid var(--k-line);display:grid;place-items:center;color:transparent;
+  transition:background .15s,border-color .15s,color .15s,transform .18s var(--k-ease)}
+.tkk .k-box svg{width:16px;height:16px;stroke-width:3}
+.tkk .k-step.on .k-box{background:var(--k-acc);border-color:var(--k-acc);color:var(--k-on);transform:scale(1.04)}
+.tkk .k-st{min-width:0;display:grid}
+.tkk .k-st b{font-weight:500;font-size:15px;line-height:1.35;color:var(--k-ink)}
+.tkk .k-st i{font-style:normal;font-size:12.5px;line-height:1.4;color:var(--k-dim)}
+.tkk .k-step.on .k-st b{color:var(--k-dim);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--k-dim) 55%,transparent)}
+
+/* I posted it */
+.tkk .k-done{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:54px;padding:0 18px;border-radius:14px;
+  background:var(--k-ok);color:#0B1F12;font-weight:700;font-size:16.5px;letter-spacing:-.01em;text-align:center;transition:transform .12s var(--k-ease),filter .12s}
+.tkk .k-done:active{transform:scale(.98);filter:brightness(.94)}
+.tkk .k-done.ask{background:var(--k-warn);color:#1E1304}
+.tkk .k-note{margin:0 4px;text-wrap:balance;text-align:center;font-size:12.5px;line-height:1.5;color:var(--k-dim)}
+.tkk .k-posted{display:grid;gap:4px;justify-items:center;text-align:center;padding:22px 16px;border-radius:14px;
+  background:color-mix(in srgb,var(--k-ok) 11%,var(--k-card));border:1px solid color-mix(in srgb,var(--k-ok) 45%,transparent)}
+.tkk .k-posted svg{width:34px;height:34px;color:var(--k-ok);stroke-width:2.4}
+.tkk .k-posted b{font-size:18px;font-weight:600;letter-spacing:-.01em}
+.tkk .k-posted span{font-size:13.5px;color:var(--k-dim)}
+.tkk.is-posted .k-cards{opacity:.55}
+.tkk .k-load{padding:28px 6px;text-align:center;color:var(--k-dim)}
+
+/* the standalone phone page: the same stack, with room under the last button for the home bar */
+.tkk.k-page .k-dock{display:grid;gap:8px;padding-bottom:env(safe-area-inset-bottom)}
+
+@media (prefers-color-scheme:light){
+  .tkk .k-done,.tkk .k-done.ask,.tkk .k-all.copied{color:#fff}
+}
+@media (prefers-reduced-motion:reduce){
+  .tkk *{transition:none!important;animation:none!important}
+}

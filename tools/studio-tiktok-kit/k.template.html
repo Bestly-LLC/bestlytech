@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0F1413" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F2F6F5" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TikTok kit">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<title>TikTok kit</title>
+<style>
+:root{
+  --bg:#0F1413; --panel:#1A2120; --panel-2:#212928; --line:rgba(236,242,241,.09); --line-2:rgba(236,242,241,.16);
+  --ink:#ECF2F1; --dim:#9BAAA7; --faint:#8E9D9A; --accent:#5FC0B6; --accent-2:rgba(95,192,182,.16); --on-accent:#08201E;
+  --ok:#8CC49C; --warn:#E0AC6A; --stop:#E8867A;
+  --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,system-ui,sans-serif;
+  --display:ui-serif,"New York","Iowan Old Style",Georgia,serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:light){
+  :root{
+    --bg:#F2F6F5; --panel:#FFFFFF; --panel-2:#FFFFFF; --line:rgba(21,32,31,.09); --line-2:rgba(21,32,31,.16);
+    --ink:#15201F; --dim:#4F5A58; --faint:#626D6B; --accent:#18635D; --accent-2:rgba(31,127,119,.12); --on-accent:#FFFFFF;
+    --ok:#2F7D4E; --warn:#8F5A15; --stop:#B8432F; color-scheme:light;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--ui);-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased;touch-action:manipulation}
+main{max-width:520px;margin:0 auto;padding:calc(18px + env(safe-area-inset-top)) 16px 0}
+.top{display:flex;align-items:center;gap:8px;margin:0 2px 4px}
+.eb{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
+.chip{margin-left:auto;font:600 12px/1 var(--ui);letter-spacing:.02em;padding:6px 9px;border-radius:99px;background:var(--accent-2);color:var(--accent);white-space:nowrap}
+h1{margin:0 2px 14px;font:600 25px/1.2 var(--display);letter-spacing:-.005em;text-wrap:balance}
+#kit{padding-bottom:6px}
+.foot{margin:18px 2px calc(28px + env(safe-area-inset-bottom));font-size:12.5px;color:var(--faint);text-align:center;line-height:1.5}
+/*__CSS__*/
+</style></head><body>
+<main>
+  <div class="top"><span class="eb">Bestly Studio &middot; TikTok</span><span class="chip" id="chip" hidden></span></div>
+  <h1 id="ttl">Your TikTok kit</h1>
+  <div id="kit"></div>
+  <p class="foot" id="foot"></p>
+</main>
+<script>
+/*__JS__*/
+</script>
+<script>
+(function(){
+  var SB = "https://rcqfqhguwpmaarseifqg.supabase.co", KEY = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw";
+  // short link: bestly.tech/k/<7 characters>
+  var m = location.pathname.match(/^\/k\/([A-Za-z0-9]+)\/?$/), code = (m && m[1]) || new URLSearchParams(location.search).get("c") || "";
+  function rpc(fn, body){
+    return fetch(SB + "/rest/v1/rpc/" + fn, { method: "POST",
+      headers: { apikey: KEY, Authorization: "Bearer " + KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function(r){ if(!r.ok) throw new Error("http " + r.status); return r.json(); });
+  }
+  var api = {
+    load:   function(){ return rpc("tiktok_kit_get", { p_code: code }); },
+    check:  function(post, key, on){ return rpc("tiktok_kit_check", { p_code: code, p_key: key, p_on: on }); },
+    posted: function(post){ return rpc("tiktok_kit_posted", { p_code: code }); }
+  };
+  var ttl = document.getElementById("ttl"), chip = document.getElementById("chip"), foot = document.getElementById("foot");
+  function fmtLeft(iso){
+    var d = Math.max(0, Math.round((new Date(iso) - Date.now()) / 86400000));
+    return d <= 1 ? "This link works for about a day more." : "This link works for " + d + " more days.";
+  }
+  TKKit.mount(document.getElementById("kit"), api, { page: true, onKit: function(k){
+    document.title = (k.code ? k.code + " " : "") + "TikTok kit";
+    ttl.textContent = k.title || "Your TikTok kit";
+    chip.hidden = false; chip.textContent = k.status === "posted" ? "Posted" : k.status === "in_drafts" ? "In your drafts" : "Uploading";
+    foot.textContent = k.expires_at ? fmtLeft(k.expires_at) : "";
+  }});
+})();
+</script></body></html>

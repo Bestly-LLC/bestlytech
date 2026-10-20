@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0F1413" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F2F6F5" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TikTok kit">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<title>TikTok kit</title>
+<style>
+:root{
+  --bg:#0F1413; --panel:#1A2120; --panel-2:#212928; --line:rgba(236,242,241,.09); --line-2:rgba(236,242,241,.16);
+  --ink:#ECF2F1; --dim:#9BAAA7; --faint:#8E9D9A; --accent:#5FC0B6; --accent-2:rgba(95,192,182,.16); --on-accent:#08201E;
+  --ok:#8CC49C; --warn:#E0AC6A; --stop:#E8867A;
+  --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,system-ui,sans-serif;
+  --display:ui-serif,"New York","Iowan Old Style",Georgia,serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:light){
+  :root{
+    --bg:#F2F6F5; --panel:#FFFFFF; --panel-2:#FFFFFF; --line:rgba(21,32,31,.09); --line-2:rgba(21,32,31,.16);
+    --ink:#15201F; --dim:#4F5A58; --faint:#626D6B; --accent:#18635D; --accent-2:rgba(31,127,119,.12); --on-accent:#FFFFFF;
+    --ok:#2F7D4E; --warn:#8F5A15; --stop:#B8432F; color-scheme:light;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--ui);-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased;touch-action:manipulation}
+main{max-width:520px;margin:0 auto;padding:calc(18px + env(safe-area-inset-top)) 16px 0}
+.top{display:flex;align-items:center;gap:8px;margin:0 2px 4px}
+.eb{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
+.chip{margin-left:auto;font:600 12px/1 var(--ui);letter-spacing:.02em;padding:6px 9px;border-radius:99px;background:var(--accent-2);color:var(--accent);white-space:nowrap}
+h1{margin:0 2px 14px;font:600 25px/1.2 var(--display);letter-spacing:-.005em;text-wrap:balance}
+#kit{padding-bottom:6px}
+.foot{margin:18px 2px calc(28px + env(safe-area-inset-bottom));font-size:12.5px;color:var(--faint);text-align:center;line-height:1.5}
+/* TikTok posting kit. One stylesheet for Studio's "Post to TikTok" panel and the standalone phone page
+   (bestly.tech/k/<code>). Reads Studio's own tokens (--panel-2, --ink, --accent ...) and falls back to the same values. */
+.tkk{
+  --k-card:var(--panel-2,#212928); --k-line:var(--line-2,rgba(236,242,241,.16)); --k-hair:var(--line,rgba(236,242,241,.09));
+  --k-ink:var(--ink,#ECF2F1); --k-dim:var(--dim,#9BAAA7); --k-faint:var(--faint,#8E9D9A);
+  --k-acc:var(--accent,#5FC0B6); --k-acc2:var(--accent-2,rgba(95,192,182,.16)); --k-on:var(--on-accent,#08201E);
+  --k-ok:var(--ok,#8CC49C); --k-stop:var(--stop,#E8867A); --k-warn:var(--warn,#E0AC6A);
+  --k-ease:cubic-bezier(.2,.7,.2,1);
+  display:grid;gap:10px;font:14px/1.5 var(--ui,-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif);
+  color:var(--k-ink);-webkit-font-smoothing:antialiased;
+}
+.tkk *{box-sizing:border-box}
+.tkk button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;text-align:left}
+.tkk button:disabled{opacity:.45;cursor:not-allowed}
+.tkk :focus-visible{outline:2px solid var(--k-acc);outline-offset:2px;border-radius:12px}
+.tkk .nw{white-space:nowrap}
+.tkk svg{width:20px;height:20px;flex:none;display:block;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* the hint under Open TikTok */
+.tkk .k-open{display:flex;align-items:center;justify-content:center;gap:9px;min-height:52px;padding:0 18px;border-radius:14px;
+  background:var(--k-acc);color:var(--k-on);font-weight:600;font-size:16px;letter-spacing:-.01em;text-decoration:none;text-align:center;
+  transition:transform .12s var(--k-ease),filter .12s}
+.tkk .k-open:active{transform:scale(.98);filter:brightness(.94)}
+.tkk .k-open svg{width:18px;height:18px}
+.tkk .k-hint{margin:-2px 2px 2px;text-wrap:balance;color:var(--k-dim);font-size:13px;line-height:1.5;text-align:center}
+.tkk .k-wait{padding:11px 14px;border-radius:12px;background:color-mix(in srgb,var(--k-warn) 13%,transparent);color:var(--k-ink);font-size:13.5px;line-height:1.5}
+.tkk .k-wait b{font-weight:600}
+.tkk .k-wait button{display:inline;color:var(--k-acc);font-weight:600;text-decoration:underline;text-underline-offset:2px;padding:6px 0}
+.tkk .k-err{padding:11px 14px;border-radius:12px;background:color-mix(in srgb,var(--k-stop) 12%,transparent);color:var(--k-ink);font-size:13.5px;line-height:1.5}
+
+/* tap-to-copy cards: the whole card is the button */
+.tkk .k-card{position:relative;display:block;width:100%;padding:12px 14px 12px;border-radius:14px;background:var(--k-card);
+  border:1px solid var(--k-hair);transition:transform .12s var(--k-ease),border-color .15s,background .15s}
+.tkk .k-card:active{transform:scale(.985)}
+.tkk .k-card:hover{border-color:var(--k-line)}
+.tkk .k-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.tkk .k-lbl{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--k-faint)}
+.tkk .k-copy{margin-left:auto;display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 11px 0 9px;border-radius:99px;
+  background:var(--k-acc2);color:var(--k-acc);font-size:13px;font-weight:600;white-space:nowrap;transition:background .15s,color .15s}
+.tkk .k-copy svg{width:15px;height:15px}
+.tkk .k-do,.tkk .k-did{align-items:center;gap:6px}
+.tkk .k-do{display:inline-flex}
+.tkk .k-copy .k-did{display:none}
+.tkk .k-card.copied{border-color:color-mix(in srgb,var(--k-ok) 55%,transparent);background:color-mix(in srgb,var(--k-ok) 9%,var(--k-card))}
+.tkk .k-card.copied .k-copy{background:color-mix(in srgb,var(--k-ok) 20%,transparent);color:var(--k-ok)}
+.tkk .k-card.copied .k-copy .k-do{display:none}
+.tkk .k-card.copied .k-copy .k-did{display:inline-flex;align-items:center;gap:6px;animation:kpop .22s var(--k-ease)}
+@keyframes kpop{from{transform:scale(.86);opacity:.4}to{transform:none;opacity:1}}
+.tkk .k-val{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.5;color:var(--k-ink)}
+.tkk .k-val.tags{color:var(--k-acc);font-weight:500}
+.tkk .k-sub{margin-top:5px;font-size:12.5px;line-height:1.45;color:var(--k-dim)}
+.tkk .k-count{margin-top:6px;font-size:12px;color:var(--k-faint);font-variant-numeric:tabular-nums}
+
+/* Copy all: the one big action */
+.tkk .k-all{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:52px;padding:0 18px;border-radius:14px;
+  border:1.5px solid var(--k-acc);color:var(--k-acc);font-weight:600;font-size:16px;letter-spacing:-.01em;text-align:center;
+  transition:transform .12s var(--k-ease),background .15s,color .15s,border-color .15s}
+.tkk .k-all:active{transform:scale(.98)}
+.tkk .k-all.copied{background:var(--k-ok);border-color:var(--k-ok);color:#0B1F12}
+.tkk .k-all .k-do{gap:9px}
+.tkk .k-all .k-did{display:none}
+.tkk .k-all.copied .k-do{display:none}
+.tkk .k-all.copied .k-did{display:inline-flex;align-items:center;gap:9px}
+
+/* cover */
+.tkk .k-cover{display:flex;gap:14px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--k-card);border:1px solid var(--k-hair)}
+.tkk .k-cover img{width:84px;aspect-ratio:9/16;object-fit:cover;border-radius:9px;background:#000;flex:none;border:1px solid var(--k-hair)}
+.tkk .k-cbody{min-width:0;flex:1;display:grid;gap:6px;align-content:start}
+.tkk .k-ctitle{font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--k-ink)}
+.tkk .k-cnote{font-size:13px;line-height:1.5;color:var(--k-dim)}
+.tkk .k-save{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border-radius:12px;background:var(--k-acc2);color:var(--k-acc);
+  font-weight:600;font-size:14px;margin-top:2px;justify-self:start;transition:transform .12s var(--k-ease)}
+.tkk .k-save:active{transform:scale(.98)}
+.tkk .k-save svg{width:17px;height:17px}
+
+/* checklist */
+.tkk .k-list{display:grid;border-radius:14px;background:var(--k-card);border:1px solid var(--k-hair);overflow:hidden}
+.tkk .k-lhead{display:flex;align-items:baseline;gap:8px;padding:12px 14px 6px}
+.tkk .k-lhead .k-n{margin-left:auto;font-size:12.5px;color:var(--k-dim);font-variant-numeric:tabular-nums}
+.tkk .k-step{display:flex;align-items:center;gap:13px;width:100%;min-height:56px;padding:9px 14px;border-top:1px solid var(--k-hair);transition:background .15s}
+.tkk .k-step:first-of-type{border-top:0}
+.tkk .k-step:active{background:var(--k-acc2)}
+.tkk .k-box{width:26px;height:26px;flex:none;border-radius:8px;border:1.8px solid var(--k-line);display:grid;place-items:center;color:transparent;
+  transition:background .15s,border-color .15s,color .15s,transform .18s var(--k-ease)}
+.tkk .k-box svg{width:16px;height:16px;stroke-width:3}
+.tkk .k-step.on .k-box{background:var(--k-acc);border-color:var(--k-acc);color:var(--k-on);transform:scale(1.04)}
+.tkk .k-st{min-width:0;display:grid}
+.tkk .k-st b{font-weight:500;font-size:15px;line-height:1.35;color:var(--k-ink)}
+.tkk .k-st i{font-style:normal;font-size:12.5px;line-height:1.4;color:var(--k-dim)}
+.tkk .k-step.on .k-st b{color:var(--k-dim);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--k-dim) 55%,transparent)}
+
+/* I posted it */
+.tkk .k-done{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:54px;padding:0 18px;border-radius:14px;
+  background:var(--k-ok);color:#0B1F12;font-weight:700;font-size:16.5px;letter-spacing:-.01em;text-align:center;transition:transform .12s var(--k-ease),filter .12s}
+.tkk .k-done:active{transform:scale(.98);filter:brightness(.94)}
+.tkk .k-done.ask{background:var(--k-warn);color:#1E1304}
+.tkk .k-note{margin:0 4px;text-wrap:balance;text-align:center;font-size:12.5px;line-height:1.5;color:var(--k-dim)}
+.tkk .k-posted{display:grid;gap:4px;justify-items:center;text-align:center;padding:22px 16px;border-radius:14px;
+  background:color-mix(in srgb,var(--k-ok) 11%,var(--k-card));border:1px solid color-mix(in srgb,var(--k-ok) 45%,transparent)}
+.tkk .k-posted svg{width:34px;height:34px;color:var(--k-ok);stroke-width:2.4}
+.tkk .k-posted b{font-size:18px;font-weight:600;letter-spacing:-.01em}
+.tkk .k-posted span{font-size:13.5px;color:var(--k-dim)}
+.tkk.is-posted .k-cards{opacity:.55}
+.tkk .k-load{padding:28px 6px;text-align:center;color:var(--k-dim)}
+
+/* the standalone phone page: the same stack, with room under the last button for the home bar */
+.tkk.k-page .k-dock{display:grid;gap:8px;padding-bottom:env(safe-area-inset-bottom)}
+
+@media (prefers-color-scheme:light){
+  .tkk .k-done,.tkk .k-done.ask,.tkk .k-all.copied{color:#fff}
+}
+@media (prefers-reduced-motion:reduce){
+  .tkk *{transition:none!important;animation:none!important}
+}
+
+</style></head><body>
+<main>
+  <div class="top"><span class="eb">Bestly Studio &middot; TikTok</span><span class="chip" id="chip" hidden></span></div>
+  <h1 id="ttl">Your TikTok kit</h1>
+  <div id="kit"></div>
+  <p class="foot" id="foot"></p>
+</main>
+<script>
+/* TikTok posting kit: tap-to-copy cards, a checklist, and "I posted it".
+   One module for Studio's "Post to TikTok" panel and the standalone phone page (bestly.tech/k/<code>).
+   TKKit.mount(root, api, opts)
+     api.load()                  -> Promise<{ok, kit}|{ok:false,error}>
+     api.check(post, key, on)    -> Promise<{ok, checks}>
+     api.posted(post)            -> Promise<{ok}>
+     opts.page                   -> true on the standalone page (frosted dock for the big button)
+     opts.onPosted(kit)          -> called after "I posted it" lands
+   Never uploads anything. The only thing it can change is the checklist and in_drafts -> posted. */
+(function (root) {
+  "use strict";
+  var TIKTOK_URL = "https://www.tiktok.com/";   // no documented tiktok:// scheme for Inbox or Drafts; the https link opens the app
+  var I = {
+    copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+    check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+    ext: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
+    down: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg>'
+  };
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function when(iso) {
+    try { return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles", hour12: true }) + " PT"; }
+    catch (e) { return ""; }
+  }
+  function legacyCopy(text) {
+    return new Promise(function (ok, no) {
+      var t = document.createElement("textarea");
+      t.value = text; t.setAttribute("readonly", ""); t.style.cssText = "position:fixed;top:0;left:0;opacity:0;font-size:16px";
+      document.body.appendChild(t); t.focus(); t.select(); t.setSelectionRange(0, t.value.length);
+      var good = false; try { good = document.execCommand("copy"); } catch (e) { good = false; }
+      document.body.removeChild(t);
+      good ? ok() : no(new Error("copy refused"));
+    });
+  }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).catch(function () { return legacyCopy(text); });
+    }
+    return legacyCopy(text);
+  }
+  function steps(k) {
+    var s = [
+      { id: "caption", t: "Paste caption", s: "Tap the caption box in TikTok, then Paste." },
+      { id: "ai", t: "Turn on “AI-generated content”", s: "On the post screen, tap More options, then switch it on." }
+    ];
+    if (k.place_search) s.push({ id: "location", t: "Tag location", s: "Tap Location and search “" + k.place_search + "”." });
+    s.push(k.cover_custom
+      ? { id: "cover", t: "Upload the cover", s: "Tap Edit cover, tap Upload, choose the saved image." }
+      : { id: "cover", t: "Pick the cover", s: "Tap Edit cover and pick the frame with the headline." });
+    s.push({ id: "duet", t: "Turn Duet and Stitch on", s: "In More options, allow Duet and Stitch." });
+    s.push({ id: "post", t: "Post", s: "Tap Post in TikTok, then tap I posted it here." });
+    return s;
+  }
+
+  function mount(el, api, opts) {
+    opts = opts || {};
+    var kit = null, poll = null, armed = false, armTimer = null;
+    el.classList.add("tkk");
+    if (opts.page) el.classList.add("k-page");
+    el.innerHTML = '<div class="k-load">Loading the kit</div>';
+
+    function stopPoll() { if (poll) { clearInterval(poll); poll = null; } }
+    function failView(r) {
+      stopPoll();
+      var e = r && r.error;
+      el.innerHTML = '<div class="k-err">' + (
+        e === "expired" ? "This link has expired. Open the post in Studio and a fresh one is made for you."
+        : e === "not_found" ? "This link is not valid. Open the post in Studio for the right one."
+        : "The kit would not load. Check your connection and try again.") + '</div>';
+    }
+    function load() {
+      return api.load().then(function (r) {
+        if (r && r.ok && r.kit) { kit = r.kit; draw(); }
+        else if (r && r.ok) { el.innerHTML = ""; if (opts.onEmpty) opts.onEmpty(); }
+        else if (!kit) failView(r);
+      }).catch(function () { if (!kit) failView(null); });
+    }
+
+    function card(id, label, valueHtml, extra, cls) {
+      return '<div class="k-card" role="button" tabindex="0" data-copy="' + id + '" aria-label="Copy ' + esc(label) + '">' +
+        '<div class="k-top"><span class="k-lbl">' + esc(label) + '</span>' +
+        '<span class="k-copy"><span class="k-do">' + I.copy + 'Copy</span><span class="k-did">' + I.check + 'Copied</span></span></div>' +
+        '<div class="k-val ' + (cls || "") + '">' + valueHtml + '</div>' + (extra || "") + '</div>';
+    }
+
+    function draw() {
+      var k = kit, st = k.status, checks = k.checks || {};
+      el.classList.toggle("is-posted", st === "posted");
+      if (opts.onKit) opts.onKit(k);
+      if (st === "posted") {
+        el.innerHTML = '<div class="k-posted">' + I.check + '<b>Marked as posted</b><span>' + esc(k.title) + (k.posted_at ? ' &middot; ' + esc(when(k.posted_at)) : '') + '</span></div>' +
+          '<div class="k-cards" style="display:grid;gap:10px">' + cardsHtml(k) + '</div>';
+        stopPoll();
+        return;
+      }
+      var live = st === "in_drafts";
+      var out = '';
+      if (!live) {
+        out += '<div class="k-wait"><b>Still on its way to TikTok.</b> The video has not landed in your drafts yet, so there is nothing to finish. ' +
+          'This fills in on its own, or <button type="button" data-act="refresh">check now</button>.</div>';
+      }
+      out += '<div class="k-cards" style="display:grid;gap:10px">';
+      out += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        '<button type="button" class="k-all" data-copy="all" aria-label="Copy the caption and hashtags together"><span class="k-do">' + I.copy + 'Copy all</span><span class="k-did">' + I.check + 'Copied</span></button>' +
+        '<a class="k-open" href="' + TIKTOK_URL + '" target="_blank" rel="noopener">Open TikTok' + I.ext + '</a></div>';
+      out += '<p class="k-hint">Copy all, open TikTok, paste in the caption box.<br>Your draft is waiting in TikTok: Inbox, then Drafts.</p>';
+      out += cardsHtml(k);
+      out += '</div>';
+      out += listHtml(k, checks);
+      if (live) {
+        var dock = '<button type="button" class="k-done" data-act="posted">' + I.check + 'I posted it</button>' +
+          '<p class="k-note" data-role="postnote">Marks this clip posted in Studio. Nothing is uploaded or sent.</p>';
+        out += opts.page ? '<div class="k-dock">' + dock + '</div>' : dock;
+      }
+      el.innerHTML = out;
+      if (!live && !poll) poll = setInterval(function () { api.load().then(function (r) { if (r && r.ok && r.kit && r.kit.status !== st) { kit = r.kit; draw(); } }).catch(function () {}); }, 15000);
+      if (live) stopPoll();
+    }
+
+    function cardsHtml(k) {
+      var h = '';
+      h += card("caption", "Caption", esc(k.caption || "(No caption.)"), k.chars ? '<div class="k-count">' + esc(String(k.chars).replace(/\B(?=(\d{3})+(?!\d))/g, ",")) + '&nbsp;of&nbsp;2,200 characters with the hashtags</div>' : "");
+      if (k.hashtags) h += card("tags", "Hashtags", esc(k.hashtags), "", "tags");
+      if (k.place_search) {
+        var full = k.place && k.place !== k.place_search ? '<div class="k-sub">' + esc(k.place) + '</div>' : '';
+        h += card("place", "Location", esc(k.place_search), full + '<div class="k-sub">Copies the place name. Paste it into TikTok’s location search and pick the match.</div>');
+      }
+      h += coverHtml(k);
+      return h;
+    }
+
+    function coverHtml(k) {
+      if (!k.cover) return '';
+      var body = k.cover_custom
+        ? '<div class="k-ctitle">Custom cover' + (k.headline ? ': “' + esc(k.headline) + '”' : '') + '</div>' +
+          '<div class="k-cnote">TikTok lets you upload it. Save it to Photos, then in TikTok tap Edit cover, then Upload.</div>' +
+          '<button type="button" class="k-save" data-act="save">' + I.down + 'Save cover image</button>' +
+          '<div class="k-cnote" data-role="savenote" aria-live="polite"></div>'
+        : '<div class="k-ctitle">Pick the frame with the headline</div>' +
+          '<div class="k-cnote">In TikTok tap Edit cover and slide to the frame that looks like this one. It is the first frame of the clip.</div>';
+      return '<div class="k-cover"><img src="' + esc(k.cover) + '" alt="The cover frame" decoding="async"><div class="k-cbody">' + body + '</div></div>';
+    }
+
+    function listHtml(k, checks) {
+      var s = steps(k), n = s.filter(function (x) { return checks[x.id]; }).length;
+      return '<div class="k-list" role="group" aria-label="Steps in TikTok"><div class="k-lhead"><span class="k-lbl">Finish in TikTok</span>' +
+        '<span class="k-n" data-role="count">' + n + '&nbsp;of&nbsp;' + s.length + '&nbsp;done</span></div>' +
+        s.map(function (x) {
+          var on = !!checks[x.id];
+          return '<button type="button" class="k-step' + (on ? ' on' : '') + '" role="checkbox" aria-checked="' + on + '" data-step="' + x.id + '">' +
+            '<span class="k-box">' + I.check + '</span><span class="k-st"><b>' + esc(x.t) + '</b><i>' + esc(x.s) + '</i></span></button>';
+        }).join("") + '</div>';
+    }
+
+    function flash(node) {
+      node.classList.add("copied");
+      clearTimeout(node._t);
+      node._t = setTimeout(function () { node.classList.remove("copied"); }, 1800);
+    }
+    function failCopy(node) {
+      var v = node.querySelector(".k-val");
+      if (v) { var r = document.createRange(); r.selectNodeContents(v); var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+      var l = node.querySelector(".k-copy .k-do");
+      if (l) { l.lastChild.nodeValue = "Hold to copy"; setTimeout(function () { l.lastChild.nodeValue = "Copy"; }, 2500); }
+    }
+    function doCopy(node) {
+      var id = node.getAttribute("data-copy"), k = kit, text;
+      if (id === "caption") text = k.caption || "";
+      else if (id === "tags") text = k.hashtags || "";
+      else if (id === "place") text = k.place_search || "";
+      else text = k.all || "";
+      copyText(text).then(function () { flash(node); }, function () { failCopy(node); });
+    }
+
+    function setCount() {
+      var c = el.querySelector('[data-role="count"]'); if (!c) return;
+      var s = steps(kit), n = s.filter(function (x) { return (kit.checks || {})[x.id]; }).length;
+      c.innerHTML = n + '&nbsp;of&nbsp;' + s.length + '&nbsp;done';
+    }
+    function toggle(btn) {
+      var key = btn.getAttribute("data-step"), on = !btn.classList.contains("on");
+      kit.checks = kit.checks || {}; kit.checks[key] = on;
+      btn.classList.toggle("on", on); btn.setAttribute("aria-checked", String(on)); setCount();
+      api.check(kit.post, key, on).then(function (r) {
+        if (!(r && r.ok)) { kit.checks[key] = !on; btn.classList.toggle("on", !on); btn.setAttribute("aria-checked", String(!on)); setCount(); }
+      }).catch(function () {});
+    }
+
+    function saveCover(btn) {
+      var note = el.querySelector('[data-role="savenote"]'), url = kit.cover;
+      function fallback() {
+        if (note) note.textContent = "Press and hold the picture, then tap Save to Photos.";
+        var img = el.querySelector(".k-cover img"); if (img) img.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        window.open(url, "_blank", "noopener");
+      }
+      fetch(url).then(function (r) { if (!r.ok) throw new Error("http " + r.status); return r.blob(); }).then(function (b) {
+        var f = new File([b], "cover.jpg", { type: b.type || "image/jpeg" });
+        if (navigator.canShare && navigator.canShare({ files: [f] })) {
+          if (note) note.textContent = "Choose Save Image in the share sheet.";
+          return navigator.share({ files: [f] });
+        }
+        throw new Error("no share");
+      }).catch(function (e) { if (e && e.name === "AbortError") return; fallback(); });
+    }
+
+    function posted(btn) {
+      var checks = kit.checks || {}, s = steps(kit);
+      var open = s.filter(function (x) { return x.id !== "post" && !checks[x.id]; }).length;
+      var note = el.querySelector('[data-role="postnote"]');
+      if (open && !armed) {
+        armed = true; btn.classList.add("ask");
+        btn.innerHTML = I.check + 'Tap again to confirm';
+        if (note) note.textContent = open + ' step' + (open === 1 ? ' is' : 's are') + ' not ticked. Tap again if it is posted.';
+        clearTimeout(armTimer);
+        armTimer = setTimeout(function () { armed = false; btn.classList.remove("ask"); btn.innerHTML = I.check + 'I posted it'; if (note) note.textContent = "Marks this clip posted in Studio. Nothing is uploaded or sent."; }, 6000);
+        return;
+      }
+      btn.disabled = true;
+      api.posted(kit.post).then(function (r) {
+        if (r && r.ok) {
+          kit.status = "posted"; kit.posted_at = new Date().toISOString(); kit.checks = kit.checks || {}; kit.checks.post = true;
+          draw(); if (opts.onPosted) opts.onPosted(kit);
+        } else {
+          btn.disabled = false;
+          if (note) note.textContent = r && r.error === "not_in_drafts" ? "This clip is not in your TikTok drafts, so it cannot be marked posted." : "That did not save. Try again.";
+        }
+      }).catch(function () { btn.disabled = false; if (note) note.textContent = "That did not save. Check your connection and try again."; });
+    }
+
+    el.addEventListener("click", function (e) {
+      var t = e.target.closest ? e.target.closest("[data-copy],[data-step],[data-act]") : null;
+      if (!t || !el.contains(t)) return;
+      if (t.hasAttribute("data-copy")) return doCopy(t);
+      if (t.hasAttribute("data-step")) return toggle(t);
+      var a = t.getAttribute("data-act");
+      if (a === "save") return saveCover(t);
+      if (a === "posted") return posted(t);
+      if (a === "refresh") return load();
+    });
+    el.addEventListener("keydown", function (e) {
+      if ((e.key === "Enter" || e.key === " ") && e.target.getAttribute && e.target.getAttribute("role") === "button" && e.target.hasAttribute("data-copy")) {
+        e.preventDefault(); doCopy(e.target);
+      }
+    });
+
+    load();
+    return { reload: load, destroy: stopPoll };
+  }
+  root.TKKit = { mount: mount };
+})(typeof window !== "undefined" ? window : this);
+
+</script>
+<script>
+(function(){
+  var SB = "https://rcqfqhguwpmaarseifqg.supabase.co", KEY = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw";
+  // short link: bestly.tech/k/<7 characters>
+  var m = location.pathname.match(/^\/k\/([A-Za-z0-9]+)\/?$/), code = (m && m[1]) || new URLSearchParams(location.search).get("c") || "";
+  function rpc(fn, body){
+    return fetch(SB + "/rest/v1/rpc/" + fn, { method: "POST",
+      headers: { apikey: KEY, Authorization: "Bearer " + KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function(r){ if(!r.ok) throw new Error("http " + r.status); return r.json(); });
+  }
+  var api = {
+    load:   function(){ return rpc("tiktok_kit_get", { p_code: code }); },
+    check:  function(post, key, on){ return rpc("tiktok_kit_check", { p_code: code, p_key: key, p_on: on }); },
+    posted: function(post){ return rpc("tiktok_kit_posted", { p_code: code }); }
+  };
+  var ttl = document.getElementById("ttl"), chip = document.getElementById("chip"), foot = document.getElementById("foot");
+  function fmtLeft(iso){
+    var d = Math.max(0, Math.round((new Date(iso) - Date.now()) / 86400000));
+    return d <= 1 ? "This link works for about a day more." : "This link works for " + d + " more days.";
+  }
+  TKKit.mount(document.getElementById("kit"), api, { page: true, onKit: function(k){
+    document.title = (k.code ? k.code + " " : "") + "TikTok kit";
+    ttl.textContent = k.title || "Your TikTok kit";
+    chip.hidden = false; chip.textContent = k.status === "posted" ? "Posted" : k.status === "in_drafts" ? "In your drafts" : "Uploading";
+    foot.textContent = k.expires_at ? fmtLeft(k.expires_at) : "";
+  }});
+})();
+</script></body></html>
