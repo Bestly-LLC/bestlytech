@@ -9,7 +9,11 @@
 /docs/*
 # The release prompt is imported by the admin (CYReleaseTracker), so the build needs it.
 !/docs/cookie-yeti-extension
-/supabase
+# The admin email builder imports the shared renderer from supabase/functions/_shared, so the build needs that one folder.
+/supabase/*
+!/supabase/functions
+/supabase/functions/*
+!/supabase/functions/_shared
 /*.command
 /*.timestamp-*.mjs
 /.scratch
