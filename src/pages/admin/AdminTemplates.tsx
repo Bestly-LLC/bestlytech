@@ -50,10 +50,48 @@ function isTemplate(v: unknown): v is Template {
   return ["slug", "name", "brand", "kind", "use", "html", "eml"].every((k) => typeof t[k] === "string");
 }
 
+/**
+ * The site sends `frame-ancestors 'none'` on every path (vercel.json), so an
+ * <iframe src> of a template is blocked by the browser and shows nothing. We fetch
+ * the HTML and hand it to the iframe as srcDoc instead, which that header does not
+ * cover. One fetch per file per visit.
+ */
+const htmlCache = new Map<string, Promise<string>>();
+function loadHtml(src: string): Promise<string> {
+  let p = htmlCache.get(src);
+  if (!p) {
+    p = fetch(src, { cache: "no-cache" }).then(async (r) => {
+      if (!r.ok) throw new Error(`${src} answered HTTP ${r.status}`);
+      const text = await r.text();
+      if (!/<table|<p[\s>]/i.test(text) || /id="root"/.test(text)) throw new Error(`${src} did not return an email`);
+      return text;
+    });
+    htmlCache.set(src, p);
+    p.catch(() => htmlCache.delete(src));
+  }
+  return p;
+}
+
+function useTemplateHtml(src: string | undefined) {
+  const [state, setState] = useState<{ html: string | null; error: string | null }>({ html: null, error: null });
+  useEffect(() => {
+    if (!src) return;
+    let alive = true;
+    setState({ html: null, error: null });
+    loadHtml(src).then(
+      (html) => alive && setState({ html, error: null }),
+      (e: unknown) => alive && setState({ html: null, error: e instanceof Error ? e.message : String(e) }),
+    );
+    return () => { alive = false; };
+  }, [src]);
+  return state;
+}
+
 /** Renders the email at its real width and scales it down to whatever width the box has. */
 function ScaledPreview({ src, title, onOpen }: { src: string; title: string; onOpen: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
+  const { html, error } = useTemplateHtml(src);
 
   useEffect(() => {
     const el = box.current;
@@ -71,10 +109,14 @@ function ScaledPreview({ src, title, onOpen }: { src: string; title: string; onO
 
   return (
     <div ref={box} className="relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-white">
+      {!html && (
+        <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-neutral-500">
+          {error ? `Preview could not load: ${error}` : <span className="h-full w-full animate-pulse rounded-lg bg-neutral-100 motion-reduce:animate-none" />}
+        </div>
+      )}
       <iframe
-        src={src}
+        srcDoc={html ?? ""}
         title={`${title} preview`}
-        loading="lazy"
         tabIndex={-1}
         sandbox=""
         className="pointer-events-none absolute left-0 top-0 border-0 bg-white"
@@ -100,6 +142,19 @@ function ScaledPreview({ src, title, onOpen }: { src: string; title: string; onO
         </span>
       </button>
     </div>
+  );
+}
+
+function FullPreview({ src, name }: { src: string; name: string }) {
+  const { html, error } = useTemplateHtml(src);
+  if (error) return <p className="p-6 text-sm text-neutral-600">Preview could not load: {error}</p>;
+  return (
+    <iframe
+      srcDoc={html ?? ""}
+      title={`${name} full-size preview`}
+      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      className="block h-[70vh] w-full border-0 bg-white"
+    />
   );
 }
 
@@ -332,12 +387,7 @@ export default function AdminTemplates() {
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-auto bg-white">
             {preview && (
-              <iframe
-                src={preview.html}
-                title={`${preview.name} full-size preview`}
-                sandbox="allow-popups allow-popups-to-escape-sandbox"
-                className="block h-[70vh] w-full border-0 bg-white"
-              />
+              <FullPreview src={preview.html} name={preview.name} />
             )}
           </div>
         </DialogContent>
