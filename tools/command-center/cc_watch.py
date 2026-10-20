@@ -253,6 +253,54 @@ def _resolve(check, r):
             p_needs_jared=None, p_healed=bool(r.get("healed")))
 
 
+IP_ALLOW = "/opt/bestly/etc/mercury_ip_allow"   # the home IPv4 Jared whitelisted on the Mercury token (one line)
+IP_KEY = "cost.mercury_ip"                      # Penny (cost-cutter, prefix 'cost') owns the Mercury numbers
+IP_TITLE = "Penny: home internet IP changed, Mercury may refuse the bank feed"
+
+
+def _public_ipv4():
+    """Current public IPv4 via curl -4 (cheap, no AI). '' when every lookup fails."""
+    import re
+    for url in ("https://api.ipify.org", "https://ipv4.icanhazip.com"):
+        try:
+            p = subprocess.run(["curl", "-4", "-s", "--max-time", "10", url], capture_output=True, text=True, timeout=15)
+            ip = p.stdout.strip()
+            if re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", ip):
+                return ip
+        except Exception:  # noqa: BLE001
+            pass
+    return ""
+
+
+def mercury_ip_watch(dry=False):
+    """Compare the Pi's public IPv4 with the one whitelisted on the Mercury token. Raise once through Penny (cost.mercury_ip)
+    on a change, resolve by itself when they match again. Lookup failure or missing config = no change, no alert."""
+    try:
+        allowed = open(IP_ALLOW).read().strip()
+    except Exception:  # noqa: BLE001
+        return {"status": "skip", "detail": "no %s yet" % IP_ALLOW}
+    now = _public_ipv4()
+    if not now:
+        return {"status": "skip", "detail": "could not read the public IPv4 (no change assumed)"}
+    out = {"status": "green" if now == allowed else "red", "allowed": allowed, "now": now}
+    if dry:
+        return out
+    try:
+        open_now = bool(lib.get("monitor_issues", "key=eq.%s&status=eq.open&select=key" % IP_KEY))
+    except Exception:  # noqa: BLE001
+        return dict(out, status="skip", detail="could not read monitor_issues")
+    if now != allowed and not open_now:
+        lib.rpc("bestly_raise", p_key=IP_KEY, p_kind="problem", p_severity="warning", p_title=IP_TITLE,
+                p_body="Home internet IP changed from %s to %s. Mercury will refuse the bank feed until %s is added to the token's IP list in Mercury." % (allowed, now, now),
+                p_area="cost", p_needs_jared="Add %s to the Mercury token's IP list" % now, p_healed=False)
+        out["raised"] = True
+    elif now == allowed and open_now:
+        lib.rpc("bestly_raise", p_key=IP_KEY, p_kind="resolved", p_severity="info", p_title="Fixed: " + IP_TITLE,
+                p_body="Home internet IP is %s again, matching the Mercury token's IP list." % now, p_area="cost", p_needs_jared=None, p_healed=False)
+        out["resolved"] = True
+    return out
+
+
 def run(argv):
     """-> (results, heals). Never raises."""
     if os.path.exists(OFF):
@@ -319,4 +367,8 @@ def run(argv):
                     _resolve(c, r)
             except Exception as e:  # noqa: BLE001
                 r["raise_error"] = str(e)[:120]
+    try:
+        mercury_ip_watch(dry=dry or bool(sim))   # Penny's IP-change check; own alert key, not part of the Command Center cards
+    except Exception:  # noqa: BLE001
+        pass
     return results, heals
