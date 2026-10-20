@@ -1,6 +1,16 @@
 // bestly-ig-poster — ONE first-party Instagram publisher for all Bestly-owned brands.
 // Sibling of bestly-poster (TikTok). Same shape, same brand-slug convention.
 //
+// v20 (2026-10-20): resume instead of rebuild. A Reel that needs more than the poll window to transcode used to return
+// "processing-timeout" and the NEXT drain built a brand-new container from scratch, so it never published and burned
+// attempts. Now (1) video polls up to ~100 s (was 72 s), (2) the drain resumes the existing container whose id is in
+// social_posts.error ("processing-timeout: {"creationId":"..."}") instead of building a new one, and only builds a
+// fresh container if the resumed one reports ERROR/EXPIRED (or Instagram says the container id no longer exists).
+//
+// v19 (2026-10-19): AI info label. When social_posts.ai_generated is true the media container is created with
+// is_ai_generated=true (Instagram Content Publishing API, both login flavours; carousels get it on the parent only).
+// Only brands with social_brand_settings.ai_label produce such rows (Minute News Daily). Everything else is unchanged.
+//
 // TWO Instagram publishing APIs are supported, chosen per-account by token shape:
 //
 //   * Instagram API with Instagram Login  -> https://graph.instagram.com
@@ -25,7 +35,7 @@
 //                                             -> exchange for 60-day token + store
 //   POST { action:'setfb', brand, accessToken, remoteUserId }
 //                                             -> store a Facebook-Login page token as-is
-//   POST { action:'dryrun', brand, mediaUrl|mediaUrls[], caption? }
+//   POST { action:'dryrun', brand, mediaUrl|mediaUrls[], caption?, isAi? }
 //                                             -> build container(s), never publish
 //   POST { action:'queue', brand, mediaUrl|mediaUrls[], caption, scheduledAt?,
 //                          mediaType?, coverUrl? }
@@ -47,16 +57,16 @@
 //   POST { action:'refresh' }                 -> roll every token nearing expiry (pg_cron)
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const cors = corsWith({
-  headers: "authorization, x-client-info, apikey, content-type",
-  methods: "GET, POST, OPTIONS"
-});
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+};
 
 const GRAPH_IG = "https://graph.instagram.com/v23.0";
 const GRAPH_FB = "https://graph.facebook.com/v23.0";
@@ -140,6 +150,7 @@ async function ig(
 // publish path and by action=dryrun, so a rehearsal exercises exactly the same
 // code — token, permissions, and every media URL — as the live post will.
 // Unpublished containers are discarded by Instagram after 24h.
+// isAi (v19): self-disclose AI-generated content (is_ai_generated=true on the container; carousels: parent only).
 async function buildContainers(
   acct: Account,
   urls: string[] | null,
@@ -147,6 +158,7 @@ async function buildContainers(
   caption: string,
   mediaType: string,
   coverUrl: string | null = null,
+  isAi: boolean = false,
 ) {
   const base = graphBase(acct.access_token);
   const uid = acct.remote_user_id!;
@@ -165,10 +177,12 @@ async function buildContainers(
       if (!c.json?.id) return { ok: false, stage: `carousel-slide-${i + 1}`, detail: c.json };
       children.push(String(c.json.id));
     }
-    const parent = await ig(base, `/${uid}/media`, {
+    const parentParams: Record<string, string> = {
       access_token: tok, media_type: "CAROUSEL",
       children: children.join(","), caption: cap,
-    }, "POST");
+    };
+    if (isAi) parentParams.is_ai_generated = "true";
+    const parent = await ig(base, `/${uid}/media`, parentParams, "POST");
     if (!parent.json?.id) return { ok: false, stage: "carousel-container", detail: parent.json };
     return { ok: true, creationId: String(parent.json.id), slides: urls.length, video: false };
   }
@@ -186,6 +200,7 @@ async function buildContainers(
   } else {
     single.image_url = mediaUrl!;
   }
+  if (isAi) single.is_ai_generated = "true";
   const init = await ig(base, `/${uid}/media`, single, "POST");
   if (!init.json?.id) return { ok: false, stage: "container", detail: init.json };
   return { ok: true, creationId: String(init.json.id), slides: 1, video: isVideo };
@@ -210,14 +225,18 @@ async function publishContainer(acct: Account, creationId: string, isVideo: bool
   // So readiness is no longer inferred. Poll for FINISHED, and if the edge never
   // reports a status at all, attempt the publish and let 9007 itself say "not
   // yet" — that error is authoritative in a way a missing field is not.
+  //
+  // v20: video polls 34 x 3 s (~102 s plus request time); a 1080x1920 ~15 MB Reel can need longer than the old 72 s.
+  // A timeout is no longer fatal for the container: the drain resumes it by creationId (see drain).
   let ready = false;
   let sawStatus = false;
-  for (let i = 0; i < 24; i++) {
+  const polls = isVideo ? 34 : 24;
+  for (let i = 0; i < polls; i++) {
     const st = await ig(base, `/${creationId}`, { fields: "status_code", access_token: tok });
     const code = st.json?.status_code;
     if (code !== undefined) sawStatus = true;
     if (code === "FINISHED") { ready = true; break; }
-    if (code === "ERROR") return { ok: false, stage: "processing", detail: st.json };
+    if (code === "ERROR" || code === "EXPIRED") return { ok: false, stage: "processing", detail: st.json };
     await new Promise((r) => setTimeout(r, isVideo ? 3000 : 1500));
   }
   // Only a container whose status WAS reported and never reached FINISHED is a
@@ -253,8 +272,9 @@ async function publishAny(
   caption: string,
   mediaType: string,
   coverUrl: string | null = null,
+  isAi: boolean = false,
 ) {
-  const built = await buildContainers(acct, urls, mediaUrl, caption, mediaType, coverUrl);
+  const built = await buildContainers(acct, urls, mediaUrl, caption, mediaType, coverUrl, isAi);
   if (!built.ok) return built;
   const res = await publishContainer(acct, built.creationId!, !!built.video);
   return res.ok ? { ...res, slides: built.slides } : res;
@@ -605,11 +625,13 @@ Deno.serve(async (req) => {
       const built = await buildContainers(
         acct, urls, cover, body.caption || "", body.mediaType || "image",
         body.coverUrl ? String(body.coverUrl) : null,
+        body.isAi === true,
       );
       return J({
         brand,
         api: isFacebookToken(acct.access_token) ? "facebook-login" : "instagram-login",
         published: false,
+        aiLabel: body.isAi === true,
         ...built,
       }, built.ok ? 200 : 502);
     }
@@ -675,21 +697,41 @@ Deno.serve(async (req) => {
         const acct = await getAccount(row.brand);
         const urls = (row.media_type === "carousel" && Array.isArray(row.media_urls))
           ? row.media_urls as string[] : null;
-        const res = await publishAny(acct, urls, row.media_url, row.caption,
-                                     row.media_type, row.cover_url ?? null);
+        // v20: resume a container that was still transcoding last time instead of building a new one.
+        // social_posts.error holds `processing-timeout: {"creationId":"<id>"}` from the previous run.
+        let res: Record<string, any>;
+        let resumed: string | null = null;
+        const m = /^processing-timeout: .*"creationId":"(\d+)"/.exec(String(row.error ?? ""));
+        if (m) {
+          resumed = m[1];
+          const isVideo = row.media_type !== "image" && row.media_type !== "carousel";
+          res = await publishContainer(acct, resumed, isVideo);
+          // Dead container (Instagram says ERROR/EXPIRED, or the id no longer exists): build a fresh one on this same run.
+          // A container that merely timed out again is NOT dead - it stays queued and is resumed once more.
+          const dead = !res.ok && (res.stage === "processing" ||
+            (res.stage === "publish" && res.detail?.error?.code === 100));
+          if (dead) {
+            resumed = null;
+            res = await publishAny(acct, urls, row.media_url, row.caption,
+                                   row.media_type, row.cover_url ?? null, row.ai_generated === true);
+          }
+        } else {
+          res = await publishAny(acct, urls, row.media_url, row.caption,
+                                 row.media_type, row.cover_url ?? null, row.ai_generated === true);
+        }
         if (res.ok) {
           await db.from("social_posts").update({
             status: "posted", remote_id: res.remoteId, permalink: res.permalink,
             posted_at: new Date().toISOString(), error: null,
           }).eq("id", row.id);
-          return J({ drained: 1, id: row.id, brand: row.brand, permalink: res.permalink });
+          return J({ drained: 1, id: row.id, brand: row.brand, permalink: res.permalink, resumed });
         }
         const giveUp = row.attempts >= row.max_attempts;
         await db.from("social_posts").update({
           status: giveUp ? "failed" : "queued",
           error: `${res.stage}: ${JSON.stringify(res.detail)}`.slice(0, 2000),
         }).eq("id", row.id);
-        return J({ drained: 0, id: row.id, retrying: !giveUp, stage: res.stage, detail: res.detail }, 502);
+        return J({ drained: 0, id: row.id, retrying: !giveUp, stage: res.stage, detail: res.detail, resumed }, 502);
       } catch (e) {
         const giveUp = row.attempts >= row.max_attempts;
         await db.from("social_posts").update({
