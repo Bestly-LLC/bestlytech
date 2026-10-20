@@ -31,6 +31,21 @@ function NewPill() {
   );
 }
 
+// Quiet door to the operator admin: three taps on the logo within 600 ms. Own counter (iPhone Safari
+// does not reliably report event.detail), kept at module level so it survives the header remounting
+// when the first tap navigates home. One or two taps do exactly what they always did.
+const DOOR_TAPS = 3;
+const DOOR_WINDOW_MS = 600;
+let doorTaps: number[] = [];
+function logoDoor(e: { preventDefault: () => void }) {
+  const now = Date.now();
+  doorTaps = [...doorTaps.filter((t) => now - t < DOOR_WINDOW_MS), now];
+  if (doorTaps.length < DOOR_TAPS) return;
+  doorTaps = [];
+  e.preventDefault();
+  window.location.assign("https://cloud.bestly.tech/admin");
+}
+
 export function Header({ compact = false }: { compact?: boolean } = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -105,7 +120,7 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
     >
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-8">
         <div className="flex lg:flex-1">
-          <Link to="/" className="-m-1.5 p-1.5 flex items-center gap-2.5 group">
+          <Link to="/" onClick={logoDoor} style={{ touchAction: "manipulation" }} className="-m-1.5 p-1.5 flex items-center gap-2.5 group">
             <img 
               src={bestlyLogo} 
               alt="Bestly LLC" 

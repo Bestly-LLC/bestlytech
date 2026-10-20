@@ -1,3 +1,4 @@
+import "./lib/embedGuard"; // first: a /admin page framed by anything but Cloud blanks and never boots
 import { createRoot } from "react-dom/client";
 import { ThemeProvider } from "next-themes";
 import App from "./App.tsx";

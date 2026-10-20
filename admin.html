@@ -33,6 +33,55 @@
 
     <link rel="preconnect" href="https://rcqfqhguwpmaarseifqg.supabase.co" crossorigin />
 
+    <script>
+      /*
+        Cloud embed (cloud.bestly.tech/admin). Runs before anything paints. Two jobs, no sign-in bridge:
+        1. FRAMED: the only allowed parent is https://cloud.bestly.tech (the server header says so too).
+           Anything else: blank the page and break out to the top-level admin (?direct=1 so it stays put).
+        2. TOP LEVEL on www.bestly.tech: go to the same path inside Cloud. ?direct=1 skips this (escape hatch
+           for when Cloud is down). Not done for: the installed app window, the phone approval page, a
+           sign-in in progress (Apple/passkey callback), or any other host (dev, previews).
+        main.tsx runs the same framing check again (src/lib/cloudEmbed.ts).
+      */
+      (function () {
+        var CLOUD = "https://cloud.bestly.tech";
+        var loc = window.location;
+        if (!/^\/admin(\/|$)/.test(loc.pathname)) return;
+        var framed = true;
+        try { framed = window.top !== window; } catch (e) {}
+        if (framed) {
+          var ok = false, a = loc.ancestorOrigins;
+          if (a && a.length > 0) {
+            ok = true;
+            for (var i = 0; i < a.length; i++) if (a[i] !== CLOUD) ok = false;
+          } else {
+            try { ok = !!document.referrer && new URL(document.referrer).origin === CLOUD; } catch (e) {}
+          }
+          if (!ok) {
+            try { document.documentElement.innerHTML = ""; } catch (e) {}
+            try { window.top.location.replace(loc.origin + loc.pathname + "?direct=1"); } catch (e) {}
+            window.__bestlyBlockedFrame = true;
+          }
+          return;
+        }
+        if (loc.hostname !== "www.bestly.tech") return;
+        var q = new URLSearchParams(loc.search);
+        if (q.get("direct") === "1") return;
+        if (/^\/admin\/approve(\/|$)/.test(loc.pathname)) return;
+        var standalone = false;
+        try { standalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches; } catch (e) {}
+        if (standalone) return;
+        var h = loc.hash || "";
+        if (q.has("code") || q.has("error") || q.has("error_description") || /access_token|error_description/.test(h)) {
+          try { sessionStorage.setItem("bestly-cloud-hop", "1"); } catch (e) {}
+          return;
+        }
+        q.delete("embed");
+        var qs = q.toString();
+        loc.replace(CLOUD + loc.pathname + (qs ? "?" + qs : ""));
+      })();
+    </script>
+
     <style>
       #boot-splash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#fbfaf8;z-index:2147483647}
       #boot-splash.is-admin{background:#000}

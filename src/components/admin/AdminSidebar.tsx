@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { AdminMark } from "@/components/AdminMark";
+import { EmbedSidebarTools } from "./EmbedSidebarTools";
+import { EMBEDDED } from "@/lib/cloudEmbed";
 import { BookOpen, ChefHat, DoorOpen, GripVertical, Network, Plane, Plus, Projector } from "lucide-react";
 import { Fragment, useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -540,15 +542,20 @@ export function AdminSidebar() {
   return (
     <Sidebar collapsible="icon" variant={bento ? "floating" : "sidebar"} className="bento:p-3">
       <SidebarHeader className="bg-[#0a0a0a] border-r border-white/[0.06] px-2 pt-3 pb-1 bento:border-0 bento:pt-4">
-        <Link
-          to="/admin"
-          onClick={closeMobile}
-          aria-label="Bestly Admin home"
-          className={cn("flex items-center gap-2.5 rounded-lg py-1.5", collapsed ? "justify-center px-0" : "px-2")}
-        >
-          <AdminMark watchCursor className={cn("shrink-0", collapsed ? "h-7 w-7" : "h-8 w-8")} />
-          {!collapsed && <span className="text-[0.9375rem] font-semibold tracking-tight text-white">Bestly Admin</span>}
-        </Link>
+        {/* Inside Bestly Cloud the admin's top bar is hidden: the mark reads just "Admin" (Bestly is in Cloud's header)
+            and search, the bell and the overflow menu sit on this row. */}
+        <div className={cn("flex items-center", EMBEDDED ? (collapsed ? "flex-col gap-1" : "justify-between gap-1") : "")}>
+          <Link
+            to="/admin"
+            onClick={closeMobile}
+            aria-label={EMBEDDED ? "Admin home" : "Bestly Admin home"}
+            className={cn("flex items-center gap-2.5 rounded-lg py-1.5 min-w-0", collapsed ? "justify-center px-0" : "px-2", !EMBEDDED && "flex-1")}
+          >
+            <AdminMark watchCursor className={cn("shrink-0", collapsed ? "h-7 w-7" : "h-8 w-8")} />
+            {!collapsed && <span className="whitespace-nowrap text-[0.9375rem] font-semibold tracking-tight text-white">{EMBEDDED ? "Admin" : "Bestly Admin"}</span>}
+          </Link>
+          {EMBEDDED && <EmbedSidebarTools collapsed={collapsed} />}
+        </div>
       </SidebarHeader>
       <SidebarContent className="pt-2 bg-[#0a0a0a] border-r border-white/[0.06] bento:border-0">
 

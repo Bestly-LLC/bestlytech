@@ -26,6 +26,7 @@ import { MoreVertical } from "lucide-react";
 import { Scout } from "./Scout";
 import { CallDebriefHost } from "./debrief/CallDebriefHost";
 import { startAdminLoaderDeck } from "@/components/loader/loaderDeck";
+import { CLOUD_ORIGIN, EMBEDDED, listenForCloud, postRouteToCloud, takeCloudHop } from "@/lib/cloudEmbed";
 
 const BREADCRUMB_MAP: Record<string, string> = {
   "/admin": "Command Center",
@@ -87,6 +88,18 @@ export function AdminLayout() {
     sw.addEventListener("message", onMsg);
     return () => sw.removeEventListener("message", onMsg);
   }, [navigateTo]);
+  // Inside Bestly Cloud: tell the parent which admin page this is (path only) so its address bar follows,
+  // and let it ask for one of our own routes. Outside Cloud these do nothing.
+  const embedLoc = useLocation();
+  useEffect(() => postRouteToCloud(embedLoc.pathname), [embedLoc.pathname]);
+  useEffect(() => listenForCloud((p) => navigateTo(p)), [navigateTo]);
+  // Apple sign-in left the frame for the top level; now signed in there, hop back into Cloud (nothing is carried across).
+  useEffect(() => {
+    if (EMBEDDED || !takeCloudHop()) return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("direct") === "1") return;
+    window.location.replace(CLOUD_ORIGIN + window.location.pathname);
+  }, []);
   const [muted, setMuted] = useState(notifySoundMuted());
   const { bento, toggle: toggleTheme } = useAdminTheme();
   useDeployRefresh();
@@ -137,8 +150,9 @@ export function AdminLayout() {
           <AdminSidebar />
 
           <div className="flex-1 flex flex-col min-w-0 relative z-10">
-            {/* Frosted glass header */}
-            <header className="sticky top-0 z-30 h-12 sm:h-14 flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] backdrop-blur-xl px-3 sm:px-4 bento:h-16 bento:border-0 bento:bg-[#F3F2EE]/85 bento:px-4 sm:bento:px-6 lg:bento:px-8">
+            {/* Frosted glass header. Hidden inside Bestly Cloud (Cloud's header is the one header;
+                search, bell and the rest moved into the sidebar header row, see EmbedSidebarTools). */}
+            {!EMBEDDED && <header className="sticky top-0 z-30 h-12 sm:h-14 flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] backdrop-blur-xl px-3 sm:px-4 bento:h-16 bento:border-0 bento:bg-[#F3F2EE]/85 bento:px-4 sm:bento:px-6 lg:bento:px-8">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <SidebarTrigger className="text-white/50 hover:text-white hover:bg-white/5" />
                 <span className="text-[0.8125rem] text-white/50 hidden sm:inline truncate bento:text-sm bento:font-medium bento:text-white/80">{currentLabel}</span>
@@ -264,8 +278,15 @@ export function AdminLayout() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-            </header>
-            <main className="flex-1 overflow-auto p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6 lg:p-8 lg:pb-8 bento:pt-2 md:bento:pt-2 lg:bento:pt-2">
+            </header>}
+            {EMBEDDED && (
+              // The live pills (uploads, recording) stay visible when the top bar is hidden; they render nothing when idle.
+              <div className="pointer-events-none fixed right-3 top-2 z-30 flex items-center gap-2 [&>*]:pointer-events-auto">
+                <ClipActivity />
+                <RecordingPill />
+              </div>
+            )}
+            <main className={cn("flex-1 overflow-auto p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6 lg:p-8 lg:pb-8 bento:pt-2 md:bento:pt-2 lg:bento:pt-2", EMBEDDED && "pt-5 md:pt-6 lg:pt-8 bento:pt-5 md:bento:pt-6 lg:bento:pt-8")}>
               <Outlet />
             </main>
             <MobileNav />
