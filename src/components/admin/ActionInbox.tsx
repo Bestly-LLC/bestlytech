@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { Lines } from "@/components/Lines";
 import { openDebrief } from "./scoutBus";
 import { debriefIdFromRow } from "./debrief/link";
+import { HERMES_DECIDED, HermesAskButtons, hermesAskId } from "./HermesAsk";
 
 /**
  * Everything waiting on the operator, from one server-side rule set.
@@ -149,6 +150,7 @@ const sourceIcon: Record<string, typeof AlertTriangle> = {
   Studio: Clapperboard,
   "Client asks": MessageSquare,
   Mail: Mail,
+  Hermes: Mail,
   Shop: Package,
   Claims: ShieldCheck,
   Alerts: Bell,
@@ -298,13 +300,14 @@ function ItemPopup({ item, onClose, onDone, working }: {
 
         {/* Actions */}
         <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] px-5 py-3">
+          {hermesAskId(item.id) && <HermesAskButtons id={hermesAskId(item.id)!} onDone={onClose} />}
           <AskScoutButton
             question={`Help me with this: ${item.title}. What's going on, and can you fix it?`}
             about={[item.title, item.detail, item.href].filter(Boolean).join(" | ")}
             className="h-9 rounded-full px-3 text-[13px] font-medium"
             label="Ask Scout"
           />
-          {item.href && (
+          {item.href && !hermesAskId(item.id) && (
             <a
               href={item.href}
               target={item.external ? "_blank" : undefined}
@@ -424,9 +427,11 @@ export function ActionInbox() {
     };
     run();
     const interval = setInterval(run, 60_000);
+    window.addEventListener(HERMES_DECIDED, run);
     return () => {
       cancelled = true;
       clearInterval(interval);
+      window.removeEventListener(HERMES_DECIDED, run);
     };
   }, [load]);
 
