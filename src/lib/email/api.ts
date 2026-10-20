@@ -21,6 +21,8 @@ export interface LibraryRow {
   status: "draft" | "sent";
   created_at: string;
   updated_at: string;
+  /** Exact send time, stamped from email_send_log when the column exists. */
+  sent_at?: string | null;
 }
 
 export interface GenResult { ok: boolean; doc?: EmailDoc; warnings?: string[]; model?: string; provider?: string; attempts?: number; error?: string; detail?: string }
@@ -79,7 +81,7 @@ export function createEmailApi(state: { dbReady: boolean; kits: Kit[]; library: 
     reload,
     async save(row) {
       const clean = { ...row } as Record<string, unknown>;
-      delete clean.created_at; delete clean.updated_at;
+      delete clean.created_at; delete clean.updated_at; delete clean.sent_at;
       const q = row.id ? sb.from("email_library").update(clean).eq("id", row.id) : sb.from("email_library").insert(clean);
       const { data, error } = await q.select("*").single();
       if (error) throw new Error(error.message);

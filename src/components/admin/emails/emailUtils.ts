@@ -25,7 +25,7 @@ export const emptyDraft = (kit: string): Draft => ({ kit, title: "", subject: ""
 export const draftFromRow = (r: LibraryRow): Draft => ({
   id: r.id, kit: r.brand_kit, title: r.title, subject: r.subject, preheader: r.preheader ?? "", blocks: (r.blocks ?? []) as Block[], brief: r.brief ?? "",
   recipient_name: r.recipient_name ?? "", recipient_email: r.recipient_email ?? "", source: r.source, status: r.status,
-  sentAt: r.status === "sent" ? r.updated_at : undefined,
+  sentAt: r.status === "sent" ? (r.sent_at ?? r.updated_at) : undefined,
   fixedHtml: r.source === "template" || !(r.blocks ?? []).length ? r.html : undefined,
 });
 

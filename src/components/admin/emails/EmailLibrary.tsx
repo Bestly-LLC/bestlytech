@@ -13,7 +13,7 @@ export interface JustSent { id: string; to: string; name: string; at: string }
 
 /** Marks the just-sent row as sent with its recipient and time, and puts the newest first. */
 export function applyJustSent(rows: LibraryRow[], j: JustSent | null): LibraryRow[] {
-  const out = j ? rows.map((r) => (r.id === j.id ? { ...r, status: "sent" as const, recipient_email: j.to, recipient_name: j.name || null, updated_at: j.at } : r)) : rows;
+  const out = j ? rows.map((r) => (r.id === j.id ? { ...r, status: "sent" as const, recipient_email: j.to, recipient_name: j.name || null, updated_at: j.at, sent_at: j.at } : r)) : rows;
   return [...out].sort((a, b) => (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0));
 }
 
@@ -57,7 +57,7 @@ export function EmailLibrary({ rows, kitName, highlightId, onOpen, onStartFrom, 
                 <p className="text-[13px] leading-snug text-[#EBEBF599]">
                   {who && <><span className="[overflow-wrap:anywhere]">Sent to {who}</span> <span aria-hidden="true">·</span> </>}
                   {!who && <>Sent </>}
-                  <WhenText iso={r.updated_at} />
+                  <WhenText iso={r.status === "sent" ? (r.sent_at ?? r.updated_at) : r.updated_at} />
                 </p>
               )}
               {r.subject && <p className="text-xs text-white/40 [overflow-wrap:anywhere]">Subject: <span className="text-white/60">{r.subject}</span></p>}
