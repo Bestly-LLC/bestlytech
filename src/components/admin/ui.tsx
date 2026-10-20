@@ -38,13 +38,13 @@ export function Card({ className, children, ...rest }: React.HTMLAttributes<HTML
 }
 
 /** iOS grouped-list header: small caps above the card, optional short aside on the right. */
-export function SectionHeader({ id, title, aside, icon }: { id?: string; title: ReactNode; aside?: ReactNode; icon?: ReactNode }) {
+export function SectionHeader({ id, title, aside, icon, as: Tag = "h2" }: { id?: string; title: ReactNode; aside?: ReactNode; icon?: ReactNode; as?: "h2" | "h3" | "h4" }) {
   return (
     <div className={cn("mb-2 flex min-h-9 items-center justify-between gap-3", inset)}>
-      <h2 id={id} className="flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white/60">
+      <Tag id={id} className="flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white/60">
         {icon}
         {title}
-      </h2>
+      </Tag>
       {aside && <div className="flex shrink-0 items-center gap-1 text-[13px] tabular-nums text-white/60">{aside}</div>}
     </div>
   );

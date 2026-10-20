@@ -5,6 +5,7 @@ import { ActionMenu } from "@/components/admin/ActionMenu";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { LeadCards } from "@/components/admin/cc/LeadCards";
 import { WeatherCard } from "@/components/admin/cc/WeatherCard";
+import { DetailPanels, useWide } from "@/components/admin/cc/Details";
 import { CallNext, HealthDot, NeedsYouShort, QuickRow, loadNeeds, realNeeds } from "@/components/admin/cc/HomeParts";
 import { failingSystems, fetchSystemHealth, healthHeadlineStatus, type SystemHealth } from "@/lib/systemHealth";
 import { loadBundle, loadWeather, useLive, type CcBundle, type Wx } from "@/lib/commandCenter";
@@ -15,8 +16,9 @@ import { focusRing, inset, tint } from "@/components/admin/ui";
 /**
  * Admin home, Command Center v2 (Jared, 2026-10-20). Looks ahead: what is coming and what to get ahead of.
  *
- *   Quick actions, then four answers (Money / Turo / AI team / My day) that tap open to their detail,
- *   the weather with your calendars and Turo drawn on it, Needs you (top three), and who to call next.
+ *   Quick actions, then four answers (Money / Turo / AI team / My day). On a phone each taps open to its detail in a sheet;
+ *   from lg up the four details sit on the page under the weather ("In detail") and a tap scrolls to its panel.
+ *   The weather with your calendars and Turo drawn on it, Needs you (top three), and who to call next.
  *   One health dot replaces the old status board and lights only when something is genuinely wrong.
  *
  * What used to crowd this page now has its own page: Overview (Also waiting, Status board, This week, Recent activity),
@@ -33,6 +35,7 @@ export default function AdminDashboard() {
   const needs = useLive(loadNeeds, 60_000);
   const health = useLive<SystemHealth>(fetchSystemHealth, 60_000);
   const meetings = useNextMeeting();
+  const wide = useWide();
 
   const needsCount = needs.data ? realNeeds(needs.data).length : null;
 
@@ -69,7 +72,7 @@ export default function AdminDashboard() {
 
       <QuickRow />
 
-      <LeadCards cc={cc} wx={wxs.data} needs={needsCount} meetings={meetings} />
+      <LeadCards cc={cc} wx={wxs.data} needs={needsCount} meetings={meetings} wide={wide} />
 
       <div className="grid grid-cols-1 items-start gap-x-6 gap-y-8 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <WeatherCard wxs={wxs} />
@@ -78,6 +81,8 @@ export default function AdminDashboard() {
           <CallNext cc={cc} />
         </div>
       </div>
+
+      {wide && <DetailPanels cc={cc} wx={wxs.data} needs={needs} meetings={meetings} />}
 
       <nav aria-label="More pages" className={cn("flex flex-wrap gap-x-5", inset)}>
         {[["/admin/overview", "Overview"], ["/admin/scout-day", "Scout's day"], ["/admin/needs-you", "All that needs you"]].map(([to, label]) => (
