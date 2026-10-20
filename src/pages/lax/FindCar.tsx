@@ -4,7 +4,8 @@
  * 2. Finding: a big arrow from the phone's GPS + compass toward the car's last spot, huge distance, Honk / Flash.
  *    The whole screen changes color when you face the car (LAX: sunset, Home: teal-green).
  * 3. Found (within ~30 ft): "You're There" + Flash / Honk + Next.
- * Fallbacks: no compass → distance + Open in Maps. Old spot (> 6 h) → says so and points to Honk.
+ * Fallbacks: no compass, Motion or Location denied → distance + Open in Maps (the arrow comes back if the compass
+ *   shows up late). Old spot (> 6 h) → says so and points to Honk. Inside the GPS error circle → "Right around here".
  * Demo pages: fully simulated (no location asked), so the host can see the whole flow anywhere.
  */
 import { useEffect, useRef, useState, type CSSProperties } from "react";
@@ -43,53 +44,87 @@ function bearing(a: { lat: number; lon: number }, b: { lat: number; lon: number 
   const x = Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) - Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(rad(b.lon - a.lon));
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
-const norm = (d: number) => ((d + 540) % 360) - 180; // -180..180
+// -180..180 for ANY input. The old ((d + 540) % 360) - 180 went out of range below -540 (JS % keeps the sign).
+export const norm = (d: number) => ((((d % 360) + 540) % 360) - 180);
 const fmtDist = (m: number) => { const ft = m * 3.281; return ft < 1000 ? { n: String(Math.max(0, Math.round(ft / 5) * 5)), u: "ft" } : { n: (m / 1609.34).toFixed(1), u: "mi" }; };
 const hintFor = (rel: number) => (Math.abs(rel) < 15 ? "ahead" : Math.abs(rel) > 150 ? "behind you" : rel > 0 ? "to your right" : "to your left");
 const FOUND_M = 10; // about 30 ft
+const FOUND_ACC = 25; // GPS must be good to about 80 ft before we say "You're There"
 const mapsFor = (lat: number, lon: number) =>
   /iPhone|iPad|Mac/.test(navigator.userAgent) ? `https://maps.apple.com/?q=Your%20Turo%20Tesla&ll=${lat},${lon}&dirflg=w` : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=walking`;
 
-async function askMotion(): Promise<boolean> {
+/** iOS asks for Motion access; everyone else just says yes. "denied" sticks for the Safari session. */
+async function askMotion(): Promise<"granted" | "denied"> {
   const D = (typeof window !== "undefined" ? (window as unknown as { DeviceOrientationEvent?: { requestPermission?: () => Promise<string> } }).DeviceOrientationEvent : undefined);
-  if (D && typeof D.requestPermission === "function") { try { return (await D.requestPermission()) === "granted"; } catch { return false; } }
-  return true;
+  if (D && typeof D.requestPermission === "function") { try { return (await D.requestPermission()) === "granted" ? "granted" : "denied"; } catch { return "denied"; } }
+  return "granted";
 }
 
-/** Compass heading in degrees (0 = north), smoothed. null until the phone reports one. */
+/** How far the screen is turned from portrait (0, 90, 180, 270), so a sideways phone still points right. */
+function screenAngle() {
+  const so = typeof screen !== "undefined" ? (screen as Screen & { orientation?: { angle?: number } }).orientation : undefined;
+  if (so && typeof so.angle === "number") return so.angle;
+  const wo = (window as unknown as { orientation?: number }).orientation;
+  return typeof wo === "number" ? wo : 0;
+}
+
+/** One orientation event → compass heading (0 = north) and iOS accuracy, or null if this event has no real heading. */
+export function readHeading(e: { webkitCompassHeading?: number; webkitCompassAccuracy?: number; absolute?: boolean | null; type?: string; alpha?: number | null }, angle = 0) {
+  let v: number | null = null, acc: number | null = null;
+  if (typeof e.webkitCompassHeading === "number" && Number.isFinite(e.webkitCompassHeading) && e.webkitCompassHeading >= 0) {
+    v = e.webkitCompassHeading;
+    acc = typeof e.webkitCompassAccuracy === "number" ? e.webkitCompassAccuracy : null;
+  } else if ((e.absolute || e.type === "deviceorientationabsolute") && typeof e.alpha === "number" && Number.isFinite(e.alpha)) {
+    v = 360 - e.alpha;
+  }
+  if (v == null) return null;
+  return { h: (((v + angle) % 360) + 360) % 360, acc };
+}
+
+/**
+ * Compass heading, smoothed. null until the phone reports one.
+ * Events arrive ~60 times a second; we smooth every one but only re-render once per frame,
+ * and only when the heading moved half a degree (the old version re-rendered the whole
+ * full-screen sheet on every event, which is what made the arrow stutter and lag).
+ */
 function useHeading(on: boolean) {
-  const [h, setH] = useState<number | null>(null);
+  const [s, setS] = useState<{ h: number; acc: number | null } | null>(null);
   useEffect(() => {
-    if (!on) return;
-    let last: number | null = null;
-    const f = (e: DeviceOrientationEvent & { webkitCompassHeading?: number }) => {
-      let v: number | null = null;
-      if (typeof e.webkitCompassHeading === "number" && !Number.isNaN(e.webkitCompassHeading)) v = e.webkitCompassHeading;
-      else if ((e.absolute || e.type === "deviceorientationabsolute") && e.alpha != null) v = (360 - e.alpha) % 360;
-      if (v == null) return;
-      last = last == null ? v : (last + norm(v - last) * 0.25 + 360) % 360;
-      setH(last);
+    if (!on) { setS(null); return; }
+    let last: number | null = null, acc: number | null = null, shown: number | null = null, shownAcc: number | null = null, raf = 0;
+    const flush = () => {
+      raf = 0;
+      if (last == null) return;
+      if (shown == null || Math.abs(norm(last - shown)) >= 0.5 || acc !== shownAcc) { shown = last; shownAcc = acc; setS({ h: last, acc }); }
     };
-    window.addEventListener("deviceorientationabsolute", f as EventListener);
-    window.addEventListener("deviceorientation", f as EventListener);
-    return () => { window.removeEventListener("deviceorientationabsolute", f as EventListener); window.removeEventListener("deviceorientation", f as EventListener); };
+    const f = (e: Event) => {
+      const r = readHeading(e as DeviceOrientationEvent & { webkitCompassHeading?: number; webkitCompassAccuracy?: number }, screenAngle());
+      if (!r) return;
+      acc = r.acc;
+      last = last == null ? r.h : (((last + norm(r.h - last) * 0.25) % 360) + 360) % 360;
+      if (!raf) raf = requestAnimationFrame(flush);
+    };
+    window.addEventListener("deviceorientationabsolute", f);
+    window.addEventListener("deviceorientation", f);
+    return () => { if (raf) cancelAnimationFrame(raf); window.removeEventListener("deviceorientationabsolute", f); window.removeEventListener("deviceorientation", f); };
   }, [on]);
-  return h;
+  return s;
 }
 
 function usePosition(on: boolean) {
   const [p, setP] = useState<{ lat: number; lon: number; acc: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [denied, setDenied] = useState(false);
   useEffect(() => {
-    if (!on) return;
-    if (!navigator.geolocation) { setErr("This browser can't share your location."); return; }
+    if (!on) { setP(null); setErr(null); setDenied(false); return; }
+    if (!navigator.geolocation) { setErr("This browser can't share your location."); setDenied(true); return; }
     const id = navigator.geolocation.watchPosition(
-      (x) => { setErr(null); setP({ lat: x.coords.latitude, lon: x.coords.longitude, acc: x.coords.accuracy }); },
-      (e) => setErr(e.code === 1 ? "Location is off for this page. Turn it on in Settings, or open the map instead." : "Can't find your location right now."),
+      (x) => { setErr(null); setDenied(false); setP({ lat: x.coords.latitude, lon: x.coords.longitude, acc: x.coords.accuracy }); },
+      (e) => { if (e.code === 1) { setDenied(true); setErr("Location is off for this page."); } else setErr("Can't find your location right now."); },
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
     return () => navigator.geolocation.clearWatch(id);
   }, [on]);
-  return { p, err };
+  return { p, err, denied };
 }
 
 function Pill({ act, run, demo, token }: { act: Act; run?: Run; demo?: boolean; token?: string }) {
@@ -114,28 +149,43 @@ function Pill({ act, run, demo, token }: { act: Act; run?: Run; demo?: boolean; 
   );
 }
 
-export function FindCar({ open, onClose, kind, spot, run, demo, token, where, onNext, nextLabel }: {
+export function FindCar({ open, onClose, kind, spot: spotProp, run, demo, token, where, onNext, nextLabel }: {
   open: boolean; onClose: () => void; kind: Kind; spot: Spot | null; run?: Run; demo?: boolean; token?: string;
   where: string; onNext?: () => void; nextLabel?: string;
 }) {
   const [phase, setPhase] = useState<"start" | "find" | "found">("start");
   const live = open && phase !== "start" && !demo;
-  const heading = useHeading(live);
-  const { p, err } = usePosition(live);
+  const hs = useHeading(live);
+  const heading = hs?.h ?? null;
+  const { p, err, denied: locDenied } = usePosition(live);
   const [noCompass, setNoCompass] = useState(false);
+  const [motionDenied, setMotionDenied] = useState(false);
   const spun = useRef(0); // cumulative arrow angle (no 359° → 0° spins)
   const [sim, setSim] = useState({ m: 98, rel: 62 });
   const buzzed = useRef(false);
+  const disarmed = useRef(false); // after "Back to the arrow": don't jump straight back to "You're There"
+  // Keep the last spot while open, so a page refresh that briefly has no spot can't break the arrow mid-walk.
+  const lastSpot = useRef<Spot | null>(null);
+  if (spotProp) lastSpot.current = spotProp;
+  const spot = spotProp ?? (open ? lastSpot.current : null);
 
-  useEffect(() => { if (!open) { setPhase("start"); setNoCompass(false); buzzed.current = false; } }, [open]);
+  useEffect(() => { if (!open) { setPhase("start"); setNoCompass(false); setMotionDenied(false); buzzed.current = false; disarmed.current = false; } }, [open]);
   useEffect(() => { if (open) track(token, "find_car_open"); }, [open, token]);
   useEffect(() => { // Escape closes
     if (!open) return;
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   }, [open, onClose]);
-  // No compass after 3 s of finding: show the distance + map instead of a wrong arrow.
-  useEffect(() => { if (!live || heading != null) return; const t = window.setTimeout(() => setNoCompass(true), 3000); return () => window.clearTimeout(t); }, [live, heading]);
+  // No compass after 4 s of finding: show the distance + map instead of a wrong arrow.
+  // The moment a heading shows up (slow compass, iOS calibration), the arrow comes back. The old version
+  // set this once and never cleared it, so a late compass left the screen stuck on "No compass".
+  const hasHeading = heading != null;
+  useEffect(() => {
+    if (!live) return;
+    if (hasHeading) { setNoCompass(false); return; }
+    const t = window.setTimeout(() => { setNoCompass(true); track(token, "find_car_no_compass"); }, 4000);
+    return () => window.clearTimeout(t);
+  }, [live, hasHeading, token]);
   // Demo: walk toward the car.
   useEffect(() => {
     if (!open || !demo || phase !== "find") return;
@@ -153,21 +203,43 @@ export function FindCar({ open, onClose, kind, spot, run, demo, token, where, on
   if (rel != null) spun.current += norm(rel - norm(spun.current));
   const staleH = spot ? (Date.now() - +new Date(spot.observed_at)) / 3600e3 : 0;
 
-  useEffect(() => { if (phase === "find" && m != null && m <= FOUND_M) { setPhase("found"); track(token, "find_car_found"); } }, [m, phase, token]);
+  // "You're There" needs a GPS fix good enough to trust (garage GPS can be 40+ ft off and used to fire early),
+  // and after "Back to the arrow" the guest has to step away first, or the screen would bounce straight back.
+  const pAcc = p?.acc ?? null;
+  useEffect(() => {
+    if (phase !== "find" || m == null) return;
+    if (disarmed.current) { if (m > FOUND_M * 2) disarmed.current = false; return; }
+    if (m <= FOUND_M && (demo || (pAcc != null && pAcc <= FOUND_ACC))) { setPhase("found"); track(token, "find_car_found"); }
+  }, [m, phase, token, demo, pAcc]);
   useEffect(() => { if (aligned && !buzzed.current) { buzzed.current = true; navigator.vibrate?.(15); } if (!aligned) buzzed.current = false; }, [aligned]);
 
   if (!open) return null;
-  const start = async () => { if (!demo) await askMotion(); setPhase("find"); };
+  const start = async () => {
+    if (!demo) {
+      const r = await askMotion();
+      setMotionDenied(r === "denied");
+      if (r === "denied") track(token, "find_car_motion_denied");
+    }
+    setPhase("find");
+  };
+  // Within the GPS error circle the bearing is noise, so say "right around here" instead of left/right.
+  const close = !demo && m != null && p != null && m < Math.min(Math.max(p.acc, FOUND_M), 40);
+  const calib = !demo && hs?.acc != null && (hs.acc < 0 || hs.acc > 25);
+  const fallback = demo ? null
+    : locDenied ? "Location is off for this page, so no arrow. Follow the map instead."
+    : motionDenied ? "Motion access is off for this page, so no arrow. Follow the map instead."
+    : noCompass && heading == null ? "No compass on this device, so no arrow. Follow the map instead."
+    : null;
   const d = m != null ? fmtDist(m) : null;
   const map = spot ? mapsFor(spot.lat, spot.lon) : null;
   const titleFont = { fontFamily: "var(--fc-font)" };
 
   const body = (
     <div role="dialog" aria-modal="true" aria-label="Find the Car" className="fixed inset-0 z-[70] flex flex-col text-white" style={{ ...THEME[kind], background: phase === "found" ? "var(--fc-found)" : phase === "start" ? "var(--fc-start)" : "var(--fc-bg)" }}>
-      {phase === "find" && <div aria-hidden className="pointer-events-none absolute inset-0 transition-opacity duration-500 motion-reduce:transition-none" style={{ background: "var(--fc-aligned)", opacity: aligned ? 1 : 0 }} />}
+      {phase === "find" && <div aria-hidden className="pointer-events-none absolute inset-0 transition-opacity duration-500 motion-reduce:transition-none" style={{ background: "var(--fc-aligned)", opacity: aligned && !close ? 1 : 0 }} />}
       <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col px-4" style={{ paddingTop: "max(12px, env(safe-area-inset-top))", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
         <div className="flex h-11 items-center justify-between">
-          {phase === "start" ? <span /> : <button type="button" onClick={onClose} className="-ml-2 min-h-[44px] px-2 text-[17px] font-semibold" style={{ color: aligned || phase === "found" ? "#fff" : "var(--fc-accent)" }}>Done</button>}
+          {phase === "start" ? <span /> : <button type="button" onClick={onClose} className="-ml-2 min-h-[44px] px-2 text-[17px] font-semibold" style={{ color: (aligned && !close) || phase === "found" ? "#fff" : "var(--fc-accent)" }}>Done</button>}
           {phase === "start" && <button type="button" onClick={onClose} aria-label="Close" className="grid h-[30px] w-[30px] place-items-center rounded-full bg-white/[0.12] text-white/70"><X className="h-4 w-4" /></button>}
         </div>
 
@@ -204,25 +276,28 @@ export function FindCar({ open, onClose, kind, spot, run, demo, token, where, on
             </div>
             <div className="relative grid flex-1 place-items-center">
               <span aria-hidden className={`absolute h-[236px] w-[236px] rounded-full ${kind === "home" ? "border-[1.5px] border-dashed border-[#E8A93A]/30" : "border border-white/15"}`} />
-              {noCompass && !demo ? (
+              {fallback ? (
                 <div className="relative px-6 text-center">
                   <MapPin className="mx-auto h-12 w-12" style={{ color: "var(--fc-accent)" }} aria-hidden />
-                  <p className="mt-3 text-[15px] leading-snug text-white/80"><Lines>No compass on this device, so no arrow. Follow the map instead.</Lines></p>
-                  {map && <a href={map} className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full px-5 text-[15px] font-bold" style={{ background: "var(--fc-accent)", color: "var(--fc-on)" }}><Navigation className="h-4 w-4" /> Open in Maps</a>}
+                  <p className="mt-3 text-[15px] leading-snug text-white/80"><Lines>{fallback}</Lines></p>
+                  {map && <a href={map} onClick={() => track(token, "find_car_maps")} className="mt-4 inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-full px-5 text-[15px] font-bold" style={{ background: "var(--fc-accent)", color: "var(--fc-on)" }}><Navigation className="h-4 w-4" /> Open in Maps</a>}
                 </div>
               ) : rel == null ? (
                 <Loader2 className="h-10 w-10 animate-spin text-white/60" aria-label="Finding your location" />
               ) : (
-                <svg viewBox="0 0 100 100" className="relative h-[180px] w-[180px] drop-shadow-[0_10px_26px_rgba(0,0,0,.35)] transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none"
-                  style={{ transform: `rotate(${spun.current}deg)` }} role="img" aria-label={`Arrow: the car is ${hintFor(rel)}`}>
-                  <path d="M50 6 86 90 50 70 14 90Z" style={{ fill: aligned ? "#fff" : "var(--fc-accent)", transition: "fill .5s" }} />
+                // Short, smooth turn: the heading is already smoothed in JS, so a long CSS ease just made the arrow lag behind the phone.
+                <svg viewBox="0 0 100 100" className="relative h-[180px] w-[180px] drop-shadow-[0_10px_26px_rgba(0,0,0,.35)] transition-transform duration-200 ease-out motion-reduce:transition-none"
+                  style={{ transform: `rotate(${spun.current}deg)`, opacity: close ? 0.55 : 1, willChange: "transform" }} role="img" aria-label={close ? "Arrow: the car is right around here" : `Arrow: the car is ${hintFor(rel)}`}>
+                  <path d="M50 6 86 90 50 70 14 90Z" style={{ fill: aligned && !close ? "#fff" : "var(--fc-accent)", transition: "fill .5s" }} />
                 </svg>
               )}
             </div>
             <div aria-live="polite">
-              <p className="text-[64px] font-extrabold leading-none tracking-[-0.02em] tabular-nums">{d ? <>{d.n}<small className="ml-1 text-[32px] font-bold tracking-normal">{d.u}</small></> : "—"}</p>
-              <p className="mt-1.5 text-[20px] font-semibold text-white/80"><Lines>{err ?? (rel != null ? hintFor(rel) : noCompass ? "away" : "Finding you…")}</Lines></p>
-              {!demo && p && p.acc > 40 && <p className="mt-1 text-[13px] text-white/65"><Lines>{kind === "lax" ? `GPS is weak inside the garage. On Level P3, tap Honk or Flash.` : "GPS is weak here. Honk or Flash helps."}</Lines></p>}
+              <p className="whitespace-nowrap text-[64px] font-extrabold leading-none tracking-[-0.02em] tabular-nums">{d ? <>{d.n}<small className="ml-1 text-[32px] font-bold tracking-normal">{d.u}</small></> : "—"}</p>
+              <p className="mt-1.5 text-[20px] font-semibold text-white/80"><Lines>{fallback ? "away" : close ? "Right around here" : rel != null ? hintFor(rel) : err ?? "Finding you…"}</Lines></p>
+              {calib && !fallback && <p className="mt-1 text-[13px] text-white/65"><Lines>Compass needs a moment. Move your phone in a figure 8.</Lines></p>}
+              {!demo && !fallback && p && p.acc > 40 && <p className="mt-1 text-[13px] text-white/65"><Lines>{kind === "lax" ? "GPS is weak inside the garage. Tap Honk or Flash." : "GPS is weak here. Honk or Flash helps."}</Lines></p>}
+              {!demo && !fallback && close && !(p && p.acc > 40) && <p className="mt-1 text-[13px] text-white/65"><Lines>Not sure which one? Flash the lights.</Lines></p>}
             </div>
             <div className="mt-5 flex gap-2.5"><Pill act="honk" run={run} demo={demo} token={token} /><Pill act="flash" run={run} demo={demo} token={token} /></div>
           </>
@@ -240,7 +315,7 @@ export function FindCar({ open, onClose, kind, spot, run, demo, token, where, on
             <div className="flex-1" />
             <div className="mb-2.5 flex gap-2.5"><Pill act="flash" run={run} demo={demo} token={token} /><Pill act="honk" run={run} demo={demo} token={token} /></div>
             <button type="button" onClick={() => { onClose(); onNext?.(); }} className="h-[52px] w-full rounded-2xl bg-white text-[17px] font-bold active:scale-[0.98]" style={{ color: "var(--fc-on)" }}>{nextLabel ?? "Next: Set Up and Unlock"}</button>
-            <button type="button" onClick={() => setPhase("find")} className="mt-1 h-11 text-[15px] font-semibold text-white/85">Back to the arrow</button>
+            <button type="button" onClick={() => { disarmed.current = true; setPhase("find"); }} className="mt-1 h-11 text-[15px] font-semibold text-white/85">Back to the arrow</button>
           </>
         )}
       </div>
@@ -249,20 +324,29 @@ export function FindCar({ open, onClose, kind, spot, run, demo, token, where, on
   return createPortal(body, document.body);
 }
 
-/** Entry button + the Find the Car screen. */
-export function FindCarButton({ kind, spot, run, demo, token, where, className = "", opensAt, onNext, held }: {
-  kind: Kind; spot: Spot | null; run?: Run; demo?: boolean; token?: string; where: string; className?: string; opensAt?: string | null; onNext?: () => void; held?: boolean;
+/**
+ * Entry button + the Find the Car screen.
+ * Pages render this ALWAYS (pass soonText for the "not yet" line) instead of swapping it out for a
+ * placeholder when the spot or hold changes. Swapping unmounted the open finder mid-walk whenever the
+ * page refreshed with no spot for a moment, which closed or reset the arrow on the guest.
+ */
+export function FindCarButton({ kind, spot, run, demo, token, where, className = "", opensAt, onNext, held, soonText }: {
+  kind: Kind; spot: Spot | null; run?: Run; demo?: boolean; token?: string; where: string; className?: string; opensAt?: string | null; onNext?: () => void; held?: boolean; soonText?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const soon = !!held || (!demo && !spot);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} disabled={soon}
-        className={`flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold shadow-md shadow-black/25 transition active:scale-[0.98] disabled:bg-white/[0.06] disabled:text-white/60 disabled:shadow-none motion-reduce:transition-none ${className}`}
-        style={soon ? undefined : { background: "var(--trip-accent)", color: kind === "home" ? "#132726" : "#1A1140" }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden><path d="M12 2 20 21 12 16.5 4 21Z" fill="currentColor" /></svg>
-        {held ? "Find the Car unlocks once your license is checked" : soon ? (opensAt ? "Find the Car turns on 2 hours before pickup" : "Find the Car: car location updating…") : "Find the Car"}
-      </button>
+      {soonText && !open ? (
+        <span className={`flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10 ${className}`}>{soonText}</span>
+      ) : (
+        <button type="button" onClick={() => setOpen(true)} disabled={soon}
+          className={`flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold shadow-md shadow-black/25 transition active:scale-[0.98] disabled:bg-white/[0.06] disabled:text-white/60 disabled:shadow-none motion-reduce:transition-none ${className}`}
+          style={soon ? undefined : { background: "var(--trip-accent)", color: kind === "home" ? "#132726" : "#1A1140" }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden><path d="M12 2 20 21 12 16.5 4 21Z" fill="currentColor" /></svg>
+          {held ? "Find the Car unlocks once your license is checked" : soon ? (opensAt ? "Find the Car turns on 2 hours before pickup" : "Find the Car: car location updating…") : "Find the Car"}
+        </button>
+      )}
       <FindCar open={open} onClose={() => setOpen(false)} kind={kind} spot={spot} run={run} demo={demo} token={token} where={where} onNext={onNext} />
     </>
   );

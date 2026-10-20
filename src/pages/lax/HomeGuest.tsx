@@ -379,9 +379,8 @@ export default function HomeGuest({ pub, token, run, demo, demoPage, reload }: {
               </>} onClimate={live ? (a, s) => run!(a, s) : undefined} lockedUntil={lockedUntil} />
           </div>
           <div className="mt-2.5">
-            {spot
-              ? <FindCarButton kind="home" spot={spot} run={live ? run : undefined} demo={!!demoPage} token={token} where="on N Kings Rd" held={!!pub.find_hold} />
-              : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">{pub.find_hold ? "Car location unlocks once your license is checked" : pub.trip && Date.now() >= +new Date(pub.trip.starts_at) - 2 * 3600e3 ? "Car location updating… use Honk to find it" : "Exact spot of the car shows 2 hours before pickup"}</span>}
+            <FindCarButton kind="home" spot={spot} run={live ? run : undefined} demo={!!demoPage} token={token} where="on N Kings Rd" held={!!pub.find_hold}
+              soonText={spot ? null : pub.find_hold ? "Car location unlocks once your license is checked" : pub.trip && Date.now() >= +new Date(pub.trip.starts_at) - 2 * 3600e3 ? "Car location updating… use Honk to find it" : "Exact spot of the car shows 2 hours before pickup"} />
           </div>
         </section>
         )}

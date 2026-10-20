@@ -622,9 +622,8 @@ export default function LaxGuest() {
               {!(pub.trip || pub.car) && <a href={maps} onClick={() => track(token || undefined, "directions")} className="mt-2.5 flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-white text-[15px] font-semibold text-[#1A1140] active:scale-[0.98]"><MapPin className="h-4 w-4" /> Directions</a>}
               {/* Same as Home: Find the Car right under the car card. */}
               {pub.trip && <div className="mt-2.5">
-                {(pub.spot || demo) || pub.find_hold
-                  ? <FindCarButton kind="lax" spot={pub.spot ?? null} run={live ? carCommand : undefined} demo={demo} token={token || undefined} where={`on Level ${level}`} held={!!pub.find_hold} />
-                  : <span className="flex min-h-[52px] items-center justify-center rounded-2xl bg-white/[0.04] px-2 text-center text-[12px] text-white/65 ring-1 ring-white/10">{Date.now() >= +new Date(pub.trip.starts_at) - 2 * 3600e3 ? "Car location updating… use Honk to find it" : "Find the Car turns on 2 hours before pickup"}</span>}
+                <FindCarButton kind="lax" spot={pub.spot ?? null} run={live ? carCommand : undefined} demo={demo} token={token || undefined} where={`on Level ${level}`} held={!!pub.find_hold}
+                  soonText={(pub.spot || demo) || pub.find_hold ? null : Date.now() >= +new Date(pub.trip.starts_at) - 2 * 3600e3 ? "Car location updating… use Honk to find it" : "Find the Car turns on 2 hours before pickup"} />
               </div>}
             </section>
             )}
