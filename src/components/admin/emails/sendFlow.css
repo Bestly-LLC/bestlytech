@@ -1,0 +1,26 @@
+/* Send flow motion. Everything has soft, feathered edges; reduced motion keeps only the cross-fade. */
+:root { --sf-ease: cubic-bezier(0.2, 0.8, 0.2, 1); --sf-spring: cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+@keyframes sf-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sf-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sf-badge-in { 0% { transform: scale(0.45); opacity: 0; } 40% { opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes sf-check-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes sf-glow-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+@keyframes sf-menu-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes sf-card-glow {
+  0%   { box-shadow: 0 0 0 1px rgba(48, 209, 88, 0.4), 0 0 26px 4px rgba(48, 209, 88, 0.32), 0 0 72px 18px rgba(48, 209, 88, 0.14); }
+  100% { box-shadow: 0 0 0 1px rgba(48, 209, 88, 0), 0 0 26px 4px rgba(48, 209, 88, 0), 0 0 72px 18px rgba(48, 209, 88, 0); }
+}
+
+.sf-view-in { animation: sf-fade-in 260ms var(--sf-ease) both; }
+.sf-view-out { animation: sf-fade-out 220ms ease-out both; }
+.sf-badge { animation: sf-badge-in 560ms var(--sf-spring) 60ms both; transform-origin: center; }
+.sf-check { stroke-dasharray: 1; stroke-dashoffset: 1; animation: sf-check-draw 380ms var(--sf-ease) 340ms forwards; }
+.sf-glow { animation: sf-glow-in 800ms var(--sf-ease) 80ms both; }
+.sf-menu-in { animation: sf-menu-in 140ms var(--sf-ease) both; transform-origin: top center; }
+.sf-card-glow { animation: sf-card-glow 2s ease-out 0.1s both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-badge, .sf-glow, .sf-menu-in { animation: none; }
+  .sf-check { animation: none; stroke-dashoffset: 0; }
+}

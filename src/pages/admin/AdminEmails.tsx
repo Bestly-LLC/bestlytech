@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, FileText, Inbox, Plus, RefreshCw, Trash2, UserPlus } from "lucide-react";
+import { ArrowLeft, Inbox, Plus, RefreshCw, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { Lines } from "@/components/Lines";
 import { cardCls, focusRing } from "@/components/admin/ui";
@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import { createEmailApi, loadEmailData, type EmailApi, type LibraryRow } from "@/lib/email/api";
 import { EmailBuilder } from "@/components/admin/emails/EmailBuilder";
-import { Thumb } from "@/components/admin/emails/PreviewFrame";
+import { EmailLibrary, applyJustSent, type JustSent } from "@/components/admin/emails/EmailLibrary";
 import { draftFromRow, emptyDraft, type Draft } from "@/components/admin/emails/emailUtils";
 
 /**
@@ -25,6 +25,8 @@ export default function AdminEmails() {
   const [filter, setFilter] = useState("all");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [clientOpen, setClientOpen] = useState(false);
+  const [justSent, setJustSent] = useState<JustSent | null>(null);
+  const [flashId, setFlashId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     try { setLoadErr(""); setData(await loadEmailData()); }
@@ -34,7 +36,13 @@ export default function AdminEmails() {
 
   const api: EmailApi | null = useMemo(() => (data ? createEmailApi(data, reload) : null), [data, reload]);
   const kitName = useMemo(() => Object.fromEntries((data?.kits ?? []).map((k) => [k.slug, k.name])), [data]);
-  const shown = useMemo(() => (data?.library ?? []).filter((r) => filter === "all" || r.brand_kit === filter), [data, filter]);
+  const shown = useMemo(() => applyJustSent(data?.library ?? [], justSent).filter((r) => filter === "all" || r.brand_kit === filter), [data, filter, justSent]);
+  useEffect(() => { if (draft) setJustSent(null); }, [draft]);
+  useEffect(() => {
+    if (!flashId) return;
+    const t = window.setTimeout(() => setFlashId(null), 2800);
+    return () => window.clearTimeout(t);
+  }, [flashId]);
   const usedKits = useMemo(() => (data?.kits ?? []).filter((k) => (data?.library ?? []).some((r) => r.brand_kit === k.slug)), [data]);
 
   const remove = async (r: LibraryRow) => {
@@ -49,7 +57,11 @@ export default function AdminEmails() {
       <div className="space-y-6">
         <PageHeader title={draft.id ? "Edit email" : "New email"} description="Say what you want in plain words. Free AI writes it, you check it, then send or download."
           actions={<button type="button" onClick={() => { setDraft(null); void reload(); }} className={btnPlain}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to the library</button>} />
-        <EmailBuilder api={api} initial={draft} onSaved={() => { void reload(); }} />
+        <EmailBuilder api={api} initial={draft} onSaved={() => { void reload(); }}
+          onSentDone={(row, to, name) => {
+            // Back to the library, newest first, the sent card lit for a moment.
+            setJustSent({ id: row.id, to, name, at: new Date().toISOString() }); setFlashId(row.id); setFilter("all"); setDraft(null); void reload();
+          }} />
       </div>
     );
   }
@@ -109,26 +121,10 @@ export default function AdminEmails() {
       )}
 
       {shown.length > 0 && api && (
-        <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
-          {shown.map((r) => (
-            <article key={r.id} className={cn(cardCls, "flex min-w-0 flex-col gap-4 p-4 sm:p-5")}>
-              <Thumb html={r.html} title={r.title} />
-              <div className="min-w-0 space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-medium text-white/80">{kitName[r.brand_kit] ?? r.brand_kit}</span>
-                  <span className="text-xs text-white/50">{r.source === "template" ? "Template" : r.status === "sent" ? "Sent" : "Draft"}</span>
-                </div>
-                <h2 className="text-lg font-semibold leading-snug text-white [overflow-wrap:anywhere]">{r.title}</h2>
-                {r.subject && <p className="text-xs text-white/40 [overflow-wrap:anywhere]">Subject: <span className="text-white/60">{r.subject}</span></p>}
-              </div>
-              <div className="mt-auto flex flex-wrap gap-2">
-                <button type="button" onClick={() => setDraft(draftFromRow(r))} className={btnTinted}><FileText className="h-4 w-4" aria-hidden="true" />Open</button>
-                <button type="button" onClick={() => setDraft({ ...emptyDraft(r.brand_kit), brief: r.brief ?? "" })} className={btnPlain}>Start from this look</button>
-                <button type="button" aria-label={`Delete ${r.title}`} onClick={() => void remove(r)} className={cn("ml-auto inline-flex h-11 w-11 items-center justify-center rounded-full text-[#FF6961] hover:bg-[#FF453A]/10", focusRing)}><Trash2 className="h-4 w-4" /></button>
-              </div>
-            </article>
-          ))}
-        </div>
+        <EmailLibrary rows={shown} kitName={kitName} highlightId={flashId}
+          onOpen={(r) => setDraft(draftFromRow(r))}
+          onStartFrom={(r) => setDraft({ ...emptyDraft(r.brand_kit), brief: r.brief ?? "" })}
+          onDelete={(r) => void remove(r)} />
       )}
 
       {api && <ClientDialog open={clientOpen} onClose={() => setClientOpen(false)} api={api} onMade={async (slug) => { await reload(); setClientOpen(false); setDraft(emptyDraft(slug)); }} />}
