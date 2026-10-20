@@ -606,6 +606,25 @@ body.admin-bento :is(a[href], button, summary, [role="button"], [role="tab"], [r
   }
 }
 
+/* Inside Bestly Cloud the theme comes from Cloud's header control. useAdminTheme flips this attribute
+   (admin.html sets it before first paint), so the page behind the app is the right colour from the very
+   first frame and a reload never flashes the other theme. */
+html[data-embed-theme="dark"] { background-color: #000; color-scheme: dark; }
+html[data-embed-theme="light"] { background-color: var(--bento-page, #F3F2EE); color-scheme: light; }
+/* Live change: one 180 ms colour crossfade (set by useAdminTheme, never added with reduced motion). */
+html.theme-xfade,
+html.theme-xfade *,
+html.theme-xfade *::before,
+html.theme-xfade *::after {
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, fill 180ms ease, stroke 180ms ease, box-shadow 180ms ease, outline-color 180ms ease !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.theme-xfade,
+  html.theme-xfade *,
+  html.theme-xfade *::before,
+  html.theme-xfade *::after { transition: none !important; }
+}
+
 /* Dark admin: dark scrollbars on the page and every scroll box (they were the light system ones). */
 html:has(body.admin-shell:not(.admin-bento)) {
   color-scheme: dark;
