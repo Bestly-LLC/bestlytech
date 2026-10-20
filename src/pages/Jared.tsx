@@ -20,7 +20,7 @@ const makes = [
   },
   {
     name: "InventoryProof",
-    line: "A home inventory app. Walk through your house and it lists everything you own.",
+    line: "A home inventory app that lists everything you own, ready for insurance.",
     to: "/inventory-proof",
     image: inventoryproofIcon,
   },
