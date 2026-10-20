@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Section, btnPrimary, card, field, label, pill, secondary } from "./laxUi";
 import { Lines } from "@/components/Lines";
+import { IPostalLoginSlot } from "./IPostalLoginSlot";
 
 const rpc = supabase.rpc.bind(supabase) as unknown as (fn: string, args?: object) => Promise<{ data: unknown; error: { message: string } | null }>;
 
@@ -99,6 +100,7 @@ export function SecurityTokensCard() {
 
   if (failed) {
     return (
+      <>
       <Section title="Audit tokens">
         <div className={cn(card, "space-y-1")}>
           <p className={cn("text-[15px] font-semibold", label)}>Token storage isn&rsquo;t set up yet</p>
@@ -107,6 +109,8 @@ export function SecurityTokensCard() {
           </p>
         </div>
       </Section>
+      <IPostalLoginSlot />
+      </>
     );
   }
   if (!s) return null;
@@ -128,6 +132,7 @@ export function SecurityTokensCard() {
   ];
 
   return (
+    <>
     <Section title="Audit tokens"
       footer="Stored in Vault under pi:vercel:api_token, pi:supabase:management_token and pi:cloudflare:api_token. Write-only: nothing typed here can be read back, by this page or anyone.">
       <div className={cn(card, "space-y-4")}>
@@ -175,5 +180,7 @@ export function SecurityTokensCard() {
         </div>
       </div>
     </Section>
+    <IPostalLoginSlot />
+    </>
   );
 }

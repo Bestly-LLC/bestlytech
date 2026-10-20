@@ -50,6 +50,24 @@ export type Database = {
         }
         Relationships: []
       }
+      _scout_stage: {
+        Row: {
+          at: string | null
+          content: string
+          path: string
+        }
+        Insert: {
+          at?: string | null
+          content: string
+          path: string
+        }
+        Update: {
+          at?: string | null
+          content?: string
+          path?: string
+        }
+        Relationships: []
+      }
       activation_code_attempts: {
         Row: {
           action: string
@@ -4646,6 +4664,167 @@ export type Database = {
           },
         ]
       }
+      callbox_events: {
+        Row: {
+          caller: string | null
+          code: string | null
+          conversation_id: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string
+          expected_id: string | null
+          expires_at: string | null
+          id: string
+          known_callbox: boolean
+          outcome: string | null
+          push_result: string | null
+          selftest: boolean
+          status: string
+          visitor_said: string | null
+        }
+        Insert: {
+          caller?: string | null
+          code?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision: string
+          expected_id?: string | null
+          expires_at?: string | null
+          id?: string
+          known_callbox?: boolean
+          outcome?: string | null
+          push_result?: string | null
+          selftest?: boolean
+          status?: string
+          visitor_said?: string | null
+        }
+        Update: {
+          caller?: string | null
+          code?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          expected_id?: string | null
+          expires_at?: string | null
+          id?: string
+          known_callbox?: boolean
+          outcome?: string | null
+          push_result?: string | null
+          selftest?: boolean
+          status?: string
+          visitor_said?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "callbox_events_expected_id_fkey"
+            columns: ["expected_id"]
+            isOneToOne: false
+            referencedRelation: "callbox_expected"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      callbox_expected: {
+        Row: {
+          auto_open: boolean
+          cancelled_at: string | null
+          created_at: string
+          id: string
+          keywords: string[]
+          kind: string
+          label: string
+          last_used_at: string | null
+          max_uses: number | null
+          note: string | null
+          source: string
+          source_ref: string | null
+          uses: number
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          auto_open?: boolean
+          cancelled_at?: string | null
+          created_at?: string
+          id?: string
+          keywords?: string[]
+          kind?: string
+          label: string
+          last_used_at?: string | null
+          max_uses?: number | null
+          note?: string | null
+          source?: string
+          source_ref?: string | null
+          uses?: number
+          window_end?: string
+          window_start?: string
+        }
+        Update: {
+          auto_open?: boolean
+          cancelled_at?: string | null
+          created_at?: string
+          id?: string
+          keywords?: string[]
+          kind?: string
+          label?: string
+          last_used_at?: string | null
+          max_uses?: number | null
+          note?: string | null
+          source?: string
+          source_ref?: string | null
+          uses?: number
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
+      callbox_settings: {
+        Row: {
+          ask_timeout_sec: number
+          caller_ids: string[]
+          enabled: boolean
+          id: boolean
+          last_selftest_at: string | null
+          last_selftest_ok: boolean | null
+          mode: string
+          open_digit: string
+          party_until: string | null
+          unit_code: string
+          updated_at: string
+        }
+        Insert: {
+          ask_timeout_sec?: number
+          caller_ids?: string[]
+          enabled?: boolean
+          id?: boolean
+          last_selftest_at?: string | null
+          last_selftest_ok?: boolean | null
+          mode?: string
+          open_digit?: string
+          party_until?: string | null
+          unit_code?: string
+          updated_at?: string
+        }
+        Update: {
+          ask_timeout_sec?: number
+          caller_ids?: string[]
+          enabled?: boolean
+          id?: boolean
+          last_selftest_at?: string | null
+          last_selftest_ok?: boolean | null
+          mode?: string
+          open_digit?: string
+          party_until?: string | null
+          unit_code?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       car_charge_sessions: {
         Row: {
           at_home: boolean | null
@@ -6456,6 +6635,10 @@ export type Database = {
           comment_draft_at: string | null
           comment_final: string | null
           comment_final_sent_at: string | null
+          comment_origin: string | null
+          comment_post_reminded_at: string | null
+          comment_posted_at: string | null
+          comment_ready_at: string | null
           content_version: number
           created_actor: Json | null
           created_at: string
@@ -6492,6 +6675,10 @@ export type Database = {
           comment_draft_at?: string | null
           comment_final?: string | null
           comment_final_sent_at?: string | null
+          comment_origin?: string | null
+          comment_post_reminded_at?: string | null
+          comment_posted_at?: string | null
+          comment_ready_at?: string | null
           content_version?: number
           created_actor?: Json | null
           created_at?: string
@@ -6528,6 +6715,10 @@ export type Database = {
           comment_draft_at?: string | null
           comment_final?: string | null
           comment_final_sent_at?: string | null
+          comment_origin?: string | null
+          comment_post_reminded_at?: string | null
+          comment_posted_at?: string | null
+          comment_ready_at?: string | null
           content_version?: number
           created_actor?: Json | null
           created_at?: string
@@ -6799,6 +6990,99 @@ export type Database = {
             columns: ["used_item"]
             isOneToOne: false
             referencedRelation: "approval_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_comment_reviews: {
+        Row: {
+          ask_id: string
+          created_at: string
+          decision: string
+          id: string
+          note: string | null
+          staff_id: string
+          version_id: string
+        }
+        Insert: {
+          ask_id: string
+          created_at?: string
+          decision: string
+          id?: string
+          note?: string | null
+          staff_id: string
+          version_id: string
+        }
+        Update: {
+          ask_id?: string
+          created_at?: string
+          decision?: string
+          id?: string
+          note?: string | null
+          staff_id?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_comment_reviews_ask_id_fkey"
+            columns: ["ask_id"]
+            isOneToOne: false
+            referencedRelation: "client_asks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_comment_reviews_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "approval_staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_comment_reviews_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "client_comment_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_comment_versions: {
+        Row: {
+          ask_id: string
+          author_kind: string
+          author_name: string
+          body: string
+          created_at: string
+          id: string
+          n: number
+          note: string | null
+        }
+        Insert: {
+          ask_id: string
+          author_kind: string
+          author_name: string
+          body: string
+          created_at?: string
+          id?: string
+          n: number
+          note?: string | null
+        }
+        Update: {
+          ask_id?: string
+          author_kind?: string
+          author_name?: string
+          body?: string
+          created_at?: string
+          id?: string
+          n?: number
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_comment_versions_ask_id_fkey"
+            columns: ["ask_id"]
+            isOneToOne: false
+            referencedRelation: "client_asks"
             referencedColumns: ["id"]
           },
         ]
@@ -8342,6 +8626,62 @@ export type Database = {
         }
         Relationships: []
       }
+      comment_reword_jobs: {
+        Row: {
+          ask_id: string
+          attempts: number
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          model: string | null
+          note: string | null
+          provider: string | null
+          run_after: string
+          source_n: number | null
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          ask_id: string
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          model?: string | null
+          note?: string | null
+          provider?: string | null
+          run_after?: string
+          source_n?: number | null
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          ask_id?: string
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          model?: string | null
+          note?: string | null
+          provider?: string | null
+          run_after?: string
+          source_n?: number | null
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_reword_jobs_ask_id_fkey"
+            columns: ["ask_id"]
+            isOneToOne: false
+            referencedRelation: "client_asks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connect_platform_help: {
         Row: {
           platform: string
@@ -9625,6 +9965,237 @@ export type Database = {
         }
         Relationships: []
       }
+      email_brand_kits: {
+        Row: {
+          active: boolean
+          ad_policy: Json
+          ai_images: string
+          assets: Json
+          created_at: string
+          default_eyebrow: string | null
+          default_sender: Json
+          extends: string | null
+          footer: Json
+          header: Json
+          kind: string
+          name: string
+          product_ads: Json
+          signature: Json
+          site_url: string | null
+          slug: string
+          sort: number
+          source_client_slug: string | null
+          theme: Json
+          updated_at: string
+          voice: string | null
+        }
+        Insert: {
+          active?: boolean
+          ad_policy?: Json
+          ai_images?: string
+          assets?: Json
+          created_at?: string
+          default_eyebrow?: string | null
+          default_sender?: Json
+          extends?: string | null
+          footer?: Json
+          header?: Json
+          kind?: string
+          name: string
+          product_ads?: Json
+          signature?: Json
+          site_url?: string | null
+          slug: string
+          sort?: number
+          source_client_slug?: string | null
+          theme?: Json
+          updated_at?: string
+          voice?: string | null
+        }
+        Update: {
+          active?: boolean
+          ad_policy?: Json
+          ai_images?: string
+          assets?: Json
+          created_at?: string
+          default_eyebrow?: string | null
+          default_sender?: Json
+          extends?: string | null
+          footer?: Json
+          header?: Json
+          kind?: string
+          name?: string
+          product_ads?: Json
+          signature?: Json
+          site_url?: string | null
+          slug?: string
+          sort?: number
+          source_client_slug?: string | null
+          theme?: Json
+          updated_at?: string
+          voice?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_brand_kits_extends_fkey"
+            columns: ["extends"]
+            isOneToOne: false
+            referencedRelation: "email_brand_kits"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
+      email_builder_runs: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: number
+          kit: string | null
+          meta: Json | null
+          model: string | null
+          ms: number | null
+          ok: boolean
+          op: string
+          provider: string | null
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: number
+          kit?: string | null
+          meta?: Json | null
+          model?: string | null
+          ms?: number | null
+          ok: boolean
+          op: string
+          provider?: string | null
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: number
+          kit?: string | null
+          meta?: Json | null
+          model?: string | null
+          ms?: number | null
+          ok?: boolean
+          op?: string
+          provider?: string | null
+        }
+        Relationships: []
+      }
+      email_library: {
+        Row: {
+          blocks: Json
+          brand_kit: string
+          brief: string | null
+          created_at: string
+          created_by: string | null
+          html: string
+          id: string
+          preheader: string | null
+          recipient_email: string | null
+          recipient_name: string | null
+          source: string
+          status: string
+          subject: string
+          template_slug: string | null
+          text_body: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          blocks?: Json
+          brand_kit: string
+          brief?: string | null
+          created_at?: string
+          created_by?: string | null
+          html?: string
+          id?: string
+          preheader?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          source?: string
+          status?: string
+          subject?: string
+          template_slug?: string | null
+          text_body?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          blocks?: Json
+          brand_kit?: string
+          brief?: string | null
+          created_at?: string
+          created_by?: string | null
+          html?: string
+          id?: string
+          preheader?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          source?: string
+          status?: string
+          subject?: string
+          template_slug?: string | null
+          text_body?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_library_brand_kit_fkey"
+            columns: ["brand_kit"]
+            isOneToOne: false
+            referencedRelation: "email_brand_kits"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
+      email_library_versions: {
+        Row: {
+          blocks: Json | null
+          created_at: string
+          html: string | null
+          id: number
+          library_id: string
+          preheader: string | null
+          saved_by: string | null
+          subject: string | null
+          version: number
+        }
+        Insert: {
+          blocks?: Json | null
+          created_at?: string
+          html?: string | null
+          id?: number
+          library_id: string
+          preheader?: string | null
+          saved_by?: string | null
+          subject?: string | null
+          version: number
+        }
+        Update: {
+          blocks?: Json | null
+          created_at?: string
+          html?: string | null
+          id?: number
+          library_id?: string
+          preheader?: string | null
+          saved_by?: string | null
+          subject?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_library_versions_library_id_fkey"
+            columns: ["library_id"]
+            isOneToOne: false
+            referencedRelation: "email_library"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_send_log: {
         Row: {
           created_at: string
@@ -10213,6 +10784,236 @@ export type Database = {
           last_error_at?: string | null
           last_ok?: string | null
           stats?: Json
+        }
+        Relationships: []
+      }
+      hermes_actions: {
+        Row: {
+          action: string
+          attempts: number
+          bundle: string | null
+          decided_at: string | null
+          decided_by: string | null
+          error: string | null
+          est_cost: string | null
+          finished_at: string | null
+          id: string
+          item_id: string
+          lease_until: string | null
+          priority: boolean
+          proposed_at: string
+          reason: string | null
+          result: Json | null
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          action: string
+          attempts?: number
+          bundle?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          error?: string | null
+          est_cost?: string | null
+          finished_at?: string | null
+          id?: string
+          item_id: string
+          lease_until?: string | null
+          priority?: boolean
+          proposed_at?: string
+          reason?: string | null
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          action?: string
+          attempts?: number
+          bundle?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          error?: string | null
+          est_cost?: string | null
+          finished_at?: string | null
+          id?: string
+          item_id?: string
+          lease_until?: string | null
+          priority?: boolean
+          proposed_at?: string
+          reason?: string | null
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hermes_actions_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "hermes_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hermes_items: {
+        Row: {
+          ai: string | null
+          amount_cents: number | null
+          confidence: number | null
+          created_at: string
+          details: Json
+          due_date: string | null
+          event: string
+          from_domain: string | null
+          has_image: boolean
+          id: string
+          is_test: boolean
+          item_ref: string | null
+          label: string | null
+          mail_type: string | null
+          mailbox_uid: number | null
+          msg_id: string
+          priority: boolean
+          received_at: string
+          sender: string | null
+          status: string
+          subject: string | null
+          summary: string | null
+          verified: boolean
+        }
+        Insert: {
+          ai?: string | null
+          amount_cents?: number | null
+          confidence?: number | null
+          created_at?: string
+          details?: Json
+          due_date?: string | null
+          event?: string
+          from_domain?: string | null
+          has_image?: boolean
+          id?: string
+          is_test?: boolean
+          item_ref?: string | null
+          label?: string | null
+          mail_type?: string | null
+          mailbox_uid?: number | null
+          msg_id: string
+          priority?: boolean
+          received_at?: string
+          sender?: string | null
+          status?: string
+          subject?: string | null
+          summary?: string | null
+          verified?: boolean
+        }
+        Update: {
+          ai?: string | null
+          amount_cents?: number | null
+          confidence?: number | null
+          created_at?: string
+          details?: Json
+          due_date?: string | null
+          event?: string
+          from_domain?: string | null
+          has_image?: boolean
+          id?: string
+          is_test?: boolean
+          item_ref?: string | null
+          label?: string | null
+          mail_type?: string | null
+          mailbox_uid?: number | null
+          msg_id?: string
+          priority?: boolean
+          received_at?: string
+          sender?: string | null
+          status?: string
+          subject?: string | null
+          summary?: string | null
+          verified?: boolean
+        }
+        Relationships: []
+      }
+      hermes_logins: {
+        Row: {
+          action_id: string | null
+          at: string
+          egress_ip: string | null
+          id: number
+          note: string | null
+          ok: boolean
+          purpose: string
+          session_tag: string | null
+        }
+        Insert: {
+          action_id?: string | null
+          at?: string
+          egress_ip?: string | null
+          id?: never
+          note?: string | null
+          ok: boolean
+          purpose: string
+          session_tag?: string | null
+        }
+        Update: {
+          action_id?: string | null
+          at?: string
+          egress_ip?: string | null
+          id?: never
+          note?: string | null
+          ok?: boolean
+          purpose?: string
+          session_tag?: string | null
+        }
+        Relationships: []
+      }
+      hermes_state: {
+        Row: {
+          baseline_at: string
+          created_at: string
+          cred_note: string | null
+          cred_saved_at: string | null
+          cred_state: string
+          enabled: boolean
+          guard_beat_at: string | null
+          guard_moved_run: number
+          id: boolean
+          last_login_fail_at: string | null
+          last_login_ok_at: string | null
+          last_note: string | null
+          last_poll_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          baseline_at?: string
+          created_at?: string
+          cred_note?: string | null
+          cred_saved_at?: string | null
+          cred_state?: string
+          enabled?: boolean
+          guard_beat_at?: string | null
+          guard_moved_run?: number
+          id?: boolean
+          last_login_fail_at?: string | null
+          last_login_ok_at?: string | null
+          last_note?: string | null
+          last_poll_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          baseline_at?: string
+          created_at?: string
+          cred_note?: string | null
+          cred_saved_at?: string | null
+          cred_state?: string
+          enabled?: boolean
+          guard_beat_at?: string | null
+          guard_moved_run?: number
+          id?: boolean
+          last_login_fail_at?: string | null
+          last_login_ok_at?: string | null
+          last_note?: string | null
+          last_poll_at?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -14012,6 +14813,171 @@ export type Database = {
         }
         Relationships: []
       }
+      mnd_enrollments: {
+        Row: {
+          code_hash: string
+          created_at: string
+          expires_at: string
+          label: string
+          token_hash: string | null
+          used_at: string | null
+        }
+        Insert: {
+          code_hash: string
+          created_at?: string
+          expires_at: string
+          label?: string
+          token_hash?: string | null
+          used_at?: string | null
+        }
+        Update: {
+          code_hash?: string
+          created_at?: string
+          expires_at?: string
+          label?: string
+          token_hash?: string | null
+          used_at?: string | null
+        }
+        Relationships: []
+      }
+      mnd_render_jobs: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          clip_id: string
+          created_at: string
+          day: string
+          done_at: string | null
+          error: string | null
+          fallback: boolean
+          id: string
+          inputs: Json
+          output_path: string | null
+          status: string
+          worker: string | null
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          clip_id: string
+          created_at?: string
+          day: string
+          done_at?: string | null
+          error?: string | null
+          fallback?: boolean
+          id?: string
+          inputs?: Json
+          output_path?: string | null
+          status?: string
+          worker?: string | null
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          clip_id?: string
+          created_at?: string
+          day?: string
+          done_at?: string | null
+          error?: string | null
+          fallback?: boolean
+          id?: string
+          inputs?: Json
+          output_path?: string | null
+          status?: string
+          worker?: string | null
+        }
+        Relationships: []
+      }
+      mnd_state: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value?: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
+      mnd_used: {
+        Row: {
+          clip_id: string | null
+          created_at: string
+          day: string
+          end_s: number
+          id: number
+          start_s: number
+          vid: string
+        }
+        Insert: {
+          clip_id?: string | null
+          created_at?: string
+          day?: string
+          end_s: number
+          id?: number
+          start_s: number
+          vid: string
+        }
+        Update: {
+          clip_id?: string | null
+          created_at?: string
+          day?: string
+          end_s?: number
+          id?: number
+          start_s?: number
+          vid?: string
+        }
+        Relationships: []
+      }
+      mnd_voice_spend: {
+        Row: {
+          api_cost: number | null
+          characters: number
+          clip_id: string
+          created_at: string
+          day: string
+          est_usd: number
+          id: number
+          kind: string
+          month: string
+          tag: string
+          voice_name: string | null
+        }
+        Insert: {
+          api_cost?: number | null
+          characters: number
+          clip_id: string
+          created_at?: string
+          day?: string
+          est_usd: number
+          id?: number
+          kind?: string
+          month: string
+          tag?: string
+          voice_name?: string | null
+        }
+        Update: {
+          api_cost?: number | null
+          characters?: number
+          clip_id?: string
+          created_at?: string
+          day?: string
+          est_usd?: number
+          id?: number
+          kind?: string
+          month?: string
+          tag?: string
+          voice_name?: string | null
+        }
+        Relationships: []
+      }
       model_y_seen: {
         Row: {
           alerted_at: string | null
@@ -16201,6 +17167,51 @@ export type Database = {
           street?: string | null
           subject?: string | null
           year_built?: number | null
+        }
+        Relationships: []
+      }
+      reach_jobs: {
+        Row: {
+          claimed_at: string | null
+          created_at: string | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          lim: number | null
+          op: string | null
+          query: string | null
+          requested_by: string
+          result: Json | null
+          status: string
+          url: string | null
+        }
+        Insert: {
+          claimed_at?: string | null
+          created_at?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          lim?: number | null
+          op?: string | null
+          query?: string | null
+          requested_by: string
+          result?: Json | null
+          status?: string
+          url?: string | null
+        }
+        Update: {
+          claimed_at?: string | null
+          created_at?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          lim?: number | null
+          op?: string | null
+          query?: string | null
+          requested_by?: string
+          result?: Json | null
+          status?: string
+          url?: string | null
         }
         Relationships: []
       }
@@ -21519,6 +22530,24 @@ export type Database = {
         }
         Relationships: []
       }
+      studio_comments_rollback_20261019: {
+        Row: {
+          def: string
+          name: string
+          saved_at: string
+        }
+        Insert: {
+          def: string
+          name: string
+          saved_at?: string
+        }
+        Update: {
+          def?: string
+          name?: string
+          saved_at?: string
+        }
+        Relationships: []
+      }
       studio_connectors: {
         Row: {
           calls: number
@@ -21836,6 +22865,24 @@ export type Database = {
         }
         Relationships: []
       }
+      studio_fn_backup_20261019: {
+        Row: {
+          def: string
+          fn: string
+          saved_at: string
+        }
+        Insert: {
+          def: string
+          fn: string
+          saved_at?: string
+        }
+        Update: {
+          def?: string
+          fn?: string
+          saved_at?: string
+        }
+        Relationships: []
+      }
       studio_health: {
         Row: {
           at: string
@@ -21863,6 +22910,157 @@ export type Database = {
           id?: number
           note?: string | null
           state?: string
+        }
+        Relationships: []
+      }
+      studio_inbox_items: {
+        Row: {
+          attachments: Json
+          audit: Json
+          bank_rank: number | null
+          bridged_at: string
+          client_slug: string | null
+          client_status: string
+          created_at: string
+          deadline: string | null
+          id: string
+          label: string | null
+          label_by: string | null
+          label_reason: string | null
+          linked_item_id: string | null
+          llm_claimed_at: string | null
+          llm_state: string
+          merged_into: string | null
+          needs_permission: boolean
+          private_forwarded_at: string | null
+          raw_text: string
+          refine_version: number
+          refined: Json | null
+          sender_addr: string | null
+          sender_name: string | null
+          sensitive: boolean
+          sort_info: Json | null
+          sorted_at: string | null
+          source: string
+          source_id: string | null
+          source_table: string | null
+          sources: Json
+          status: string
+          subject: string | null
+          target_id: string | null
+          target_kind: string | null
+          updated_at: string
+        }
+        Insert: {
+          attachments?: Json
+          audit?: Json
+          bank_rank?: number | null
+          bridged_at?: string
+          client_slug?: string | null
+          client_status?: string
+          created_at?: string
+          deadline?: string | null
+          id?: string
+          label?: string | null
+          label_by?: string | null
+          label_reason?: string | null
+          linked_item_id?: string | null
+          llm_claimed_at?: string | null
+          llm_state?: string
+          merged_into?: string | null
+          needs_permission?: boolean
+          private_forwarded_at?: string | null
+          raw_text?: string
+          refine_version?: number
+          refined?: Json | null
+          sender_addr?: string | null
+          sender_name?: string | null
+          sensitive?: boolean
+          sort_info?: Json | null
+          sorted_at?: string | null
+          source: string
+          source_id?: string | null
+          source_table?: string | null
+          sources?: Json
+          status?: string
+          subject?: string | null
+          target_id?: string | null
+          target_kind?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attachments?: Json
+          audit?: Json
+          bank_rank?: number | null
+          bridged_at?: string
+          client_slug?: string | null
+          client_status?: string
+          created_at?: string
+          deadline?: string | null
+          id?: string
+          label?: string | null
+          label_by?: string | null
+          label_reason?: string | null
+          linked_item_id?: string | null
+          llm_claimed_at?: string | null
+          llm_state?: string
+          merged_into?: string | null
+          needs_permission?: boolean
+          private_forwarded_at?: string | null
+          raw_text?: string
+          refine_version?: number
+          refined?: Json | null
+          sender_addr?: string | null
+          sender_name?: string | null
+          sensitive?: boolean
+          sort_info?: Json | null
+          sorted_at?: string | null
+          source?: string
+          source_id?: string | null
+          source_table?: string | null
+          sources?: Json
+          status?: string
+          subject?: string | null
+          target_id?: string | null
+          target_kind?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_inbox_items_linked_item_id_fkey"
+            columns: ["linked_item_id"]
+            isOneToOne: false
+            referencedRelation: "approval_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_inbox_items_merged_into_fkey"
+            columns: ["merged_into"]
+            isOneToOne: false
+            referencedRelation: "studio_idea_bank_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_inbox_items_merged_into_fkey"
+            columns: ["merged_into"]
+            isOneToOne: false
+            referencedRelation: "studio_inbox_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_inbox_meta: {
+        Row: {
+          id: boolean
+          live_since: string
+        }
+        Insert: {
+          id?: boolean
+          live_since?: string
+        }
+        Update: {
+          id?: boolean
+          live_since?: string
         }
         Relationships: []
       }
@@ -22292,6 +23490,54 @@ export type Database = {
         }
         Relationships: []
       }
+      studio_queue_watch_beat: {
+        Row: {
+          check_name: string
+          last_at: string
+          last_result: Json | null
+        }
+        Insert: {
+          check_name: string
+          last_at?: string
+          last_result?: Json | null
+        }
+        Update: {
+          check_name?: string
+          last_at?: string
+          last_result?: Json | null
+        }
+        Relationships: []
+      }
+      studio_queue_watch_log: {
+        Row: {
+          at: string
+          client_id: string | null
+          detail: Json | null
+          id: number
+          item_id: string | null
+          kind: string
+          post_id: string | null
+        }
+        Insert: {
+          at?: string
+          client_id?: string | null
+          detail?: Json | null
+          id?: number
+          item_id?: string | null
+          kind: string
+          post_id?: string | null
+        }
+        Update: {
+          at?: string
+          client_id?: string | null
+          detail?: Json | null
+          id?: number
+          item_id?: string | null
+          kind?: string
+          post_id?: string | null
+        }
+        Relationships: []
+      }
       studio_recut_check_log: {
         Row: {
           at: string
@@ -22565,6 +23811,191 @@ export type Database = {
           topic?: string | null
         }
         Relationships: []
+      }
+      studio_stitch_plans: {
+        Row: {
+          ask_id: string
+          auto: Json | null
+          claimed_at: string | null
+          claimed_by: string | null
+          client_id: string
+          created_at: string
+          cut_in: number | null
+          cut_out: number | null
+          cut_reason: string | null
+          fail_count: number
+          id: string
+          item_id: string | null
+          last_error: string | null
+          music_note: string | null
+          next_try_at: string
+          nudge_version: number
+          nudges: Json
+          override: Json
+          package: Json | null
+          platform: string | null
+          preview: boolean
+          remix_allowed: string
+          remix_note: string | null
+          render: Json | null
+          render_id: string | null
+          rendered_nudge: number
+          source_duration: number | null
+          source_error: string | null
+          source_handle: string | null
+          source_path: string | null
+          source_public_url: string | null
+          source_sha: string | null
+          source_status: string
+          source_title: string | null
+          source_transcript: Json | null
+          source_url: string
+          source_via: string | null
+          stage: string | null
+          status: string
+          style: string | null
+          style_reason: string | null
+          take_duration: number | null
+          take_start: number | null
+          take_transcript: Json | null
+          take_url: string | null
+          trim_note: string | null
+          trim_words: string | null
+          updated_at: string
+          upload_id: string | null
+        }
+        Insert: {
+          ask_id: string
+          auto?: Json | null
+          claimed_at?: string | null
+          claimed_by?: string | null
+          client_id: string
+          created_at?: string
+          cut_in?: number | null
+          cut_out?: number | null
+          cut_reason?: string | null
+          fail_count?: number
+          id?: string
+          item_id?: string | null
+          last_error?: string | null
+          music_note?: string | null
+          next_try_at?: string
+          nudge_version?: number
+          nudges?: Json
+          override?: Json
+          package?: Json | null
+          platform?: string | null
+          preview?: boolean
+          remix_allowed?: string
+          remix_note?: string | null
+          render?: Json | null
+          render_id?: string | null
+          rendered_nudge?: number
+          source_duration?: number | null
+          source_error?: string | null
+          source_handle?: string | null
+          source_path?: string | null
+          source_public_url?: string | null
+          source_sha?: string | null
+          source_status?: string
+          source_title?: string | null
+          source_transcript?: Json | null
+          source_url: string
+          source_via?: string | null
+          stage?: string | null
+          status?: string
+          style?: string | null
+          style_reason?: string | null
+          take_duration?: number | null
+          take_start?: number | null
+          take_transcript?: Json | null
+          take_url?: string | null
+          trim_note?: string | null
+          trim_words?: string | null
+          updated_at?: string
+          upload_id?: string | null
+        }
+        Update: {
+          ask_id?: string
+          auto?: Json | null
+          claimed_at?: string | null
+          claimed_by?: string | null
+          client_id?: string
+          created_at?: string
+          cut_in?: number | null
+          cut_out?: number | null
+          cut_reason?: string | null
+          fail_count?: number
+          id?: string
+          item_id?: string | null
+          last_error?: string | null
+          music_note?: string | null
+          next_try_at?: string
+          nudge_version?: number
+          nudges?: Json
+          override?: Json
+          package?: Json | null
+          platform?: string | null
+          preview?: boolean
+          remix_allowed?: string
+          remix_note?: string | null
+          render?: Json | null
+          render_id?: string | null
+          rendered_nudge?: number
+          source_duration?: number | null
+          source_error?: string | null
+          source_handle?: string | null
+          source_path?: string | null
+          source_public_url?: string | null
+          source_sha?: string | null
+          source_status?: string
+          source_title?: string | null
+          source_transcript?: Json | null
+          source_url?: string
+          source_via?: string | null
+          stage?: string | null
+          status?: string
+          style?: string | null
+          style_reason?: string | null
+          take_duration?: number | null
+          take_start?: number | null
+          take_transcript?: Json | null
+          take_url?: string | null
+          trim_note?: string | null
+          trim_words?: string | null
+          updated_at?: string
+          upload_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_stitch_plans_ask_id_fkey"
+            columns: ["ask_id"]
+            isOneToOne: true
+            referencedRelation: "client_asks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_stitch_plans_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "approval_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_stitch_plans_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "approval_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_stitch_plans_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "client_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       studio_tool_manifest: {
         Row: {
@@ -27450,6 +28881,22 @@ export type Database = {
         }
         Relationships: []
       }
+      studio_idea_bank_v: {
+        Row: {
+          client_name: string | null
+          client_slug: string | null
+          created_at: string | null
+          deadline: string | null
+          id: string | null
+          rank: number | null
+          sensitive: boolean | null
+          snippet: string | null
+          sources_count: number | null
+          status: string | null
+          title: string | null
+        }
+        Relationships: []
+      }
       trustpilot_stats: {
         Row: {
           avg_rating: number | null
@@ -28293,6 +29740,10 @@ export type Database = {
       }
       _public_voter: { Args: never; Returns: string }
       _rate_nk: { Args: { p_n: number; p_rate: number }; Returns: Json }
+      _scout_stage_put: {
+        Args: { p_content: string; p_path: string; p_token: string }
+        Returns: Json
+      }
       _term_hits: {
         Args: { p_doc: unknown; p_terms: string[] }
         Returns: number
@@ -29418,6 +30869,56 @@ export type Database = {
         Returns: Json
       }
       call_watch_ok: { Args: { p_key: string }; Returns: boolean }
+      callbox_admin_state: { Args: never; Returns: Json }
+      callbox_ask: {
+        Args: {
+          p_caller: string
+          p_conv: string
+          p_said: string
+          p_selftest?: boolean
+        }
+        Returns: Json
+      }
+      callbox_check: {
+        Args: { p_caller: string; p_said?: string }
+        Returns: Json
+      }
+      callbox_deadman: { Args: never; Returns: undefined }
+      callbox_decide: {
+        Args: { p_code: string; p_open: boolean; p_remember?: boolean }
+        Returns: Json
+      }
+      callbox_event_get: { Args: { p_code: string }; Returns: Json }
+      callbox_expect_add: {
+        Args: {
+          p_end?: string
+          p_keywords?: string[]
+          p_kind?: string
+          p_label: string
+          p_max_uses?: number
+          p_note?: string
+          p_source?: string
+          p_source_ref?: string
+          p_start?: string
+        }
+        Returns: Json
+      }
+      callbox_expect_cancel: { Args: { p_id: string }; Returns: Json }
+      callbox_is_admin: { Args: never; Returns: boolean }
+      callbox_log: {
+        Args: {
+          p_caller: string
+          p_conv: string
+          p_decision: string
+          p_expected?: string
+          p_outcome: string
+          p_said: string
+          p_selftest?: boolean
+        }
+        Returns: Json
+      }
+      callbox_norm_phone: { Args: { p: string }; Returns: string }
+      callbox_settings_set: { Args: { p: Json }; Returns: Json }
       car_alerts_sweep: { Args: never; Returns: Json }
       car_battery_health_public: { Args: never; Returns: Json }
       car_battery_health_store: { Args: { p_health: Json }; Returns: undefined }
@@ -29875,6 +31376,10 @@ export type Database = {
         Args: { p_name: string; p_self?: string }
         Returns: string
       }
+      client_comment_posted: {
+        Args: { p_ask: string; p_token: string }
+        Returns: Json
+      }
       client_connect_ack: {
         Args: { p_platform: string; p_token: string }
         Returns: Json
@@ -29920,6 +31425,7 @@ export type Database = {
       client_feed_watch: { Args: never; Returns: number }
       client_feedback_watch: { Args: never; Returns: Json }
       client_ideas_watch: { Args: never; Returns: Json }
+      client_inbox_status: { Args: { p_token: string }; Returns: Json }
       client_item_publish: {
         Args: { p_at?: string; p_item: string; p_token: string }
         Returns: Json
@@ -30070,6 +31576,10 @@ export type Database = {
         Args: { p_item: string; p_token: string }
         Returns: Json
       }
+      client_video_comment_create: {
+        Args: { p_text: string; p_token: string; p_url: string }
+        Returns: Json
+      }
       client_viewer: { Args: { p_token: string }; Returns: string }
       client_viewer_info: { Args: { p_token: string }; Returns: Json }
       clip_claim: { Args: { p_key: string }; Returns: Json }
@@ -30159,6 +31669,49 @@ export type Database = {
       code_worker_beat_t: {
         Args: { p_info?: Json; p_token: string }
         Returns: Json
+      }
+      comment_client_name: {
+        Args: { p_fallback: string; p_token: string }
+        Returns: string
+      }
+      comment_deliver: {
+        Args: { p_ask: string; p_version: string }
+        Returns: undefined
+      }
+      comment_platform_of: { Args: { p_url: string }; Returns: Json }
+      comment_reword_claim: { Args: never; Returns: Json }
+      comment_reword_enqueue: {
+        Args: { p_ask: string; p_note?: string }
+        Returns: string
+      }
+      comment_reword_fail: {
+        Args: { p_error: string; p_job: string }
+        Returns: Json
+      }
+      comment_reword_save: {
+        Args: {
+          p_job: string
+          p_model: string
+          p_provider: string
+          p_text: string
+        }
+        Returns: Json
+      }
+      comment_reword_tick: { Args: never; Returns: Json }
+      comment_reword_watch: { Args: never; Returns: Json }
+      comment_say: {
+        Args: { p_ask: string; p_key: string; p_line: string }
+        Returns: undefined
+      }
+      comment_version_add: {
+        Args: {
+          p_ask: string
+          p_body: string
+          p_kind: string
+          p_name: string
+          p_note?: string
+        }
+        Returns: string
       }
       connect_platform_available: {
         Args: { p_client: string; p_platform: string }
@@ -30343,6 +31896,15 @@ export type Database = {
       demo_key_tap: { Args: { p_pass?: string }; Returns: Json }
       demo_key_tick: { Args: never; Returns: Json }
       demo_key_watchdog: { Args: never; Returns: Json }
+      dock_sync_beat_t: {
+        Args: {
+          p_healed?: boolean
+          p_ok: boolean
+          p_summary: string
+          p_token: string
+        }
+        Returns: Json
+      }
       driver_first_norm: { Args: { p: string }; Returns: string }
       driver_lev: { Args: { a: string; b: string }; Returns: number }
       driver_name_score: {
@@ -30365,6 +31927,8 @@ export type Database = {
         Returns: Json
       }
       edge_key_ok: { Args: { p_key: string; p_name: string }; Returns: boolean }
+      email_kit_build: { Args: { p_slug: string }; Returns: string }
+      email_kit_for_client: { Args: { p_slug: string }; Returns: string }
       emergency_battery_check: { Args: never; Returns: string }
       emergency_end: { Args: never; Returns: Json }
       emergency_start: { Args: { p_hazard?: string }; Returns: Json }
@@ -30621,6 +32185,74 @@ export type Database = {
         }
         Returns: boolean
       }
+      hermes_action_decide: {
+        Args: { p_approve: boolean; p_id: string }
+        Returns: Json
+      }
+      hermes_action_report_t: {
+        Args: {
+          p_error?: string
+          p_id: string
+          p_result?: Json
+          p_status: string
+        }
+        Returns: Json
+      }
+      hermes_action_request: {
+        Args: { p_action: string; p_item: string }
+        Returns: Json
+      }
+      hermes_alert: {
+        Args: {
+          p_body: string
+          p_mark_read?: boolean
+          p_tag: string
+          p_title: string
+          p_url: string
+        }
+        Returns: undefined
+      }
+      hermes_ask_title: {
+        Args: { p_action: string; p_sender: string; p_type: string }
+        Returns: string
+      }
+      hermes_done: {
+        Args: {
+          p_agent?: string
+          p_body?: string
+          p_tag: string
+          p_title: string
+        }
+        Returns: undefined
+      }
+      hermes_file_item_t: { Args: { p: Json }; Returns: Json }
+      hermes_guard_beat_t: { Args: { p_moved?: number }; Returns: undefined }
+      hermes_login_report_t: {
+        Args: {
+          p_action: string
+          p_ip: string
+          p_note: string
+          p_ok: boolean
+          p_purpose: string
+          p_rejected?: boolean
+          p_session: string
+        }
+        Returns: undefined
+      }
+      hermes_login_save: {
+        Args: { p_email: string; p_password: string }
+        Returns: Json
+      }
+      hermes_login_status: { Args: never; Returns: Json }
+      hermes_name: { Args: { n?: number; t: string }; Returns: string }
+      hermes_poll_t: {
+        Args: { p_filed?: number; p_note?: string }
+        Returns: undefined
+      }
+      hermes_set_enabled: { Args: { p_on: boolean }; Returns: undefined }
+      hermes_take_approved_t: { Args: { p_limit?: number }; Returns: Json }
+      hermes_view_needed_t: { Args: never; Returns: Json }
+      hermes_watch: { Args: never; Returns: string }
       hero_watch_tick: { Args: never; Returns: Json }
       higgsfield_watch: { Args: never; Returns: Json }
       hire_graduate: {
@@ -30864,6 +32496,90 @@ export type Database = {
       hunter_worker_ok: { Args: never; Returns: boolean }
       improver_context: { Args: never; Returns: Json }
       improver_save: { Args: { p_ideas: Json }; Returns: number }
+      inbox_audit: {
+        Args: { p_action: string; p_by: string; p_detail?: Json; p_id: string }
+        Returns: undefined
+      }
+      inbox_bank_rank: {
+        Args: { p_created: string; p_deadline: string }
+        Returns: number
+      }
+      inbox_bounce: {
+        Args: { p_by?: string; p_id: string; p_reason: string }
+        Returns: undefined
+      }
+      inbox_bridge_backfill: { Args: never; Returns: Json }
+      inbox_bridge_brief: { Args: { p_id: string }; Returns: string }
+      inbox_bridge_mail: { Args: { p_id: string }; Returns: string }
+      inbox_card: {
+        Args: { i: Database["public"]["Tables"]["studio_inbox_items"]["Row"] }
+        Returns: Json
+      }
+      inbox_client_state: {
+        Args: { i: Database["public"]["Tables"]["studio_inbox_items"]["Row"] }
+        Returns: string
+      }
+      inbox_client_word: { Args: { p_state: string }; Returns: string }
+      inbox_do_bank: { Args: { p_by: string; p_id: string }; Returns: Json }
+      inbox_easter: { Args: { p_year: number }; Returns: string }
+      inbox_extract_deadline: {
+        Args: { p_ref?: string; p_text: string }
+        Returns: string
+      }
+      inbox_find_draft: {
+        Args: { p_mail: string }
+        Returns: Record<string, unknown>
+      }
+      inbox_holiday_on: {
+        Args: { p_key: string; p_year: number }
+        Returns: string
+      }
+      inbox_html: { Args: { p: string }; Returns: string }
+      inbox_llm_apply: {
+        Args: {
+          p_id: string
+          p_label: string
+          p_model?: string
+          p_reason?: string
+          p_sensitive?: boolean
+        }
+        Returns: Json
+      }
+      inbox_llm_claim: {
+        Args: { p_limit?: number }
+        Returns: {
+          client_name: string
+          client_slug: string
+          id: string
+          rule_label: string
+          rule_reason: string
+          source: string
+          subject: string
+          text_in: string
+        }[]
+      }
+      inbox_norm: { Args: { p: string }; Returns: string }
+      inbox_nth_dow: {
+        Args: { p_dow: number; p_month: number; p_n: number; p_year: number }
+        Returns: string
+      }
+      inbox_private_reason: {
+        Args: { p_slug: string; p_text: string }
+        Returns: string
+      }
+      inbox_queue_private_forward: { Args: { p_id: string }; Returns: boolean }
+      inbox_refresh_client_status: { Args: never; Returns: number }
+      inbox_sensitive_hit: { Args: { p_text: string }; Returns: string }
+      inbox_sort: { Args: { p_force?: boolean; p_id: string }; Returns: Json }
+      inbox_sort_tick: { Args: never; Returns: Json }
+      inbox_t12: { Args: { p_ts: string }; Returns: string }
+      inbox_title: {
+        Args: {
+          i: Database["public"]["Tables"]["studio_inbox_items"]["Row"]
+          p_client?: string
+        }
+        Returns: string
+      }
       intake_doc_path_ok: { Args: { p_name: string }; Returns: boolean }
       internal_proxy_key_ok: { Args: { p_key: string }; Returns: boolean }
       interrupt_class: {
@@ -31510,6 +33226,32 @@ export type Database = {
         Returns: Json
       }
       mercury_tokens_status: { Args: never; Returns: Json }
+      mnd_claim_job: {
+        Args: { p_token: string; p_worker: string }
+        Returns: Json
+      }
+      mnd_file_item: { Args: { p: Json }; Returns: Json }
+      mnd_finish_job: {
+        Args: {
+          p_error: string
+          p_id: string
+          p_ok: boolean
+          p_output_path: string
+          p_token: string
+        }
+        Returns: Json
+      }
+      mnd_pc_beat_t: {
+        Args: { p_ok: boolean; p_summary: string; p_token: string }
+        Returns: Json
+      }
+      mnd_pc_enroll: {
+        Args: { p_code: string; p_token_hash: string }
+        Returns: Json
+      }
+      mnd_pc_unenroll: { Args: { p_token: string }; Returns: Json }
+      mnd_token_ok: { Args: { p_token: string }; Returns: boolean }
+      mnd_voice_month: { Args: { p_month?: string }; Returns: Json }
       model_y_seen_list: { Args: { p_days?: number }; Returns: Json }
       model_y_seen_prune: { Args: never; Returns: number }
       model_y_seen_save: { Args: { p: Json }; Returns: Json }
@@ -31744,6 +33486,15 @@ export type Database = {
             }
             Returns: undefined
           }
+      ollama_pc_beat_t: {
+        Args: {
+          p_healed?: boolean
+          p_ok: boolean
+          p_summary: string
+          p_token: string
+        }
+        Returns: Json
+      }
       ops_cancel_long: {
         Args: { p_secs?: number; p_terminate?: boolean }
         Returns: Json
@@ -31845,6 +33596,7 @@ export type Database = {
       }
       partner_ai_claim_cloud: { Args: never; Returns: Json }
       partner_ai_claim_core: { Args: never; Returns: Json }
+      partner_ai_key_handoff_pc: { Args: { p_token: string }; Returns: string }
       partner_ai_key_ok: { Args: { p_key: string }; Returns: boolean }
       partner_ai_watchdog: { Args: never; Returns: Json }
       partner_ai_write: {
@@ -32168,6 +33920,45 @@ export type Database = {
         Args: { p_mid: string; p_token: string }
         Returns: Json
       }
+      reach_claim: {
+        Args: { p_worker: string }
+        Returns: {
+          claimed_at: string | null
+          created_at: string | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          lim: number | null
+          op: string | null
+          query: string | null
+          requested_by: string
+          result: Json | null
+          status: string
+          url: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "reach_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      reach_finish: {
+        Args: { p_error: string; p_id: string; p_ok: boolean; p_result: Json }
+        Returns: undefined
+      }
+      reach_request: {
+        Args: {
+          p_lim: number
+          p_op: string
+          p_query: string
+          p_requested_by: string
+          p_url: string
+        }
+        Returns: string
+      }
+      reach_result: { Args: { p_id: string }; Returns: Json }
+      reach_sweep: { Args: never; Returns: Json }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
@@ -33135,6 +34926,11 @@ export type Database = {
         Returns: Json
       }
       starnet_team_snapshot_t: { Args: { p_token: string }; Returns: Json }
+      stitch_claim: { Args: { p_worker?: string }; Returns: Json }
+      stitch_file: { Args: { p: Json; p_plan: string }; Returns: Json }
+      stitch_find_copy: { Args: { p_url: string }; Returns: Json }
+      stitch_save: { Args: { p: Json; p_plan: string }; Returns: Json }
+      stitch_watch: { Args: never; Returns: number }
       store_bestly_secret: {
         Args: { p_name: string; p_value: string }
         Returns: string
@@ -33587,6 +35383,20 @@ export type Database = {
       }
       studio_clip_used: { Args: { p_ids: string[] }; Returns: number }
       studio_clip_watch: { Args: never; Returns: Json }
+      studio_comment_decide: {
+        Args: {
+          p_ask: string
+          p_decision: string
+          p_note?: string
+          p_token: string
+        }
+        Returns: Json
+      }
+      studio_comment_reword_request: {
+        Args: { p_ask: string; p_note?: string; p_token: string }
+        Returns: Json
+      }
+      studio_comment_signoff: { Args: { p_ask: string }; Returns: Json }
       studio_connect_step: {
         Args: {
           p_info?: Json
@@ -33842,6 +35652,10 @@ export type Database = {
         Args: { p_active: boolean; p_rule: string; p_token: string }
         Returns: Json
       }
+      studio_idea_bank: {
+        Args: { p_client?: string; p_limit?: number; p_token: string }
+        Returns: Json
+      }
       studio_ig_app_get: { Args: never; Returns: Json }
       studio_ig_app_set: {
         Args: { p_app_id: string; p_app_secret: string }
@@ -33869,6 +35683,45 @@ export type Database = {
         Args: { p_id: string; p_status: string; p_token: string }
         Returns: Json
       }
+      studio_inbox2_bank: {
+        Args: { p_id: string; p_token: string }
+        Returns: Json
+      }
+      studio_inbox2_clear: {
+        Args: { p_id: string; p_token: string; p_what: string }
+        Returns: Json
+      }
+      studio_inbox2_get: {
+        Args: { p_id: string; p_token: string }
+        Returns: Json
+      }
+      studio_inbox2_list: {
+        Args: {
+          p_client?: string
+          p_limit?: number
+          p_status?: string
+          p_token: string
+        }
+        Returns: Json
+      }
+      studio_inbox2_relabel: {
+        Args: {
+          p_id: string
+          p_label: string
+          p_reason?: string
+          p_token: string
+        }
+        Returns: Json
+      }
+      studio_inbox2_send_to_board: {
+        Args: { p_id: string; p_token: string }
+        Returns: Json
+      }
+      studio_inbox2_set: {
+        Args: { p_id: string; p_status: string; p_token: string }
+        Returns: Json
+      }
+      studio_inbox2_watch: { Args: never; Returns: Json }
       studio_is_demo: {
         Args: { p_ctx: Json; p_slug: string; p_title: string }
         Returns: boolean
@@ -34248,6 +36101,11 @@ export type Database = {
         Args: { p_force?: boolean; p_item: string; p_token: string }
         Returns: Json
       }
+      studio_queue_time_ok: {
+        Args: { p_item_at: string; p_row_at: string }
+        Returns: boolean
+      }
+      studio_queue_watch: { Args: never; Returns: Json }
       studio_read_state: {
         Args: { p_client_slug: string; p_token: string }
         Returns: Json
@@ -34478,6 +36336,18 @@ export type Database = {
         Returns: Json
       }
       studio_state_check: { Args: never; Returns: Json }
+      studio_stitch_get: {
+        Args: { p_ask: string; p_token: string }
+        Returns: Json
+      }
+      studio_stitch_nudge: {
+        Args: { p_ask: string; p_patch: Json; p_token: string }
+        Returns: Json
+      }
+      studio_stitch_request: {
+        Args: { p_ask: string; p_preview?: boolean; p_token: string }
+        Returns: Json
+      }
       studio_take_approve: {
         Args: { p_token: string; p_upload: string }
         Returns: Json
@@ -34566,6 +36436,7 @@ export type Database = {
         Args: { p_force?: boolean; p_item: string; p_token: string }
         Returns: Json
       }
+      studio_upload_dup_sweep: { Args: never; Returns: Json }
       studio_vault_upsert: {
         Args: { p_desc: string; p_name: string; p_value: string }
         Returns: undefined
@@ -35011,6 +36882,22 @@ export type Database = {
         Returns: Json
       }
       trip_valet_state: { Args: { p_token: string }; Returns: Json }
+      trustpilot_ingest_review: {
+        Args: {
+          p_alert: string
+          p_msg_id: string
+          p_name: string
+          p_received_at: string
+          p_snippet: string
+          p_stars: number
+          p_title: string
+        }
+        Returns: boolean
+      }
+      trustpilot_reader_flag: {
+        Args: { p_body: string; p_key: string; p_title: string }
+        Returns: undefined
+      }
       turo_breadcrumbs: { Args: never; Returns: Json }
       turo_driver_approvals_sync: { Args: never; Returns: number }
       turo_email_ts: { Args: { p: string }; Returns: string }

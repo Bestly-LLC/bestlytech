@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ComponentType } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ComponentType } from "react";
 import { AnimatePresence } from "framer-motion";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { Link, useSearchParams } from "react-router-dom";
 import { TeamProducts, useAdminProducts, dutyWord, type DutyKey } from "@/components/admin/team/TeamProducts";
 import { Sheet, btnPlain, btnPrimary, btnTinted, card, field, label, secondary, tertiary, tint } from "./laxUi";
+import { HermesPanel } from "./HermesPanel";
 
 /**
  * Team — the Bestly org chart. Jared on top, Scout as Chief of Staff, then each department.
@@ -361,7 +362,7 @@ function Connector() {
 
 /* ---------------------------------------------------------------- detail sheet */
 
-function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[]; onClose: () => void; onOpen: (slug: string) => void }) {
+function DetailSheet({ a, all, onClose, onOpen, focusAsk }: { a: Agent | null; all: Agent[]; onClose: () => void; onOpen: (slug: string) => void; focusAsk?: string | null }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Partial<Agent>>({});
@@ -584,6 +585,8 @@ function DetailSheet({ a, all, onClose, onOpen }: { a: Agent | null; all: Agent[
               <Row k="Alerts" v={a.watched ? "Team Watch tells Scout if it goes quiet" : a.on_demand ? "Only works when asked, so silence is fine" : "Its own watchdog tells Scout"} />
             </dl>
           )}
+
+          {a.slug === "hermes" && <HermesPanel focusAsk={focusAsk} />}
 
           {a.issues.length > 0 && (
             <div className="space-y-2">
@@ -1443,6 +1446,14 @@ export default function Team() {
   const [moodFilter, setMoodFilter] = useState<Mood | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [openSlug, setOpenSlug] = useState<string | null>(null);
+  // Needs you and the notifications link here as /admin/team?hermes=<ask id>: open Hermes' card once, then tidy the address.
+  const hermesParam = params.get("hermes");
+  const hermesAsk = hermesParam && hermesParam.length > 8 ? hermesParam : null;
+  useEffect(() => {
+    if (!hermesParam) return;
+    setOpenSlug("hermes");
+    setParams((prev) => { const n = new URLSearchParams(prev); n.delete("hermes"); return n; }, { replace: true });
+  }, [hermesParam, setParams]);
 
   const agents = useMemo(() => data?.agents ?? [], [data]);
   const bySlug = useMemo(() => new Map(agents.map((a) => [a.slug, a])), [agents]);
@@ -1616,7 +1627,7 @@ export default function Team() {
       ) : null}
       </div>
 
-      <DetailSheet a={opened} all={agents} onClose={() => setOpenSlug(null)} onOpen={(slug) => setOpenSlug(slug)} />
+      <DetailSheet a={opened} all={agents} onClose={() => setOpenSlug(null)} onOpen={(slug) => setOpenSlug(slug)} focusAsk={hermesAsk} />
     </div>
     </ToolsContext.Provider>
     </MoodContext.Provider>

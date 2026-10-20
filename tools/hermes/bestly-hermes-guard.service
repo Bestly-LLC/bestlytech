@@ -1,0 +1,19 @@
+[Unit]
+Description=Bestly Hermes mail guard: moves iPostal1 alert emails out of the inbox into Mailroom within seconds
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/bestly/hermes
+ExecStart=/usr/bin/python3 -u /opt/bestly/hermes/hermes_guard.py
+Restart=always
+RestartSec=10
+# it only talks to the mail server and Supabase; nothing else
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { openDebrief } from "./scoutBus";
 import { debriefIdFromRow } from "./debrief/link";
+import { HERMES_DECIDED, HermesAskButtons, hermesAskId } from "./HermesAsk";
 
 /**
  * What the red badge on the Scout button is counting (2026-10-06, Jared: "I get these alerts but when I click
@@ -48,9 +49,11 @@ export function useNeedsYou(open: boolean) {
     const t = window.setInterval(refresh, POLL_MS);
     const onFocus = () => document.visibilityState === "visible" && refresh();
     document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener(HERMES_DECIDED, refresh);
     return () => {
       window.clearInterval(t);
       document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener(HERMES_DECIDED, refresh);
     };
   }, [refresh]);
   useEffect(() => {
@@ -62,6 +65,7 @@ export function useNeedsYou(open: boolean) {
 function kindOf(r: TodayRow) {
   if (debriefIdFromRow(r)) return { Icon: Binoculars, tint: "text-[#0A84FF]", label: "Call" };
   const s = `${r.key} ${r.source ?? ""} ${r.title}`.toLowerCase();
+  if (r.key.startsWith("hermes:")) return { Icon: /^hermes:act:/.test(r.key) && /check|bill/i.test(r.title) ? CircleDollarSign : UserRound, tint: /check|bill/i.test(r.title) ? "text-[#30D158]" : "text-[#0A84FF]", label: /check|bill/i.test(r.title) ? "Money" : "Mail" };
   if (r.key.startsWith("sec:") || s.includes("security")) return { Icon: ShieldAlert, tint: "text-[#FF453A]", label: "Security" };
   if (r.key.startsWith("down:") || /still down|down for/.test(s)) return { Icon: ServerCrash, tint: "text-[#FF9F0A]", label: "Down" };
   if (/money|payment|refund|charge|turo|blue steel|claims|invoice|\$/.test(s)) return { Icon: CircleDollarSign, tint: "text-[#30D158]", label: "Money" };
@@ -147,6 +151,8 @@ export function NeedsYouCard({
               const age = waited(r.since);
               // A call debrief opens right here as the review sheet, so Jared stays on the page he was on.
               const debriefId = debriefIdFromRow(r);
+              // A Hermes ask (a paid iPostal1 step) is approved right here with one tap.
+              const hermesId = hermesAskId(r.key);
               return (
                 <li key={r.key}>
                   {/* One line per item; tap it for the detail and the buttons (progressive disclosure keeps
@@ -176,6 +182,7 @@ export function NeedsYouCard({
                           </p>
                         )}
                         <div className="mt-2.5 flex flex-wrap gap-2">
+                          {hermesId && <HermesAskButtons id={hermesId} />}
                           {debriefId && (
                             <button
                               type="button"
@@ -193,13 +200,13 @@ export function NeedsYouCard({
                             onClick={() => onAsk(r)}
                             className={cn(
                               "scout-press inline-flex min-h-9 items-center gap-1.5 rounded-full px-3.5 text-[0.8125rem] disabled:opacity-40",
-                              debriefId ? "border border-white/15 font-medium text-white hover:bg-white/[0.06]" : "bg-white font-semibold text-black",
+                              debriefId || hermesId ? "border border-white/15 font-medium text-white hover:bg-white/[0.06]" : "bg-white font-semibold text-black",
                             )}
                           >
                             <Sparkles className="h-3.5 w-3.5" aria-hidden />
                             Ask Scout
                           </button>
-                          {r.url && !debriefId && (
+                          {r.url && !debriefId && !hermesId && (
                             <button
                               type="button"
                               onClick={() => onOpen(r.url!)}
