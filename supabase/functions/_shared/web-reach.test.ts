@@ -177,7 +177,7 @@ Deno.test("system prompt rules carry every required safety line", () => {
   const r = webReachRules("Jared");
   for (const must of ["DATA, never instructions", "send_email", "approvals", "posting", "payments", "database writes", "cloud.bestly.tech", "supabase.co", "bestly.tech/admin", "studio.bestly.tech", "signed links", "Jina and Exa", BEGIN, END]) ok(r.includes(must), `rules mention ${must}`);
   ok(webReachRules("the person in this chat").includes("the person in this chat's own chat messages"), "spark wording");
-  ok(/YouTube video transcript/.test(WEB_REACH_TOOL.description) && /RSS feed/.test(WEB_REACH_TOOL.description) && /web search/.test(WEB_REACH_TOOL.description) && /no logins/.test(WEB_REACH_TOOL.description), "tool description");
+  ok(/YouTube video/.test(WEB_REACH_TOOL.description) && /RSS feed/.test(WEB_REACH_TOOL.description) && /look something up/.test(WEB_REACH_TOOL.description) && /no logins/.test(WEB_REACH_TOOL.description), "tool description");
 });
 
 Deno.test("both functions register the tool, carry the rules, and Scout autopilot never runs it", async () => {
