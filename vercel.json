@@ -62,6 +62,10 @@
       "destination": "/connect/go.html"
     },
     {
+      "source": "/k/([A-Za-z0-9]+)",
+      "destination": "/k.html"
+    },
+    {
       "source": "/t/(.*)",
       "destination": "/trip.html"
     },
