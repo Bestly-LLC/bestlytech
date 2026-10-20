@@ -57,6 +57,7 @@ const CookieYetiSupport = lazyPage(() => import("./pages/CookieYetiSupport"));
 const ConfeshPrivacy = lazyPage(() => import("./pages/ConfeshPrivacy"));
 const ConfeshSupport = lazyPage(() => import("./pages/ConfeshSupport"));
 const Links = lazyPage(() => import("./pages/Links"));
+const Jared = lazyPage(() => import("./pages/Jared"));
 const SignWall = lazyPage(() => import("./pages/SignWall"));
 const LaxGuest = lazyPage(() => import("./pages/LaxGuest"));
 const HostGate = lazyPage(() => import("./pages/HostGate"));
@@ -232,6 +233,8 @@ const App = () => {
 
                 {/* Standalone pages (no Header/Footer) */}
                 <Route path="/links" element={<Links />} />
+                <Route path="/jared" element={<Jared />} />
+                <Route path="/j" element={<Navigate to="/jared" replace />} />
                 <Route path="/sign" element={<SignWall />} />
                 <Route path="/sign/:code" element={<SignWall />} />
                 <Route path="/lax" element={<LaxGuest />} />

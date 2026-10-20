@@ -53,7 +53,7 @@ const ROUTES = [
   "/cookie-yeti", "/cookie-yeti/privacy", "/cookie-yeti/terms", "/cookie-yeti/success",
   "/cookie-yeti/cancel", "/cookie-yeti/transparency",
   "/in-house-cloud", "/studio", "/neckpilot", "/inventory-proof", "/hoku",
-  "/get-started", "/shield/report", "/support", "/status", "/links", "/unsubscribe",
+  "/get-started", "/shield/report", "/support", "/status", "/links", "/jared", "/unsubscribe",
   "/apple-modernization", "/marketplace-setup", "/developer-compliance", "/report-site",
   "/confesh/privacy", "/confesh/support", "/privacy-policy", "/terms",
 ];

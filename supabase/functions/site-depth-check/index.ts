@@ -84,6 +84,7 @@ const ROUTES: RouteDef[] = [
   { path: "/terms-of-use" },
   { path: "/shield/report" },
   { path: "/support" },
+  { path: "/jared" },
 ];
 
 interface RpcDef {
@@ -302,6 +303,8 @@ Deno.serve(async (req) => {
     ["/email-templates/assets/inventoryproof-icon.png", /^image\//i],
     ["/email-templates/assets/cookieyeti-icon.png", /^image\//i],
     ["/og-agent.png", /^image\//i],
+    // Jared's tap/scan card downloads this; an SPA 200 with HTML here means the card saves nothing.
+    ["/jared.vcf", /text\/vcard/i],
   ];
   await Promise.all(
     EMAIL_FILES.map(async ([path, type]) => {

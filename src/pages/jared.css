@@ -1,0 +1,228 @@
+/* /jared — tap/scan contact page. Same look as the Bestly Cloud login:
+   ink, faint dot grid, navy corner glows, one frosted glass card. */
+.jc-page {
+  --ink: #0a0a0a;
+  --paper: #fafafa;
+  --muted: #a8a8a8;
+  --rule: rgba(255, 255, 255, 0.09);
+  --indigo: #3b4a9c;
+  --indigo-hi: #4a5bb8;
+  --indigo-light: #7b8fe5;
+  --spring: cubic-bezier(0.2, 0.9, 0.25, 1);
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Static dot grid, feathered out at every edge (no hard cut-off). */
+.jc-dots {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(123, 143, 229, 0.22) 1px, transparent 1.4px);
+  background-size: 28px 28px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 0%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 0%, transparent 100%);
+}
+.jc-glow {
+  position: fixed;
+  inset: -20%;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 50% at 20% 10%, rgba(123, 143, 229, 0.2), transparent 70%),
+    radial-gradient(45% 45% at 85% 90%, rgba(59, 74, 156, 0.26), transparent 72%);
+}
+
+.jc-wrap {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: max(28px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  animation: jc-rise 0.7s var(--spring) both;
+}
+@keyframes jc-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.jc-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 22px 26px;
+  background: rgba(18, 19, 24, 0.84);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  backdrop-filter: blur(28px) saturate(1.5);
+  border: 1px solid var(--rule);
+  border-radius: 24px;
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.jc-photo {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(123, 143, 229, 0.35);
+  box-shadow: 0 0 44px -12px rgba(123, 143, 229, 0.55);
+}
+.jc-name {
+  margin: 18px 0 0;
+  font: 400 34px/1.1 Newsreader, Georgia, "Times New Roman", serif;
+  letter-spacing: -0.02em;
+  text-align: center;
+  color: var(--paper);
+}
+.jc-role {
+  margin: 8px 0 24px;
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: 0.005em;
+  text-align: center;
+  color: var(--muted);
+}
+
+.jc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 48px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--paper);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 0.18s var(--spring), background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.jc-btn:active { transform: scale(0.97); transition-duration: 0.08s; }
+.jc-btn:focus-visible { outline: 3px solid var(--indigo-light); outline-offset: 2px; }
+
+.jc-btn--primary {
+  width: 100%;
+  min-height: 54px;
+  font-size: 16px;
+  background: var(--indigo);
+  box-shadow: 0 8px 28px -6px rgba(59, 74, 156, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+@media (hover: hover) {
+  .jc-btn--primary:hover { background: var(--indigo-hi); }
+  .jc-btn--sm:hover, .jc-item:hover { border-color: rgba(123, 143, 229, 0.5); }
+}
+
+.jc-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+  margin-top: 12px;
+}
+.jc-btn--sm {
+  flex-direction: column;
+  gap: 6px;
+  min-height: 58px;
+  padding: 10px 6px;
+  font-size: 13px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--rule);
+}
+.jc-btn--sm svg { color: var(--indigo-light); }
+
+.jc-maya {
+  margin: 22px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: center;
+  color: var(--muted);
+}
+.jc-tel {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--indigo-light);
+  text-decoration: none;
+}
+.jc-tel:focus-visible { outline: 3px solid var(--indigo-light); outline-offset: 2px; border-radius: 8px; }
+
+.jc-eyebrow {
+  margin: 0 0 12px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.jc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.jc-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-sizing: border-box;
+  min-height: 64px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--rule);
+  background: rgba(18, 19, 24, 0.6);
+  color: var(--paper);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 0.18s var(--spring), border-color 0.2s ease;
+}
+.jc-item:active { transform: scale(0.97); transition-duration: 0.08s; }
+.jc-item:focus-visible { outline: 3px solid var(--indigo-light); outline-offset: 2px; }
+.jc-ico {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(59, 74, 156, 0.28);
+  color: var(--indigo-light);
+}
+.jc-ico img { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; display: block; }
+.jc-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.jc-iname { font-size: 15px; font-weight: 600; }
+.jc-idesc { font-size: 13px; line-height: 1.45; color: var(--muted); }
+.jc-chev { flex: none; width: 18px; height: 18px; color: var(--muted); opacity: 0.7; }
+
+.jc-foot {
+  margin-top: 4px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.jc-foot a {
+  display: inline-block;
+  padding: 12px 2px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jc-wrap { animation: none; }
+  .jc-btn, .jc-item { transition: none; }
+}
+@media (min-width: 640px) {
+  .jc-wrap { padding-top: 64px; }
+}
