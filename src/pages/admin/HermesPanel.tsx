@@ -49,7 +49,7 @@ export function HermesPanel({ focusAsk }: { focusAsk?: string | null }) {
     const it = await db.from("hermes_items").select("id,received_at,label,sender,mail_type,event,summary,amount_cents,due_date,status,is_test,verified,subject").order("received_at", { ascending: false }).limit(12);
     setItems((it.data ?? []) as Item[]);
     const ak = await db.from("hermes_actions").select("id,action,reason,status,proposed_at,item:hermes_items(sender,mail_type,is_test)").order("proposed_at", { ascending: false }).limit(20);
-    setAsks(((ak.data ?? []) as Ask[]).filter((a) => a.status === "proposed"));
+    setAsks(((ak.data ?? []) as Ask[]).filter((a) => a.status === "proposed" && !a.item?.is_test));
     const lg = await db.from("hermes_logins").select("id,at,purpose,ok,egress_ip,note").order("at", { ascending: false }).limit(4);
     setLogins((lg.data ?? []) as Login[]);
   }, []);
