@@ -26,7 +26,7 @@ import { MoreVertical } from "lucide-react";
 import { Scout } from "./Scout";
 import { CallDebriefHost } from "./debrief/CallDebriefHost";
 import { startAdminLoaderDeck } from "@/components/loader/loaderDeck";
-import { CLOUD_ORIGIN, EMBEDDED, listenForCloud, postRouteToCloud, takeCloudHop } from "@/lib/cloudEmbed";
+import { CLOUD_ORIGIN, EMBEDDED, listenForCloud, takeCloudHop } from "@/lib/cloudEmbed";
 
 const BREADCRUMB_MAP: Record<string, string> = {
   "/admin": "Command Center",
@@ -90,8 +90,7 @@ export function AdminLayout() {
   }, [navigateTo]);
   // Inside Bestly Cloud: tell the parent which admin page this is (path only) so its address bar follows,
   // and let it ask for one of our own routes. Outside Cloud these do nothing.
-  const embedLoc = useLocation();
-  useEffect(() => postRouteToCloud(embedLoc.pathname), [embedLoc.pathname]);
+  // (The path report itself lives in EmbedRouteSync at the app root, so the sign-in page reports too.)
   useEffect(() => listenForCloud((p) => navigateTo(p)), [navigateTo]);
   // Apple sign-in left the frame for the top level; now signed in there, hop back into Cloud (nothing is carried across).
   useEffect(() => {
