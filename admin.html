@@ -68,7 +68,11 @@
         }
         if (loc.hostname !== "www.bestly.tech") return;
         var q = new URLSearchParams(loc.search);
-        if (q.get("direct") === "1") return;
+        // ?direct=1 sticks for this tab (the sign-in page drops the query), so reloads stay on www.
+        try { if (q.get("direct") === "1") sessionStorage.setItem("bestly-admin-direct", "1"); } catch (e) {}
+        var direct = q.get("direct") === "1";
+        try { direct = direct || sessionStorage.getItem("bestly-admin-direct") === "1"; } catch (e) {}
+        if (direct) return;
         if (/^\/admin\/approve(\/|$)/.test(loc.pathname)) return;
         var standalone = false;
         try { standalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches; } catch (e) {}
