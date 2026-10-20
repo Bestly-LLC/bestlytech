@@ -423,8 +423,12 @@ function useDashboardData() {
 // Presentational pieces.
 // ---------------------------------------------------------------------------
 
+// Ask for the site's main domain: subdomains like old.reddit.com have no icon of
+// their own, and Google's favicon service answers those with a 404 (a console
+// error on every visit, caught by scripts/site-audit on 2026-10-19).
 function favicon(domain: string) {
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
+  const site = domain.replace(/^(?:www|old|m|amp|mobile)\./i, "");
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(site)}&sz=64`;
 }
 
 function TickerCard({ label, value, sub }: { label: string; value: number; sub?: string }) {
