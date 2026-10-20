@@ -199,7 +199,7 @@ DONE MEANS
 4. If it could happen again, add a scout_lessons row so Scout fixes it alone next time.`;
 }
 
-async function climb(i: Issue, opts: { scoutOk: boolean; force: boolean }): Promise<string> {
+async function climb(i: Issue, opts: { scoutOk: boolean; freeAiOk: boolean; force: boolean }): Promise<string> {
   const ctx = await context(i);
 
   if (i.fix_stage === "auto") {
@@ -220,6 +220,13 @@ async function climb(i: Issue, opts: { scoutOk: boolean; force: boolean }): Prom
   if (i.fix_stage === "free_ai") {
     const { data: job } = await db.from("fix_ai_jobs").select("id, status, answer, created_at").eq("issue_key", i.key)
       .gte("created_at", i.opened_at).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    // 2026-10-17: all of Groq's free models share one per-minute token budget. A tick that was due on 13 incidents fired
+    // 13 diagnoses back to back, every Groq model 429'd, and the one Scout call that tick got nothing and reported STUCK.
+    // Two diagnoses a tick is plenty; the rest wait their turn.
+    if (!job && !opts.freeAiOk && !opts.force) {
+      await setStage(i.key, { fix_next_at: later(3) });
+      return "free_ai: deferred (free AI budget this tick)";
+    }
     // v6 (2026-09-23): try the cloud free AI first (Groq -> Cloudflare via _shared/free-llm.ts, $0, seconds not minutes);
     // the Mac mini queue below is the fallback when both are down.
     let cloud: string | null = null;
@@ -270,6 +277,12 @@ async function climb(i: Issue, opts: { scoutOk: boolean; force: boolean }): Prom
     }
     const res = await scoutRead(i);
     if (!res) { await setStage(i.key, { fix_next_at: later(2) }); return "scout: running"; }
+    // 2026-10-17: a busy free AI is not a Scout failure. "Not answering right now" / "out of room" used to count as STUCK and
+    // sent the incident to the claude pile, so a five-minute provider squeeze became a permanent needs-a-human ticket.
+    if (/free AI (?:is out of room|isn't answering right now)|waiting for the free AI/i.test(res.reply) && res.reply.length < 600) {
+      await setStage(i.key, { fix_next_at: later(5) });
+      return "scout: free AI busy, retry";
+    }
     if (res.verdict === "FIXED") {
       await log(i.key, "scout", res.line, true);
       // If Scout closed the incident itself, the "Fixed" card went out before this note existed.
@@ -316,7 +329,7 @@ Deno.serve(async (req) => {
       await log(key, "you", "You asked the ladder to try again.", null);
       await db.from("monitor_issues").update({ fix_stage: "auto", fix_next_at: new Date().toISOString(), scout_thread: null, scout_started_at: null }).eq("key", key);
       const { data: fresh } = await db.from("monitor_issues").select("*").eq("key", key).single();
-      return J({ ok: true, result: await climb(fresh as Issue, { scoutOk: true, force: true }) });
+      return J({ ok: true, result: await climb(fresh as Issue, { scoutOk: true, freeAiOk: true, force: true }) });
     }
 
     // tick: every open incident whose turn it is. One Scout call per tick.
@@ -324,11 +337,13 @@ Deno.serve(async (req) => {
       .not("fix_stage", "in", "(needs_yes,claude,fixed)").order("opened_at");
     const out: Record<string, string> = {};
     let scoutOk = true;
+    let freeAiUsed = 0;
     for (const i of (open ?? []) as Issue[]) {
       if (i.fix_next_at && new Date(i.fix_next_at).getTime() > Date.now()) { out[i.key] = "later"; continue; }
-      const r = await climb(i, { scoutOk, force: false });
+      const r = await climb(i, { scoutOk, freeAiOk: freeAiUsed < 2, force: false });
       if (r === "scout: started") scoutOk = false;
       if (r === "needs_yes" || r === "claude") scoutOk = false;
+      if (r === "free_ai: queued") freeAiUsed++;
       out[i.key] = r;
     }
     return J({ ok: true, ran: out });
