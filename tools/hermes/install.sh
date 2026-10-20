@@ -6,7 +6,8 @@ set -e
 SRC=$(cd "$(dirname "$0")" && pwd)
 JOBS=/opt/bestly/cron/jobs
 HOME_DIR=/opt/bestly/hermes
-mkdir -p "$JOBS" "$HOME_DIR" /opt/bestly/cron/state /home/pi/scripts/cron-logs
+[ -d "$HOME_DIR" ] || { sudo -n mkdir -p "$HOME_DIR" && sudo -n chown pi:pi "$HOME_DIR"; }
+mkdir -p "$JOBS" /opt/bestly/cron/state /home/pi/scripts/cron-logs
 
 python3 "$SRC/selftest.py"
 
