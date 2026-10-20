@@ -1,0 +1,94 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Connect Bluesky · Bestly Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1A1712;--bone:#EFEAE1;--brass:#A8824B;--mute:#6E6557;--hair:#CEC6B9;--bad:#9A2F22}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bone);color:var(--ink)}
+body{font:17px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:12vh 20px 56px}
+.eb{font:600 12px/1 Inter,-apple-system,sans-serif;letter-spacing:.28em;text-transform:uppercase;color:var(--brass)}
+h1{font:400 40px/1.12 "Cormorant Garamond",Georgia,serif;margin:14px 0 18px}
+hr{border:0;border-top:1px solid var(--hair);margin:24px 0}
+p{margin:0 0 14px}.mute{color:var(--mute);font-size:15px}.bad{color:var(--bad)}
+.btn{display:inline-block;background:var(--ink);color:var(--bone);border:0;border-radius:999px;padding:14px 26px;font:600 15px Inter,-apple-system,sans-serif;text-decoration:none;cursor:pointer}
+.btn[disabled]{opacity:.5;cursor:default}
+input{width:100%;padding:12px 14px;border:1px solid var(--hair);border-radius:10px;background:#fff;font:16px ui-monospace,Menlo,monospace;margin:6px 0 16px;color:var(--ink)}
+label{font:600 12px Inter,-apple-system,sans-serif;letter-spacing:.2em;text-transform:uppercase;color:var(--mute)}
+code{font:14px ui-monospace,Menlo,monospace;background:#fff;padding:2px 6px;border-radius:6px;word-break:break-all}
+.pg{display:block;width:100%;text-align:left;margin:0 0 10px;background:#fff;color:var(--ink);border:1px solid var(--hair);border-radius:12px;padding:14px 16px;font:600 16px Inter,-apple-system,sans-serif;cursor:pointer}
+.pg:hover{border-color:var(--brass)}
+input{width:100%;padding:12px 14px;border:1px solid var(--hair);border-radius:10px;background:#fff;font:16px ui-monospace,Menlo,monospace;margin:6px 0 16px;color:var(--ink)}
+ol{padding-left:22px;margin:0 0 14px}li{margin:0 0 8px}
+</style>
+
+</head><body><main><div class="eb">Bestly Studio</div><div id="out"><h1>One moment.</h1></div></main>
+<script>
+// Connect a brand's Bluesky account to Bestly Studio so the posts it approves go out on Bluesky.
+// You paste an App Password (not your real password). It goes straight into Bestly's vault and is never shown again.
+const API = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/studio-bluesky";
+const out = document.getElementById("out");
+const q = new URLSearchParams(location.search);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const WHY = {
+  link_not_found: "This link isn't valid. Ask your Bestly contact for a new one.",
+  link_used: "This link was already used, so your Bluesky is connected. If you need to reconnect, ask for a new link.",
+  link_expired: "This link has expired. Ask your Bestly contact for a new one.",
+  wrong_platform: "This link is for a different account. Ask your Bestly contact for a Bluesky one.",
+  no_handle: "Type your Bluesky handle first.",
+  bad_handle: "That handle doesn't look right. It looks like name.bsky.social.",
+  not_app_password: "That doesn't look like an App Password. An App Password looks like abcd-1234-efgh-5678. Please do not use your real password. Follow the steps above to make an App Password.",
+  login_refused: "Bluesky said no. Check the handle and the App Password, or make a new App Password and paste that one.",
+  rate_limited: "Bluesky wants you to wait a few minutes. Try again soon.",
+  bluesky_unreachable: "Bluesky didn't answer. Try again in a few minutes."
+};
+function say(title, body){ out.innerHTML = `<h1>${title}</h1>${body || ""}`; }
+async function call(body){
+  const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return r.json().catch(() => ({ ok: false, error: "unreachable" }));
+}
+function done(r){
+  say("Connected.", `<p><b>@${esc(r.handle)}</b> is now connected to Bestly Studio${r.client ? " for " + esc(r.client) : ""}.</p>
+    <p class="mute">Posts you approve will go to this Bluesky account at the time on your calendar. To turn this off any time, delete the App Password in Bluesky (Settings, Privacy and security, App passwords).</p>
+    ${r.email_confirmed === false ? '<p class="bad">One more thing: Bluesky only lets you upload videos after you confirm your email. In Bluesky go to Settings, Account, Email, and tap Verify.</p>' : ""}
+    <p class="mute">You can close this tab.</p>`);
+}
+function form(client, msg){
+  say(`Connect Bluesky${client ? " for " + esc(client) : ""}`,
+    `<p>Bestly Studio will post the videos you approve to your Bluesky account, at the time on your calendar. You stay in control: you can switch it off any time.</p>
+     <p><b>First, make an App Password.</b> It is a second password made just for Bestly. It is not your real password.</p>
+     <ol><li>Open Bluesky (the app or bsky.app).</li>
+       <li>Tap <b>Settings</b>, then <b>Privacy and security</b>, then <b>App passwords</b>.</li>
+       <li>Tap <b>Add App Password</b>. Name it <b>Bestly Studio</b>. Leave "Allow access to your direct messages" switched off.</li>
+       <li>Tap <b>Create App Password</b>. Copy the password it shows. It looks like abcd-1234-efgh-5678.</li></ol>
+     <hr>
+     <form id="f" autocomplete="off">
+       <label>Your Bluesky handle</label>
+       <input name="handle" placeholder="name.bsky.social" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+       <label>App Password</label>
+       <input name="pw" type="password" placeholder="abcd-1234-efgh-5678" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" required>
+       <button class="btn" type="submit">Connect</button> <span id="m" class="mute"></span>
+       <p id="err" class="bad" style="margin-top:14px">${msg ? esc(msg) : ""}</p>
+     </form>
+     <p class="mute">Your App Password goes straight into Bestly's private vault. It is never shown again, not even to us.</p>`);
+  document.getElementById("f").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target), m = document.getElementById("m"), btn = e.target.querySelector("button");
+    btn.disabled = true; m.textContent = "Checking…";
+    const r = await call({ op: "bluesky_finish", k: q.get("k"), handle: f.get("handle"), app_password: f.get("pw") });
+    e.target.pw.value = "";
+    if (r.ok) return done(r);
+    if (String(r.error).startsWith("link")) return say("Not connected.", `<p class="bad">${WHY[r.error]}</p>`);
+    btn.disabled = false; m.textContent = "";
+    document.getElementById("err").textContent = WHY[r.error] || ("Something went wrong. " + (r.detail || r.error || ""));
+  };
+}
+(async () => {
+  const k = q.get("k");
+  if (!k) return say("Nothing to connect.", `<p class="mute">Open the link your Bestly contact sent you.</p>`);
+  const r = await call({ op: "bluesky_start", k });
+  if (!r.ok) return say(r.error === "link_used" ? "Already connected." : "Can't connect yet.", `<p>${WHY[r.error] || esc(r.error)}</p>`);
+  form(r.client);
+})();
+</script></body></html>
