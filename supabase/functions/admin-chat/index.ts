@@ -178,7 +178,7 @@ import { corsWith } from "../_shared/cors.ts";
 import { chefCook, chefMarkdown } from "../_shared/chef.ts";
 import { sendAsJared } from "../_shared/bestly-signature.ts";
 // 2026-10-19: web_reach, the web-reading tool (Agent Reach queue on the Pi). Fetched text is untrusted data; see _shared/web-reach.ts.
-import { webReach, WEB_REACH_TOOL, WEB_REACH_FREE_DESC, webReachRules } from "../_shared/web-reach.ts";
+import { webReach, WEB_REACH_TOOL, WEB_REACH_FREE_DESC, webReachRules, prefetchReach, plainReachTalk, AUTO_FREE_CHARS, AUTO_PAID_CHARS } from "../_shared/web-reach.ts";
 
 const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
 const MAX_TURNS = 10;
@@ -819,6 +819,7 @@ async function threadDigest(threadId: string): Promise<string> {
 const NOT_AN_ANSWER = "My last step came back as working notes, not an answer, so I threw it away instead of showing it to you. Nothing was changed. Ask me again or pick one below and I will redo that step.";
 
 async function adhdShape(reply: string, ask: string, threadId: string): Promise<string> {
+  reply = plainReachTalk(reply);   // 2026-10-19: never web_reach / job ids / markers to Jared
   try {
     if (!reply || /^\s*QUESTIONS:/m.test(reply)) return reply;
     const m = reply.match(/^\s*OPTIONS:\s*(.+)$/m);
@@ -1386,6 +1387,7 @@ async function freeTry(threadId: string, text: string, page: unknown): Promise<{
   // v26: the free AI is now Groq -> Cloudflare -> Mac mini (_shared/free-llm.ts), so the Mac being asleep no longer matters.
   // v23: work goes to the model with tools. So does every follow-up in a thread that began as a hand-off.
   const todoHelp = /^help me finish this to-do:/i.test(text.trim());
+  if (reachByThread.has(threadId)) return { why: FREE_WHY.DATA };   // a link was opened / a search ran for this message: the tool step answers from it
   if (!todoHelp && ASKS_FOR_WORK.test(text.trim())) return { why: FREE_WHY.ACTION };
   // v41: the quick-answer step has no tools. A question about a person, an email, an invoice, a task or a call needs a lookup, so it goes straight to the tool step
   // instead of answering from nothing (it named invoice services for Elizabeth without reading a single email).
@@ -1571,7 +1573,7 @@ const TOOL_TOPICS: [string[], RegExp][] = [
   [["clear_alerts", "resolve_incident"], /\b(alerts?|incidents?|bell|resolve|clear|fixed|warning|notification)\b/i],
   [["learn"], /\b(learn|remember|lesson|next time)\b/i],
   [["make_video"], /\b(video|videos|clip|clips|ltx|render|animate|animation|footage|b-?roll|reel)\b/i],
-  [["web_reach"], /\b(web|website|webpage|web page|url|link|links|article|blog|rss|feed|youtube|transcript|google|look ?up|news|search online|online)\b|https?:\/\//i],
+  [["web_reach"], /\b(web|website|webpage|web page|url|link|links|article|blog|rss|feed|youtube|video|watch|transcript|google|look ?up|news|search|online|internet|reviews?|prices?|saying|latest|read this|summari[sz]e)\b|https?:\/\/|\b[a-z0-9-]+\.(?:com|org|net|io|co|app|dev|ai|tech)\b/i],
   [["send_email"], /\b(e-?mails?|mail|send|signature|message (to|eli|rohit)|write to|reply to)\b/i],
   [["look"], /\b(images?|photos?|screenshots?|pictures?|videos?|frames?|pdf|look|see|seen)\b|scout-files/i],
   [["kitchen_chef"], /\b(chef|recipes?|cook|cooking|dinner|lunch|breakfast|meal|pantry|omni ?cook|tokit|gourmet|eat)\b/i],
@@ -1593,8 +1595,9 @@ const FREE_DESC: Record<string, string> = {
 };
 const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "search_code", "ask_user"]);
 
-function freeToolDefs(autopilot: boolean, convo: string) {
+function freeToolDefs(autopilot: boolean, convo: string, forceReach = false) {
   const want = new Set(ALWAYS_TOOLS);
+  if (forceReach && !autopilot) want.add("web_reach");   // a pre-fetch ran: keep the tool (and its rules) for the follow-up
   if (autopilot) ["resolve_incident", "learn", "delegate"].forEach((n) => want.add(n));   // the fix ladder closes and records its fixes
   for (const [names, re] of TOOL_TOPICS) if (re.test(convo)) names.forEach((n) => want.add(n));
   return [
@@ -1669,6 +1672,16 @@ const DOING: Record<string, string> = {
 };
 const pt12 = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" });
 /** v41 output scrub: no tool syntax, no NEEDS_TOOLS, no thinking out loud ever reaches a saved message. "" = a failed step, not a reply. */
+// 2026-10-19 (natural phrasing, Jared: "i would never ask like that"): links he pastes and plain "look this up" questions are read BEFORE
+// the model runs (see prefetchReach in _shared/web-reach.ts). The result rides in the newest user turn of every model path for this
+// thread; it is never stored in the chat. Keyed by thread so a concurrent autopilot run in the same isolate never sees it.
+const reachByThread = new Map<string, string>();
+function reachSet(threadId: string, block: string | null) {
+  if (!block) { reachByThread.delete(threadId); return; }
+  if (reachByThread.size >= 30) reachByThread.delete(reachByThread.keys().next().value as string);
+  reachByThread.set(threadId, block);
+}
+
 function scrubReply(s: string): string {
   let t = stripToolSyntax(String(s ?? ""));
   if (thinkingLeak(t)) return "";
@@ -1867,6 +1880,8 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     else msgs.push({ role, content: body });
   });
   if (msgs[msgs.length - 1].role !== "user") msgs.push({ role: "user", content: text.slice(0, 20_000) });
+  const reachBlock = autopilot ? "" : (reachByThread.get(threadId) ?? "");
+  if (reachBlock) msgs[msgs.length - 1].content += "\n\n" + reachBlock;
   // v36: a continuing hop sees its own earlier work instead of starting over.
   if (prior) {
     const note = continuationNote(prior);
@@ -1876,7 +1891,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   }
   KEEP.add(msgs[msgs.length - 1]);
 
-  const tools = freeToolDefs(autopilot, msgs.slice(1).map((m) => String(m.content ?? "")).join("\n").slice(-6000));
+  const tools = freeToolDefs(autopilot, msgs.slice(1).map((m) => String(m.content ?? "")).join("\n").slice(-6000), !!reachBlock);
   const allowed = new Set(tools.map((t) => t.function.name));
   if (allowed.has("web_reach")) msgs[0].content += "\n\n" + webReachRules("Jared");   // the untrusted-content rules ride along whenever the tool is offered
   // 2026-10-17: measure the first request the way llmChat does (chars / 3.8 + the reply budget). Groq's gate is 7,000
@@ -3164,6 +3179,25 @@ Deno.serve(async (req) => {
     }
   }
 
+  // 2026-10-19 (Jared: "make scout understand human, i would never ask like that"): on his LIVE chat message only (never autopilot, hops,
+  // hand-offs or service calls), open the links he pasted and run a plain "look this up" search before the model runs. Up to 2 links in
+  // parallel, about 20 s. Private links and anything with a token are refused here and never fetched. See prefetchReach.
+  const reachLive = !autopilot && !svcCall && !autoHop && !paidHandoff && !keepGoing && !resumeCall;
+  if (reachLive) {
+    try {
+      let reachText = text;
+      if (/^(yes,? use paid ai|use paid ai for this one)\.?$/i.test(text.trim())) {   // his yes to paid AI: read what he actually asked
+        const { data: prevU } = await db.from("admin_chat_messages").select("body").eq("thread_id", threadId).eq("role", "user").order("created_at", { ascending: false }).limit(6);
+        reachText = ((prevU ?? []) as any[]).map((r) => String(r.body ?? "")).find((b) => b.trim() && !/^\s*(yes|no|always|keep going|use paid|raise|override|drop|leave|wait)\b/i.test(b)) ?? text;
+      }
+      const pre = await prefetchReach(db as never, reachText, "scout", "Jared", { maxChars: paidOn && !freeFirst ? AUTO_PAID_CHARS : AUTO_FREE_CHARS });
+      reachSet(threadId, pre?.block ?? null);
+      if (pre) {
+        await db.from("admin_chat_actions").insert({ thread_id: threadId, tool: "web_reach", args: { auto: true, items: pre.plan.items.map((i) => ({ op: i.op, target: i.shown })), refused: pre.plan.blocked.length }, result: { log: pre.log }, ok: pre.log.every((l) => l.ok) });
+      }
+    } catch { reachSet(threadId, null); }
+  }
+
   // v15/v30: paid AI only while the Paid AI switch is on. v38: and free goes first even then (freeFirst).
   // v69 (2026-10-13): autopilot never spends. With the switch on it used to skip free and go straight to paid: on Oct 10-11
   // the fix ladder burned all of the Anthropic credit (124 Sonnet calls, 0 of them his chats). It now always takes the free path.
@@ -3422,6 +3456,14 @@ Deno.serve(async (req) => {
   // paid run with a user turn.
   if (messages[messages.length - 1]?.role !== "user") {
     messages.push({ role: "user", content: "(Scout: carry on from the newest message above and finish the job.)" });
+  }
+  {
+    const rc = reachByThread.get(threadId);   // links opened / search run for his newest message (natural phrasing)
+    const lastM = messages[messages.length - 1];
+    if (rc && !autopilot && lastM) {
+      if (typeof lastM.content === "string") lastM.content += "\n\n" + rc;
+      else if (Array.isArray(lastM.content)) lastM.content.push({ type: "text", text: rc });
+    }
   }
 
   const page = body.page && typeof body.page === "object"
