@@ -58,6 +58,8 @@
             try { ok = !!document.referrer && new URL(document.referrer).origin === CLOUD; } catch (e) {}
           }
           if (!ok) {
+            // stop the parser first, or it keeps adding the rest of this page after the blanking below
+            try { window.stop(); } catch (e) {}
             try { document.documentElement.innerHTML = ""; } catch (e) {}
             try { window.top.location.replace(loc.origin + loc.pathname + "?direct=1"); } catch (e) {}
             window.__bestlyBlockedFrame = true;
