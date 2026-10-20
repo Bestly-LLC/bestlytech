@@ -1606,9 +1606,16 @@ def run_audit(ctx, args, live, state):
                 if host in NON_VERCEL_HOSTS or host not in by_host:
                     continue
                 st = fp_status.get(host)
-                if st in (None, "unchecked", "redirect"):
-                    why = {None: "the homepage was not fetched tonight", "unchecked": "the homepage fetch did not return a normal page (%s)" % fp.get("last_unchecked"),
-                           "redirect": "the host redirects to %s, which has its own check" % fp.get("redirect_to")}[st]
+                if st == "redirect":
+                    # Fixed 2026-10-20 (Command Center v2): a host that only redirects to another host we already check
+                    # has no page of its own to deface, so there is nothing to be "not checked". Emitting a skip here made
+                    # security_check() open a yellow <key>:unreachable finding every night that contradicted the external
+                    # health check (bestly.tech, www.eldoraluxe.com, hoascope.com, review.bestly.tech). A pass closes it
+                    # on the next run, and the redirect target keeps its own content_changed check.
+                    checks.add("web:%s:content_changed" % host, "pass", "Websites", host, "content_changed")
+                    continue
+                if st in (None, "unchecked"):
+                    why = {None: "the homepage was not fetched tonight", "unchecked": "the homepage fetch did not return a normal page (%s)" % fp.get("last_unchecked")}[st]
                     checks.add("web:%s:content_changed" % host, "skip", "Websites", host, "content_changed",
                                "Not checked: %s" % host, why.capitalize() + ". The old baseline is kept and nothing is raised.")
                     continue
