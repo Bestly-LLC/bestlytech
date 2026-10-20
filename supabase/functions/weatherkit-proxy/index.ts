@@ -7,6 +7,10 @@
 //   GET /weatherkit-proxy?lat=34.09&lon=-118.36[&dataSets=currentWeather][&lang=en]
 //   -> Apple's JSON, plus X-Bestly-Weather-Cache: hit|miss
 //
+//   &air=1 (admin Command Center, 2026-10-20) also merges `airQuality` into the JSON: US AQI, PM2.5 and ozone
+//   from Open-Meteo (free, no account, no key), fetched HERE so the browser never talks to a third party.
+//   Cached 30 min per rounded coordinate. If Open-Meteo is down, airQuality is null and the weather still returns.
+//
 // Three things WeatherKit rejects tokens for, all of them silent 401s:
 //   1. `sub` must be the SERVICES ID, not an app/bundle ID.
 //   2. The header needs `id: "<TEAM>.<SERVICE>"` alongside `kid`.
@@ -67,6 +71,49 @@ async function mintToken(teamId: string, serviceId: string, keyId: string, pem: 
 const cache = new Map<string, { at: number; body: string; status: number }>();
 const TTL_MS = 10 * 60_000;
 
+// Air quality: Open-Meteo, server side only. One entry per rounded coordinate for 30 minutes.
+type Air = { aqi: number | null; pm25: number | null; ozone: number | null; hourly: { time: string; aqi: number }[]; at: string; source: string };
+const airCache = new Map<string, { at: number; v: Air | null }>();
+async function airFor(lat: number, lon: number): Promise<Air | null> {
+  const k = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const hit = airCache.get(k);
+  if (hit && Date.now() - hit.at < 30 * 60_000) return hit.v;
+  let v: Air | null = null;
+  try {
+    const u = new URL("https://air-quality-api.open-meteo.com/v1/air-quality");
+    u.searchParams.set("latitude", String(lat));
+    u.searchParams.set("longitude", String(lon));
+    u.searchParams.set("current", "us_aqi,pm2_5,ozone");
+    u.searchParams.set("hourly", "us_aqi");
+    u.searchParams.set("forecast_hours", "24");
+    u.searchParams.set("timezone", "UTC");
+    const r = await fetch(u, { signal: AbortSignal.timeout(6000) });
+    if (r.ok) {
+      const j = await r.json();
+      const t: string[] = j?.hourly?.time ?? [];
+      const a: (number | null)[] = j?.hourly?.us_aqi ?? [];
+      v = {
+        aqi: j?.current?.us_aqi ?? null, pm25: j?.current?.pm2_5 ?? null, ozone: j?.current?.ozone ?? null,
+        hourly: t.map((x, i) => ({ time: x.length === 16 ? x + ":00Z" : x, aqi: a[i] as number })).filter((h) => Number.isFinite(h.aqi)),
+        at: new Date().toISOString(), source: "open-meteo",
+      };
+    }
+  } catch { /* leave null: weather still returns */ }
+  // Do not cache a failure for the full 30 minutes: retry after 2.
+  airCache.set(k, { at: v ? Date.now() : Date.now() - 28 * 60_000, v });
+  if (airCache.size > 50) airCache.delete(airCache.keys().next().value as string);
+  return v;
+}
+async function withAir(body: string, want: boolean, lat: number, lon: number): Promise<string> {
+  if (!want) return body;
+  try {
+    const j = JSON.parse(body);
+    j.airQuality = await airFor(lat, lon);
+    j.fetchedAt = new Date().toISOString();
+    return JSON.stringify(j);
+  } catch { return body; }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
@@ -76,6 +123,7 @@ Deno.serve(async (req) => {
   let dataSets = url.searchParams.get("dataSets") ?? "currentWeather";
   let lang = url.searchParams.get("lang") ?? "en";
   let country = url.searchParams.get("country") ?? "";
+  let air = url.searchParams.get("air") === "1";
 
   // Accept a JSON body too, so supabase.functions.invoke() works unchanged.
   if (req.method === "POST") {
@@ -86,6 +134,7 @@ Deno.serve(async (req) => {
       if (b.dataSets) dataSets = String(b.dataSets);
       if (b.lang) lang = String(b.lang);
       if (b.country) country = String(b.country);
+      if (b.air) air = true;
     } catch { /* query params only, fine */ }
   }
 
@@ -99,7 +148,7 @@ Deno.serve(async (req) => {
   const key = `${nLat.toFixed(2)},${nLon.toFixed(2)}|${dataSets}|${lang}|${country}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) {
-    return new Response(hit.body, {
+    return new Response(await withAir(hit.body, air, nLat, nLon), {
       status: hit.status,
       headers: { "Content-Type": "application/json", ...CORS, "X-Bestly-Weather-Cache": "hit" },
     });
@@ -148,7 +197,7 @@ Deno.serve(async (req) => {
   cache.set(key, { at: Date.now(), body, status: res.status });
   if (cache.size > 200) cache.delete(cache.keys().next().value as string);
 
-  return new Response(body, {
+  return new Response(await withAir(body, air, nLat, nLon), {
     status: 200,
     headers: { "Content-Type": "application/json", ...CORS, "X-Bestly-Weather-Cache": "miss" },
   });

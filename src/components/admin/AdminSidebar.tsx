@@ -1,4 +1,4 @@
-import { BadgeDollarSign, Brush, FileWarning, Scissors,
+import { Binoculars, Inbox, BadgeDollarSign, Brush, FileWarning, Scissors,
   LayoutDashboard,
   Settings,
   BarChart3,
@@ -47,6 +47,10 @@ export const dashboardItem = { title: "Command Center", url: "/admin", icon: Lay
 
 // Work: Pipeline is leads from found to called, with the CRM as its Inbound tab; inbound messages, waitlist, meetings and settings sit beside it.
 const workItems = [
+  // Moved off the home page by Command Center v2 (2026-10-20): the home answers four questions, these hold the rest.
+  { title: "Needs you", url: "/admin/needs-you", icon: Inbox },
+  { title: "Scout's day", url: "/admin/scout-day", icon: Binoculars },
+  { title: "Overview", url: "/admin/overview", icon: Gauge },
   { title: "Pipeline", url: "/admin/pipeline", icon: Users, countKey: "leads" as CountKeys },
   { title: "Contacts", url: "/admin/contacts", icon: Mail, countKey: "contacts" as CountKeys },
   { title: "Waitlist", url: "/admin/waitlist", icon: ListChecks },

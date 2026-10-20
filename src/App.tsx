@@ -81,6 +81,9 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 const AdminLogin = lazyPage(() => import("./pages/admin/AdminLogin"));
 const AdminApproveLogin = lazyPage(() => import("./pages/admin/AdminApproveLogin"));
 const AdminDashboard = lazyPage(() => import("./pages/admin/AdminDashboard"));
+const AdminOverview = lazyPage(() => import("./pages/admin/AdminOverview"));
+const AdminNeedsYou = lazyPage(() => import("./pages/admin/AdminNeedsYou"));
+const AdminScoutDay = lazyPage(() => import("./pages/admin/AdminScoutDay"));
 const AdminSubmissionDetail = lazyPage(() => import("./pages/admin/AdminSubmissionDetail"));
 // Cookie Yeti: three tabbed sections; each lazy-loads only its active tab's page.
 const CookieYetiCommandCenter = lazyPage(() => import("./pages/admin/CookieYetiCommandCenter"));
@@ -258,6 +261,9 @@ const App = () => {
                 <Route path="/admin/approve" element={<AdminRoute><AdminApproveLogin /></AdminRoute>} />
                 <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
                   <Route index element={<AdminDashboard />} />
+                  <Route path="overview" element={<AdminOverview />} />
+                  <Route path="needs-you" element={<AdminNeedsYou />} />
+                  <Route path="scout-day" element={<AdminScoutDay />} />
                   <Route path="pipeline" element={<Pipeline />} />
                   <Route path="leads" element={<LeadsRedirect />} />
                   <Route path="submissions" element={<InboundRedirect sub="marketplace" />} />
