@@ -73,7 +73,10 @@
         if (standalone) return;
         var h = loc.hash || "";
         if (q.has("code") || q.has("error") || q.has("error_description") || /access_token|error_description/.test(h)) {
-          try { sessionStorage.setItem("bestly-cloud-hop", "1"); } catch (e) {}
+          try {
+            if (sessionStorage.getItem("bestly-cloud-nohop") === "1") sessionStorage.removeItem("bestly-cloud-nohop");
+            else sessionStorage.setItem("bestly-cloud-hop", "1");
+          } catch (e) {}
           return;
         }
         q.delete("embed");

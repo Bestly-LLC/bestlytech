@@ -112,6 +112,10 @@ export default function AdminLogin() {
       // Inside Bestly Cloud the admin is in a frame, and Apple refuses to be framed. Same sign-in, but the
       // Apple page opens in the top-level window; it returns to /admin and the admin hops back into Cloud.
       const inCloudFrame = EMBEDDED;
+      // Signed in from the ?direct=1 escape hatch (Cloud may be down): after Apple returns, stay here, do not hop to Cloud.
+      if (!inCloudFrame && new URLSearchParams(window.location.search).get("direct") === "1") {
+        try { sessionStorage.setItem("bestly-cloud-nohop", "1"); } catch { /* private mode */ }
+      }
       const { data: oauth, error } = await supabase.auth.signInWithOAuth({
         provider: "apple",
         options: {
