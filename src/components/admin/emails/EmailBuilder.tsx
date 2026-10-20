@@ -15,6 +15,7 @@ import { WhenText } from "./WhenText";
 import { BLOCK_LABEL, cleanHtml, docOf, download, emptyDraft, makeEml, newBlock, previewSource, slugify, textOf, type Draft } from "./emailUtils";
 
 type Snap = { subject: string; preheader: string; blocks: Block[] };
+type ChangeNote = { kind: "working" | "done" | "same" | "error"; text: string };
 const QUICK = ["Make it shorter", "Make it friendlier", "Explain it more simply", "Add a button to my website"];
 
 const seg = (on: boolean) =>
@@ -30,6 +31,10 @@ export function EmailBuilder({ api, initial, onSaved, onSentDone }: { api: Email
   const [warnings, setWarnings] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [change, setChange] = useState("");
+  const [running, setRunning] = useState("");
+  const [note, setNote] = useState<ChangeNote | null>(null);
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const changeBox = useRef<HTMLTextAreaElement>(null);
   const [btn, setBtn] = useState<Extract<Block, { type: "button" }> | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
   const [saved, setSaved] = useState<LibraryRow | null>(null);
@@ -37,7 +42,8 @@ export function EmailBuilder({ api, initial, onSaved, onSentDone }: { api: Email
   const future = useRef<Snap[]>([]);
   const [, bump] = useState(0);
 
-  useEffect(() => { setDraft(initial); past.current = []; future.current = []; setWarnings([]); setError(""); setSaved(null); }, [initial]);
+  useEffect(() => { setDraft(initial); past.current = []; future.current = []; setWarnings([]); setError(""); setSaved(null); setNote(null); setRunning(""); }, [initial]);
+  useEffect(() => () => { if (noteTimer.current) clearTimeout(noteTimer.current); }, []);
 
   const kit: Kit = api.kits.find((k) => k.slug === draft.kit) ?? api.kits[0];
   const hasDoc = draft.blocks.length > 0 || !!draft.fixedHtml;
@@ -62,17 +68,31 @@ export function EmailBuilder({ api, initial, onSaved, onSentDone }: { api: Email
     setWarnings(r.warnings ?? []);
     setPane("preview");
   };
+  const showNote = (n: ChangeNote | null, clearAfterMs = 0) => {
+    if (noteTimer.current) { clearTimeout(noteTimer.current); noteTimer.current = null; }
+    setNote(n);
+    if (n && clearAfterMs) noteTimer.current = setTimeout(() => setNote(null), clearAfterMs);
+  };
   const revise = async (instruction: string) => {
-    if (!instruction.trim() || !hasDoc || locked) return;
-    setBusy("revise"); setError(""); setWarnings([]);
-    const r = await api.revise({ kit: draft.kit, doc: docOf(draft), instruction });
-    setBusy("");
-    if (!r.ok || !r.doc) { setError(r.error ?? "Could not change it. Your email is untouched."); return; }
+    const ask = instruction.trim();
+    if (!ask || !hasDoc || locked || busy) return;
+    const before = JSON.stringify(snap());
+    setBusy("revise"); setRunning(instruction); setError(""); setWarnings([]);
+    showNote({ kind: "working", text: "Changing it with free AI. This can take up to a minute." });
+    let r: Awaited<ReturnType<EmailApi["revise"]>>;
+    try { r = await api.revise({ kit: draft.kit, doc: docOf(draft), instruction: ask }); }
+    catch (e) { r = { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+    setBusy(""); setRunning("");
+    if (!r.ok || !r.doc) { showNote({ kind: "error", text: r.error ?? "Could not change it. Your email is untouched." }); return; }
+    const next = { subject: r.doc.subject || draft.subject, preheader: r.doc.preheader ?? draft.preheader, blocks: r.doc.blocks };
+    const same = r.changed === false || (r.changed === undefined && JSON.stringify(next) === before);
+    if (same) { showNote({ kind: "same", text: "The free AI sent it back unchanged. Try saying it another way." }); return; }
     remember();
-    setDraft((d) => ({ ...d, subject: r.doc!.subject || d.subject, preheader: r.doc!.preheader ?? d.preheader, blocks: r.doc!.blocks }));
+    setDraft((d) => ({ ...d, ...next }));
     setWarnings(r.warnings ?? []);
     setChange("");
     setPane("preview");
+    showNote({ kind: "done", text: `Done: ${ask}` }, 6000);
   };
 
   /* ── tap-to-edit from the preview ── */
@@ -208,15 +228,34 @@ export function EmailBuilder({ api, initial, onSaved, onSentDone }: { api: Email
             <section className={cn(card, "space-y-3")} aria-labelledby="eb-change">
               <h2 id="eb-change" className="text-[17px] font-semibold text-white">Ask for changes</h2>
               <div className="flex flex-wrap gap-2">
-                {QUICK.map((q) => (
-                  <button key={q} type="button" disabled={!!busy} onClick={() => revise(q)} className={cn("min-h-[44px] rounded-full bg-white/[0.07] px-4 text-[14px] text-white/80 hover:bg-white/[0.12] active:scale-[0.97]", focusRing)}>{q}</button>
-                ))}
+                {QUICK.map((q) => {
+                  const on = running === q;
+                  return (
+                    <button key={q} type="button" disabled={!!busy} aria-busy={on} onClick={() => revise(q)}
+                      className={cn("inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white/[0.07] px-4 py-2 text-left text-[14px] leading-snug text-white/80 hover:bg-white/[0.12] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/[0.07]", on && "bg-white/[0.16] text-white disabled:opacity-100", focusRing)}>
+                      {on && <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />}{q}
+                    </button>
+                  );
+                })}
               </div>
-              <textarea value={change} onChange={(e) => setChange(e.target.value)} rows={3} placeholder='Or say it: "add a button to the deck page: https://..."' className={`${field} resize-y`} aria-label="Ask for changes" />
-              <button type="button" onClick={() => revise(change)} disabled={!!busy || !change.trim()} className={cn(btnTinted, "w-full")}>
-                {busy === "revise" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Wand2 className="h-4 w-4" aria-hidden="true" />}
-                {busy === "revise" ? "Changing it" : "Make the change"}
+              <textarea ref={changeBox} value={change} onChange={(e) => setChange(e.target.value)} rows={3} disabled={busy === "revise"} placeholder='Or say it: "add a button to the deck page: https://..."' className={`${field} resize-y`} aria-label="Ask for changes" />
+              <button type="button" onClick={() => (change.trim() ? revise(change) : changeBox.current?.focus())} disabled={!!busy} className={cn(btnTinted, "w-full")}>
+                {busy === "revise" && running === change ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Wand2 className="h-4 w-4" aria-hidden="true" />}
+                {busy === "revise" && running === change ? "Changing it" : "Make the change"}
               </button>
+              {note && (
+                <p role={note.kind === "working" || note.kind === "done" ? "status" : "alert"}
+                  className={cn("flex items-start gap-2 rounded-xl px-3 py-2 text-[13px] leading-snug",
+                    note.kind === "working" && "bg-white/[0.06] text-white/75",
+                    note.kind === "done" && "bg-[#30D158]/10 text-[#30D158]",
+                    note.kind === "same" && "bg-[#FF9F0A]/10 text-[#FFB340]",
+                    note.kind === "error" && "bg-[#FF453A]/10 text-[#FF6961]")}>
+                  {note.kind === "working" ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+                    : note.kind === "done" ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />}
+                  <span className="min-w-0 [overflow-wrap:anywhere]"><Lines>{note.text}</Lines></span>
+                </p>
+              )}
             </section>
           )}
 

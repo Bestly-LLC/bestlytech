@@ -25,7 +25,7 @@ export interface LibraryRow {
   sent_at?: string | null;
 }
 
-export interface GenResult { ok: boolean; doc?: EmailDoc; warnings?: string[]; model?: string; provider?: string; attempts?: number; error?: string; detail?: string }
+export interface GenResult { ok: boolean; doc?: EmailDoc; warnings?: string[]; model?: string; provider?: string; attempts?: number; /** revise only: false when the free AI sent the email back unchanged */ changed?: boolean; error?: string; detail?: string }
 export interface SendResult { ok: boolean; id?: string | null; error?: string; changed?: boolean; detail?: string }
 export interface ContactHit { name: string | null; email: string; source: "client" | "icloud" | "recent"; detail: string | null }
 export interface VersionRow { id: number; version: number; subject: string | null; blocks: Block[] | null; html: string | null; created_at: string }

@@ -1,7 +1,7 @@
 // email-builder — writes branded emails with FREE AI only (docs: Jared, 2026-10-19; plan in the email-builder branch).
 //
 //   op generate   {kit, request, recipient_name?, recipient_email?, subject_hint?}          -> {doc, warnings, model}
-//   op revise     {kit, doc, instruction}                                                    -> {doc, warnings, model}
+//   op revise     {kit, doc, instruction}                                                    -> {doc, warnings, model, changed}
 //   op image      {kit, prompt}                                                              -> {url}
 //   op export_eml {html, text, subject, to?, from?}                                          -> {eml, inlined}
 //   any op accepts dry_run:true: no model, no image service, no storage; shows the prompt and runs the validator.
@@ -159,6 +159,19 @@ async function generate(kit: Kit, o: { request: string; recipient_name?: string;
     }
   }
   throw new Error(lastErr || "generation failed");
+}
+
+/** Compare two emails by what a reader sees, ignoring block ids and whitespace noise. */
+function docSig(d: { subject?: string; preheader?: string; blocks?: unknown[] }): string {
+  const norm = (v: unknown) => String(v ?? "").replace(/\s+/g, " ").trim();
+  return JSON.stringify({
+    s: norm(d.subject), p: norm(d.preheader),
+    b: (d.blocks ?? []).map((x) => {
+      const b = x as Record<string, unknown>;
+      return [b.type, norm(b.text), norm(b.label), norm(b.url), norm(b.title), norm(b.style), norm(b.variant), norm(b.asset_key), norm(b.prompt), norm(b.alt),
+        Array.isArray(b.items) ? b.items.map(norm) : [], Array.isArray(b.keys) ? b.keys.map(norm) : []];
+    }),
+  });
 }
 
 /* ───────── pictures (Cloudflare Workers AI, free allowance) ───────── */
@@ -322,11 +335,25 @@ Deno.serve(async (req) => {
         await raise("generate", "Email builder: the free AI could not write the email", `${msg}. Tried the free ladder twice. Nothing was sent.`);
         return J({ ok: false, error: "The free AI is busy or answered badly twice. Nothing was lost. Try again in a minute.", detail: msg }, 200);
       }
+      // revise: free models sometimes hand the email back untouched. Retry once, harder; if still the same, say so.
+      let changed: boolean | undefined;
+      let retried = false;
+      if (op === "revise" && doc) {
+        const before = docSig(doc);
+        changed = docSig(out.doc) !== before;
+        if (!changed) {
+          retried = true;
+          try {
+            const again = await generate(kit, { ...input, instruction: "The previous attempt returned the email unchanged. You MUST apply this change visibly: " + String(input.instruction ?? "") });
+            if (docSig(again.doc) !== before) { out = again; changed = true; }
+          } catch { /* keep the first answer; changed stays false */ }
+        }
+      }
       const warnings = [...out.warnings];
       const pics = await fillImages(kit, out.doc, warnings);
-      await runLog(op, kit.slug, true, Date.now() - t0, { provider: out.provider, model: out.model, meta: { attempts: out.attempts, blocks: out.doc.blocks.length, pictures: pics } });
+      await runLog(op, kit.slug, true, Date.now() - t0, { provider: out.provider, model: out.model, meta: { attempts: out.attempts, blocks: out.doc.blocks.length, pictures: pics, ...(changed === undefined ? {} : { changed, retried }) } });
       await heal("generate", "Email builder writing again");
-      return J({ ok: true, doc: out.doc, warnings, model: out.model, provider: out.provider, attempts: out.attempts, pictures: pics });
+      return J({ ok: true, doc: out.doc, warnings, model: out.model, provider: out.provider, attempts: out.attempts, pictures: pics, ...(changed === undefined ? {} : { changed }) });
     }
     return J({ ok: false, error: "op must be generate, revise, image or export_eml" }, 400);
   } catch (e) {
