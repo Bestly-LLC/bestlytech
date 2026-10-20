@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { startEmergency } from "@/pages/admin/Emergency";
 import { openScout } from "@/components/admin/scoutBus";
 import { LoadError, Pill, RowLink, SectionHeader, cardCls, divider, focusRing, hairline, inset, rowCls, text, tint } from "@/components/admin/ui";
-import { ageWords, type CcBundle, type Live } from "@/lib/commandCenter";
+import { ageWords, glue, type CcBundle, type Live } from "@/lib/commandCenter";
 
 /* ───────── quick actions ───────── */
 
@@ -97,7 +97,7 @@ export function NeedsYouShort({ needs }: { needs: Live<TodayRow[]> }) {
   const top = all.slice(0, 3);
   return (
     <section aria-labelledby="needs-title">
-      <SectionHeader id="needs-title" title="Needs you" aside={all.length > 0 ? <Link to="/admin/needs-you" className={cn("inline-flex min-h-[44px] items-center rounded-md px-1 text-[15px] font-medium sm:min-h-9", tint.blue, focusRing)}>All {all.length}</Link> : undefined} />
+      <SectionHeader id="needs-title" title="Needs you" aside={all.length > 0 ? <Link to="/admin/needs-you" className={cn("inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-2 text-[15px] font-medium sm:min-h-9", tint.blue, focusRing)}>All {all.length}</Link> : undefined} />
       <div className={cn(cardCls, "overflow-hidden")}>
         {needs.loading && !needs.data ? (
           <div className={cn(rowCls, "py-4")} aria-hidden><div className="h-4 w-2/3 animate-pulse rounded bg-white/[0.06]" /></div>
@@ -115,7 +115,7 @@ export function NeedsYouShort({ needs }: { needs: Live<TodayRow[]> }) {
                       {(SEV[n.severity] ?? 3) === 0 && <Pill tone="red">Urgent</Pill>}
                       <span>{n.title.replace(/^Ares couldn't fix: /, "")}</span>
                     </p>
-                    {n.detail && <p className={cn(text.detail, "mt-0.5")}>{n.detail.split("\n")[0]}</p>}
+                    {n.detail && <p className={cn(text.detail, "mt-0.5")}>{glue(n.detail.split("\n")[0])}</p>}
                   </div>
                 </RowLink>
               </li>
@@ -151,7 +151,7 @@ export function CallNext({ cc }: { cc: Live<CcBundle> }) {
                     <p className={text.title}>{x.company}</p>
                     <p className={cn(text.detail, "mt-0.5")}>
                       {[x.window ? WINDOW[x.window] ?? `Best ${x.window}` : null, x.table === "rg_leads" ? "RoofGuard" : "Maya"].filter(Boolean).join(" · ")}
-                      {x.why ? `. ${x.why}` : ""}
+                      {x.why ? glue(`. ${x.why}`) : ""}
                     </p>
                   </div>
                 </RowLink>
