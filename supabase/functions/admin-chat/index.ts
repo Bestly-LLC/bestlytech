@@ -177,6 +177,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsWith } from "../_shared/cors.ts";
 import { chefCook, chefMarkdown } from "../_shared/chef.ts";
 import { sendAsJared } from "../_shared/bestly-signature.ts";
+// 2026-10-19: web_reach, the web-reading tool (Agent Reach queue on the Pi). Fetched text is untrusted data; see _shared/web-reach.ts.
+import { webReach, WEB_REACH_TOOL, WEB_REACH_FREE_DESC, webReachRules } from "../_shared/web-reach.ts";
 
 const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
 const MAX_TURNS = 10;
@@ -537,6 +539,7 @@ const TOOLS = [
       required: ["action"],
     },
   },
+  WEB_REACH_TOOL,
   {
     name: "send_email",
     description:
@@ -916,6 +919,8 @@ Read the file first, every time. Keep the change small. Use commit_files edits (
 
 # Backend code needs his tap to go live
 commit_files ships the site and the admin through the build. It does NOT ship edge functions (supabase/functions/). When a commit_files result carries deploy_needed, propose exactly that job with mac_run (its title, why and script: it deploys only the changed functions from a fresh temp clone on the Mac mini and deletes the clone), say in one line that the Yes button is up, and never say the function is live until that job has run. A deploy always waits for his Run tap, even with auto-run on. Schema and cron changes are never run by you: file them in improver_ideas (kind 'schema', the exact SQL in change) and tell him in one line it is queued.
+
+${webReachRules("Jared")}
 
 # How to behave
 - ${ADHD_RULE}
@@ -1459,6 +1464,7 @@ const FREE_TOOLS = new Set([
   "today", "incidents", "run_sql", "list_files", "read_file", "search_code", "meeting_transcript", "notify", "mark_done",
   "resolve_incident", "todo_owner", "clear_alerts", "pi_command", "mac_run", "recorder", "learn", "ask_user", "make_video",
   "send_email", "look", "report_spam",
+  "web_reach",                    // 2026-10-19: read the public web (read-only; never autopilot)
   "search_mail", "read_email",   // v41
   "call_debrief", "add_todo",     // v69
   "kitchen_chef",                 // 2026-10-15: Basil's chef (free AI only, saves recipes to the Kitchen page)
@@ -1565,6 +1571,7 @@ const TOOL_TOPICS: [string[], RegExp][] = [
   [["clear_alerts", "resolve_incident"], /\b(alerts?|incidents?|bell|resolve|clear|fixed|warning|notification)\b/i],
   [["learn"], /\b(learn|remember|lesson|next time)\b/i],
   [["make_video"], /\b(video|videos|clip|clips|ltx|render|animate|animation|footage|b-?roll|reel)\b/i],
+  [["web_reach"], /\b(web|website|webpage|web page|url|link|links|article|blog|rss|feed|youtube|transcript|google|look ?up|news|search online|online)\b|https?:\/\//i],
   [["send_email"], /\b(e-?mails?|mail|send|signature|message (to|eli|rohit)|write to|reply to)\b/i],
   [["look"], /\b(images?|photos?|screenshots?|pictures?|videos?|frames?|pdf|look|see|seen)\b|scout-files/i],
   [["kitchen_chef"], /\b(chef|recipes?|cook|cooking|dinner|lunch|breakfast|meal|pantry|omni ?cook|tokit|gourmet|eat)\b/i],
@@ -1578,6 +1585,7 @@ const TOOL_TOPICS: [string[], RegExp][] = [
 ];
 /** Short descriptions for the tools whose full text is longer than the free window keeps (it would cut off "requires confirmed:true"). */
 const FREE_DESC: Record<string, string> = {
+  web_reach: WEB_REACH_FREE_DESC,
   commit_files: "Commit changes to main and watch the deploy. Read the file first. Use edits [{path, old, new}] (old = an exact, unique snippet of the current file); files only for new or tiny files. A failed build is reverted automatically. confirmed:true only after his yes (or auto-run). If the result has deploy_needed, propose that job with mac_run.",
   db_write: "Change data: ONE INSERT, UPDATE or DELETE on the public schema (UPDATE/DELETE need a WHERE). Read the rows with run_sql first. Add RETURNING. Schema or cron changes: INSERT into improver_ideas (kind 'schema', change = exact SQL). confirmed:true only after his yes (or auto-run).",
   code_job: "Hand a coding job to the Code Worker (Mac mini, free coding AI, build must pass, pushes to main, reports here): multi-file changes, new sites, other Bestly-LLC repos. repo: site, hoku or Bestly-LLC/name; new_site {name} for a new site. confirmed:true only after his yes.",
@@ -1870,6 +1878,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
 
   const tools = freeToolDefs(autopilot, msgs.slice(1).map((m) => String(m.content ?? "")).join("\n").slice(-6000));
   const allowed = new Set(tools.map((t) => t.function.name));
+  if (allowed.has("web_reach")) msgs[0].content += "\n\n" + webReachRules("Jared");   // the untrusted-content rules ride along whenever the tool is offered
   // 2026-10-17: measure the first request the way llmChat does (chars / 3.8 + the reply budget). Groq's gate is 7,000
   // tokens per minute; over it, every Groq rung is skipped as skipped_size and the run dies in 400 ms with no provider
   // ever called. Drop the optional blocks (lessons, queue detail, the table cheat-sheet) rather than lose the run.
@@ -2531,6 +2540,11 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
         : { ok: true, ...(data as any), hint: args.action === "make" ? "Not made yet: show him this estimate and ask. Call make with confirmed:true after his yes." : undefined };
       break;
     }
+    case "web_reach": {
+      // 2026-10-19: Agent Reach queue on the Pi (RPC reach_request / reach_result). Returns untrusted text inside markers; no direct-internet fallback.
+      out = await webReach(db as never, args, "scout");
+      break;
+    }
     case "send_email": {
       out = await sendEmailTool(args, threadId);
       break;
@@ -2566,7 +2580,9 @@ async function runTool(name: string, args: Record<string, any>, threadId: string
   // Transcripts are long and private; log that one was read, not the text.
   const logged = name === "meeting_transcript" && (out as any).transcript
     ? { ...out, transcript: `[${String((out as any).transcript).length} chars]` }
-    : out;
+    : name === "web_reach" && typeof (out as any).content === "string"
+      ? { ...out, content: `[${String((out as any).content).length} chars of untrusted web text]` }
+      : out;
   await db.from("admin_chat_actions").insert({ thread_id: threadId, tool: name, args, result: logged, ok: (out as any)?.ok !== false });
   return out;
 }
@@ -2671,7 +2687,7 @@ async function ask(messages: any[], system: string, apiKey: string, opts: { time
 }
 
 // Tools autopilot never runs even without a confirmed flag: they reach Jared, spend money or need a person.
-const AUTOPILOT_NEVER = new Set(["notify", "clear_alerts", "ask_user", "make_video", "send_email", "report_spam"]);
+const AUTOPILOT_NEVER = new Set(["notify", "clear_alerts", "ask_user", "make_video", "send_email", "report_spam", "web_reach"]);
 // 2026-10-17 (Jared: "take on all and any tasks"): the fix ladder had no hands, so 251 of its last ~282 attempts ended
 // NEEDS_YES and the same incident came back every 20 minutes. When auto-run is on (his standing yes, the switch in
 // Scout's header) autopilot may now run the repairs too. With auto-run off it behaves exactly as before. Code deploys
