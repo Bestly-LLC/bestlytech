@@ -14,6 +14,7 @@ import { BrandLoader } from "@/components/BrandLoader";
 import { useAdminFavicon } from "@/hooks/useAdminFavicon";
 import { AdminAccessDenied } from "@/components/admin/AdminAccessDenied";
 import { useAdminTheme } from "@/hooks/useAdminTheme";
+import { EMBEDDED } from "@/lib/cloudEmbed";
 
 function speakWelcome(name: string) {
   if (!("speechSynthesis" in window)) return;
@@ -108,12 +109,20 @@ export default function AdminLogin() {
     setOauthLoading(true);
     rememberNext(next); // Apple sends us back to /admin; AdminRoute picks this up and finishes the trip
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      // Inside Bestly Cloud the admin is in a frame, and Apple refuses to be framed. Same sign-in, but the
+      // Apple page opens in the top-level window; it returns to /admin and the admin hops back into Cloud.
+      const inCloudFrame = EMBEDDED;
+      const { data: oauth, error } = await supabase.auth.signInWithOAuth({
         provider: "apple",
         options: {
           redirectTo: window.location.origin + "/admin",
+          ...(inCloudFrame ? { skipBrowserRedirect: true } : {}),
         },
       });
+      if (inCloudFrame && !error && oauth?.url) {
+        window.open(oauth.url, "_top");
+        return;
+      }
       if (error) {
         toast({
           title: "Apple Sign In Failed",

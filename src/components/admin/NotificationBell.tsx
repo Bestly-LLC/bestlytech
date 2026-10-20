@@ -88,7 +88,7 @@ function ago(iso: string) {
   return d < 7 ? `${d}d` : new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export function NotificationBell() {
+export function NotificationBell({ triggerClassName }: { triggerClassName?: string } = {}) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [items, setItems] = useState<Notification[]>([]);
@@ -235,7 +235,7 @@ export function NotificationBell() {
             <button
               type="button"
               aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
-              className="relative h-8 w-8 grid place-items-center rounded-md text-white/60 hover:text-white hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+              className={cn("relative h-8 w-8 grid place-items-center rounded-md text-white/60 hover:text-white hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40", triggerClassName)}
             >
               <Bell className="h-4 w-4" aria-hidden="true" />
               {unread > 0 && (
