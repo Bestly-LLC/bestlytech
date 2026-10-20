@@ -1221,7 +1221,8 @@ async function callDebrief(args: Record<string, any>): Promise<Record<string, un
     const er = (globalThis as any).EdgeRuntime;
     if (er?.waitUntil) er.waitUntil(job);
     return { ok: false, error: "not_ready", ...head, progress: s?.status === "partial" ? `${s.chunks_done ?? 0} of ${s.chunks_total ?? "?"} pieces read` : "starting",
-      hint: "Tell Jared the debrief is being built from the whole call (2-3 minutes) and to ask again then. Do NOT build one from meeting_transcript searches." };
+      retry_after_s: 60,
+      hint: "Tell Jared in one line it's being built from the whole call and you'll post it here when ready. Never tell him to ask again. Do NOT build one from meeting_transcript searches." };
   }
   const { data: todos } = await db.from("scout_daily").select("id, title, status, action").eq("kind", "call").like("source_key", `call:${r.id}:%`).limit(60);
   return {
@@ -1687,7 +1688,19 @@ interface RunState {
 interface TryEntry { at: string; what: string; why: string }
 const RUN_STATE_CAP = 12_000;       // bytes of JSON kept per thread
 const RUN_MAX_MS = 20 * 60_000;     // wall clock for one free run (hops included)
-const PAUSE_MAX = 2;                // v39: busy-free-AI pauses in a row (30 s apart) before Scout says so
+const PAUSE_MAX = 4;                // v39: busy-free-AI pauses in a row (30 s apart) before Scout says so; v83: 2 -> 4
+// v83 (2026-10-19): when Jared has said no to paid AI in this thread, "Free AI is out of room" must not offer it again.
+const NO_PAID_RE = /\b(no|not|don'?t|never|stop)\b[^.!?\n]{0,20}\bpaid\b/i;
+async function saidNoPaid(threadId: string): Promise<boolean> {
+  try {
+    const { data } = await db.from("admin_chat_messages").select("body").eq("thread_id", threadId).eq("role", "user")
+      .order("created_at", { ascending: false }).limit(300);
+    return ((data ?? []) as any[]).some((m) => NO_PAID_RE.test(String(m.body ?? "")));
+  } catch { return false; }
+}
+/** The OPTIONS line under "Free AI is out of room": no paid offer once he has said no to paid in this thread. */
+const roomOptions = (back: string, noPaid: boolean) =>
+  noPaid ? `OPTIONS: Wait and retry at ${back} | Check what's using the free AI` : `OPTIONS: Use paid AI for this one | Wait and retry at ${back}`;
 const RUN_RESUME_MS = 60 * 60_000;  // a hand-typed "keep going" picks the memory back up if it is this fresh
 
 /** Same tool + same arguments = same hash (key order and the confirmation flags don't matter). */
@@ -1754,6 +1767,7 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
     return tries >= TRY_MAX;
   };
 
+  const noPaidP = saidNoPaid(threadId);
   const [{ data: hist }, { data: today }, { data: lessonRows }] = await Promise.all([
     db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(10),
     db.rpc("admin_today"),
@@ -1895,17 +1909,20 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   // closing summary (or the first reply) failed and every running chat fell straight to "I'd need paid AI", even though
   // the work was going fine. Now: pause and retry in 30 s, up to PAUSE_MAX times, then say plainly the free AI is out of
   // room right now. Paid AI is still only offered after 3 real failed tries (v38) or when he asks.
+  const noPaid = await noPaidP;
   const busyPause = () => {
     const pauses = (prior?.pauses ?? 0) + 1;
     const st: RunState = { ...snapshot(), pauses };
-    const out = isQ || pauses > PAUSE_MAX;
+    // v83 (2026-10-19): a question used to give up on the first busy reply. Questions pause and retry too now; only after
+    // PAUSE_MAX pauses does Scout say the free AI is out of room (and a task carries on by itself while it waits).
+    const out = pauses > PAUSE_MAX;
     const back = pt12(Date.now() + 30 * 60_000);
     // v41: ONE honest message when the free AI is out of room (no "busy, picking it back up" chatter): when, and what he can do.
     return {
       answer: out
-        ? `Free AI is out of room until ${back}.${notes.length ? ` Last thing I found: ${oneLine(notes[notes.length - 1])}` : ""}\n\nOPTIONS: Use paid AI for this one | Wait and retry at ${back}`
+        ? `Free AI is out of room until ${back}.${notes.length ? ` Last thing I found: ${oneLine(notes[notes.length - 1])}` : ""}\n\n${roomOptions(back, noPaid)}`
         : "Waiting for the free AI to free up.",
-      why: "", tools: used, more: !isQ, stalled: out, paused: !out, state: st,
+      why: "", tools: used, more: !out || !isQ, stalled: out, paused: !out, state: st,
     };
   };
   const escalate = () => ({ why: "", tools: used, escalate: { what: goal, log: tryLog }, state: snapshot() });
@@ -3337,8 +3354,12 @@ Deno.serve(async (req) => {
             { paid_needed: true, out_of_credit: true },
           );
         }
+        const back = pt12(Date.now() + 30 * 60_000);
+        if (await saidNoPaid(threadId)) {
+          return await say(`Free AI is out of room until ${back}. ${free.why}\n\n${roomOptions(back, true)}`, { free: true });
+        }
         return await say(
-          `Free AI is out of room until ${pt12(Date.now() + 30 * 60_000)}. ${free.why} Paid AI costs about 5 to 50 cents; yes turns the Paid AI switch on for one hour, then it turns itself off.\n\nOPTIONS: Use paid AI for this one | Wait and retry at ${pt12(Date.now() + 30 * 60_000)}`,
+          `Free AI is out of room until ${back}. ${free.why} Paid AI costs about 5 to 50 cents; yes turns the Paid AI switch on for one hour, then it turns itself off.\n\n${roomOptions(back, false)}`,
           { paid_needed: true },
         );
       }
