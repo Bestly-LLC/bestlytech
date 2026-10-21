@@ -240,3 +240,6 @@
 @media (min-width: 640px) {
   .jc-wrap { padding-top: 64px; }
 }
+
+/* Maya's face beside her line; sits on the first line's baseline */
+.jc-maya-orb { vertical-align: -9px; margin-right: 8px; }

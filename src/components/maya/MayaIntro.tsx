@@ -1,3 +1,4 @@
+import { AgentOrb } from "@/components/AgentOrb";
 /**
  * The first thing a visitor sees after tapping "Talk to Maya" (Jared, 2026-10-11): what she is and what she can do,
  * so nobody mistakes her for a chat box. "Start talking" opens her with the microphone on (voice is the default);
@@ -29,9 +30,7 @@ export function MayaIntro({ onTalk, onType, onClose }: { onTalk: () => void; onT
           style={{ background: "radial-gradient(80% 100% at 30% 0%, #8E9BFF40, #E59CFF18 45%, transparent 75%)" }} />
         <div className="relative p-5 pb-4">
           <div className="flex items-start gap-3">
-            <span aria-hidden className="maya-orb-live block h-14 w-14 shrink-0 rounded-full"
-              style={{ background: "radial-gradient(circle at 32% 28%, rgba(255,255,255,.85), rgba(255,255,255,0) 45%), conic-gradient(from 210deg, #8E9BFF, #E59CFF, #8E9BFF, #6CD3FF, #8E9BFF)",
-                boxShadow: "0 0 30px -3px #8E9BFFAA" }} />
+            <AgentOrb tint="maya" size={56} />
             <div className="min-w-0 flex-1 pt-1">
               <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#8E9BFF]">Bestly's AI agent</p>
               <h2 id="maya-intro-title" className="text-[24px] font-semibold leading-tight tracking-[-0.02em]">Meet Maya</h2>

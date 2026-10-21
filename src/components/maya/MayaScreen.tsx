@@ -1,3 +1,4 @@
+import { AgentOrb } from "@/components/AgentOrb";
 /**
  * Maya, Leo-style (Jared, 2026-10-11: "show an example of the Leo style screen but for Maya").
  *
@@ -461,12 +462,7 @@ export function MayaScreenLauncher({ onOpen }: { onOpen: () => void }) {
 }
 
 function MayaOrb({ size = 40, live = false }: { size?: number; live?: boolean }) {
-  return (
-    <span aria-hidden className={`block shrink-0 rounded-full ${live ? "maya-orb-live" : ""}`}
-      style={{ width: size, height: size,
-        background: "radial-gradient(circle at 32% 28%, rgba(255,255,255,.85), rgba(255,255,255,0) 45%), conic-gradient(from 210deg, #8E9BFF, #E59CFF, #8E9BFF, #6CD3FF, #8E9BFF)",
-        boxShadow: `0 0 ${Math.round(size * 0.5)}px -${Math.round(size * 0.05)}px #8E9BFFAA` }} />
-  );
+  return <AgentOrb tint="maya" size={size} talking={live} />;
 }
 
 function IconBtn({ label, onClick, pressed, children }: { label: string; onClick: () => void; pressed?: boolean; children: ReactNode }) {
