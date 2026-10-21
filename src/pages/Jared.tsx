@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { ChevronRight, Mail, MessageCircle, Phone, PhoneCall, UserPlus } from "lucide-react";
+import { CalendarDays, ChevronRight, Mail, MessageCircle, Phone, PhoneCall, UserPlus } from "lucide-react";
 import jaredHeadshot from "@/assets/jared-headshot.png";
 import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import inventoryproofIcon from "@/assets/inventoryproof-icon.png";
@@ -73,6 +73,11 @@ export default function Jared() {
           <a className="jc-btn jc-btn--primary" href="/jared.vcf">
             <UserPlus className="h-5 w-5" aria-hidden="true" />
             Save contact
+          </a>
+
+          <a className="jc-btn jc-btn--book" href="/book" target="_blank" rel="noopener">
+            <CalendarDays className="h-5 w-5" aria-hidden="true" />
+            Book a call
           </a>
 
           <div className="jc-row">

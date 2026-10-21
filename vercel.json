@@ -104,6 +104,11 @@
   ],
   "redirects": [
     {
+      "source": "/book",
+      "destination": "https://cloud.bestly.tech/apps/calendar/appointment/BtktQYtGFocY",
+      "permanent": true
+    },
+    {
       "source": "/tezlab/:s",
       "destination": "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/tezlab/connect?s=:s",
       "permanent": false

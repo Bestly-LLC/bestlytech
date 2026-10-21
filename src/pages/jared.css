@@ -123,6 +123,20 @@
   .jc-btn--sm:hover, .jc-item:hover { border-color: rgba(123, 143, 229, 0.5); }
 }
 
+.jc-btn--book {
+  width: 100%;
+  min-height: 54px;
+  margin-top: 10px;
+  font-size: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+@media (hover: hover) {
+  .jc-btn--book:hover { border-color: rgba(123, 143, 229, 0.5); }
+}
+
 .jc-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
