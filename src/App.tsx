@@ -108,6 +108,7 @@ const AdminSettings = lazyPage(() => import("./pages/admin/AdminSettings"));
 const HomeHubOverview = lazyPage(() => import("./pages/admin/HomeHubOverview"));
 const HomeHubPihole = lazyPage(() => import("./pages/admin/HomeHubPihole"));
 const HomeHubHomeAssistant = lazyPage(() => import("./pages/admin/HomeHubHomeAssistant"));
+const HomeHubAutomations = lazyPage(() => import("./pages/admin/HomeHubAutomations"));
 const HomeHubHomebridge = lazyPage(() => import("./pages/admin/HomeHubHomebridge"));
 const HomeHubAccess = lazyPage(() => import("./pages/admin/HomeHubAccess"));
 const HomeHubKitchen = lazyPage(() => import("./pages/admin/HomeHubKitchen"));
@@ -296,6 +297,7 @@ const App = () => {
                   <Route path="home-hub" element={<HomeHubOverview />} />
                   <Route path="home-hub/pihole" element={<HomeHubPihole />} />
                   <Route path="home-hub/home-assistant" element={<HomeHubHomeAssistant />} />
+                  <Route path="home-hub/automations" element={<HomeHubAutomations />} />
                   <Route path="home-hub/homebridge" element={<HomeHubHomebridge />} />
                   <Route path="home-hub/access" element={<HomeHubAccess />} />
                   <Route path="home-hub/kitchen" element={<HomeHubKitchen />} />

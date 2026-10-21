@@ -40,6 +40,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/admin/home-hub": "Home Hub",
   "/admin/home-hub/pihole": "Pi-hole",
   "/admin/home-hub/home-assistant": "Home Assistant",
+  "/admin/home-hub/automations": "Automation Maker",
   "/admin/home-hub/homebridge": "Homebridge",
   "/admin/home-hub/access": "Access backup",
   "/admin/street-sweeping": "Street Sweeping",

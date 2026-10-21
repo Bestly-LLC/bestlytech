@@ -11,7 +11,7 @@ import { Binoculars, Inbox, BadgeDollarSign, Brush, FileWarning, Scissors,
   Car,
   Mic,
   Handshake,
-  House, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, ShieldAlert, Siren, Flower2, PhoneCall, Headset, Crosshair, Gauge, ConciergeBell,
+  House, Wand2, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, ShieldAlert, Siren, Flower2, PhoneCall, Headset, Crosshair, Gauge, ConciergeBell,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -75,6 +75,7 @@ const homeHubItems = [
   { title: "Callbox", url: "/admin/home-hub/callbox", icon: DoorOpen },
   { title: "Pi-hole", url: "/admin/home-hub/pihole", icon: Shield },
   { title: "Home Assistant", url: "/admin/home-hub/home-assistant", icon: House },
+  { title: "Automation Maker", url: "/admin/home-hub/automations", icon: Wand2 },
   { title: "Homebridge", url: "/admin/home-hub/homebridge", icon: Boxes },
   { title: "Access backup", url: "/admin/home-hub/access", icon: KeyRound },
   { title: "Wall", url: "/admin/wall", icon: Projector },
