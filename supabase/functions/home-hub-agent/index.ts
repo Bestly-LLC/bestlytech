@@ -8,13 +8,16 @@
 // Auth: shared secret in x-api-key, held in Vault. Not the anon key.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsWith } from "../_shared/cors.ts";
+// CORS inline, as in the live v17: only the Pi calls this, server to server.
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
 const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const corsHeaders = corsWith({ headers: "authorization, x-client-info, apikey, content-type, x-api-key" });
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+};
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -37,6 +40,18 @@ const optDomain = (p: Payload, key = "host") =>
   p[key] === undefined || p[key] === null || p[key] === "" || (typeof p[key] === "string" && DOMAIN_RE.test(p[key] as string))
     ? null
     : `${key} must be a domain name`;
+// Automation Maker (Tinker): it may only touch what it made, and never shell/REST/secret plumbing.
+const AUTO_ID_RE = /^bestly_[a-z0-9_]{3,60}$/;
+const AUTO_PKG_RE = /^bestly_auto_[a-z0-9_]{3,50}$/;
+const AUTO_DENY = ["!secret", "!include", "!env_var", "shell_command", "command_line", "rest_command", "python_script",
+  "pyscript", "hassio.", "homeassistant.stop", "homeassistant.restart", "recorder.purge"];
+const autoId = (p: Payload) => (typeof p.id === "string" && AUTO_ID_RE.test(p.id) ? null : "id must look like bestly_<name>");
+const pkgName = (p: Payload) => (typeof p.name === "string" && AUTO_PKG_RE.test(p.name) ? null : "name must look like bestly_auto_<name>");
+const autoDeny = (text: string) => {
+  const low = String(text ?? "").toLowerCase();
+  const hit = AUTO_DENY.find((d) => low.includes(d));
+  return hit ? `'${hit}' is not allowed in automations Tinker installs` : null;
+};
 const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
   pihole: {
     enable: none,
@@ -80,6 +95,39 @@ const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
       typeof p.message === "string" && p.message.trim().length > 0 && p.message.length <= 400
         ? null
         : "announce needs a message (1-400 characters)",
+    // agent >= 1.5.3 (notify patch, 2026-09-27): iPhone notification or Live Activity through the
+    // HA companion app. Queued by ha_push() in the database; replaces ntfy.
+    notify: (p) => {
+      const s = (v: unknown, n: number) => v === undefined || v === null || (typeof v === "string" && v.length <= n);
+      if (!(typeof p.title === "string" && p.title.trim().length > 0 && p.title.length <= 120)) return "notify needs a title (1-120 characters)";
+      if (!s(p.message, 1000) || !s(p.subtitle, 120) || !s(p.group, 64) || !s(p.tag, 64)) return "notify message, subtitle, group or tag is too long";
+      if (p.level != null && !NOTIFY_LEVELS.has(String(p.level))) return "notify level must be passive, active, time-sensitive or critical";
+      if (p.url != null && !(typeof p.url === "string" && HTTPS_RE.test(p.url))) return "notify url must be https";
+      if (p.actions != null) {
+        const a = p.actions;
+        const ok = Array.isArray(a) && a.length <= 3 && a.every((x) =>
+          x && typeof x === "object" && typeof (x as Payload).title === "string" &&
+          typeof (x as Payload).uri === "string" && HTTPS_RE.test((x as Payload).uri as string));
+        if (!ok) return "notify actions must be up to 3 of {title, uri (https)}";
+      }
+      if (p.live != null && (typeof p.live !== "object" || Array.isArray(p.live))) return "notify live must be an object";
+      if (p.clear != null && typeof p.clear !== "boolean") return "notify clear must be true or false";
+      return null;
+    },
+    // agent >= 1.6.1: the Automation Maker (Tinker, docs/ha-automator-opusplan.md). Only ids/names Tinker owns.
+    catalog: none,
+    automation_get: (p) => autoId(p),
+    automation_delete: (p) => autoId(p),
+    automation_put: (p) =>
+      autoId(p) ??
+      (p.config && typeof p.config === "object" && !Array.isArray(p.config) ? null : "automation_put needs config (an object)") ??
+      autoDeny(JSON.stringify(p.config)),
+    package_get: (p) => pkgName(p),
+    package_delete: (p) => pkgName(p),
+    package_put: (p) =>
+      pkgName(p) ??
+      (typeof p.yaml === "string" && p.yaml.trim().length > 0 && p.yaml.length <= 40_000 ? null : "package_put needs yaml (1-40000 characters)") ??
+      autoDeny(p.yaml as string),
   },
   // agent >= 1.3.0: read-only diagnosis, and the same heal ladder the health loop uses.
   nextcloud: { status: none, restart: none },
@@ -116,6 +164,8 @@ const MAINT_STEPS = new Set(["agent", "homeassistant", "homebridge", "pihole", "
 const SNAPSHOT_SOURCES = new Set(["homeassistant", "homebridge", "host", "health"]);
 const EVENT_KINDS = new Set(["problem", "resolved", "info"]);
 const EVENT_SEVERITIES = new Set(["info", "success", "warning", "error"]);
+const NOTIFY_LEVELS = new Set(["passive", "active", "time-sensitive", "critical"]);
+const HTTPS_RE = /^https:\/\/[^\s]{1,500}$/;
 // The only secrets the agent may back up. Vault names are fixed here, not taken from the Pi.
 const BACKUP_SECRETS: Record<string, string> = {
   home_hub_ha_token: "Home Assistant long-lived token (backed up by the Home Hub agent)",
@@ -297,7 +347,7 @@ Deno.serve(async (req) => {
   }
 
   // Health events from the agent (>= 1.2.0). home_hub_raise() keeps the issue list and decides
-  // what reaches ntfy, so a chatty or retrying agent can't spam the phone.
+  // what reaches the phone, so a chatty or retrying agent can't spam it.
   if (op === "event") {
     const key = String(body.key ?? "");
     const kind = String(body.kind ?? "");
