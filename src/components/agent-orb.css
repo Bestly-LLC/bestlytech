@@ -1,0 +1,57 @@
+.agent-orb { display: inline-block; flex-shrink: 0; line-height: 0; }
+.agent-orb svg { display: block; overflow: visible; }
+.agent-orb .ao-face, .agent-orb .ao-eyes, .agent-orb .ao-smile, .agent-orb .ao-spec {
+  transform-box: fill-box; transform-origin: center;
+}
+.agent-orb .ao-ring { filter: drop-shadow(0 0 2.5px rgba(var(--orb-glow), .9)); }
+
+/* Intro: glance left, glance right, back to center, smile. Plays once. */
+.agent-orb.is-intro .ao-face  { animation: ao-look 2.4s cubic-bezier(.2,.9,.25,1) both; }
+.agent-orb.is-intro .ao-eyes  { animation: ao-eyes 2.4s cubic-bezier(.2,.9,.25,1) both; }
+.agent-orb.is-intro .ao-smile { animation: ao-smile 2.4s cubic-bezier(.2,.9,.25,1) both; }
+.agent-orb.is-intro .ao-spec  { animation: ao-spec 2.4s cubic-bezier(.2,.9,.25,1) both; }
+
+@keyframes ao-look {
+  0%   { transform: translateX(0); }
+  14%, 32% { transform: translateX(-7px); }
+  46%, 62% { transform: translateX(7px); }
+  76%, 100% { transform: translateX(0); }
+}
+/* eyes travel a little further than the smile: reads as a curved surface */
+@keyframes ao-eyes {
+  0%   { transform: translateX(0) scaleY(1); }
+  14%, 32% { transform: translateX(-2px) scaleY(1); }
+  46%, 62% { transform: translateX(2px) scaleY(1); }
+  76% { transform: translateX(0) scaleY(1); }
+  88%, 100% { transform: translate(0, -1px) scaleY(.6); }
+}
+@keyframes ao-smile {
+  0%, 76% { transform: scale(1, 1); }
+  88%, 100% { transform: scale(1.14, 1.45); }
+}
+@keyframes ao-spec {
+  0%   { transform: translateX(0); }
+  14%, 32% { transform: translateX(2.5px); }
+  46%, 62% { transform: translateX(-2.5px); }
+  76%, 100% { transform: translateX(0); }
+}
+
+/* Live call: the ring breathes and the smile moves a little while she talks. */
+.agent-orb.is-talking .ao-ring  { animation: ao-ring 1.4s ease-in-out infinite; }
+.agent-orb.is-talking .ao-smile { animation: ao-talk .5s ease-in-out infinite alternate; }
+@keyframes ao-ring { 50% { filter: drop-shadow(0 0 5px rgba(var(--orb-glow), 1)); } }
+@keyframes ao-talk { from { transform: scale(1.14, 1.45); } to { transform: scale(1.05, 1.9); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-orb .ao-face, .agent-orb .ao-spec, .agent-orb .ao-ring { animation: none !important; }
+  .agent-orb .ao-eyes  { animation: none !important; transform: translate(0, -1px) scaleY(.6); }
+  .agent-orb .ao-smile { animation: none !important; transform: scale(1.14, 1.45); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .agent-orb .ao-glow { display: none; }
+  .agent-orb .ao-ring { filter: none; }
+}
+
+/* animate="none": rest on the smiling frame */
+.agent-orb.is-static .ao-eyes  { transform: translate(0, -1px) scaleY(.6); }
+.agent-orb.is-static .ao-smile { transform: scale(1.14, 1.45); }

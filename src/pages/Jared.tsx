@@ -1,12 +1,13 @@
 import { useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { CalendarDays, ChevronRight, Mail, MessageCircle, Phone, PhoneCall, UserPlus } from "lucide-react";
+import { CalendarDays, ChevronRight, Mail, MessageCircle, Phone, UserPlus } from "lucide-react";
 import jaredHeadshot from "@/assets/jared-headshot.png";
 import cookieYetiIcon from "@/assets/cookieyeti-icon.png";
 import inventoryproofIcon from "@/assets/inventoryproof-icon.png";
 import { SEOHead } from "@/components/SEOHead";
 import { Lines } from "@/components/Lines";
+import { AgentOrb } from "@/components/AgentOrb";
 import "./jared.css";
 
 /** Tap/scan landing page: NFC card and the QR on the paper card both point here. */
@@ -16,7 +17,7 @@ const makes = [
     name: "Bestly Agent",
     line: "AI that answers your business phone and does the work.",
     to: "/agent",
-    icon: <PhoneCall className="h-5 w-5" aria-hidden="true" />,
+    icon: <AgentOrb tint="maya" size={40} />,
   },
   {
     name: "InventoryProof",
@@ -96,6 +97,7 @@ export default function Jared() {
           </div>
 
           <p className="jc-maya">
+            <AgentOrb tint="maya" size={28} className="jc-maya-orb" />
             <Lines>Questions anytime? Call Maya, our AI assistant.</Lines>{" "}
             <a className="jc-tel" href="tel:+12136410074">
               (213) 641-0074

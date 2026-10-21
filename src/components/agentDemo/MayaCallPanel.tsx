@@ -1,3 +1,4 @@
+import { AgentOrb } from "@/components/AgentOrb";
 import { useEffect, useMemo, useRef } from "react";
 import { Check, Mic, PhoneCall, RotateCcw } from "lucide-react";
 import "@/components/maya/maya-widget.css";
@@ -15,9 +16,6 @@ import {
   type FiredEvent,
   type Timeline,
 } from "./timeline";
-
-const ORB_BG =
-  "radial-gradient(circle at 32% 28%, rgba(255,255,255,.85), rgba(255,255,255,0) 45%), conic-gradient(from 210deg, #8E9BFF, #E59CFF, #8E9BFF, #6CD3FF, #8E9BFF)";
 
 /** Maya's side of the stage: who is on the call, the transcript as it is spoken, and what she got done. */
 export function MayaCallPanel({
@@ -88,11 +86,7 @@ export function MayaCallPanel({
   return (
     <section className="ad-maya" aria-label={`Maya on a call with ${scenario.caller.name}`}>
       <header className="ad-maya-head">
-        <span
-          aria-hidden="true"
-          className={`ad-orb block h-11 w-11 shrink-0 rounded-full ${who === "agent" ? "maya-orb-live" : ""}`}
-          style={{ background: ORB_BG, boxShadow: "0 0 26px -2px #8E9BFFAA" }}
-        />
+        <AgentOrb tint="maya" size={44} talking={who === "agent"} className="ad-orb" />
         <div className="ad-maya-id">
           <b>
             Maya <span className="ad-badge">AI agent</span>
