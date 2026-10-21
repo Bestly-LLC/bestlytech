@@ -37,12 +37,23 @@
     }
     return legacyCopy(text);
   }
+  /* The search string to type into TikTok's location picker. The geocoded label reads
+     "Doral, Miami-Dade County, Florida"; TikTok's picker wants the city and the state, so
+     drop the county. Two parts or one part are already what the picker wants. */
+  function placeSearch(k) {
+    var q = String(k.place || k.place_search || "").trim();
+    var parts = q.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+    // "City, County, State" -> "City, State"; "City, Region, Country" -> "City, Country"
+    return parts.length >= 3 ? parts[0] + ", " + parts[parts.length > 3 ? parts.length - 2 : parts.length - 1] : q;
+  }
+
   function steps(k) {
+    var place = placeSearch(k);
     var s = [
-      { id: "caption", t: "Paste caption", s: "Tap the caption box in TikTok, then Paste." },
+      { id: "caption", t: "Paste caption", s: "Tap the caption box in TikTok, then Paste. The hashtags are already in it." },
       { id: "ai", t: "Turn on “AI-generated content”", s: "On the post screen, tap More options, then switch it on." }
     ];
-    if (k.place_search) s.push({ id: "location", t: "Tag location", s: "Tap Location and search “" + k.place_search + "”." });
+    if (place) s.push({ id: "location", t: "Tag location", s: "Tap Location and search “" + place + "”." });
     s.push(k.cover_custom
       ? { id: "cover", t: "Upload the cover", s: "Tap Edit cover, tap Upload, choose the saved image." }
       : { id: "cover", t: "Pick the cover", s: "Tap Edit cover and pick the frame with the headline." });
@@ -99,10 +110,8 @@
           'This fills in on its own, or <button type="button" data-act="refresh">check now</button>.</div>';
       }
       out += '<div class="k-cards" style="display:grid;gap:10px">';
-      out += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-        '<button type="button" class="k-all" data-copy="all" aria-label="Copy the caption and hashtags together"><span class="k-do">' + I.copy + 'Copy all</span><span class="k-did">' + I.check + 'Copied</span></button>' +
-        '<a class="k-open" href="' + TIKTOK_URL + '" target="_blank" rel="noopener">Open TikTok' + I.ext + '</a></div>';
-      out += '<p class="k-hint">Copy all, open TikTok, paste in the caption box.<br>Your draft is waiting in TikTok: Inbox, then Drafts.</p>';
+      out += '<a class="k-open" href="' + TIKTOK_URL + '" target="_blank" rel="noopener">Open TikTok' + I.ext + '</a>';
+      out += '<p class="k-hint">Tap the caption card to copy it, then paste it in the caption box.<br>Your draft is waiting in TikTok: Inbox, then Drafts.</p>';
       out += cardsHtml(k);
       out += '</div>';
       out += listHtml(k, checks);
@@ -117,12 +126,13 @@
     }
 
     function cardsHtml(k) {
-      var h = '';
-      h += card("caption", "Caption", esc(k.caption || "(No caption.)"), k.chars ? '<div class="k-count">' + esc(String(k.chars).replace(/\B(?=(\d{3})+(?!\d))/g, ",")) + '&nbsp;of&nbsp;2,200 characters with the hashtags</div>' : "");
-      if (k.hashtags) h += card("tags", "Hashtags", esc(k.hashtags), "", "tags");
-      if (k.place_search) {
-        var full = k.place && k.place !== k.place_search ? '<div class="k-sub">' + esc(k.place) + '</div>' : '';
-        h += card("place", "Location", esc(k.place_search), full + '<div class="k-sub">Copies the place name. Paste it into TikTok’s location search and pick the match.</div>');
+      var h = '', place = placeSearch(k);
+      /* One card, one tap, one paste: the hashtag line rides along with the caption. TikTok takes them as
+         text in the caption box, so splitting them into a second card only ever cost a second copy. */
+      h += card("caption", "Caption + hashtags", esc(k.all || k.caption || "(No caption.)"), k.chars ? '<div class="k-count">' + esc(String(k.chars).replace(/\B(?=(\d{3})+(?!\d))/g, ",")) + '&nbsp;of&nbsp;2,200 characters with the hashtags</div>' : "");
+      if (place) {
+        var full = k.place && k.place !== place ? '<div class="k-sub">' + esc(k.place) + '</div>' : '';
+        h += card("place", "Location to tag", esc(place), full + '<div class="k-sub">Copies the place name. Type it into TikTok’s location search and pick the match.</div>');
       }
       h += coverHtml(k);
       return h;
@@ -164,9 +174,9 @@
     }
     function doCopy(node) {
       var id = node.getAttribute("data-copy"), k = kit, text;
-      if (id === "caption") text = k.caption || "";
+      if (id === "caption") text = k.all || k.caption || "";   // caption and hashtags in one paste
       else if (id === "tags") text = k.hashtags || "";
-      else if (id === "place") text = k.place_search || "";
+      else if (id === "place") text = placeSearch(k);
       else text = k.all || "";
       copyText(text).then(function () { flash(node); }, function () { failCopy(node); });
     }
