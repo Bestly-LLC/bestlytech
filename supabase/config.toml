@@ -168,3 +168,6 @@ project_id = "rcqfqhguwpmaarseifqg"
 
 [functions.email-builder-send]
   verify_jwt = false
+
+[functions.repo-read]
+    verify_jwt = false

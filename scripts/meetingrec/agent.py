@@ -83,14 +83,15 @@ auto = {"next": 0, "fails": 0, "hold": {}, "false_since": {}, "blocked": set(), 
         "retry_at": 0, "verify_next": 0, "jared_marked": None, "arms": [], "live_since": None}
 
 # Self-healing. The notetaker drives Talk's web page, so a Talk update can break it.
-#  - code sync: the scripts below are pulled from the repo (main) every 10 minutes,
+#  - code sync: the scripts below are pulled from the repo (main, through the repo-read function) every 10 minutes,
 #    so a fix Scout commits reaches this Mac without anyone touching it.
 #  - self-test: a fake guest + the notetaker in a throwaway room, run when Talk's
 #    version changes, after every code update, daily, and whenever Scout asks.
 #  - a failed self-test after an update rolls the update back and blocks that version.
 #  - every failure lands in the monitor (recorder.notetaker) with the diagnostics
 #    Scout needs to write the fix.
-RAW = "https://raw.githubusercontent.com/Bestly-LLC/bestlytech/main/scripts/meetingrec/"
+REPO_READ = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/repo-read"   # authenticated repo fetch (Vault token stays server side)
+REPO_DIR = "scripts/meetingrec/"
 SYNC = {"notetaker/notetaker.js": f"{HOME}/notetaker/notetaker.js",
         "notetaker/tester.js": f"{HOME}/notetaker/tester.js",
         "talk_tracks.py": f"{HOME}/talk_tracks.py",
@@ -697,7 +698,10 @@ def sync_code():
     changed = []
     for rel, dest in SYNC.items():
         try:
-            with urllib.request.urlopen(RAW + rel + f"?t={int(time.time())}", timeout=20) as r:
+            tok = subprocess.run(["security", "find-generic-password", "-s", "bestly-db-watchdog", "-w"],
+                                 capture_output=True, text=True).stdout.strip()
+            req = urllib.request.Request(REPO_READ + "?path=" + urllib.parse.quote(REPO_DIR + rel), headers={"x-worker-token": tok})
+            with urllib.request.urlopen(req, timeout=20) as r:
                 new = r.read()
         except Exception as e:  # noqa: BLE001
             log("sync fetch failed", rel, e)

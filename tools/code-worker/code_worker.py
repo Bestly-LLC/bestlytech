@@ -291,12 +291,12 @@ def secret_hits(files):
 
 
 def wait_for_vercel(sha):
-    """bestlytech is public: Vercel posts its build result as a GitHub commit status."""
+    """Vercel posts its build result as a GitHub commit status; the repo-read function reads it with the Vault token (the repo is private)."""
     for i in range(48):
         time.sleep(10 if i else 20)
         try:
-            j = http("https://api.github.com/repos/Bestly-LLC/bestlytech/commits/%s/status" % sha, headers={"Accept": "application/vnd.github+json", "User-Agent": "code-worker"}, timeout=20)
-            if j.get("state") in ("success", "failure", "error"):
+            j = fn("repo-read", {"status": sha}, timeout=30)
+            if j.get("ok") and j.get("state") in ("success", "failure", "error"):
                 return j["state"]
         except Exception:
             pass

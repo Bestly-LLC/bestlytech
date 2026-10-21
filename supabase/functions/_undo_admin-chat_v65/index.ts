@@ -1019,7 +1019,7 @@ function deployJobFor(paths: string[]): { functions: string[]; shared: string[];
     "set -e",
     'D=$(mktemp -d)',
     'trap \'rm -rf "$D"\' EXIT',
-    'git clone --depth 1 --branch main https://github.com/Bestly-LLC/bestlytech.git "$D/r"',
+    'git clone --depth 1 --branch main git@github.com:Bestly-LLC/bestlytech.git "$D/r"',
     'cd "$D/r"',
     `FNS="${[...fns, ...importers].join(" ")}"`,
     'for f in $(printf "%s\\n" $FNS | sort -u); do',

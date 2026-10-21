@@ -25,7 +25,7 @@ workstream is `docs/wall-round4-2026-09-28-opusplan.md`; Jared's photos are in `
 - **Supabase:** `wall_state` (id=1).state = wall settings; admin writes go `wall_admin_set` → `wall_clean_patch` / `wall_clean_toggles`
   (new keys go there AND in server.py `DEFAULT_STATE`/`ALLOWED`). Pi reads data via token RPCs like `wall_pi_trips(p_token)` / `wall_pi_feeds(p_token)`.
   Migrations are append-only: new file in `supabase/migrations/` + `apply_migration`.
-- **Repo:** clone `https://github.com/Bestly-LLC/bestlytech` to `/home/claude/ws-r4-<w>` (or `cp -r /home/claude/bestlytech` then pull). Admin UI:
+- **Repo:** clone `git@github.com:Bestly-LLC/bestlytech.git` (the repo is private; the Mac has the key) to `/home/claude/ws-r4-<w>` (or `cp -r /home/claude/bestlytech` then pull). Admin UI:
   Vite + React + TS + Tailwind + shadcn; `npx tsc --noEmit -p tsconfig.app.json` (2 known WowButton.tsx errors), `npm run build`.
 
 ## Pi editing rule (8 workers share wall.html / server.py / watchdog.py today)

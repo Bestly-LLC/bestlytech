@@ -140,7 +140,7 @@ thing that waits for Jared is booking ("Book it" button), and anything that woul
 - Repo `/home/claude/bestlytech` (Vite/React + Supabase project `rcqfqhguwpmaarseifqg`). Read `CLAUDE.md` first.
   Migrations append-only (new files only). Free AI only (`paid:"never"`). Secrets only in Vault.
 - `apply_migration` via MCP sometimes comes back "cancelled". Do not loop on it: commit the SQL file, then apply it
-  from the Mac mini with Desktop Commander: fresh `git clone --depth 1 https://github.com/Bestly-LLC/bestlytech`
+  from the Mac mini with Desktop Commander: fresh `git clone --depth 1 git@github.com:Bestly-LLC/bestlytech.git`
   into a temp dir, then `/opt/homebrew/bin/supabase db query --linked --project-ref rcqfqhguwpmaarseifqg -f <file>`.
   Edge functions: `supabase functions deploy <name> --project-ref rcqfqhguwpmaarseifqg --no-verify-jwt --use-api`
   from that clone. Verify with `execute_sql` after.

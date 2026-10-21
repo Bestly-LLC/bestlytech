@@ -1,12 +1,13 @@
 #!/bin/sh
-# One-paste install for Tally (todo-autotick). Run ON the Pi as pi, or from the Mac:
-#   ssh pi@bestly-pi 'curl -fsSL https://raw.githubusercontent.com/Bestly-LLC/bestlytech/main/tools/todo-autotick/go.sh | sh'
+# One-paste install for Tally (todo-autotick). Run from the Mac (repo checkout), the files come through the repo-read function:
+#   ssh pi@bestly-pi 'sh -s' < tools/todo-autotick/go.sh
+# Needs /opt/bestly/cron/tools/repo_get.py on the Pi (tools/repo-get/repo_get.py).
 # Installs, does a dry run, and only goes live if the dry run could read Mercury and Bestly Sign.
 set -e
-RAW=https://raw.githubusercontent.com/Bestly-LLC/bestlytech/main/tools/todo-autotick
+RG="python3 /opt/bestly/cron/tools/repo_get.py"
 TMP=$(mktemp -d)
 for f in todo_autotick.py todo-autotick.py install.sh selftest.py; do
-  curl -fsSL "$RAW/$f" -o "$TMP/$f"
+  $RG "tools/todo-autotick/$f" -o "$TMP/$f"
 done
 sh "$TMP/install.sh"
 

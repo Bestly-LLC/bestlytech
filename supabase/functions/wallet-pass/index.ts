@@ -263,7 +263,7 @@ function hostPassJson(code: Code, token: string, st: Settings) {
   };
 }
 
-// Pass art lives in the site repo (public/wallet/lax); fetched once per instance.
+// Pass art is served by the public website (public/wallet/lax in the site repo); fetched once per instance.
 const IMG_NAMES = ["icon.png", "icon@2x.png", "icon@3x.png", "logo.png", "logo@2x.png", "logo@3x.png", "strip.png", "strip@2x.png", "strip@3x.png"];
 let imgCache: Record<string, Uint8Array> | null = null;
 async function images() {
@@ -271,7 +271,7 @@ async function images() {
   const out: Record<string, Uint8Array> = {};
   for (const n of IMG_NAMES) {
     let r = await fetch(`${SITE}/wallet/lax/${n}`);
-    if (!r.ok || !(r.headers.get("content-type") ?? "").includes("image")) r = await fetch(`https://raw.githubusercontent.com/Bestly-LLC/bestlytech/main/public/wallet/lax/${n}`);
+    if (r.ok && !(r.headers.get("content-type") ?? "").includes("image")) throw new Error(`image ${n}: not an image`);
     if (!r.ok) throw new Error(`image ${n}: ${r.status}`);
     out[n] = new Uint8Array(await r.arrayBuffer());
   }
@@ -286,7 +286,7 @@ async function hostStrips() {
   const out: Record<string, Uint8Array> = {};
   for (const n of ["strip.png", "strip@2x.png", "strip@3x.png"]) {
     let r = await fetch(`${SITE}/wallet/lax/host/${n}`);
-    if (!r.ok || !(r.headers.get("content-type") ?? "").includes("image")) r = await fetch(`https://raw.githubusercontent.com/Bestly-LLC/bestlytech/main/public/wallet/lax/host/${n}`);
+    if (r.ok && !(r.headers.get("content-type") ?? "").includes("image")) throw new Error(`host image ${n}: not an image`);
     if (!r.ok) throw new Error(`host image ${n}: ${r.status}`);
     out[n] = new Uint8Array(await r.arrayBuffer());
   }

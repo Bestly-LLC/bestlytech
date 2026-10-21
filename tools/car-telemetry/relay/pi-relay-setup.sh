@@ -2,7 +2,7 @@
 # pi-relay-setup.sh - switch Blue Steel live location from the Tailscale Funnel to telemetry.bestly.tech (AWS relay).
 # Run on the Pi as root, with the commit it was downloaded from:   sudo bash pi-relay-setup.sh <commit>
 # What it does (each step is safe to re-run):
-#   1. Downloads certs.sh, finish.sh and the tunnel unit from GitHub at <commit> and checks their SHA-256.
+#   1. Downloads certs.sh, finish.sh and the tunnel unit from the repo (repo-read function) at <commit> and checks their SHA-256.
 #   2. Installs them (old copies kept as *.bak-20261014-relay) and re-signs the receiver certificate so it also
 #      names telemetry.bestly.tech (certs.sh restarts the receiver).
 #   3. Creates the tunnel key (/opt/bestly/telemetry/relay, root 0700) and pins the relay's host key.
@@ -17,7 +17,7 @@ C=${1:?usage: sudo bash pi-relay-setup.sh <commit>}
 [[ "$C" =~ ^[0-9a-f]{7,40}$ ]] || { echo "commit must be a git hash" >&2; exit 1; }
 D=/opt/bestly/telemetry
 R=$D/relay
-RAW=https://raw.githubusercontent.com/Bestly-LLC/bestlytech/$C/tools/car-telemetry
+RG="python3 /opt/bestly/cron/tools/repo_get.py"   # authenticated repo fetch (repo-read function)
 RELAY_IP=44.241.28.216
 RELAY_HOSTKEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAHun/RNXxEIhUsyHLkc7NFc1AhEshn9q6Vep/663rTV"
 SB=https://rcqfqhguwpmaarseifqg.supabase.co
@@ -25,9 +25,9 @@ say() { printf '%s  %s\n' "$(date '+%I:%M:%S %p')" "$*"; }
 
 say "1/6 downloading files at $C"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
-curl -fsSL "$RAW/certs.sh" -o "$T/certs.sh"
-curl -fsSL "$RAW/finish.sh" -o "$T/finish.sh"
-curl -fsSL "$RAW/relay/car-telemetry-tunnel.service" -o "$T/car-telemetry-tunnel.service"
+$RG tools/car-telemetry/certs.sh -r "$C" -o "$T/certs.sh"
+$RG tools/car-telemetry/finish.sh -r "$C" -o "$T/finish.sh"
+$RG tools/car-telemetry/relay/car-telemetry-tunnel.service -r "$C" -o "$T/car-telemetry-tunnel.service"
 ( cd "$T" && sha256sum -c --quiet - ) <<'SUMS'
 61af839b645fba6a1b6cb7fb84cd8a2d8354f23bedb7c4358904518b13be0790  certs.sh
 fc7289ab8a21f4e6ae827eccfaf95b4d17fc469db01617887a65bfb2a5affdd7  finish.sh

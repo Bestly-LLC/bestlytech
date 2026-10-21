@@ -111,8 +111,9 @@ drop function if exists public.call_debrief_dismiss(uuid);
 -- 5. the sandbox client goes back to no people
 update public.approval_clients set people = '{}' where slug = 'bestly-test';
 
--- 6. scout-daily (an edge function, not SQL): redeploy the shim with verify_jwt false and its import line pointing at the pin from before this change:
---      import "https://raw.githubusercontent.com/Bestly-LLC/bestlytech/5c87e1e3cf6b7271d2aa43907fc5c0ea12f01c4b/supabase/functions/scout-daily/index.ts";
+-- 6. scout-daily (an edge function, not SQL): redeploy it with verify_jwt false from a checkout of the pin from before this change
+--    (the repo is private, so no raw-URL shim): git checkout 5c87e1e3cf6b7271d2aa43907fc5c0ea12f01c4b -- supabase/functions/scout-daily
+--      then: supabase functions deploy scout-daily --project-ref rcqfqhguwpmaarseifqg --use-api --no-verify-jwt
 --    Do this FIRST if you are rolling everything back. If you skip it the function still works: it catches a failed call_debrief_create and falls
 --    back to the plain "Call with ..." notice, so a missing function costs nothing.
 --    (The pin before that one, from before Oct 13, is 8e0bf1e9564fa06078134a0e1d4c5ed20c78564c.)

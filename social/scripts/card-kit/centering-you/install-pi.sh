@@ -5,7 +5,7 @@ R=${1:-main}
 K=/opt/bestly/cy-kit
 S=https://rcqfqhguwpmaarseifqg.supabase.co/storage/v1/object/public/review
 sudo -n mkdir -p $K/fonts $K/art && sudo -n chown -R pi:pi $K
-curl -fsS https://raw.githubusercontent.com/Bestly-LLC/bestlytech/$R/social/scripts/card-kit/centering-you/card.html -o $K/card.html
+python3 /opt/bestly/cron/tools/repo_get.py social/scripts/card-kit/centering-you/card.html -r "$R" -o $K/card.html
 curl -fsS $S/brand/centering-you/fonts/LeagueGothic-Regular.54b176f16f.ttf -o $K/fonts/LeagueGothic-Regular.ttf
 curl -fsS $S/brand/centering-you/fonts/ClearSans-Regular.bb811af889.ttf -o $K/fonts/ClearSans-Regular.ttf
 curl -fsS $S/brand/centering-you/fonts/ClearSans-Medium.93677acbad.ttf -o $K/fonts/ClearSans-Medium.ttf
