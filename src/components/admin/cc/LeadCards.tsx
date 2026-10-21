@@ -11,7 +11,7 @@ import { LoadError, Pill, cardCls, focusRing } from "@/components/admin/ui";
 import { SheetDetail, jumpToPanel, nowrap, useLineup, type Meetings } from "@/components/admin/cc/Details";
 import {
   glue,
-  monthDay, stamp, time12, usd, whenShort, type CcBundle, type Live, type Wx,
+  monthDay, rainPeak, stamp, time12, usd, whenShort, type CcBundle, type Live, type Wx,
 } from "@/lib/commandCenter";
 
 type Open = null | "money" | "turo" | "ai" | "myday";
@@ -114,7 +114,8 @@ export function LeadCards({ cc, wx, needs, meetings, wide }: { cc: Live<CcBundle
   // My day
   const nm = meetings.next;
   const calls = d?.myday?.calls;
-  const rain = wx?.hours.slice(0, 24).find((h) => h.rain >= 50);
+  const peak = wx ? rainPeak(wx.hours) : null;
+  const rain = peak && peak.pct >= 50 ? { rain: peak.pct, t: peak.t } : null;   // same peak as the weather card's headline and chip
   const after = meetings.events.find((e) => e !== nm);
   const dayBig = nm ? nowrap(whenShort(nm.start)) : nm === undefined ? "Checking" : "No meetings";
   const daySub = (

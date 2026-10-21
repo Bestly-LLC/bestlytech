@@ -1,22 +1,27 @@
 /**
- * Weather on the Command Center (rebuilt 2026-10-20). Apple WeatherKit through weatherkit-proxy, with your calendars and
- * Turo pickups/returns drawn on it the way the projection wall draws them.
+ * Weather on the Command Center (rebuilt 2026-10-20, chart redone 2026-10-21 to match the approved v2 preview).
+ * Apple WeatherKit through weatherkit-proxy, with your calendars and Turo pickups/returns drawn on it the way the projection
+ * wall draws them.
  *
- *   Headline + alerts (worst first) + chips that only appear when they matter (UV, air quality, rain)
- *   Hourly: next 24 hours you can scrub by finger, mouse or arrow keys. Each event is a capsule with end dots across its
- *   hours and its name under the bar; overlapping events share ONE capsule with names joined by " · ".
- *   Scrubbing onto an hour with an event shows it with the temperature and rain chance at that time.
+ *   Headline + alerts (worst first) + chips that only appear when they matter (UV, air quality, rain). The rain headline, the
+ *   rain chip and the chart's "% rain" label all read ONE peak (rainPeak in lib/commandCenter), so they cannot disagree.
+ *   Now row: the current temperature once (no repeat in the headline area), with Feels / Rain / Wind / UV that follow the scrub.
+ *   Hourly: next 24 hours you can scrub by finger, mouse or arrow keys. Smooth temperature curve with a feathered fill, night
+ *   shading, the day's high and low called out, a temperature every few hours, and rain as a soft blue hill whose height AND
+ *   opacity grow with the chance (hidden when every hour is under 10%).
+ *   Calendar items: each event is an indigo capsule with end dots across its hours and its name under the bar; overlapping events
+ *   share ONE capsule with names joined by " · ". Turo Pickup (hour before) and Return (hour after) come from the wall.
  *   Next 5 days with each day's events as a compact agenda.
  *
- * Fixes the old WeatherNow bugs: no ellipsis, light theme colours (white/black utilities + bento variants, no hard-coded dark),
- * mounted once, unique SVG ids (useId), no private-use Apple glyph (Lucide icons only). US units, 12-hour times.
+ * No ellipsis, no hard-coded dark (white/black utilities + bento variants), unique SVG ids (useId), Lucide icons only.
+ * US units, 12-hour times. Reduced motion jumps instead of gliding.
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSnow, CloudSun, Moon, Sun, TriangleAlert, Wind } from "lucide-react";
+import { Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSnow, CloudSun, MapPin, Moon, Sun, TriangleAlert, Wind } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Disclosure, LoadError, Pill, cardCls, focusRing, hairline, inset, text } from "@/components/admin/ui";
 import {
-  agendaByDay, chips, clusterEvents, dayShort, eventsAt, headline, hour12, loadWxEvents, ptDateKey, stamp, time12, useLive,
+  HOME, TZ, agendaByDay, chips, clusterEvents, dayShort, eventsAt, headline, hour12, loadWxEvents, ptDateKey, rainPeak, stamp, time12, useLive,
   type Cluster, type Live, type Wx, type WxAlert, type WxEvent, type WxHour,
 } from "@/lib/commandCenter";
 
@@ -45,12 +50,16 @@ export const Deg = ({ v, className }: { v: number; className?: string }) => (
 
 /* ───────── colours (both themes) ───────── */
 
-const LINE = "text-[#409CFF] bento:text-[#007AFF]";
-const CAL_BAR = "bg-[#BF5AF2] bento:bg-[#AF52DE]";
+/** Chart tokens: set once on the chart wrapper, light theme swaps them. Gradients read them with var(). */
+const WX_VARS = cn(
+  "[--wx-ind:#7A8BE0] [--wx-blue:#0A84FF] [--wx-rain:#5AC8FA] [--wx-night:#2C3B8F] [--wx-nop:1] [--wx-wash:20%]",
+  "bento:[--wx-ind:#3A4A9C] bento:[--wx-blue:#0A6CF0] bento:[--wx-rain:#0A84FF] bento:[--wx-night:#3A4A9C] bento:[--wx-nop:0.3] bento:[--wx-wash:11%]",
+);
+const CAL_BAR = "bg-[#7A8BE0] bento:bg-[#4C5DB8]";
 const TURO_BAR = "bg-[#30D158] bento:bg-[#248A3D]";
-const CAL_TEXT = "text-[#DA8FFF] bento:text-[#8944AB]";
+const CAL_TEXT = "text-[#AAB6F5] bento:text-[#3A4A9C]";
 const TURO_TEXT = "text-[#30D158] bento:text-[#248A3D]";
-const RING = "ring-2 ring-[#1c1c1e] bento:ring-white";
+const RING = "ring-2 ring-[#1c1c1e] bento:ring-[#ffffff]";
 
 const SEV_TONE: Record<WxAlert["severity"], "red" | "orange" | "blue" | "neutral"> = { extreme: "red", severe: "red", moderate: "orange", minor: "blue", unknown: "neutral" };
 const SEV_WORD: Record<WxAlert["severity"], string> = { extreme: "Extreme", severe: "Severe", moderate: "Moderate", minor: "Minor", unknown: "Advisory" };
@@ -64,8 +73,22 @@ function untilText(ms: number | null): string {
 /* ───────── helpers ───────── */
 
 const lerp = (a: number, b: number, f: number) => a + (b - a) * f;
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const PAD = 16;   // px of breathing room at each end of the timeline
 const reduced = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const ptHour = (t: number) => Number(new Date(t).toLocaleString("en-US", { hour: "numeric", hourCycle: "h23", timeZone: TZ }));
+
+/** Smooth path through points (Catmull-Rom to cubic Bezier), the same curve as the approved preview. */
+function smooth(pts: readonly (readonly [number, number])[]): string {
+  let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  for (let k = 0; k < pts.length - 1; k++) {
+    const p0 = pts[k - 1] ?? pts[k], p1 = pts[k], p2 = pts[k + 1], p3 = pts[k + 2] ?? p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += `C${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
 
 function useWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null);
@@ -84,6 +107,14 @@ function useWidth<T extends HTMLElement>() {
 
 const evKind = (c: Cluster): "turo" | "cal" => (c.events.every((e) => e.source === "turo") ? "turo" : "cal");
 
+/* chart geometry: the SVG viewBox height equals the chart's pixel height, so y values are pixels */
+const CH = 184;          // chart height
+const VB = 1000;         // viewBox width (stretched to the card)
+const T_TOP = 34;        // temperature band: top
+const T_H = 70;          // temperature band: height
+const R_H = 56;          // rain hill height at 100%
+const R_BASE = CH - 2;   // rain baseline
+
 /* ───────── the scrubbable hour timeline ───────── */
 
 function HourScrub({ hours, events }: { hours: WxHour[]; events: WxEvent[] }) {
@@ -98,8 +129,10 @@ function HourScrub({ hours, events }: { hours: WxHour[]; events: WxEvent[] }) {
   const set = useCallback((p: number) => { posRef.current = p; setPos(p); }, []);
   const stop = () => { if (raf.current != null) cancelAnimationFrame(raf.current); raf.current = null; };
   /** Critically damped glide to a target (interruptible: any new input cancels it). Reduced motion jumps. */
+  const goal = useRef(0);   // where the current glide is heading, so fast key repeats stack instead of restarting
   const glide = useCallback((target: number) => {
     stop();
+    goal.current = target;
     if (reduced()) { set(target); return; }
     const step = () => {
       const d = target - posRef.current;
@@ -116,26 +149,53 @@ function HourScrub({ hours, events }: { hours: WxHour[]; events: WxEvent[] }) {
   const span = Math.max(1, tN - t0);
   const fx = (t: number) => Math.min(1, Math.max(0, (t - t0) / span));
   const px = (f: number) => PAD + (W - PAD * 2) * f;
+  const xp = (i: number) => (i / (n - 1)) * 100;   // percent across the chart
 
-  // temperature curve, in a 0..100 box
+  /* temperature curve */
   const temps = hours.map((h) => h.tempF);
-  const lo = Math.min(...temps) - 3;
-  const hi = Math.max(...temps) + 3;
-  const yOf = (t: number) => 88 - ((t - lo) / Math.max(1, hi - lo)) * 66;
-  const pts = hours.map((h, i) => [(i / (n - 1)) * 100, yOf(h.tempF)] as const);
-  const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`).join(" ");
-  const area = `${line} L100 100 L0 100 Z`;
+  const tmax = Math.max(...temps);
+  const tmin = Math.min(...temps);
+  const mid = (tmax + tmin) / 2;
+  const range = Math.max(8, tmax - tmin);
+  const yOf = (t: number) => T_TOP + T_H / 2 - ((t - mid) / range) * T_H;
+  const pts = hours.map((h, i) => [(i / (n - 1)) * VB, yOf(h.tempF)] as const);
+  const line = smooth(pts);
+  const area = `${line}L${VB} ${CH}L0 ${CH}Z`;
+  const hiI = temps.indexOf(tmax);
+  const loI = temps.indexOf(tmin);
 
-  // what is under the finger
+  /* rain: slim rounded columns, one per hour; height AND opacity follow the chance. Hidden when every hour is under 10%. */
+  const maxRain = Math.max(...hours.map((h) => h.rain));
+  const showRain = maxRain >= 10;
+  const peak = rainPeak(hours);
+  const colW = clamp(((W - PAD * 2) / (n - 1)) * 0.42, 4, 12);              // slim: well under half the gap between hours
+  const colH = (pct: number) => Math.max(4, (pct / 100) * R_H);
+  // where it first crosses 50% (only labelled when it is not next to the peak, so labels never collide)
+  const crossI = hours.findIndex((h, i) => h.rain >= 50 && (i === 0 || hours[i - 1].rain < 50));
+  const showCross = showRain && crossI >= 0 && peak != null && Math.abs(crossI - peak.i) >= 3;
+
+  /* hour axis: clock-aligned ticks (every 3 hours when there is room, else 6); "Now" first; midnight reads as the day */
+  const stepPx = ((W - PAD * 2) / (n - 1)) * 3;
+  const every = stepPx >= 44 ? 3 : stepPx >= 36 ? 4 : 6;
+  const minGap = Math.ceil(48 / (stepPx / 3));   // keep clock labels clear of the "Now" label
+  const ticks = hours
+    .map((h, i) => ({ h, i, hr: ptHour(h.t) }))
+    .filter(({ i, hr }) => i >= minGap && hr % every === 0);
+
+  /* what is under the finger */
   const i0 = Math.min(n - 2, Math.max(0, Math.floor(pos)));
   const fr = Math.min(1, Math.max(0, pos - i0));
   const a = hours[i0];
   const b = hours[i0 + 1];
   const tempAt = lerp(a.tempF, b.tempF, fr);
+  const feelsAt = lerp(a.feelsF, b.feelsF, fr);
   const rainAt = Math.round(lerp(a.rain, b.rain, fr));
+  const windAt = lerp(a.windMph, b.windMph, fr);
+  const uvAt = Math.round(lerp(a.uv, b.uv, fr));
   const near = hours[Math.round(pos)] ?? a;
   const hereEvents = eventsAt(events, near.t);
   const label = Math.round(pos) === 0 && Date.now() - near.t < 36e5 ? "Now" : `${dayShort(near.t)} ${time12(near.t)}`;
+  const mostAtOnce = useMemo(() => hours.reduce((m, h) => Math.max(m, eventsAt(events, h.t).length), 0), [hours, events]);
 
   // capsules, then name labels placed on rows so none overlap (no cut-off stacks)
   const clusters = useMemo(() => clusterEvents(events, t0, tN + 36e5), [events, t0, tN]);
@@ -187,7 +247,7 @@ function HourScrub({ hours, events }: { hours: WxHour[]; events: WxEvent[] }) {
     glide(Math.round(posRef.current));
   };
   const onKey = (e: React.KeyboardEvent) => {
-    const cur = Math.round(posRef.current);
+    const cur = raf.current != null ? goal.current : Math.round(posRef.current);
     const to = e.key === "ArrowRight" || e.key === "ArrowUp" ? cur + 1 : e.key === "ArrowLeft" || e.key === "ArrowDown" ? cur - 1
       : e.key === "PageUp" ? cur + 6 : e.key === "PageDown" ? cur - 6 : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : null;
     if (to == null) return;
@@ -196,24 +256,44 @@ function HourScrub({ hours, events }: { hours: WxHour[]; events: WxEvent[] }) {
   };
 
   const readout = `${label}, ${F(tempAt)} degrees, ${rainAt} percent chance of rain, ${near.cond}${hereEvents.length ? ", " + hereEvents.map((x) => x.title).join(", ") : ""}`;
-  const ticks = hours.map((h, i) => ({ h, i })).filter(({ i }) => i % 3 === 0);
+  const tagCls = "pointer-events-none absolute -translate-x-1/2 whitespace-nowrap text-[12px] font-semibold leading-none tabular-nums";
+  const facts: [string, string][] = [
+    ["Feels", `${F(feelsAt)}\u00a0°F`],
+    ["Rain", `${rainAt}%`],
+    ["Wind", `${F(windAt)}\u00a0mph`],
+    ["UV", String(uvAt)],
+  ];
+  // room for the events a scrub can land on, so moving across the chart never shifts the page
+  const evRoom = Math.min(2, mostAtOnce) * (W < 480 ? 40 : 22);
 
   return (
-    <div>
+    <div className={WX_VARS}>
       {/* readout: reserved height so scrubbing never shifts the page */}
-      <div className="min-h-[3.5rem] px-1 pb-2" aria-hidden data-testid="scrub-readout">
-        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-white">
-          <span className="whitespace-nowrap text-[13px] font-semibold uppercase tracking-wide text-white/60">{label}</span>
-          <Deg v={tempAt} className="text-[22px] font-semibold leading-tight" />
-          <span className="whitespace-nowrap text-[15px] tabular-nums text-white/70">Rain&nbsp;{rainAt}%</span>
-          <span className="inline-flex items-center gap-1 text-[15px] text-white/70"><CondIcon code={near.code} daylight={near.daylight} className="h-4 w-4" />{near.cond}</span>
-        </p>
+      <div className="px-1 pb-3" style={{ minHeight: 76 + evRoom }} aria-hidden data-testid="scrub-readout">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <CondIcon code={near.code} daylight={near.daylight} className="h-11 w-11 stroke-[1.5] text-white/90" />
+          <div>
+            <p className="whitespace-nowrap text-[13px] font-semibold uppercase tracking-wide text-white/60">{label}</p>
+            <p className="flex items-baseline gap-2.5 text-white">
+              <Deg v={tempAt} className="text-[34px] font-bold leading-[1.1] tracking-tight" />
+              <span className="text-[16px] font-medium text-white/65">{near.cond}</span>
+            </p>
+          </div>
+          <dl className="grid w-full grid-cols-4 gap-x-3 sm:ml-auto sm:flex sm:w-auto sm:gap-x-6">
+            {facts.map(([k, v]) => (
+              <div key={k} className="min-w-0 sm:min-w-[3rem]">
+                <dt className="text-[12px] leading-tight text-white/60">{k}</dt>
+                <dd className="whitespace-nowrap text-[16px] font-semibold tabular-nums leading-tight text-white">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
         {hereEvents.length > 0 && (
-          <ul className="mt-1 space-y-0.5" data-testid="scrub-events">
+          <ul className="mt-2 space-y-0.5" data-testid="scrub-events">
             {hereEvents.map((e, i) => (
               <li key={i} className={cn("text-[14px] font-medium leading-snug", e.source === "turo" ? TURO_TEXT : CAL_TEXT)}>
                 {e.title}
-                <span className="font-normal text-white/60"> · {time12(e.start)} to {time12(e.end)}</span>
+                <span className="font-normal text-white/60"> · <span className="whitespace-nowrap">{time12(e.start)} to {time12(e.end)}</span></span>
               </li>
             ))}
           </ul>
@@ -262,37 +342,99 @@ function HourScrub({ hours, events }: { hours: WxHour[]; events: WxEvent[] }) {
           </div>
         )}
 
-        {/* temperature curve + rain bars */}
-        <div className="relative h-[132px]" style={{ marginLeft: PAD, marginRight: PAD }}>
-          <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-            <defs>
-              <linearGradient id={`fill${uid}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="currentColor" stopOpacity="0.30" />
-                <stop offset="1" stopColor="currentColor" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <g className={LINE}>
-              <path d={area} fill={`url(#fill${uid})`} />
-              <path d={line} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-            </g>
-          </svg>
-          {hours.map((h, i) => h.rain >= 10 && (
-            <span key={i} className="absolute bottom-0 w-[3.5%] -translate-x-1/2 rounded-full bg-[#64D2FF]/40 bento:bg-[#007AFF]/25"
-              style={{ left: `${(i / (n - 1)) * 100}%`, height: `${Math.max(4, h.rain * 0.34)}%` }} />
+        {/* temperature curve, night shading, rain hill, callouts */}
+        <div className="relative" style={{ height: CH, marginLeft: PAD, marginRight: PAD }} data-testid="wx-chart">
+          {/* faint column behind each event's hours, feathered on every side (the wall's wash) */}
+          {laid.map((l, i) => (
+            <span key={i} aria-hidden className="pointer-events-none absolute inset-y-0 min-w-[10px]"
+              style={{
+                left: `${l.f1 * 100}%`, width: `${(l.f2 - l.f1) * 100}%`,
+                background: "linear-gradient(to bottom, transparent, color-mix(in srgb, var(--wx-ind) var(--wx-wash), transparent) 30%, color-mix(in srgb, var(--wx-ind) var(--wx-wash), transparent) 70%, transparent)",
+                WebkitMaskImage: "linear-gradient(to right, transparent, #000 22%, #000 78%, transparent)",
+                maskImage: "linear-gradient(to right, transparent, #000 22%, #000 78%, transparent)",
+              }} />
           ))}
+          <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${VB} ${CH}`} preserveAspectRatio="none" aria-hidden data-testid="wx-svg">
+            <defs>
+              <linearGradient id={`night${uid}`} gradientUnits="userSpaceOnUse" x1="0" x2={VB} y1="0" y2="0">
+                {hours.map((h, i) => <stop key={i} offset={i / (n - 1)} style={{ stopColor: "var(--wx-night)", stopOpacity: h.daylight ? 0 : 0.34 }} />)}
+              </linearGradient>
+              <linearGradient id={`line${uid}`} gradientUnits="userSpaceOnUse" x1="0" x2={VB} y1="0" y2="0">
+                <stop offset="0" style={{ stopColor: "var(--wx-ind)" }} />
+                <stop offset="0.5" style={{ stopColor: "var(--wx-blue)" }} />
+                <stop offset="1" style={{ stopColor: "var(--wx-ind)" }} />
+              </linearGradient>
+              <linearGradient id={`area${uid}`} gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={T_TOP} y2={CH}>
+                <stop offset="0" style={{ stopColor: "var(--wx-ind)", stopOpacity: 0.28 }} />
+                <stop offset="0.6" style={{ stopColor: "var(--wx-ind)", stopOpacity: 0.05 }} />
+                <stop offset="1" style={{ stopColor: "var(--wx-ind)", stopOpacity: 0 }} />
+              </linearGradient>
+              {/* soft left and right ends for every fill */}
+              <linearGradient id={`fade${uid}`} gradientUnits="userSpaceOnUse" x1="0" x2={VB} y1="0" y2="0">
+                <stop offset="0" stopColor="#fff" stopOpacity="0" />
+                <stop offset="0.05" stopColor="#fff" stopOpacity="1" />
+                <stop offset="0.95" stopColor="#fff" stopOpacity="1" />
+                <stop offset="1" stopColor="#fff" stopOpacity="0" />
+              </linearGradient>
+              <mask id={`mask${uid}`} maskUnits="userSpaceOnUse" x="0" y="0" width={VB} height={CH}>
+                <rect width={VB} height={CH} fill={`url(#fade${uid})`} />
+              </mask>
+            </defs>
+            <g mask={`url(#mask${uid})`}>
+              <rect width={VB} height={CH} fill={`url(#night${uid})`} style={{ opacity: "var(--wx-nop)" } as React.CSSProperties} />
+              <path d={area} fill={`url(#area${uid})`} />
+            </g>
+            <path d={line} fill="none" stroke={`url(#line${uid})`} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          </svg>
+
+          {/* rain columns: soft blue, richer with the chance, top edge feathered away, never blobs */}
+          {showRain && hours.map((h, i) => h.rain >= 10 && (
+            <span key={i} aria-hidden data-testid="rain-col" className="pointer-events-none absolute -translate-x-1/2 rounded-full"
+              style={{
+                left: `${xp(i)}%`, width: colW, height: colH(h.rain), bottom: CH - R_BASE,
+                opacity: 0.4 + 0.6 * (h.rain / 100),
+                background: "linear-gradient(to top, color-mix(in srgb, var(--wx-rain) 90%, transparent), color-mix(in srgb, var(--wx-rain) 6%, transparent))",
+              }} />
+          ))}
+
+          {/* callouts: the high, the low, a temperature every few hours, and the rain peak */}
+          <span className={cn(tagCls, "text-white")} style={{ left: `${clamp(xp(hiI), 5, 95)}%`, top: yOf(tmax) - 24 }} aria-hidden data-testid="wx-hi">{F(tmax)}°</span>
+          {loI !== hiI && (
+            <span className={cn(tagCls, "text-white/75")} style={{ left: `${clamp(xp(loI), 5, 95)}%`, top: yOf(tmin) + 12 }} aria-hidden data-testid="wx-lo">{F(tmin)}°</span>
+          )}
+          {ticks.filter(({ i }) => Math.abs(i - hiI) > 2 && i < n - 1).map(({ h, i }) => (
+            <span key={i} className={cn(tagCls, "font-medium text-white/60")} style={{ left: `${xp(i)}%`, top: yOf(h.tempF) - 22 }} aria-hidden>{F(h.tempF)}°</span>
+          ))}
+          {showRain && peak && peak.pct >= 10 && (
+            <span className={cn(tagCls, "text-[#64D2FF] bento:text-[#0A6CF0]")} style={{ left: `${clamp(xp(peak.i), 8, 92)}%`, top: R_BASE - colH(peak.pct) - 20 }} aria-hidden data-testid="wx-rain-peak">
+              {peak.pct}%&nbsp;rain
+            </span>
+          )}
+          {showCross && (
+            <span className={cn(tagCls, "font-medium text-[#64D2FF]/80 bento:text-[#0A6CF0]")} style={{ left: `${xp(crossI)}%`, top: R_BASE - colH(hours[crossI].rain) - 20 }} aria-hidden data-testid="wx-rain-cross">
+              {hours[crossI].rain}%
+            </span>
+          )}
+
           {/* scrub hairline: feathered at both ends, plus a soft dot on the curve */}
           <span className="pointer-events-none absolute inset-y-0 w-px -translate-x-1/2" style={{
             left: `${(pos / (n - 1)) * 100}%`,
             background: "linear-gradient(to bottom, transparent, rgba(128,128,128,0.7) 22%, rgba(128,128,128,0.7) 78%, transparent)",
           }} />
-          <span className={cn("pointer-events-none absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current", RING, LINE)}
-            style={{ left: `${(pos / (n - 1)) * 100}%`, top: `${yOf(tempAt)}%`, boxShadow: "0 0 14px 3px color-mix(in srgb, currentColor 35%, transparent)" }} />
+          <span className="pointer-events-none absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
+            style={{
+              left: `${(pos / (n - 1)) * 100}%`, top: yOf(tempAt),
+              boxShadow: "0 0 0 5px color-mix(in srgb, var(--wx-ind) 28%, transparent), 0 0 20px color-mix(in srgb, var(--wx-ind) 65%, transparent)",
+            }} />
         </div>
 
-        {/* hour axis */}
-        <div className="relative h-6" aria-hidden>
-          {ticks.map(({ h, i }) => (
-            <span key={i} className="absolute top-1 -translate-x-1/2 whitespace-nowrap text-[12px] tabular-nums text-white/55" style={{ left: px(i / (n - 1)) }}>{hour12(h.t)}</span>
+        {/* hour axis: "Now" first, then the clock hours, midnight as the day */}
+        <div className="relative h-6" aria-hidden data-testid="wx-axis">
+          <span className="absolute top-1 -translate-x-1/2 whitespace-nowrap text-[12px] font-semibold text-white" style={{ left: px(0) }}>Now</span>
+          {ticks.map(({ h, i, hr }) => (
+            <span key={i} className={cn("absolute top-1 -translate-x-1/2 whitespace-nowrap text-[12px] tabular-nums", hr === 0 ? "font-semibold text-white" : "text-white/60")} style={{ left: px(i / (n - 1)) }}>
+              {hr === 0 ? dayShort(h.t) : hour12(h.t)}
+            </span>
           ))}
         </div>
       </div>
@@ -306,6 +448,14 @@ export function WeatherCard({ wxs }: { wxs: Live<Wx> }) {
   const evs = useLive(loadWxEvents, 5 * 60_000);
   const [allAlerts, setAllAlerts] = useState(false);
   const wx = wxs.data;
+
+  // the first hour is "right now": use the live reading so the curve starts on the temperature people just saw
+  const hours = useMemo<WxHour[]>(() => {
+    if (!wx) return [];
+    return wx.hours.map((h, i) => i === 0
+      ? { ...h, tempF: wx.now.tempF, feelsF: wx.now.feelsF, windMph: wx.now.windMph, uv: wx.now.uv, cond: wx.now.cond, code: wx.now.code }
+      : h);
+  }, [wx]);
 
   if (!wx) {
     return (
@@ -335,13 +485,10 @@ export function WeatherCard({ wxs }: { wxs: Live<Wx> }) {
         {/* headline */}
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
           <div className="min-w-0">
-            <h2 className="text-[22px] font-semibold leading-snug tracking-tight text-white">{headline(wx)}</h2>
-            <p className={cn(text.detail, "mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5")}>
-              <span className="inline-flex items-center gap-1.5 text-white/80"><CondIcon code={wx.now.code} daylight={!!wx.hours[0]?.daylight} className="h-4 w-4" /><Deg v={wx.now.tempF} className="font-semibold text-white" /> {wx.now.cond}</span>
-              <span className="whitespace-nowrap">Feels {F(wx.now.feelsF)}&nbsp;°F</span>
-              <span className="whitespace-nowrap">Wind {F(wx.now.windMph)}&nbsp;mph</span>
-              <span className="whitespace-nowrap">Humidity {wx.now.humidity}%</span>
+            <p className="flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-wide text-white/60">
+              <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />{HOME.name}
             </p>
+            <h2 className="mt-1.5 text-[22px] font-semibold leading-snug tracking-tight text-white" data-testid="wx-headline">{headline(wx)}</h2>
           </div>
           <p className={cn("whitespace-nowrap text-[12px] tabular-nums", st.stale ? "text-[#FF9F0A] bento:text-[#C93400]" : "text-white/50")} data-testid="wx-updated">
             {st.text}
@@ -377,7 +524,7 @@ export function WeatherCard({ wxs }: { wxs: Live<Wx> }) {
         )}
 
         {/* hourly */}
-        {wx.hours.length >= 2 ? <HourScrub hours={wx.hours} events={events} /> : <p className={text.detail}>The hourly forecast is not available right now.</p>}
+        {hours.length >= 2 ? <HourScrub hours={hours} events={events} /> : <p className={text.detail}>The hourly forecast is not available right now.</p>}
 
         {evs.error && !evs.data && <p className="text-[13px] text-white/60">Calendar items are not loading right now. The forecast above is unaffected.</p>}
         {evSt?.stale && <p className="text-[12px] text-[#FF9F0A] bento:text-[#C93400]">Calendar items: {evSt.text.toLowerCase()}</p>}
@@ -390,7 +537,7 @@ export function WeatherCard({ wxs }: { wxs: Live<Wx> }) {
           <ul className="mt-1 grid grid-cols-1 divide-y divide-white/[0.06] md:grid-cols-5 md:divide-x md:divide-y-0" data-testid="five-days">
             {wx.days.map((d, i) => {
               const key = ptDateKey(d.t + 6 * 36e5);
-              const list = agenda.get(key) ?? [];
+              const list = (agenda.get(key) ?? []).filter((e) => !e.all_day);
               return (
                 <li key={d.t} className="flex gap-3 px-4 py-3 sm:px-6 md:flex-col md:gap-1.5 md:px-4 md:py-4">
                   <div className="flex w-24 shrink-0 items-center gap-2 md:w-auto md:justify-between">

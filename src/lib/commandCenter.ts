@@ -186,7 +186,7 @@ export function nextRun(schedule: string, now = new Date()): Date | null {
 
 /* ───────── weather ───────── */
 
-export interface WxHour { t: number; tempF: number; rain: number; cond: string; code: string; uv: number; windMph: number; daylight: boolean; aqi: number | null }
+export interface WxHour { t: number; tempF: number; feelsF: number; rain: number; cond: string; code: string; uv: number; windMph: number; daylight: boolean; aqi: number | null }
 export interface WxDay { t: number; hiF: number; loF: number; rain: number; cond: string; code: string; uvMax: number; windMph: number }
 export interface WxAlert { id: string; title: string; severity: "extreme" | "severe" | "moderate" | "minor" | "unknown"; until: number | null; area: string; url: string | null }
 export interface Wx {
@@ -216,7 +216,7 @@ export function normalizeWx(j: any): Wx {
   const nowMs = Date.now();
   const hours: WxHour[] = (j?.forecastHourly?.hours ?? [])
     .map((h: any) => ({
-      t: new Date(h.forecastStart).getTime(), tempF: cToF(h.temperature), rain: Math.round((h.precipitationChance ?? 0) * 100),
+      t: new Date(h.forecastStart).getTime(), tempF: cToF(h.temperature), feelsF: cToF(h.temperatureApparent ?? h.temperature), rain: Math.round((h.precipitationChance ?? 0) * 100),
       cond: condLabel(h.conditionCode), code: h.conditionCode, uv: h.uvIndex ?? 0, windMph: kmhToMph(h.windSpeed ?? 0), daylight: !!h.daylight,
       aqi: aqiAt.get(Math.floor(new Date(h.forecastStart).getTime() / 3.6e6)) ?? null,
     }))
@@ -255,6 +255,22 @@ export async function loadWeather(): Promise<Wx> {
   return normalizeWx(data);
 }
 
+/**
+ * The ONE rain peak: the hour with the highest chance in the forecast window (earliest hour wins a tie).
+ * The headline, the rain chip, the day card and the chart's % label all read it, so they can never disagree.
+ */
+export function rainPeak(hours: WxHour[]): { pct: number; t: number; i: number } | null {
+  let best: { pct: number; t: number; i: number } | null = null;
+  hours.forEach((h, i) => { if (h.rain > 0 && (!best || h.rain > best.pct)) best = { pct: h.rain, t: h.t, i }; });
+  return best;
+}
+
+/** "6 PM", or "4 AM Thursday" (long) / "4 AM Thu" (short) when it is not today. */
+export function peakWhen(t: number, long: boolean): string {
+  const today = ptDateKey(t) === ptDateKey(Date.now());
+  return `${hour12(t)}${today ? "" : " " + (long ? dayLong(t) : dayShort(t))}`;
+}
+
 /** Chips that appear only when they matter. */
 export function chips(wx: Wx): { id: "uv" | "air" | "rain"; label: string; tone: "orange" | "red" | "blue" }[] {
   const out: { id: "uv" | "air" | "rain"; label: string; tone: "orange" | "red" | "blue" }[] = [];
@@ -262,8 +278,8 @@ export function chips(wx: Wx): { id: "uv" | "air" | "rain"; label: string; tone:
   if (uvNow >= 6) out.push({ id: "uv", label: `UV ${Math.round(uvNow)} ${uvNow >= 8 ? "very high" : "high"}`, tone: uvNow >= 8 ? "red" : "orange" });
   const aqi = Math.max(wx.air?.aqi ?? 0, ...wx.hours.slice(0, 12).map((h) => h.aqi ?? 0));
   if (aqi >= 101) out.push({ id: "air", label: `Air ${Math.round(aqi)} ${aqiLabel(aqi).replace("Unhealthy for sensitive groups", "unhealthy for some")}`, tone: aqi >= 151 ? "red" : "orange" });
-  const wet = wx.hours.slice(0, 12).reduce((m, h) => (h.rain > m.rain ? h : m), { rain: 0, t: 0 } as { rain: number; t: number });
-  if (wet.rain >= 40) out.push({ id: "rain", label: `Rain ${wet.rain}% around ${hour12(wet.t)}`, tone: "blue" });
+  const peak = rainPeak(wx.hours);
+  if (peak && peak.pct >= 40) out.push({ id: "rain", label: glue(`Rain ${peak.pct}% around ${peakWhen(peak.t, false)}`), tone: "blue" });
   return out;
 }
 
@@ -275,11 +291,14 @@ export function glue(s: string): string {
 
 export function headline(wx: Wx): string {
   const cond = wx.now.cond.charAt(0).toUpperCase() + wx.now.cond.slice(1).toLowerCase();
-  const soon = wx.hours.find((h) => h.rain >= 50);
-  if (soon) {
-    const dt = soon.t - Date.now();
-    const when = dt < 36e5 ? "within the hour" : `around ${hour12(soon.t)}${ptDateKey(soon.t) === ptDateKey(Date.now()) ? "" : " " + dayLong(soon.t)}`;
-    return glue(`${cond}. Rain likely ${when}.`);
+  const peak = rainPeak(wx.hours);
+  if (peak && peak.pct >= 50) {
+    const soon = peak.t - Date.now() < 36e5;
+    if (/rain|drizzle|shower|thunder/i.test(wx.now.code)) {
+      // already wet: do not say "Rain. Rain likely"
+      return glue(soon ? "Raining now." : `Raining now. The chance peaks around ${peakWhen(peak.t, true)}.`);
+    }
+    return glue(`${cond}. Rain likely ${soon ? "within the hour" : `around ${peakWhen(peak.t, true)}`}.`);
   }
   const later = wx.days.find((d) => d.rain >= 50);
   if (later) return glue(`${cond}. No rain in the next 24 hours, then ${later.cond.toLowerCase()} ${ptDateKey(later.t) === ptDateKey(Date.now()) ? "today" : "on " + dayLong(later.t + 12 * 36e5)}.`);
@@ -288,7 +307,7 @@ export function headline(wx: Wx): string {
 
 /* ───────── calendar items on the weather ───────── */
 
-export interface WxEvent { title: string; start: string; end: string; calendar?: string; location?: string; source?: string; turo?: "pickup" | "return" }
+export interface WxEvent { title: string; start: string; end: string; all_day?: boolean; calendar?: string; location?: string; source?: string; turo?: "pickup" | "return" }
 export interface WxEventsPayload { events: WxEvent[]; updated_at: string | null; calendar_at: string | null; err: string | null }
 
 export async function loadWxEvents(): Promise<WxEventsPayload> {
@@ -305,6 +324,7 @@ export interface Cluster { start: number; end: number; titles: string[]; events:
  */
 export function clusterEvents(events: WxEvent[], from: number, to: number): Cluster[] {
   const rows = events
+    .filter((e) => !e.all_day)
     .map((e) => ({ e, s: new Date(e.start).getTime(), f: new Date(e.end).getTime() }))
     .filter((r) => Number.isFinite(r.s) && Number.isFinite(r.f) && r.f > from && r.s < to)
     .sort((a, b) => a.s - b.s || a.f - b.f);
@@ -323,7 +343,7 @@ export function clusterEvents(events: WxEvent[], from: number, to: number): Clus
 }
 
 export function eventsAt(events: WxEvent[], t: number, span = 36e5): WxEvent[] {
-  return events.filter((e) => new Date(e.start).getTime() < t + span && new Date(e.end).getTime() > t);
+  return events.filter((e) => !e.all_day && new Date(e.start).getTime() < t + span && new Date(e.end).getTime() > t);
 }
 
 export function agendaByDay(events: WxEvent[]): Map<string, WxEvent[]> {
