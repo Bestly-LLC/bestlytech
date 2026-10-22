@@ -483,6 +483,11 @@ def main():
             try:
                 m, b = fn(); moved += m; freed += b
                 if m: notes.append("%s: %d files, %s" % (name, m, gb(b)))
+            except PermissionError as e:
+                # macOS privacy (TCC) blocks launchd jobs from ~/Downloads until the interpreter has Full Disk Access.
+                # That is a setup gap, not a broken cleanup: skip the step, say so, and do not report a failed run.
+                log("%s skipped, macOS privacy blocks access: %s" % (name, e))
+                notes.append("%s skipped (macOS privacy)" % name)
             except Exception as e:
                 ok = False; log("%s failed: %s" % (name, e))
         st["moves_at"] = time.time()
