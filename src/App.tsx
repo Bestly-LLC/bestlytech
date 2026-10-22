@@ -127,6 +127,7 @@ const ClaimsCloser = lazyPage(() => import("./pages/admin/ClaimsCloser"));
 const Settlements = lazyPage(() => import("./pages/admin/Settlements"));
 const CostCutter = lazyPage(() => import("./pages/admin/CostCutter"));
 const SkyTouch = lazyPage(() => import("./pages/admin/SkyTouch"));
+const RoofGuardOutreach = lazyPage(() => import("./pages/admin/RoofGuardOutreach"));
 const Wall = lazyPage(() => import("./pages/admin/Wall"));
 const Sky = lazyPage(() => import("./pages/admin/Sky"));
 const Security = lazyPage(() => import("./pages/admin/Security"));
@@ -330,6 +331,7 @@ const App = () => {
                   <Route path="settlements" element={<Settlements />} />
                   <Route path="cost-cutter" element={<CostCutter />} />
                   <Route path="skytouch" element={<SkyTouch />} />
+                  <Route path="roofguard-outreach" element={<RoofGuardOutreach />} />
                   <Route path="turo/lax-pass" element={<LaxPassRedirect />} />
                   <Route path="lax" element={<LaxPassRedirect />} />
                   <Route path="turo/settings" element={<LaxPassRedirect />} />

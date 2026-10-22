@@ -114,6 +114,8 @@ const agentItems = [
   { title: "Ava (Personal)", url: "/admin/ava", icon: AvaOrbIcon },
   { title: "Maya (Bestly)", url: "/admin/maya", icon: Headset, countKey: "maya" as CountKeys },
   { title: "Reese (RoofGuard)", url: "/admin/roofguard", icon: PhoneCall },
+  // RoofGuard Outreach: the weekday partner-recruit emails, moved off Claude onto the Pi. Draft-only: Jared sends them.
+  { title: "RoofGuard Outreach", url: "/admin/roofguard-outreach", icon: Mail },
   // SkyTouch Front Desk: the massage practice's text inbox, moved off Claude onto the Pi (paused until switched on there).
   { title: "SkyTouch (Front Desk)", url: "/admin/skytouch", icon: ConciergeBell },
 ];
