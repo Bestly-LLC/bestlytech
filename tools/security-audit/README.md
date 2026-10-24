@@ -16,6 +16,11 @@ This job runs the same checks on the Pi, with no AI at all.
 |---|---|
 | Worker | `/opt/bestly/cron/jobs/security_audit.py` |
 | Wrapper (hyphenated name for `runjob.py`) | `/opt/bestly/cron/jobs/security-audit.py` |
+| Ares 2.0 (history scan, liveness, escalation, the lessons loop) | `security_audit_ares2.py` |
+| Ares 2.1 stack inventory, CVE watch, dependency gate, Nextcloud self-heal | `/opt/bestly/cron/jobs/security_audit_cve.py` |
+| Regression suite (the L6 gate runs this before every audit) | `selftest.py`, installed as `/opt/bestly/cron/jobs/security_audit_selftest.py` |
+| Extra stack rows for machines the Pi cannot look inside | `/opt/bestly/cron/state/stack_inventory_extra.json` |
+| Cached CVE feed responses | `/opt/bestly/cron/state/cve_feeds/` |
 | Website, DNS, mail and code checks (reused, unchanged) | `scripts/security-audit/web_checks.py`, installed as `/opt/bestly/cron/jobs/security_audit_web_checks.py` |
 | State (`mode`, last run, last 30 runs) | `/opt/bestly/cron/state/security_audit.json` |
 | Database side | `supabase/migrations/20261014210000_security_audit_pi_rpcs.sql` (**not applied**), `20261014210100_security_audit_pi_job.sql` (applied), `20261015150000_security_audit_cloudflare_token.sql` (Cloudflare token, **not applied**) |
@@ -124,7 +129,84 @@ Written 2026-10-15 from Cloudflare's documentation and the plan, with no Cloudfl
 * **Token scope check** treats a permission group as a write permission when its name contains the word Edit or Write. Only active tokens are examined. Names are listed, ids and values are never stored.
 * Account names and member emails are dropped as they arrive, but a Cloudflare 5xx/429 retries up to 3 times; the retry sleeps are untested against a real rate limit.
 
+## Stack / CVE watch (Ares 2.1, 2026-10-24, plan: `docs/ares-cve-watch-opusplan.md`)
+
+Why: PHP2Shell (a pre-auth remote code execution bug in PHP core) reached the Nextcloud container on the Pi, and the nightly audit said "0 new" three nights running.
+Ares had no list of what Bestly runs, so no CVE could ever match anything.
+Three lessons, L7 to L9, close that.
+No AI, stdlib only, Python 3.9+. Everything is in `security_audit_cve.py` and runs at the end of the Ares 2.0 pass, so one batched write and one run row still hold the whole night.
+A failure in this part fails the run loudly like the rest of Ares 2.0; it never quietly passes.
+
+**L7, stack inventory and CVE watch.**
+Every night Ares reads what runs on the Pi: Debian release, kernel, python3, node, npm, and every container from `docker ps` (PHP is read with `docker exec <container> php -v`, Nextcloud with `php occ status`).
+Each component gets a host, version, release cycle, `internet_facing` flag and source.
+Then it is matched against free feeds and judged: end-of-life is red; behind the newest release **and** a critical CVE is red; behind is yellow; current is pass.
+A component no feed covers gets no verdict (never a pass for something unchecked), and a floating tag such as `postgres:16` or `redis:7` is never called behind because the tag hides the patch level.
+The inventory (versions only, no labels, commands or ids) is saved on the run's `inventory.stack`.
+
+| Feed | Used for | Window | Cache file in `state/cve_feeds/` |
+|---|---|---|---|
+| `https://endoflife.date/api/<product>.json` | newest release, release date, end-of-life date per cycle | current | `endoflife-<product>.json` |
+| CISA Known Exploited Vulnerabilities | any entry for the product counts as critical | last 90 days | `kev.json` |
+| NVD 2.0, `cvssV3Severity=CRITICAL` | a critical CVE for the product itself (CPE product, or the product named in the description while NVD has not analysed it) | last 14 days | `nvd-<product>.json` |
+
+NVD is called with a 7 second pause between calls (the unkeyed limit is 5 per 30 seconds); no API key is used or stored.
+A feed that fails falls back to its cache if the cache is under 3 days old (yellow "feed stale"); older or missing, it is **skip** plus an `unverified` entry, and no stack verdict is a pass while a feed is down.
+
+Other hosts report through `stack_inventory_extra.json`, a list of the same rows (`host`, `component`, `version`, `cycle`, `internet_facing`, `source`, `verified_at`, optional `note`).
+`install.sh` seeds it with the Mac mini's two node installs, verified 2026-10-24, if the file is missing, and never overwrites it.
+A manual row older than 7 days is an unverified entry ("<host> runtimes (manual inventory stale)", which L5 escalates) and is never treated as current: its check is skip.
+
+**L8, dependency gate.**
+For every repo Ares already clones (the code-secret scan), it reads `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock` and `requirements*.txt` (4 folders deep, `node_modules` and `.git` skipped) and sends the pinned versions to OSV.dev `querybatch`, 500 per call (ecosystem `npm` or `PyPI`).
+Any `MAL-` advisory, or one OSV or its CVSS v3 vector rates CRITICAL, is red; a HIGH advisory is yellow; an advisory whose severity cannot be looked up is yellow, never a quiet pass.
+Repos with a `package.json` must also carry a `.npmrc` with `ignore-scripts=true` and `min-release-age=7` (or `minimumReleaseAge: 7` in `pnpm-workspace.yaml`); otherwise yellow with both lines in `fix` and `evidence.autofix = "add .npmrc"`, which Scout's Code Worker can pick up.
+OSV unreachable is skip plus `dependency gate (OSV unreachable)`, never a pass; the `.npmrc` check needs no network and still runs.
+
+**L9, patch-lag push and the Nextcloud self-heal.**
+A critical CVE on an internet-facing component whose fix has been out **more than 24 hours** is pushed to Jared at once as an Ares alert, key `security.cve.<host>.<component>` (for example `security.cve.bestly-pi.nextcloud/php`), severity `error`, needs Jared, with the exact fix command in the body.
+It resolves itself the night the component is on the latest release. Nothing is pushed under `--dry`.
+
+The self-heal covers **only Nextcloud**, and only when every guard holds:
+
+1. the run is live (not `--dry`);
+2. `heal_nextcloud` in `/opt/bestly/cron/state/security_audit.json` is not `false`;
+3. the nextcloud container says it came from `/mnt/ssd/apps/nextcloud/docker-compose.yml` and that file exists;
+4. the registry holds a **different image digest for the same tag** than the one running (`docker manifest inspect` against `docker image inspect`).
+
+Then, in this order: tag the running image `nextcloud:<tag>-pre-ares-<YYYYMMDD>` (the **undo**), `docker compose pull nextcloud push`, `docker compose up -d nextcloud push`, wait 25 seconds, and verify that `php -v` moved forward **and** `https://cloud.bestly.tech/status.php` returns 200 with `"installed":true`.
+Only the `nextcloud` and `push` services are ever touched. No other container, no other compose file.
+Any failure (pull error, PHP did not move, status page down) rolls back: the undo tag is put back onto the tag and `up -d nextcloud push` runs again, then Jared gets one `error` alert saying it was rolled back and whether Nextcloud answers again.
+On success the check is re-judged with `evidence.healed = {from, to, undo_tag}` and Jared is told after ("Ares patched Nextcloud ... The undo tag ... is kept").
+To turn the heal off and keep only the alert, set `"heal_nextcloud": false` in `security_audit.json`.
+To undo a heal by hand: `docker tag nextcloud:<tag>-pre-ares-<date> nextcloud:<tag>`, then `cd /mnt/ssd/apps/nextcloud && docker compose up -d nextcloud push`.
+
+**Keys** (findings de-duplicate by key, so these are stable):
+
+| Key | Layer | Result |
+|---|---|---|
+| `stack:<host>:<component>:cve` (component `nextcloud/php` for PHP inside the container) | Stack | red / yellow / pass / skip as above. Evidence: red `{cves, latest, released}`, pass `{latest, cves_seen}` |
+| `stack:feed:endoflife`, `stack:feed:kev`, `stack:feed:nvd` | Stack | pass fresh, yellow stale cache, skip unreachable |
+| `stack:bestly-pi:inventory` | Stack | pass, or skip when `docker ps` fails ("docker unreachable") |
+| `dep:<repo>:osv` | Dependencies | red / yellow / pass / skip. Pass evidence `{packages, vulns}` |
+| `dep:<repo>:npmrc` | Dependencies | pass / yellow |
+| `security.cve.<host>.<component>` | alert key, not a check | the L9 push |
+
+The run summary gains "Stack: n components, n behind, n critical, n EOL. Deps: n packages in n repos, n red." just before "Rules enforced".
+
+### Stack / CVE watch: NOT verified
+
+Written 2026-10-24 with no Pi, no Docker and no network, so the selftest (cases L7 to L9) drives the real code against fakes shaped from the docs. It proves the logic and the guards, not the field names.
+
+* **Never run on the Pi.** The first `--dry` run must be compared by eye against `docker ps`, `docker exec nextcloud php -v` and the Security page.
+* **Docker output shapes** (`docker ps --format json` lines with `Labels`, `docker image inspect --format`, `docker manifest inspect` for a multi-arch tag, then per platform) come from the docs. `docker manifest inspect` may need the experimental CLI setting or a registry login on the Pi; if it fails, Ares cannot tell the digests apart and **does not heal** (the push still goes out).
+* **The 25 second wait** is a guess at how long Nextcloud needs after `up -d`; a slow start looks like a failed heal and rolls back (safe, but noisy).
+* **Feed field names** (`endoflife.date` `cycle` / `latest` / `latestReleaseDate` / `eol`; KEV `vendorProject` / `product` / `dateAdded`; NVD `metrics.cvssMetricV31`, `configurations`) are from the docs, not a live call. NVD keyword matching is deliberately strict to avoid every WordPress plugin "written in PHP", which means a brand-new NVD record that names the product only in unusual words can be missed until NVD analyses it. CISA KEV is the backstop.
+* **OSV severity.** `MAL-` ids, `database_specific.severity` and a CVSS v3 vector (computed locally) are read; other vector types are not, and read as "severity unknown" (yellow).
+* **Only the Pi is inventoried automatically.** The Mac mini and the Windows PC are rows in `stack_inventory_extra.json` until they get a reporter.
+
 ## Tuning
 
 Edit the constants at the top of `security_audit.py`: `DEPLOY_WINDOW_HOURS` (26), `DUP_GUARD_HOURS` (6), `EXTRA_HOSTS`, `MAIL_DOMAINS`, `EXPECTED_SUPABASE`, `CF_WORKER_OWNERS` (every Worker needs an owner), `CF_TAKEOVER_SUFFIXES`, `CF_FREE_CAP`.
+For the stack watch edit the constants at the top of `security_audit_cve.py`: `INTERNET_FACING`, `PUSH_AFTER` (24 hours), `CACHE_MAX_AGE` (3 days), `KEV_DAYS` (90), `NVD_DAYS` (14), `MANUAL_STALE_DAYS` (7), `HEAL_WAIT_S` (25), `NEXTCLOUD_DIR`.
 Selftest: `python3 selftest.py`.

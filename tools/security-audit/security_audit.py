@@ -1504,7 +1504,8 @@ def run_audit(ctx, args, live, state):
                 # ---- Ares 2.0: full-history scan, liveness, repo visibility, legacy keys (before the HEAD-only scan, which it replaces)
                 if ctx.ares is not None:
                     try:
-                        ares_out = ctx.ares.run(checks, repo if cloned else None, tmp, unverified, inventory, live)
+                        # `live` decides dry: a dry run never touches docker, never pushes, never self-heals (Ares 2.1, L7-L9)
+                        ares_out = ctx.ares.run(checks, repo if cloned else None, tmp, unverified, inventory, live, state=state)
                     except Exception as exc:  # noqa: BLE001 -- loud: the run is marked failed, never quietly reverts to HEAD-only
                         ares_error = "Ares 2.0 scan failed: %s: %s" % (type(exc).__name__, str(exc)[:160])
                         log(ares_error)
@@ -1742,6 +1743,14 @@ def run_audit(ctx, args, live, state):
                         ares_out.get("repos", 0), ares_out.get("commits", 0), ares_out.get("secrets", 0), ares_out.get("live", 0))
                 if esc:
                     summary += " Escalated to Jared: %d%s." % (len(esc), "" if pushed else " (push not sent)")
+                if ares_out and ares_out.get("stack"):
+                    stk, dps = ares_out["stack"], ares_out.get("deps") or {}
+                    summary += " Stack: %d components, %d behind, %d critical, %d EOL." % (
+                        stk.get("components", 0), stk.get("behind", 0), stk.get("critical", 0), stk.get("eol", 0))
+                    summary += " Deps: %d packages in %d repos, %d red." % (
+                        dps.get("packages", 0), dps.get("repos", 0), dps.get("red", 0))
+                    if stk.get("healed"):
+                        summary += " Ares patched Nextcloud tonight and kept an undo tag."
                 if ctx.ares.enforced:
                     summary += " Rules enforced: %s." % ", ".join(x.split(" ")[0] for x in ctx.ares.enforced)
             failed = bool(web_error) or bool(errors) or bool(ares_error)

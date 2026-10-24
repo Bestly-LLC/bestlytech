@@ -19,6 +19,9 @@ bestly_memory house/security/ares-lessons):
   6. The audit's own clone is authenticated (GitHub token read server-side from Vault).
   7. Coverage escalation: a layer unverified 3 nights running, or a needs_person finding older than 2 nights, is pushed.
   8. Learning loop: lessons are rules in bestly_memory; the run logs which ones it enforced.
+  9. Ares 2.1 (2026-10-24, the PHP2Shell miss), in security_audit_cve.py and called at the end of Ares.run(): a nightly
+     inventory of every runtime and container Bestly serves matched against endoflife.date, CISA KEV and NVD (L7), a
+     lockfile + .npmrc dependency gate (L8), and the patch-lag push with a guarded Nextcloud self-heal (L9).
 
 Secret VALUES live in memory for the length of one scan and are then dropped. Only fingerprints, masked prefixes
 (first 4 characters plus length) and status codes are ever stored, logged or sent anywhere.
@@ -36,6 +39,8 @@ import threading
 import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
+
+import security_audit_cve as cvew
 
 ORG = "Bestly-LLC"
 GH_API = "https://api.github.com"
@@ -746,6 +751,9 @@ ENFORCED_RULES = {
     "legacy_keys_checked": "legacy Supabase keys are probed and reported",
     "coverage_escalates": "a blind spot of 3 nights, or a needs_person older than 2 nights, is pushed to Jared",
     "selftest_gate": "the regression suite runs before every nightly run and a failure fails the run loudly",
+    "stack_cve_watch": "every runtime and container is inventoried nightly and matched against endoflife.date, CISA KEV and NVD; no feed is skip, never pass",
+    "dependency_gate": "every repo lockfile is checked against OSV.dev and every npm repo must pin ignore-scripts=true and min-release-age=7",
+    "patch_lag_push": "a critical CVE on an internet-facing component with a day-old fix is pushed at once, and Nextcloud is self-healed with an undo",
 }
 BUILTIN_LESSONS = [
     ("L1", "fixed_means_dead", "test_L1_fixed_means_dead",
@@ -760,6 +768,12 @@ BUILTIN_LESSONS = [
      "A layer unverified 3 nights running, or a needs_person finding older than 2 nights, is pushed to Jared by Ares. A quiet blind spot is a miss."),
     ("L6", "selftest_gate", "test_L6_selftest_gate",
      "selftest.py runs before every nightly run. If any regression test fails the run fails loudly with an Ares-signed alert; a lesson without a passing test is not a lesson."),
+    ("L7", "stack_cve_watch", "test_L7_stack_cve_watch",
+     "Ares keeps an inventory of every runtime and container Bestly serves (PHP, Node, Nextcloud, OS, images) and matches it nightly against endoflife.date, CISA KEV and NVD critical CVEs. An EOL runtime or an unpatched critical CVE is red; no feed = not checked, never a pass (2026-10-24: PHP2Shell went three nights unseen)."),
+    ("L8", "dependency_gate", "test_L8_dependency_gate",
+     "Every repo lockfile is checked against OSV.dev for malicious or critical packages, and every npm repo must pin ignore-scripts=true and min-release-age=7; a missing gate is yellow with the fix attached (the Shai-Hulud / tensorlake worm path)."),
+    ("L9", "patch_lag_push", "test_L9_patch_lag_push",
+     "A critical CVE on an internet-facing component with a fix older than 24 hours is pushed to Jared by Ares at once, and Nextcloud is self-healed (undo tag, pull, recreate, verify, roll back on failure) instead of waiting for a person."),
 ]
 
 
@@ -808,16 +822,24 @@ def lessons_checks(lessons, selftest_state):
 
 
 # --------------------------------------------------------------------------------------------- alerts
-def alert(db, key, title, body, severity="warning", needs=None):
+def alert(db, key, title, body, severity="warning", needs=None, healed=False):
     """Ares-signed push: bestly_raise under the `security.` prefix is owned by security-auditor (notification_owner).
-    -> True when the database accepted it."""
+    `needs=True` means "needs Jared" (p_needs_jared is a text column, so True becomes the standard line). `healed=True`
+    marks an issue Ares already fixed: bestly_raise records it without pushing. -> True when the database accepted it."""
     assert key.startswith("security."), key
-    try:
-        db.rpc("bestly_raise", {"p_key": key, "p_kind": "problem", "p_severity": severity, "p_title": title, "p_body": body,
-                                "p_area": "security", "p_needs_jared": needs})
-        return True
-    except Exception:  # noqa: BLE001
-        return False
+    if needs is True:
+        needs = "Open the Security page."
+    elif needs is False:
+        needs = None
+    payload = {"p_key": key, "p_kind": "problem", "p_severity": severity, "p_title": title, "p_body": body,
+               "p_area": "security", "p_needs_jared": needs}
+    for with_healed in ((True, False) if healed else (False,)):
+        try:
+            db.rpc("bestly_raise", dict(payload, p_healed=True) if with_healed else payload)
+            return True
+        except Exception:  # noqa: BLE001
+            continue
+    return False
 
 
 def resolve(db, key, title=None):
@@ -901,10 +923,12 @@ class Ares(object):
     """Everything Ares 2.0 does in one run. All outside access (database, HTTP, git, clock) is injected so selftest can fake it."""
 
     def __init__(self, db, api, gh_token="", supa_token="", clone=clone_full, gitleaks=GITLEAKS_BIN, logf=print,
-                 selftest_path=SELFTEST_STATE, main_repo="bestlytech", scan_gitleaks=True):
+                 selftest_path=SELFTEST_STATE, main_repo="bestlytech", scan_gitleaks=True, cve=None):
         self.db, self.api, self.token, self.supa_token, self.clone = db, api, gh_token or "", supa_token or "", clone
         self.gitleaks, self.log, self.selftest_path, self.main_repo = gitleaks, logf, selftest_path, main_repo
         self.scan_gitleaks = scan_gitleaks
+        # Ares 2.1: stack inventory + CVE watch, dependency gate, patch-lag push (L7-L9). Injected so selftest can fake it.
+        self.cve = cve if cve is not None else cvew.CveWatch(api, cvew.run_cmd, db, logf=logf, alert_fn=alert, resolve_fn=resolve)
         self.error = None
         self.enforced = []
 
@@ -960,8 +984,9 @@ class Ares(object):
             self.log("ares: liveness table not written (%s)" % str(exc)[:80])
             return False
 
-    def run(self, checks, main_repo_path, tmp, unverified, inventory, live):
-        """Adds Ares 2.0's checks to `checks`. Returns a dict of what ran (for the summary). Exceptions are the caller's to surface."""
+    def run(self, checks, main_repo_path, tmp, unverified, inventory, live, state=None):
+        """Adds Ares 2.0's checks to `checks`. Returns a dict of what ran (for the summary). Exceptions are the caller's to surface.
+        `state` is the audit's state dict (heal_nextcloud: false switches the Nextcloud self-heal off)."""
         out = {"repos": 0, "secrets": 0, "live": 0, "persisted": False}
 
         def add_item(d):
@@ -1069,4 +1094,8 @@ class Ares(object):
             tested = [r for r in legacy if r.live is not None]
             accepted = True if any(r.live for r in tested) else (False if tested else None)
         add_item(legacy_check(recs, accepted, self.traffic()))
+        # ---- 9. Ares 2.1: stack inventory + CVE watch (L7), dependency gate (L8), patch-lag push + Nextcloud self-heal (L9).
+        # No try/except on purpose: a crash here fails the run loudly, like everything else in Ares.
+        cres = self.cve.run(checks, unverified, inventory, live, paths, dry=not live, state=state)
+        out["stack"], out["deps"] = cres["stack"], cres["deps"]
         return out

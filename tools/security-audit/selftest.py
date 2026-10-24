@@ -842,7 +842,9 @@ import stat  # noqa: E402
 import subprocess  # noqa: E402
 import tempfile  # noqa: E402
 
+import atexit  # noqa: E402
 import security_audit_ares2 as a2  # noqa: E402
+import security_audit_cve as cv  # noqa: E402
 
 LESSON_RESULTS = {}
 GIT_ENV = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com", GIT_COMMITTER_NAME="t",
@@ -986,7 +988,23 @@ class AresWorld(FakeWorld):
         return super().db_get(path)
 
 
-def ares_make(world, repo_src, extra_repos=None, token=None, gl="/nonexistent/gitleaks", web_extra=None, selftest_path="/nonexistent"):
+_QUIET_DIR = []
+
+
+def quiet_cve(world, db):
+    """A CveWatch for the L1-L6 tests: a Pi whose docker answers with no containers and whose other commands do not exist,
+    so nothing reaches the network, the real docker, or /opt/bestly. L7-L9 build their own, with real fakes."""
+    if not _QUIET_DIR:
+        _QUIET_DIR.append(tempfile.mkdtemp(prefix="ares-cve-"))
+        atexit.register(shutil.rmtree, _QUIET_DIR[0], True)
+
+    def runner(cmd, timeout):
+        return (0, "", "") if cmd[:2] == ["docker", "ps"] else (127, "", "no such command")
+    return cv.CveWatch(world, runner, db, state_dir=_QUIET_DIR[0], now=lambda: datetime.now(timezone.utc), logf=lambda m: None,
+                       sleep=lambda s: None, exists=lambda p: False)
+
+
+def ares_make(world, repo_src, extra_repos=None, token=None, gl="/nonexistent/gitleaks", web_extra=None, selftest_path="/nonexistent", cve=None):
     """A Ctx wired to fakes: ctx.clone / ares.clone copy prepared repos instead of calling GitHub."""
     db = sa.Db(BASE, "service-role-key-not-real", api=world)
     repos = dict(extra_repos or {})
@@ -1000,7 +1018,7 @@ def ares_make(world, repo_src, extra_repos=None, token=None, gl="/nonexistent/gi
         items, err = fake_web_factory(world)(hosts, apexes, mail_domains, repo)
         return items + (web_extra or []), err
     ares = a2.Ares(db, world, world.gh_token if token is None else token, STOKEN, clone=clone_one, gitleaks=gl,
-                   logf=lambda m: None, selftest_path=selftest_path)
+                   logf=lambda m: None, selftest_path=selftest_path, cve=cve if cve is not None else quiet_cve(world, db))
     return sa.Ctx(db, VTOKEN, STOKEN, api=world, web=fake_web, clone=lambda d: clone_one("bestlytech", d, None), cf_token=CTOKEN,
                   resolve=world.resolve, ares=ares), ares
 
@@ -1340,28 +1358,28 @@ def test_L5_coverage_escalation():
 def test_lessons_loop():
     print("learning loop: lessons are rules, loaded at the start, logged when enforced")
     ls = a2.parse_lessons(a2.lessons_body())
-    ok([l[0] for l in ls] == ["L1", "L2", "L3", "L4", "L5", "L6"], "the seeded lessons parse (L1 is the fixed-means-dead lesson from the post-mortem)")
+    ok([l[0] for l in ls] == ["L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9"], "the seeded lessons parse (L1 is the fixed-means-dead lesson from the post-mortem)")
     ok(ls[0][1] == "fixed_means_dead" and "still worked" in ls[0][3], "lesson 1 is seeded from the post-mortem")
     ok(all(l[1] in a2.ENFORCED_RULES for l in ls), "every seeded lesson names a rule the code enforces")
     ok(all(hasattr(sys.modules[__name__], l[2]) for l in ls), "every seeded lesson names a selftest that exists")
-    cs, lines = a2.lessons_checks(ls + [("L9", "made_up_rule", "test_x", "text")], {"tests": {x[0]: "ok" for x in ls}})
+    cs, lines = a2.lessons_checks(ls + [("L99", "made_up_rule", "test_x", "text")], {"tests": {x[0]: "ok" for x in ls}})
     k = by_key(cs)
-    ok(k["ares:lesson:L9"]["result"] == "yellow" and k["ares:lesson:L1"]["result"] == "pass", "a lesson with no enforcement is a yellow finding")
+    ok(k["ares:lesson:L99"]["result"] == "yellow" and k["ares:lesson:L1"]["result"] == "pass", "a lesson with no enforcement is a yellow finding")
     cs, _ = a2.lessons_checks(ls, {"tests": {"L1": "FAIL"}})
     ok(by_key(cs)["ares:lesson:L1"]["result"] == "yellow", "a lesson whose selftest failed is yellow")
     tmp = tempfile.mkdtemp(prefix="ares-t-")
     try:
         repo, _ = leak_repo(tmp)
         w = AresWorld()
-        w.memory[a2.LESSONS_KEY] = a2.lessons_body() + "\nL7 | future_rule | test_future | a lesson added after a later miss"
+        w.memory[a2.LESSONS_KEY] = a2.lessons_body() + "\nL99 | future_rule | test_future | a lesson added after a later miss"
         res, err, out, ares = ares_run(w, repo)
         ok("L1" in " ".join(ares.enforced) and "L6" in " ".join(ares.enforced), "the run records which rules it enforced")
-        ok("Rules enforced: L1, L2, L3, L4, L5, L6." in res, "...and the run summary lists them")
-        ok(key_check(w, "ares:lesson:L7")["result"] == "yellow", "a lesson added to bestly_memory without code behind it is flagged")
+        ok("Rules enforced: L1, L2, L3, L4, L5, L6, L7, L8, L9." in res, "...and the run summary lists them")
+        ok(key_check(w, "ares:lesson:L99")["result"] == "yellow", "a lesson added to bestly_memory without code behind it is flagged")
         w = AresWorld()
         del w.memory[a2.LESSONS_KEY]
         res, err, out, ares = ares_run(w, repo)
-        ok(err is None and len(ares.enforced) == 6, "bestly_memory unreachable or empty: the built-in rules still run")
+        ok(err is None and len(ares.enforced) == 9, "bestly_memory unreachable or empty: the built-in rules still run")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -1565,10 +1583,633 @@ def test_old_head_scan_never_passes():
     ok('"pass"' not in body and "'pass'" not in body, "check_repo's secret loop has no pass branch")
 
 
+# =========================================================================================================
+# Ares 2.1 (2026-10-24, the PHP2Shell miss): L7 stack + CVE watch, L8 dependency gate, L9 patch-lag push + self-heal.
+# Everything is fake: no network, no docker, no sleeping. CveWorld answers the feeds, OSV, Nextcloud's status page
+# AND plays the Pi (the runner), including a Nextcloud image that can be "pulled" and rolled back.
+# =========================================================================================================
+NOW = datetime(2026, 10, 24, 8, 0, tzinfo=timezone.utc)
+
+
+def _sha(ch):
+    return "sha256:" + ch * 64
+
+
+def _eol_row(cycle, latest, released, eol, lts=False):
+    return {"cycle": cycle, "latest": latest, "latestReleaseDate": released, "eol": eol, "support": False, "lts": lts}
+
+
+def default_eol(php_released="2026-10-21"):
+    return {
+        "php": [_eol_row("8.4", "8.4.27", php_released, "2028-12-31"), _eol_row("8.3", "8.3.30", "2026-10-21", "2027-12-31")],
+        "nodejs": [_eol_row("26", "26.12.1", "2026-10-20", False), _eol_row("24", "24.22.1", "2026-10-20", "2028-04-30", True),
+                   _eol_row("22", "22.23.4", "2026-10-20", "2027-04-30", True), _eol_row("20", "20.20.2", "2026-03-01", "2026-04-30")],
+        "nextcloud": [_eol_row("33", "33.0.1", "2026-10-01", "2027-06-01"), _eol_row("32", "32.0.6", "2026-09-01", "2026-12-01")],
+        "debian": [_eol_row("13", "13.1", "2026-09-01", "2030-08-09")],
+        "python": [_eol_row("3.13", "3.13.5", "2026-06-01", "2029-10-31")],
+        "postgresql": [_eol_row("16", "16.10", "2026-08-14", "2028-11-09")],
+        "redis": [_eol_row("7.4", "7.4.6", "2026-08-01", "2027-11-30"), _eol_row("7.2", "7.2.10", "2026-08-01", "2026-02-28")],
+        "nginx": [_eol_row("1.27", "1.27.5", "2026-07-01", False)],
+        "home-assistant": [_eol_row("2026.10", "2026.10.2", "2026-10-15", False)],
+    }
+
+
+def nvd_cve(cid, desc, published="2026-10-21T14:15:00.000", score=9.8, cpe=None):
+    c = {"id": cid, "published": published, "descriptions": [{"lang": "es", "value": "x"}, {"lang": "en", "value": desc}],
+         "metrics": {"cvssMetricV31": [{"cvssData": {"baseScore": score}}]}}
+    if cpe:
+        c["configurations"] = [{"nodes": [{"cpeMatch": [{"criteria": "cpe:2.3:a:%s:*:*:*:*:*:*:*:*:*" % cpe}]}]}]
+    return c
+
+
+PHP2SHELL = nvd_cve("CVE-2026-109618", "In PHP versions 8.4.0 through 8.4.26 a pre-auth heap overflow allows remote code execution (PHP2Shell).")
+PHP_NOISE = [nvd_cve("CVE-2026-777", "The Foo plugin for WordPress is vulnerable to PHP Object Injection via the data parameter in all versions up to 1.2."),
+             nvd_cve("CVE-2026-778", "SQL injection in Bar CMS.", cpe="barcms:bar_cms")]
+NODE_BROTLI = nvd_cve("CVE-2026-2200", "A Brotli decompression flaw in Node.js allows remote code execution; fixed in 22.23.4, 24.22.1 and 26.12.1.")
+KEV_NOISE = [{"cveID": "CVE-2026-1", "vendorProject": "PHPMailer", "product": "PHPMailer", "dateAdded": "2026-10-22", "vulnerabilityName": "x"},
+             {"cveID": "CVE-2012-1823", "vendorProject": "PHP Group", "product": "PHP", "dateAdded": "2022-03-25", "vulnerabilityName": "old"}]
+NC_LABELS = ("com.docker.compose.project=nextcloud,com.docker.compose.service=%s,com.docker.compose.project.working_dir=/mnt/ssd/apps/nextcloud,"
+             "com.docker.compose.project.config_files=%s")
+MAC_ROWS = [{"host": "jareds-mac-mini", "component": "node", "version": "22.23.4", "cycle": "22", "internet_facing": False,
+             "source": "manual", "verified_at": "2026-10-24"},
+            {"host": "jareds-mac-mini", "component": "node-system", "version": "22.14.0", "cycle": "22", "internet_facing": False,
+             "source": "manual", "verified_at": "2026-10-24", "note": "/usr/local/bin/node, root-owned; needs an admin password to replace"}]
+
+
+class CveWorld(object):
+    """The outside world of the CVE watch. Callable like http_json (the api); .runner plays the Pi; .exists plays the filesystem."""
+
+    def __init__(self):
+        self.down = set()                  # endoflife kev nvd osv osvvuln status
+        self.http, self.cmds, self.mutations, self.unexpected, self.osv_posts = [], [], [], [], []
+        self.pi_node = "22.23.4"
+        self.eol = default_eol()
+        self.kev_extra = []
+        self.nvd = {}                      # product -> raw NVD cve dicts
+        self.cfg = cv.NEXTCLOUD_COMPOSE    # compose file the nextcloud container says it came from
+        self.compose_exists = True
+        self.local, self.running = "old", "old"
+        self.remote_same = False
+        self.pull_rc, self.pull_brings_new = 0, True
+        self.new_breaks_status, self.new_php_same = False, False
+        self.osv_vulns, self.osv_detail = {}, {}
+
+    # ---- the Pi
+    def exists(self, path):
+        return self.compose_exists and path == cv.NEXTCLOUD_COMPOSE
+
+    def versions(self, which):
+        php = "8.4.26" if (which == "old" or self.new_php_same) else "8.4.27"
+        return {"php": php, "nc": "33.0.1" if which == "old" else "33.0.2"}
+
+    def ps(self):
+        rows = [
+            {"ID": "c1", "Image": "nextcloud:33", "Names": "nextcloud", "Labels": NC_LABELS % ("nextcloud", self.cfg)},
+            {"ID": "c2", "Image": "postgres:16-alpine", "Names": "nc-db", "Labels": ""},
+            {"ID": "c3", "Image": "redis:7-alpine", "Names": "nc-redis", "Labels": ""},
+            {"ID": "c4", "Image": "nginx:1.27-alpine", "Names": "proxy", "Labels": ""},
+            {"ID": "c5", "Image": "ghcr.io/home-assistant/home-assistant:2026.10.2", "Names": "homeassistant", "Labels": ""},
+            {"ID": "c6", "Image": "ghcr.io/strukturag/nextcloud-spreed-signaling:2.0.4", "Names": "signaling", "Labels": ""},
+        ]
+        return "\n".join(json.dumps(r) for r in rows) + "\n"
+
+    def runner(self, cmd, timeout):
+        self.cmds.append(list(cmd))
+        c = list(cmd)
+        out = {
+            ("cat", "/etc/os-release"): 'PRETTY_NAME="Debian GNU/Linux 13 (trixie)"\nVERSION_ID="13"\n',
+            ("cat", "/etc/debian_version"): "13.1\n", ("uname", "-r"): "6.12.47+rpt-rpi-v8\n", ("uname", "-m"): "aarch64\n",
+            ("python3", "--version"): "Python 3.13.5\n", ("node", "-v"): "v%s\n" % self.pi_node, ("npm", "-v"): "10.8.2\n",
+        }.get(tuple(c))
+        if out is not None:
+            return 0, out, ""
+        if c[:2] == ["docker", "ps"]:
+            return 0, self.ps(), ""
+        if c[:2] == ["docker", "exec"] or c[:4] == ["docker", "exec", "-u", "www-data"]:
+            tail = c[-2:] if c[-1] != "--output=json" else ["occ-status"]
+            name = c[4] if c[2] == "-u" else c[2]
+            if name == "nextcloud" and tail == ["php", "-v"]:
+                return 0, "PHP %s (cli) (built: Oct  9 2026 10:00:00) (NTS)\nCopyright (c) The PHP Group\n" % self.versions(self.running)["php"], ""
+            if name == "nextcloud" and tail == ["occ-status"]:
+                return 0, json.dumps({"installed": True, "version": self.versions(self.running)["nc"] + ".2",
+                                      "versionstring": self.versions(self.running)["nc"], "edition": ""}), ""
+            return 127, "", "executable file not found in $PATH"
+        if c[:3] == ["docker", "image", "inspect"]:
+            ids = (_sha("a"), _sha("b")) if self.local == "old" else (_sha("e"), _sha("f"))
+            return 0, "%s [\"nextcloud@%s\"]\n" % ids, ""
+        if c[:3] == ["docker", "inspect", "--format"]:
+            return 0, (_sha("a") if self.running == "old" else _sha("e")) + "\n", ""
+        if c[:3] == ["docker", "manifest", "inspect"]:
+            ref = c[3]
+            if "@" not in ref:
+                return 0, json.dumps({"schemaVersion": 2, "manifests": [
+                    {"digest": _sha("1"), "platform": {"architecture": "amd64", "os": "linux"}},
+                    {"digest": _sha("c"), "platform": {"architecture": "arm64", "os": "linux"}}]}), ""
+            cfg = (_sha("a") if self.local == "old" else _sha("e")) if self.remote_same else _sha("e")
+            return 0, json.dumps({"schemaVersion": 2, "config": {"digest": cfg}}), ""
+        if c[:2] == ["docker", "tag"]:
+            self.mutations.append(c)
+            if "-pre-ares-" in c[2]:                 # rollback: the undo tag goes back onto the tag
+                self.local = "old"
+            return 0, "", ""
+        if c[:2] == ["docker", "compose"] and "pull" in c:
+            self.mutations.append(c)
+            if self.pull_rc:
+                return self.pull_rc, "", "pull access denied"
+            if self.pull_brings_new:
+                self.local = "new"
+            return 0, "", ""
+        if c[:2] == ["docker", "compose"] and "up" in c:
+            self.mutations.append(c)
+            self.running = self.local
+            return 0, "", ""
+        self.unexpected.append(c)
+        return 127, "", "unexpected"
+
+    # ---- the network
+    def __call__(self, method, url, headers=None, body=None, timeout=60, tries=1):
+        self.http.append((method, url))
+        if url.startswith("https://endoflife.date/api/"):
+            if "endoflife" in self.down:
+                raise sa.ApiError("GET endoflife.date: network error (URLError)")
+            rows = self.eol.get(url.rsplit("/", 1)[1][:-5])
+            return (200, rows) if rows is not None else (404, None)
+        if url == cv.KEV_URL:
+            if "kev" in self.down:
+                raise sa.ApiError("GET cisa.gov: network error (URLError)")
+            return 200, {"vulnerabilities": KEV_NOISE + self.kev_extra}
+        if url.startswith(cv.NVD_URL):
+            if "nvd" in self.down:
+                return 503, None
+            q = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).items()}
+            assert q["cvssV3Severity"] == "CRITICAL" and q["resultsPerPage"] == "50", q
+            assert q["lastModStartDate"] < q["lastModEndDate"], q
+            prod = [p for p, kw in cv.NVD_KEYWORD.items() if kw == q["keywordSearch"]][0]
+            return 200, {"vulnerabilities": [{"cve": x} for x in self.nvd.get(prod, [])]}
+        if url == cv.OSV_BATCH_URL:
+            assert method == "POST" and headers["Content-Type"] == "application/json"
+            if "osv" in self.down:
+                raise sa.ApiError("POST osv.dev: network error (URLError)")
+            qs = json.loads(body)["queries"]
+            self.osv_posts.append(qs)
+            return 200, {"results": [({"vulns": [{"id": i, "modified": "2026-10-01T00:00:00Z"} for i in self.osv_vulns[k]]}
+                                      if k in self.osv_vulns else {}) for k in
+                                     [(q["package"]["ecosystem"], q["package"]["name"], q["version"]) for q in qs]]}
+        if url.startswith("https://api.osv.dev/v1/vulns/"):
+            if "osvvuln" in self.down:
+                raise sa.ApiError("GET osv.dev: network error (URLError)")
+            vid = url.rsplit("/", 1)[1]
+            return (200, self.osv_detail[vid]) if vid in self.osv_detail else (404, None)
+        if url == cv.NEXTCLOUD_STATUS_URL:
+            if "status" in self.down or (self.running == "new" and self.new_breaks_status):
+                return 503, None
+            return 200, {"installed": True, "maintenance": False, "version": self.versions(self.running)["nc"] + ".2"}
+        raise AssertionError("unexpected call " + url)
+
+
+def cve_run(cw, tmp, live=False, dry=None, state=None, paths=None, now=NOW, aw=None, mac=None):
+    """One CveWatch pass against `cw`. -> (result, checks by key, unverified, inventory, alerts world, sleeps, watch)."""
+    aw = aw or AresWorld()
+    if mac is not None:
+        with open(os.path.join(tmp, cv.EXTRA_FILE), "w") as fh:
+            json.dump(mac, fh)
+    sleeps = []
+    watch = cv.CveWatch(cw, cw.runner, sa.Db(BASE, "service-role-key-not-real", api=aw), state_dir=tmp, now=now, logf=lambda m: None,
+                        sleep=sleeps.append, exists=cw.exists)
+    checks, unverified, inventory = sa.Checks(), [], {}
+    res = watch.run(checks, unverified, inventory, live, paths or {}, dry=dry, state=state)
+    return res, by_key(checks.items), unverified, inventory, aw, sleeps, watch
+
+
+def cve_alerts(aw, kind="problem"):
+    return [a for a in aw.alerts if a["p_kind"] == kind]
+
+
+PHP_KEY = "stack:bestly-pi:nextcloud/php:cve"
+PHP_ALERT = "security.cve.bestly-pi.nextcloud/php"
+
+
+# --------------------------------------------------------------------------- L7: stack inventory + CVE watch
+def test_L7_stack_cve_watch():
+    print("L7 stack inventory and CVE watch (PHP2Shell went three nights unseen)")
+    before = len(FAILS)
+    tmp = tempfile.mkdtemp(prefix="ares-t-")
+    try:
+        ok(cv.vtuple("v20.20.2") == (20, 20, 2) and cv.vtuple("8.4.26-1+deb13u1") == (8, 4, 26) and cv.vtuple("stable") is None,
+           "version parse tolerates a v prefix and -suffixes")
+        ok(cv.vcmp("8.4.26", "8.4.27") == -1 and cv.vcmp("v22.23.4", "22.23.4") == 0 and cv.vcmp("22.23.10", "22.23.4") == 1 and cv.vcmp("8.4", "8.4.0") == 0,
+           "version compare is numeric, not text (22.23.10 > 22.23.4)")
+        # ---- php 8.4.26 in the nextcloud container, fix 8.4.27 out since 10-21, an NVD critical for PHP: RED with the fix command
+        cw = CveWorld()
+        cw.nvd["php"] = [PHP2SHELL] + PHP_NOISE
+        res, cs, unv, inv, aw, sleeps, _ = cve_run(cw, tmp)
+        c = cs[PHP_KEY]
+        ok(c["result"] == "red" and c["layer"] == "Stack" and c["asset"] == "bestly-pi:nextcloud/php" and c["check"] == "cve_watch",
+           "php 8.4.26 behind 8.4.27 with an NVD critical: RED, key stack:<host>:<component>:cve, layer Stack")
+        ok("critical CVE" in c["title"] and "8.4.27" in c["title"] and "2026-10-21" in c["title"] and "nextcloud/php 8.4.26" in c["title"],
+           "the title says what is wrong and which fix is not installed")
+        ok(c["evidence"]["cves"] == ["CVE-2026-109618"] and c["evidence"]["latest"] == "8.4.27" and c["evidence"]["released"] == "2026-10-21",
+           "evidence is {cves, latest, released}; the WordPress 'PHP Object Injection' and the non-PHP CPE records are not PHP's")
+        ok(c["fix"] == "cd /mnt/ssd/apps/nextcloud && docker compose pull nextcloud push && docker compose up -d nextcloud push",
+           "the fix is the exact Nextcloud upgrade command")
+        ok(cs["stack:bestly-pi:nextcloud:cve"]["result"] == "pass", "the nextcloud app itself is on latest: pass")
+        ok(res["stack"]["critical"] == 1 and res["stack"]["behind"] == 1 and res["stack"]["eol"] == 0 and res["stack"]["healed"] == 0,
+           "counters: 1 critical, 1 behind, 0 EOL, 0 healed (%s)" % res["stack"])
+        ok(sleeps and set(sleeps) == {7} and len(sleeps) == len([1 for m, u in cw.http if u.startswith(cv.NVD_URL)]) - 1,
+           "NVD calls are 7 seconds apart")
+        ok(not cw.mutations and not cw.unexpected, "a dry run reads docker but never changes it (%s)" % cw.unexpected)
+        # ---- the same, but from CISA KEV only
+        cw = CveWorld()
+        cw.kev_extra = [{"cveID": "CVE-2026-109619", "vendorProject": "PHP Group", "product": "PHP", "dateAdded": "2026-10-22", "vulnerabilityName": "PHP2Shell"}]
+        res, cs, *_ = cve_run(cw, tmp)
+        ok(cs[PHP_KEY]["result"] == "red" and cs[PHP_KEY]["evidence"]["cves"] == ["CVE-2026-109619"],
+           "a CISA KEV entry alone is enough; PHPMailer and a 2022 PHP entry are not")
+        # ---- behind, nothing critical: yellow. On latest: pass.
+        cw = CveWorld()
+        res, cs, *_ = cve_run(cw, tmp)
+        ok(cs[PHP_KEY]["result"] == "yellow" and "behind by 1 patch release" in cs[PHP_KEY]["title"], "behind with no critical CVE: yellow, 'behind by 1 patch release'")
+        cw = CveWorld()
+        cw.nvd["php"] = [PHP2SHELL]
+        cw.eol["php"][0]["latest"] = "8.4.26"
+        res, cs, *_ = cve_run(cw, tmp)
+        ok(cs[PHP_KEY]["result"] == "pass" and cs[PHP_KEY]["evidence"]["latest"] == "8.4.26" and cs[PHP_KEY]["evidence"]["cves_seen"] == ["CVE-2026-109618"],
+           "the same CVE at the fixed version: pass, with {latest, cves_seen}")
+        # ---- Node 20 on the Pi: EOL since 2026-04-30
+        cw = CveWorld()
+        cw.pi_node = "20.20.2"
+        res, cs, *_ = cve_run(cw, tmp)
+        c = cs["stack:bestly-pi:node:cve"]
+        ok(c["result"] == "red" and "node 20.20.2 is end-of-life, no security fixes ship" == c["title"] and res["stack"]["eol"] == 1,
+           "node 20.20.2 (cycle EOL 2026-04-30) is RED: end-of-life")
+        ok("setup_24.x" in c["fix"] and "nodesource" in c["fix"], "the fix is a NodeSource line for the newest supported LTS")
+        # ---- Mac mini rows (the hook for the Mac reporter): fresh row judged, stale row never treated as current
+        cw = CveWorld()
+        cw.nvd["nodejs"] = [NODE_BROTLI]
+        res, cs, unv, inv, *_ = cve_run(cw, tmp, mac=MAC_ROWS)
+        ok(cs["stack:jareds-mac-mini:node:cve"]["result"] == "pass", "mac mini node 22.23.4 verified today: pass")
+        c = cs["stack:jareds-mac-mini:node-system:cve"]
+        ok(c["result"] == "red" and "22.14.0" in c["title"] and "needs an admin password" in c["fix"],
+           "mac mini /usr/local/bin/node 22.14.0 with the Brotli RCE out: RED, and its note says what it needs")
+        stale = [dict(r, verified_at="2026-10-14") for r in MAC_ROWS]
+        res, cs, unv, inv, *_ = cve_run(CveWorld(), tmp, mac=stale)
+        ok("jareds-mac-mini runtimes (manual inventory stale)" in unv and unv.count("jareds-mac-mini runtimes (manual inventory stale)") == 1,
+           "a manual row 10 days old is an unverified entry (L5 escalates it)")
+        ok(cs["stack:jareds-mac-mini:node:cve"]["result"] == "skip" and cs["stack:jareds-mac-mini:node-system:cve"]["result"] == "skip",
+           "...and is never treated as current: skip, not pass")
+        # ---- inventory on the run: versions only
+        mine = [r for r in inv["stack"] if r["host"] == "bestly-pi"]
+        want = {("debian", "13.1"), ("kernel", "6.12.47+rpt-rpi-v8"), ("python3", "3.13.5"), ("node", "22.23.4"), ("npm", "10.8.2"), ("nextcloud", "33.0.1"),
+                ("nextcloud/php", "8.4.26"), ("postgres", "16"), ("redis", "7"), ("nginx", "1.27"), ("home-assistant", "2026.10.2"),
+                ("nextcloud-spreed-signaling", "2.0.4")}
+        ok({(r["component"], r["version"]) for r in mine} == want, "inventory has the host runtimes and every container (%s)" % sorted({(r["component"], r["version"]) for r in mine} ^ want))
+        ok(all(set(r) <= set(cv.PUBLIC_FIELDS) for r in inv["stack"]), "inventory[stack] carries versions only (no labels, commands or ids)")
+        byc = {r["component"]: r for r in mine}
+        ok(byc["nextcloud"]["internet_facing"] and byc["nginx"]["internet_facing"] and byc["nextcloud-spreed-signaling"]["internet_facing"]
+           and byc["nextcloud/php"]["internet_facing"] and not byc["postgres"]["internet_facing"] and not byc["node"]["internet_facing"],
+           "internet_facing: nextcloud, nginx and the signaling container yes; db and host runtimes no")
+        ok(byc["nextcloud/php"]["cycle"] == "8.4" and byc["node"]["cycle"] == "22" and byc["nextcloud"]["source"] == "docker-exec",
+           "cycle and source are filled in")
+        # ---- a floating tag hides the patch level: pass, never a false 'behind'
+        ok(cs["stack:bestly-pi:postgres:cve"]["result"] == "pass" and cs["stack:bestly-pi:redis:cve"]["result"] == "pass",
+           "postgres:16 and redis:7 (tag shows no patch level) are not reported as behind")
+        ok("stack:bestly-pi:kernel:cve" not in cs and "stack:bestly-pi:nextcloud-spreed-signaling:cve" not in cs,
+           "a component no feed covers gets no verdict at all (no pass for something unchecked)")
+        # ---- feeds down, nothing cached: skip + unverified, and NO CVE verdict is a pass
+        tmp2 = tempfile.mkdtemp(prefix="ares-t-")
+        cw = CveWorld()
+        cw.down = {"endoflife", "kev", "nvd"}
+        cw.nvd["php"] = [PHP2SHELL]
+        res, cs, unv, inv, *_ = cve_run(cw, tmp2, mac=MAC_ROWS)
+        verdicts = {k: v for k, v in cs.items() if v["check"] == "cve_watch"}
+        ok(verdicts and all(v["result"] in ("skip",) for v in verdicts.values()), "feeds down and no cache: every CVE verdict is skip (%s)" % sorted(set(v["result"] for v in verdicts.values())))
+        ok(not any(v["result"] == "pass" for k, v in cs.items() if k.startswith("stack:") and v["check"] in ("cve_watch", "feed_fresh")),
+           "no stack verdict and no feed check is a pass")
+        ok(all(cs["stack:feed:%s" % f]["result"] == "skip" for f in ("endoflife", "kev", "nvd")), "each dead feed is its own skip")
+        ok({"stack CVE feed endoflife.date (unreachable)", "stack CVE feed CISA KEV (unreachable)", "stack CVE feed NVD (unreachable)"} <= set(unv),
+           "each dead feed is an unverified entry")
+        ok(res["stack"]["critical"] == 0 and res["stack"]["behind"] == 0, "nothing is counted as fine or as a finding")
+        # ---- a cache 2 days old stands in for a dead feed, with a yellow 'feed stale'
+        tmp3 = tempfile.mkdtemp(prefix="ares-t-")
+        cw = CveWorld()
+        cw.nvd["php"] = [PHP2SHELL]
+        cve_run(cw, tmp3, now=NOW - timedelta(days=2))
+        ok(all(os.path.exists(os.path.join(tmp3, "cve_feeds", n)) for n in ("endoflife-php.json", "kev.json", "nvd-php.json")),
+           "every feed response is cached under state/cve_feeds/<name>.json")
+        cw2 = CveWorld()
+        cw2.down = {"endoflife", "kev", "nvd"}
+        res, cs, unv, *_ = cve_run(cw2, tmp3)
+        ok(cs[PHP_KEY]["result"] == "red", "a 2-day-old cache is used when the feed is down: the PHP verdict is still red")
+        ok(all(cs["stack:feed:%s" % f]["result"] == "yellow" and "stale" in cs["stack:feed:%s" % f]["title"] for f in ("endoflife", "kev", "nvd")),
+           "...with a yellow 'feed stale' for each feed")
+        ok(not [u for u in unv if u.startswith("stack CVE feed")], "...and no unverified entry while the cache is usable")
+        tmp4 = tempfile.mkdtemp(prefix="ares-t-")
+        cve_run(CveWorld(), tmp4, now=NOW - timedelta(days=4))
+        res, cs, unv, *_ = cve_run(cw2, tmp4)
+        ok(cs[PHP_KEY]["result"] == "skip" and cs["stack:feed:endoflife"]["result"] == "skip" and "stack CVE feed endoflife.date (unreachable)" in unv,
+           "a 4-day-old cache is too old: skip + unverified, never a pass")
+        for d in (tmp2, tmp3, tmp4):
+            shutil.rmtree(d, ignore_errors=True)
+        # ---- docker itself cannot be listed: a blind spot, said out loud
+        cw = CveWorld()
+        orig = cw.runner
+        cw.runner = lambda cmd, t: (127, "", "docker: not found") if cmd[:2] == ["docker", "ps"] else orig(cmd, t)
+        res, cs, unv, *_ = cve_run(cw, tmp)
+        ok(cs["stack:bestly-pi:inventory"]["result"] == "skip" and "bestly-pi container inventory (docker unreachable)" in unv,
+           "docker unreachable: the inventory check is skip + unverified, not an empty pass")
+        # ---- an unreadable version inside a container
+        cw = CveWorld()
+        orig = cw.runner
+        cw.runner = lambda cmd, t: (1, "", "boom") if cmd[-2:] == ["php", "-v"] else orig(cmd, t)
+        res, cs, *_ = cve_run(cw, tmp)
+        ok(cs[PHP_KEY]["result"] == "yellow" and "inside nextcloud" in cs[PHP_KEY]["title"], "php -v failing inside the container is yellow 'could not read the version inside nextcloud'")
+        # ---- wired into a whole audit run
+        repo, _ = leak_repo(tmp)
+        w = AresWorld()
+        cw = CveWorld()
+        cw.nvd["php"] = [PHP2SHELL]
+        ctx, ares = ares_make(w, repo, cve=cv.CveWatch(cw, cw.runner, sa.Db(BASE, "service-role-key-not-real", api=w), state_dir=tmp, now=NOW,
+                                                      logf=lambda m: None, sleep=lambda s: None, exists=cw.exists))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            res = sa.run_audit(ctx, Args(), True, {"heal_nextcloud": False})
+        ok(key_check(w, PHP_KEY)["result"] == "red", "run_audit records the stack verdict in the one batched write")
+        m = re.search(r"Stack: (\d+) components, (\d+) behind, (\d+) critical, (\d+) EOL\. Deps: (\d+) packages in (\d+) repos, (\d+) red\.", res)
+        ok(m and int(m.group(1)) >= 12 and int(m.group(3)) == 1 and res.index("Stack:") < res.index("Rules enforced"),
+           "the summary says 'Stack: n components, n behind, n critical, n EOL. Deps: ...' before 'Rules enforced'")
+        inv_patch = [p for path, p in w.patches if path.startswith("security_audit_runs")][-1]["inventory"]
+        ok(len(inv_patch["stack"]) >= 12, "the run's inventory carries the stack")
+        w = AresWorld()
+        ctx, ares = ares_make(w, repo, cve=cv.CveWatch(cw, cw.runner, sa.Db(BASE, "service-role-key-not-real", api=w), state_dir=tmp, now=NOW,
+                                                      logf=lambda m: None, sleep=lambda s: None, exists=cw.exists))
+
+        def boom(*a, **k):
+            raise ValueError("cve kaboom")
+        ares.cve.run = boom
+        err = None
+        with contextlib.redirect_stdout(io.StringIO()):
+            try:
+                sa.run_audit(ctx, Args(), True, {})
+            except RuntimeError as exc:
+                err = exc
+        fin = [p for n, p in w.rpc if n == "security_run_finish"]
+        ok(err is not None and fin and fin[-1]["p_failed"] is True and "Ares 2.0 scan failed" in fin[-1]["p_summary"] and "cve kaboom" in fin[-1]["p_summary"],
+           "an exception from the CVE watch fails the run loudly (never a quiet pass)")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    lesson("L7", len(FAILS) == before)
+
+
+# ------------------------------------------------------------------------------------- L8: dependency gate
+def _lock(*pairs):
+    pk = {"": {"name": "app", "version": "1.0.0"}}
+    for n, v in pairs:
+        pk["node_modules/" + n] = {"version": v}
+    return json.dumps({"name": "app", "lockfileVersion": 3, "packages": pk})
+
+
+def _write(root, rel, text):
+    p = os.path.join(root, rel)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w") as fh:
+        fh.write(text)
+
+
+def dep_run(cw, paths, tmp):
+    res, cs, unv, inv, aw, sleeps, watch = cve_run(cw, tmp, paths=paths)
+    return res["deps"], cs, unv
+
+
+def test_L8_dependency_gate():
+    print("L8 dependency gate (OSV.dev for lockfiles, .npmrc for npm repos)")
+    before = len(FAILS)
+    tmp = tempfile.mkdtemp(prefix="ares-t-")
+    try:
+        state = os.path.join(tmp, "state")
+        os.makedirs(state)
+        evil = _lock(("tanstack-evil", "1.0.0"), ("left-pad", "1.3.0"), ("@scope/pkg", "2.0.0"))
+        r1 = os.path.join(tmp, "r1")
+        _write(r1, "package-lock.json", evil.replace('"node_modules/@scope/pkg": {"version": "2.0.0"}', '"node_modules/a/node_modules/b": {"version": "3.1.0"}'))
+        _write(r1, "package.json", '{"name":"app"}')
+        _write(r1, "node_modules/junk/package-lock.json", _lock(("ignored", "9.9.9")))
+        _write(r1, "a/b/c/d/e/package-lock.json", _lock(("toodeep", "9.9.9")))
+        cw = CveWorld()
+        cw.osv_vulns = {("npm", "tanstack-evil", "1.0.0"): ["MAL-2026-1"]}
+        deps, cs, unv = dep_run(cw, {"r1": r1}, state)
+        c = cs["dep:r1:osv"]
+        ok(c["result"] == "red" and c["layer"] == "Dependencies" and c["asset"] == "github:Bestly-LLC/r1",
+           "a lockfile package OSV calls malicious (MAL-2026-1): RED")
+        ok(c["title"] == "r1 installs a known-malicious or critical package: tanstack-evil@1.0.0 (MAL-2026-1)", "the title names repo, package, version and advisory (%s)" % c["title"])
+        ok(deps == {"repos": 1, "packages": 3, "red": 1}, "counters (node_modules and depth>4 lockfiles skipped; b read from a nested key): %s" % deps)
+        sent = sorted((q["package"]["name"], q["package"]["ecosystem"]) for qs in cw.osv_posts for q in qs)
+        ok(sent == [("b", "npm"), ("left-pad", "npm"), ("tanstack-evil", "npm")] and len(cw.osv_posts) == 1, "one querybatch with every package, ecosystem npm (%s)" % sent)
+        n = cs["dep:r1:npmrc"]
+        ok(n["result"] == "yellow" and "ignore-scripts=true" in n["fix"] and "min-release-age=7" in n["fix"] and n["evidence"]["autofix"] == "add .npmrc",
+           "no .npmrc: yellow, both lines in fix, evidence.autofix = 'add .npmrc' for Scout's Code Worker")
+        # ---- clean OSV: pass with counts
+        cw = CveWorld()
+        deps, cs, unv = dep_run(cw, {"r1": r1}, state)
+        ok(cs["dep:r1:osv"]["result"] == "pass" and cs["dep:r1:osv"]["evidence"] == {"packages": 3, "vulns": 0} and deps["red"] == 0,
+           "clean OSV: pass with {packages, vulns}")
+        ok(cs["dep:r1:npmrc"]["result"] == "yellow", "clean OSV and still no .npmrc: yellow")
+        # ---- proper .npmrc: pass
+        _write(r1, ".npmrc", "# gate\nignore-scripts=true\nmin-release-age=7\n")
+        deps, cs, unv = dep_run(CveWorld(), {"r1": r1}, state)
+        ok(cs["dep:r1:npmrc"]["result"] == "pass", "a .npmrc with ignore-scripts=true and min-release-age=7: pass")
+        _write(r1, ".npmrc", "ignore-scripts=true\nmin-release-age=3\n")
+        ok(dep_run(CveWorld(), {"r1": r1}, state)[1]["dep:r1:npmrc"]["evidence"]["missing"] == ["min-release-age=7"], "a release age under 7 days does not count")
+        os.remove(os.path.join(r1, ".npmrc"))
+        _write(r1, "pnpm-workspace.yaml", "packages:\n  - 'x'\nminimumReleaseAge: 7\n")
+        ok(dep_run(CveWorld(), {"r1": r1}, state)[1]["dep:r1:npmrc"]["result"] == "pass", "pnpm-workspace.yaml with minimumReleaseAge counts")
+        os.remove(os.path.join(r1, "pnpm-workspace.yaml"))
+        # ---- OSV unreachable: skip + unverified, never a pass; the local .npmrc check still runs
+        cw = CveWorld()
+        cw.down = {"osv"}
+        deps, cs, unv = dep_run(cw, {"r1": r1}, state)
+        ok(cs["dep:r1:osv"]["result"] == "skip" and "dependency gate (OSV unreachable)" in unv, "OSV unreachable: skip + unverified 'dependency gate (OSV unreachable)'")
+        ok(not any(v["result"] == "pass" for k, v in cs.items() if k.startswith("dep:") and k.endswith(":osv")), "...and nothing in the dependency gate passes")
+        ok(cs["dep:r1:npmrc"]["result"] == "yellow", "the .npmrc check does not need the network")
+        # ---- requirements.txt is queried as PyPI
+        r2 = os.path.join(tmp, "r2")
+        _write(r2, "requirements.txt", "# pins\nrequests==2.19.0  # old\nFlask[async]==3.0.0 ; python_version > '3.8'\n-r other.txt\nnumpy>=1.0\nPyYAML==6.0.1 \\\n    --hash=sha256:abc\n")
+        _write(r2, "svc/requirements-dev.txt", "pytest==8.0.0\n")
+        cw = CveWorld()
+        cw.osv_vulns = {("PyPI", "requests", "2.19.0"): ["GHSA-high-1"]}
+        cw.osv_detail = {"GHSA-high-1": {"id": "GHSA-high-1", "database_specific": {"severity": "HIGH"}}}
+        deps, cs, unv = dep_run(cw, {"r2": r2}, state)
+        sent = sorted((q["package"]["name"], q["package"]["ecosystem"], q["version"]) for qs in cw.osv_posts for q in qs)
+        ok(sent == [("Flask", "PyPI", "3.0.0"), ("PyYAML", "PyPI", "6.0.1"), ("pytest", "PyPI", "8.0.0"), ("requests", "PyPI", "2.19.0")],
+           "requirements*.txt pins are queried under ecosystem PyPI (%s)" % sent)
+        ok(cs["dep:r2:osv"]["result"] == "yellow" and "requests@2.19.0 (GHSA-high-1)" in cs["dep:r2:osv"]["detail"], "a HIGH advisory is yellow with the list")
+        ok("dep:r2:npmrc" not in cs, "no package.json, no .npmrc requirement")
+        # ---- CRITICAL by CVSS vector (severity[].score), via the advisory lookup
+        cw = CveWorld()
+        cw.osv_vulns = {("PyPI", "requests", "2.19.0"): ["GHSA-crit-1"]}
+        cw.osv_detail = {"GHSA-crit-1": {"id": "GHSA-crit-1", "severity": [{"type": "CVSS_V3", "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}]}}
+        deps, cs, unv = dep_run(cw, {"r2": r2}, state)
+        ok(cs["dep:r2:osv"]["result"] == "red" and "GHSA-crit-1" in cs["dep:r2:osv"]["title"], "a CVSS 9.8 vector is CRITICAL: red")
+        ok(cv.cvss3_score("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H") == 9.8 and cv.cvss3_score("CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H") == 9.9,
+           "the CVSS v3 calculator matches the spec's reference scores")
+        cw = CveWorld()
+        cw.osv_vulns = {("PyPI", "requests", "2.19.0"): ["GHSA-unk-1"]}
+        cw.down = {"osvvuln"}
+        ok(dep_run(cw, {"r2": r2}, state)[1]["dep:r2:osv"]["result"] == "yellow", "an advisory whose severity cannot be looked up is yellow, never a quiet pass")
+        cw = CveWorld()
+        cw.osv_vulns = {("PyPI", "requests", "2.19.0"): ["GHSA-v4-1"]}
+        cw.osv_detail = {"GHSA-v4-1": {"id": "GHSA-v4-1", "severity": [{"type": "CVSS_V4", "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N"}]}}
+        c = dep_run(cw, {"r2": r2}, state)[1]["dep:r2:osv"]
+        ok(c["result"] == "yellow" and c["evidence"]["unrated"] == 1, "a CVSS v4 vector Ares cannot score is yellow 'could not rate', never a quiet pass")
+        cw = CveWorld()
+        cw.osv_vulns = {("PyPI", "requests", "2.19.0"): ["GHSA-low-1"]}
+        cw.osv_detail = {"GHSA-low-1": {"id": "GHSA-low-1", "database_specific": {"severity": "LOW"}}}
+        ok(dep_run(cw, {"r2": r2}, state)[1]["dep:r2:osv"]["result"] == "pass", "a LOW advisory is not a finding (counted in evidence.vulns)")
+        # ---- chunks of 500
+        r3 = os.path.join(tmp, "r3")
+        _write(r3, "package-lock.json", _lock(*[("pkg%d" % i, "1.0.%d" % i) for i in range(1200)]))
+        cw = CveWorld()
+        deps, cs, unv = dep_run(cw, {"r3": r3}, state)
+        ok([len(q) for q in cw.osv_posts] == [500, 500, 200] and deps["packages"] == 1200, "1200 packages go in chunks of 500 (%s)" % [len(q) for q in cw.osv_posts])
+        # ---- pnpm and yarn lockfile parsing
+        pnpm = ("lockfileVersion: '9.0'\n\nimporters:\n  .:\n    dependencies:\n      lodash:\n        specifier: ^4\n        version: 4.17.21\n\n"
+                "packages:\n\n  '@babel/core@7.24.0':\n    resolution: {integrity: sha512-x}\n\n  lodash@4.17.21:\n    resolution: {integrity: sha512-y}\n\n"
+                "  react-dom@18.2.0(react@18.2.0):\n    x: 1\n\nsnapshots:\n\n  lodash@4.17.21: {}\n")
+        ok(cv.parse_pnpm_lock(pnpm) == {("@babel/core", "7.24.0"), ("lodash", "4.17.21"), ("react-dom", "18.2.0")}, "pnpm-lock.yaml packages: name@version keys")
+        ok(cv.parse_pnpm_lock("lockfileVersion: 5.4\npackages:\n  /lodash/4.17.21:\n    dev: false\n  /@babel/core/7.0.0_x:\n    dev: true\n")
+           == {("lodash", "4.17.21"), ("@babel/core", "7.0.0")}, "pnpm v5 /name/version keys")
+        yarn = ('# yarn lockfile v1\n\n"@scope/a@^1.0.0", "@scope/a@^1.1.0":\n  version "1.2.3"\n  resolved "x"\n\nleft-pad@^1.0.0:\n  version "1.3.0"\n')
+        ok(cv.parse_yarn_lock(yarn) == {("@scope/a", "1.2.3"), ("left-pad", "1.3.0")}, "yarn.lock v1 blocks")
+        ok(cv.parse_package_lock(json.dumps({"lockfileVersion": 1, "dependencies": {"a": {"version": "1.0.0", "dependencies": {"b": {"version": "2.0.0"}}}}}))
+           == {("a", "1.0.0"), ("b", "2.0.0")}, "npm lockfile v1 nested dependencies")
+        # ---- a repo with nothing to check makes no verdict
+        r4 = os.path.join(tmp, "r4")
+        _write(r4, "README.md", "x\n")
+        deps, cs, unv = dep_run(CveWorld(), {"r4": r4}, state)
+        ok(not [k for k in cs if k.startswith("dep:")] and deps == {"repos": 0, "packages": 0, "red": 0}, "a repo with no lockfile and no package.json gets no dependency verdict")
+        # ---- wired into a whole audit run, with the repos Ares cloned
+        repo = build_repo(os.path.join(tmp, "bestlytech"), [{"package-lock.json": evil, "package.json": '{"name":"app"}'}])
+        w = AresWorld()
+        cw = CveWorld()
+        cw.osv_vulns = {("npm", "tanstack-evil", "1.0.0"): ["MAL-2026-1"]}
+        ctx, ares = ares_make(w, repo, cve=cv.CveWatch(cw, cw.runner, sa.Db(BASE, "service-role-key-not-real", api=w), state_dir=state, now=NOW,
+                                                      logf=lambda m: None, sleep=lambda s: None, exists=cw.exists))
+        with contextlib.redirect_stdout(io.StringIO()):
+            res = sa.run_audit(ctx, Args(), True, {"heal_nextcloud": False})
+        ok(key_check(w, "dep:bestlytech:osv")["result"] == "red" and key_check(w, "dep:bestlytech:npmrc")["result"] == "yellow",
+           "run_audit scans the repos Ares cloned: the malicious package is red in the batch")
+        ok("Deps: 3 packages in 1 repos, 1 red." in res, "the summary says 'Deps: 3 packages in 1 repos, 1 red.' (%s)" % res[res.find("Stack:"):res.find("Rules")])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    lesson("L8", len(FAILS) == before)
+
+
+# ------------------------------------------------------------------ L9: patch-lag push and Nextcloud self-heal
+def test_L9_patch_lag_push():
+    print("L9 patch-lag push and the guarded Nextcloud self-heal")
+    before = len(FAILS)
+    tmp = tempfile.mkdtemp(prefix="ares-t-")
+    no_heal = {"heal_nextcloud": False}
+    try:
+        def world(released="2026-10-22"):
+            cw = CveWorld()
+            cw.eol = default_eol(php_released=released)
+            cw.nvd["php"] = [PHP2SHELL]
+            return cw
+        # ---- fix released 48 hours ago on an internet-facing component: ONE Ares push, right away
+        now48 = datetime(2026, 10, 24, 0, 0, tzinfo=timezone.utc)
+        cw = world("2026-10-22")
+        res, cs, unv, inv, aw, sleeps, _ = cve_run(cw, tmp, live=True, state=no_heal, now=now48)
+        al = [a for a in cve_alerts(aw) if a["p_key"] == PHP_ALERT]
+        ok(len(cve_alerts(aw)) == 1 and len(al) == 1, "red on internet-facing nextcloud/php, fix 48 h old: exactly one push (%s)" % [a["p_key"] for a in cve_alerts(aw)])
+        a = al[0]
+        ok(a["p_severity"] == "error" and a["p_needs_jared"] and a["p_area"] == "security" and a["p_key"] == "security.cve.bestly-pi.nextcloud/php",
+           "key security.cve.<host>.<component>, severity error, needs Jared, under the security. prefix (Ares's)")
+        ok("nextcloud/php 8.4.26" in a["p_title"] and "8.4.27" in a["p_title"] and "docker compose pull nextcloud push" in a["p_body"] and "CVE-2026-109618" in a["p_body"],
+           "the push says what, which fix, and the command")
+        ok("..." not in a["p_title"] + a["p_body"], "no text is cut off with ...")
+        ok(not cw.mutations, "heal switched off in state: docker is not touched")
+        res, cs, unv, inv, aw2, *_ = cve_run(cw, tmp, live=False, state=no_heal, now=now48)
+        ok(not aw2.alerts, "a dry run pushes nothing")
+        # ---- fix released 6 hours ago: no push yet
+        cw = world("2026-10-24")
+        res, cs, unv, inv, aw, *_ = cve_run(cw, tmp, live=True, state=no_heal, now=datetime(2026, 10, 24, 6, 0, tzinfo=timezone.utc))
+        ok(cs[PHP_KEY]["result"] == "red" and not cve_alerts(aw), "fix released 6 h ago: still red on the Security page, but no push")
+        # ---- on latest again: the push resolves itself
+        cw = world("2026-10-22")
+        cw.running = cw.local = "new"
+        cw.eol["php"][0]["latest"] = "8.4.27"
+        res, cs, unv, inv, aw, *_ = cve_run(cw, tmp, live=True, state=no_heal, now=now48)
+        ok(cs[PHP_KEY]["result"] == "pass" and any(a["p_key"] == PHP_ALERT and a["p_kind"] == "resolved" for a in aw.alerts) and not cve_alerts(aw),
+           "once the component is on latest the alert is resolved through ares2.resolve")
+        # ---- self-heal: new digest for the same tag, verification passes
+        cw = world("2026-10-22")
+        res, cs, unv, inv, aw, sleeps, _ = cve_run(cw, tmp, live=True, state={}, now=now48)
+        undo = "nextcloud:33-pre-ares-20261024"
+        compose = ["docker", "compose", "-f", cv.NEXTCLOUD_COMPOSE]
+        ok(cw.mutations == [["docker", "tag", _sha("a"), undo], compose + ["pull", "nextcloud", "push"], compose + ["up", "-d", "nextcloud", "push"]],
+           "heal: undo tag first, then pull and up -d for `nextcloud push` only (%s)" % cw.mutations)
+        ok(25 in sleeps, "...with a 25 second wait before verifying")
+        c = cs[PHP_KEY]
+        ok(c["result"] == "pass" and c["evidence"]["healed"] == {"from": "8.4.26", "to": "8.4.27", "undo_tag": undo},
+           "verified (php moved forward, status.php 200 installed:true): the check is re-evaluated and carries evidence.healed {from, to, undo_tag}")
+        ok(res["stack"]["healed"] == 1 and "healed" not in cs["stack:bestly-pi:nextcloud:cve"]["evidence"], "healed counter is 1; the app check was not behind so it carries no healed record")
+        ok(not [a for a in aw.alerts if a["p_severity"] == "error"], "success pushes no error")
+        heal_a = [a for a in aw.alerts if a["p_kind"] == "problem" and a.get("p_healed") is True]
+        res_a = [a for a in aw.alerts if a["p_kind"] == "resolved"]
+        ok(len(heal_a) == 1 and heal_a[0]["p_severity"] == "info" and any(undo in (a["p_title"] or "") for a in res_a),
+           "Jared is told after: a self-healed issue recorded by Ares, resolved with the undo tag named")
+        ok(all(m[:3] == ["docker", "compose", "-f"] or m[:2] == ["docker", "tag"] for m in cw.mutations)
+           and all(set(m[m.index("pull") + 1:]) <= {"nextcloud", "push"} for m in cw.mutations if "pull" in m)
+           and all(m[-2:] == ["nextcloud", "push"] for m in cw.mutations if "up" in m) and not cw.unexpected,
+           "only the nextcloud and push services are ever touched; nothing else ran")
+        # ---- self-heal: the update breaks Nextcloud -> rollback, error alert, check stays red
+        cw = world("2026-10-22")
+        cw.new_breaks_status = True
+        res, cs, unv, inv, aw, *_ = cve_run(cw, tmp, live=True, state={}, now=now48)
+        ok(cw.mutations[-2:] == [["docker", "tag", undo, "nextcloud:33"], compose + ["up", "-d", "nextcloud", "push"]] and cw.mutations.count(compose + ["up", "-d", "nextcloud", "push"]) == 2,
+           "verify fails (status.php 503): the undo tag goes back onto the tag and `up -d nextcloud push` runs again (%s)" % cw.mutations[-2:])
+        errs = [a for a in aw.alerts if a["p_kind"] == "problem" and a["p_severity"] == "error"]
+        ok(len(errs) == 1 and errs[0]["p_needs_jared"] and "rolled back" in errs[0]["p_title"] and undo in errs[0]["p_body"] and "answers on cloud.bestly.tech again" in errs[0]["p_body"],
+           "...and ONE error alert says it was rolled back, that Nextcloud answers again, and where the undo is")
+        ok(cs[PHP_KEY]["result"] == "red" and "healed" not in cs[PHP_KEY]["evidence"] and res["stack"]["healed"] == 0, "a failed heal records no healed evidence and the check stays red")
+        cw = world("2026-10-22")
+        cw.new_php_same = True
+        res, cs, unv, inv, aw, *_ = cve_run(cw, tmp, live=True, state={}, now=now48)
+        ok(cw.mutations[-2][:2] == ["docker", "tag"] and len([a for a in aw.alerts if a["p_severity"] == "error"]) == 1,
+           "an update where PHP did not move forward is not a fix: rolled back, error alert")
+        cw = world("2026-10-22")
+        cw.pull_rc = 1
+        res, cs, unv, inv, aw, *_ = cve_run(cw, tmp, live=True, state={}, now=now48)
+        ok(not any(m[-3:-2] == ["up"] or "up" in m for m in cw.mutations) and any("nothing was changed" in a["p_title"] for a in aw.alerts),
+           "a failed pull never reaches `up -d`; the alert says nothing was changed")
+        # ---- guards: no docker change at all
+        for label, setup, st in (("--dry", lambda c: None, "dry"), ("state heal_nextcloud false", lambda c: None, no_heal),
+                                 ("compose file somewhere else", lambda c: setattr(c, "cfg", "/srv/other/docker-compose.yml"), {}),
+                                 ("compose file missing", lambda c: setattr(c, "compose_exists", False), {}),
+                                 ("registry digest equals the running one", lambda c: setattr(c, "remote_same", True), {})):
+            cw = world("2026-10-22")
+            setup(cw)
+            res, cs, unv, inv, aw, *_ = cve_run(cw, tmp, live=(st != "dry"), dry=(True if st == "dry" else None), state=({} if st == "dry" else st), now=now48)
+            ok(not cw.mutations, "no heal: %s" % label)
+            if st == "dry":
+                ok(not [c for c in cw.cmds if c[:2] in (["docker", "manifest"], ["docker", "tag"], ["docker", "compose"])] and not aw.alerts,
+                   "--dry: no manifest, tag or compose command, no alert (docker is only read for the inventory)")
+            else:
+                ok(len([a for a in cve_alerts(aw) if a["p_key"] == PHP_ALERT]) == 1, "...and the patch-lag push still goes out (%s)" % label)
+        cw = world("2026-10-22")
+        cw.pull_brings_new = False
+        res, cs, unv, inv, aw, *_ = cve_run(cw, tmp, live=True, state={}, now=now48)
+        ok(not [m for m in cw.mutations if "up" in m] and not [a for a in aw.alerts if a["p_severity"] == "error" and "failed" in a["p_title"]],
+           "a pull that brings nothing new never recreates anything and raises no failure")
+        ok(not cw.unexpected, "the fake saw no command the code should not run (%s)" % cw.unexpected)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    lesson("L9", len(FAILS) == before)
+
+
 NEW_TESTS = [
     test_L1_fixed_means_dead, test_L2_history_and_names, test_L3_public_repo_red, test_L4_legacy_keys,
     test_L5_coverage_escalation, test_lessons_loop, test_authenticated_clone, test_unauth_consumers,
-    test_ares_failure_is_loud, test_old_head_scan_never_passes, test_L6_selftest_gate,
+    test_ares_failure_is_loud, test_old_head_scan_never_passes, test_L7_stack_cve_watch, test_L8_dependency_gate,
+    test_L9_patch_lag_push, test_L6_selftest_gate,
 ]
 
 
