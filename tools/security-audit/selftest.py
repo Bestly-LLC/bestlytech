@@ -1653,6 +1653,8 @@ class CveWorld(object):
         self.pull_rc, self.pull_brings_new = 0, True
         self.new_breaks_status, self.new_php_same = False, False
         self.osv_vulns, self.osv_detail = {}, {}
+        self.apt = ""                      # what `apt-get -s upgrade` prints on the Pi (Inst lines)
+        self.gh_latest = None              # GitHub releases/latest tag for products endoflife.date lacks; None = 404
 
     # ---- the Pi
     def exists(self, path):
@@ -1683,6 +1685,8 @@ class CveWorld(object):
         }.get(tuple(c))
         if out is not None:
             return 0, out, ""
+        if c == cv.APT_SIMULATE:
+            return 0, self.apt, ""
         if c[:2] == ["docker", "ps"]:
             return 0, self.ps(), ""
         if c[:2] == ["docker", "exec"] or c[:4] == ["docker", "exec", "-u", "www-data"]:
@@ -1760,6 +1764,8 @@ class CveWorld(object):
                 raise sa.ApiError("GET osv.dev: network error (URLError)")
             vid = url.rsplit("/", 1)[1]
             return (200, self.osv_detail[vid]) if vid in self.osv_detail else (404, None)
+        if url.startswith("https://api.github.com/repos/") and url.endswith("/releases/latest"):
+            return (200, {"tag_name": self.gh_latest, "published_at": "2026-10-22T00:00:00Z"}) if self.gh_latest else (404, None)
         if url == cv.NEXTCLOUD_STATUS_URL:
             if "status" in self.down or (self.running == "new" and self.new_breaks_status):
                 return 503, None
@@ -1834,6 +1840,38 @@ def test_L7_stack_cve_watch():
         res, cs, *_ = cve_run(cw, tmp)
         ok(cs[PHP_KEY]["result"] == "pass" and cs[PHP_KEY]["evidence"]["latest"] == "8.4.26" and cs[PHP_KEY]["evidence"]["cves_seen"] == ["CVE-2026-109618"],
            "the same CVE at the fixed version: pass, with {latest, cves_seen}")
+        # ---- Debian-packaged python3: judged by apt, never by the upstream version (3.13.5 stays 3.13.5 with the fix backported)
+        PY_KEY = "stack:bestly-pi:python3:cve"
+        cw = CveWorld()
+        cw.eol["python"][0]["latest"] = "3.13.17"
+        cw.nvd["python"] = [{"id": "CVE-2026-99001", "published": "2026-10-21T00:00:00.000", "descriptions": [{"lang": "en", "value": "CPython 3.13 before 3.13.17 allows remote code execution"}],
+                             "metrics": {"cvssMetricV31": [{"cvssData": {"baseScore": 9.8, "baseSeverity": "CRITICAL"}}]}, "configurations": []}]
+        res, cs, unv, *_ = cve_run(cw, tmp)
+        ok(cs[PY_KEY]["result"] == "pass" and cs[PY_KEY]["evidence"].get("packaged_by") == "Debian" and cs[PY_KEY]["evidence"].get("cves_seen") == ["CVE-2026-99001"],
+           "python3 3.13.5 from Debian with nothing pending in apt: pass, even though upstream is at 3.13.17 with a critical (%s)" % cs[PY_KEY].get("title"))
+        cw.apt = "Inst libpython3.13-minimal [3.13.5-2] (3.13.5-2+deb13u1 Debian-Security:13/stable-security [arm64])\nInst python3.13 [3.13.5-2] (3.13.5-2+deb13u1 Debian-Security:13/stable-security [arm64])\nInst curl [8.14.1-2] (8.14.1-2+deb13u1 Debian:13.1/stable [arm64])\n"
+        res, cs, *_ = cve_run(cw, tmp)
+        ok(cs[PY_KEY]["result"] == "red" and "security update waiting" in cs[PY_KEY]["title"] and "install --only-upgrade" in cs[PY_KEY]["fix"] and "python3.13" in cs[PY_KEY]["fix"] and "curl" not in cs[PY_KEY]["fix"],
+           "a pending Debian-Security upgrade for python3: RED with the exact apt command (curl is not python3's)")
+        cw.apt = "Inst python3.13 [3.13.5-2] (3.13.5-3 Debian:13.1/stable [arm64])\n"
+        res, cs, *_ = cve_run(cw, tmp)
+        ok(cs[PY_KEY]["result"] == "yellow" and "update waiting" in cs[PY_KEY]["title"], "a pending non-security Debian upgrade: yellow")
+        # ---- home-assistant is not on endoflife.date (404): GitHub's latest release stands in, and the feed is not "unreachable"
+        HA_KEY = "stack:bestly-pi:home-assistant:cve"
+        cw = CveWorld()
+        del cw.eol["home-assistant"]
+        cw.gh_latest = "2026.10.3"
+        res, cs, unv, *_ = cve_run(cw, tmp)
+        ok(cs[HA_KEY]["result"] == "yellow" and "behind" in cs[HA_KEY]["title"] and cs[HA_KEY]["evidence"].get("source") == "github releases",
+           "home-assistant 2026.10.2 vs GitHub latest 2026.10.3: yellow, behind (%s)" % cs[HA_KEY].get("title"))
+        ok(not any("endoflife" in u for u in unv) and "stack:feed:endoflife" not in cs or cs["stack:feed:endoflife"]["result"] == "pass",
+           "a 404 for one product is not an endoflife.date outage (%s)" % unv)
+        cw.gh_latest = "2026.10.2"
+        res, cs, *_ = cve_run(cw, tmp)
+        ok(cs[HA_KEY]["result"] == "pass", "on GitHub's latest: pass")
+        cw.gh_latest = None
+        res, cs, unv, *_ = cve_run(cw, tempfile.mkdtemp(prefix="ares-t-"))     # fresh state dir: no cached GitHub answer to fall back on
+        ok(HA_KEY not in cs and not any("endoflife" in u for u in unv), "a product in neither place gets no verdict and no pass, and nothing is marked unreachable")
         # ---- Node 20 on the Pi: EOL since 2026-04-30
         cw = CveWorld()
         cw.pi_node = "20.20.2"

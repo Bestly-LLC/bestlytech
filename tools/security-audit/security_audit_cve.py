@@ -65,6 +65,15 @@ NVD_TEXT = {"php": re.compile(r"\bPHP\b(?!\s+(?:object|code|file|remote|local|sc
             "home-assistant": re.compile(r"\bHome Assistant\b"), "python": re.compile(r"\bCPython\b|\bPython\s+\d|\bin\s+Python\b")}
 
 EOL_URL = "https://endoflife.date/api/%s.json"
+# Products endoflife.date does not list (its API answers 404): the latest GitHub release stands in. Behind = yellow,
+# behind with a KEV/NVD critical = red, like everything else; a product in neither place gets no verdict and no pass.
+GITHUB_LATEST = {"home-assistant": "home-assistant/core"}
+GH_RELEASE_URL = "https://api.github.com/repos/%s/releases/latest"
+# Host software that Debian packages and patches in place: the upstream version never changes (python3 3.13.5 stays
+# 3.13.5 with the fix backported), so comparing it to endoflife.date's latest is wrong. `apt-get -s upgrade` is the truth:
+# a pending Debian-Security upgrade is red, any other pending upgrade yellow, nothing pending pass.
+DPKG_COMPONENTS = {"python3": ("python3", "libpython3")}
+APT_SIMULATE = ["apt-get", "-s", "-o", "Debug::NoLocking=1", "upgrade"]
 KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 NVD_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 OSV_BATCH_URL = "https://api.osv.dev/v1/querybatch"
@@ -231,6 +240,16 @@ def parse_eol(data):
              "eol": r.get("eol"), "support": r.get("support"), "lts": r.get("lts")} for r in data]
 
 
+def parse_gh_release(data):
+    """GitHub releases/latest -> {"latest": "2026.10.3", "released": "2026-10-22"}; a draft/prerelease or no tag -> []."""
+    if not isinstance(data, dict) or data.get("draft") or data.get("prerelease"):
+        return []
+    tag = first_version(data.get("tag_name") or data.get("name") or "")
+    if not tag:
+        return []
+    return {"latest": tag, "released": (data.get("published_at") or "")[:10] or None}
+
+
 def parse_kev(data):
     """Only the entries that name a product we run (the whole file is 1 MB and nobody needs it on disk)."""
     if not isinstance(data, dict) or not isinstance(data.get("vulnerabilities"), list):
@@ -299,6 +318,7 @@ class Feeds(object):
 
     def __init__(self):
         self.eol, self.nvd, self.kev = {}, {}, None
+        self.gh = {}           # product -> {"latest", "released"} from GitHub releases, for products endoflife.date lacks
         self.state = {}        # feed name -> "fresh" | "stale" | "none"
         self.stale_at = {}     # feed name -> fetched-at of the cache that was used
         self.loaded = False
@@ -541,7 +561,8 @@ class CveWatch(object):
             rc, txt, err = self._run(cmd, 10)
             v = first_version((txt or err) if rc == 0 else "")
             if v:
-                out.append(self._comp(h, name, v, product, "host", False, today, where=h))
+                src = "dpkg" if name in DPKG_COMPONENTS else "host"
+                out.append(self._comp(h, name, v, product, src, False, today, where=h))
         return out
 
     def _containers(self):
@@ -573,7 +594,9 @@ class CveWatch(object):
         internet = any(t in ci["repo"].lower() for t in INTERNET_FACING)
         extra = {"container": nc, "image": ci["image"], "where": "container %s" % nc, "service": ci["service"], "workdir": ci["workdir"]}
         base_prod = PRODUCTS.get(ALIASES.get(ci["base"], ci["base"]))
-        if ci["base"] == "nextcloud":
+        if ci["base"] == "nextcloud" and ci.get("service") not in (None, "nextcloud"):
+            pass                        # notify_push and the like run the nextcloud image without the app: PHP only, no occ
+        elif ci["base"] == "nextcloud":
             rc, txt, _ = self._run(["docker", "exec", "-u", "www-data", nc, "php", "occ", "status", "--output=json"], 30)
             ver = None
             if rc == 0:
@@ -674,13 +697,16 @@ class CveWatch(object):
         if at is not None:
             feeds.stale_at[name] = min(at, feeds.stale_at.get(name, at))
 
-    def _feed(self, feeds, state_name, cache_name, url, parse):
-        """Fetch once, cache on success. -> parsed data, or None when neither the fetch nor a cache under 3 days old worked."""
+    def _feed(self, feeds, state_name, cache_name, url, parse, missing_ok=False):
+        """Fetch once, cache on success. -> parsed data, or None when neither the fetch nor a cache under 3 days old worked.
+        missing_ok: a 404 means the feed simply has no entry for this product; that is [] (no coverage), never an outage."""
         data = None
         try:
             status, body = self.api("GET", url, FEED_HEADERS, None, 60, 2)
             if status == 200:
                 data = parse(body)
+            elif status == 404 and missing_ok:
+                data = []
         except Exception as exc:  # noqa: BLE001 -- any transport failure means "the feed did not answer"
             self.log("cve: feed %s failed (%s)" % (cache_name, type(exc).__name__))
         if data is not None:
@@ -699,7 +725,9 @@ class CveWatch(object):
         if not products:
             return feeds
         for p in sorted(products):
-            feeds.eol[p] = self._feed(feeds, "endoflife", "endoflife-" + p, EOL_URL % p, parse_eol)
+            feeds.eol[p] = self._feed(feeds, "endoflife", "endoflife-" + p, EOL_URL % p, parse_eol, missing_ok=True)
+            if feeds.eol[p] == [] and p in GITHUB_LATEST:
+                feeds.gh[p] = self._feed(feeds, "github", "github-" + p, GH_RELEASE_URL % GITHUB_LATEST[p], parse_gh_release)
         feeds.kev = self._feed(feeds, "kev", "kev", KEV_URL, parse_kev)
         now, first = self.now(), True
         for p in sorted(products):
@@ -775,6 +803,8 @@ class CveWatch(object):
                 if lts:
                     cyc = max(lts, key=lambda r: vtuple(r["cycle"]) or (0,))["cycle"]
             return "curl -fsSL https://deb.nodesource.com/setup_%s.x | sudo -E bash - && sudo apt-get install -y nodejs" % cyc
+        if c.get("source") == "dpkg":
+            return "sudo apt-get update && sudo apt-get install --only-upgrade -y " + " ".join(c.get("pending_pkgs") or DPKG_COMPONENTS.get(comp, (comp,)))
         if c.get("source") == "host":
             return "sudo apt-get update && sudo apt-get upgrade -y"
         svc, wd = c.get("service"), c.get("workdir")
@@ -810,7 +840,14 @@ class CveWatch(object):
                         "Ares could not read the version of %s (%s), so it cannot tell whether it is patched." % (comp, c.get("where") or c["host"]),
                         "Check that the container is healthy and answers a version command.", {"source": c.get("source")})
         vt = vtuple(ver)
+        if c.get("source") == "dpkg":
+            return self._judge_dpkg(c, feeds, done, rec, now)
         rows = feeds.eol.get(prod)
+        if rows == [] and feeds.gh.get(prod):
+            return self._judge_github(c, feeds, done, rec, now, vt)
+        if rows == []:
+            rec.update(result=None, reason="nocoverage", check=None)       # neither endoflife.date nor a GitHub release list covers it
+            return rec
         if rows is None:
             return done("skip", "feed", "Not checked: %s %s (endoflife.date did not answer)" % (comp, ver),
                         "No endoflife.date data for %s and no saved copy under 3 days old, so Ares cannot say whether it is end-of-life or behind." % prod)
@@ -859,6 +896,74 @@ class CveWatch(object):
             ev["cve_feeds"] = "unavailable"
         return done("yellow", "behind", "%s %s is behind by %s (latest %s)" % (comp, ver, plural(n, unit + " release"), latest),
                     "%s is behind the latest %s release. No critical CVE is on record%s." % (
+                        comp, prod, " (but the CVE feeds could not be read tonight, so severity is unknown)" if not usable else ""),
+                    self.fix_for(c, feeds), ev)
+
+    def _apt_pending(self):
+        """Pending apt upgrades on this host, once per run. -> list of {pkg, to, origin} or None when apt could not answer."""
+        if not hasattr(self, "_apt_cache"):
+            rc, txt, _ = self._run(APT_SIMULATE, 120)
+            if rc != 0:
+                self._apt_cache = None
+            else:
+                self._apt_cache = [{"pkg": m.group(1), "to": m.group(2), "origin": m.group(3)}
+                                   for m in re.finditer(r"^Inst\s+(\S+)\s+(?:\[[^\]]*\]\s+)?\((\S+)\s+([^\)]*)\)", txt, re.M)]
+        return self._apt_cache
+
+    def _judge_dpkg(self, c, feeds, done, rec, now):
+        """Debian-packaged software: judged by what apt still has to install, never by the upstream version string."""
+        comp, ver, prod = c["component"], c.get("version"), c.get("product")
+        hits, usable = feeds.critical(prod, now) if prod else ([], False)
+        rec["cves"] = [h["id"] for h in hits]
+        pending = self._apt_pending()
+        ev = {"installed": ver, "packaged_by": "Debian", "cves_seen": rec["cves"][:10],
+              "note": "Debian backports security fixes into %s without changing the upstream version" % ver}
+        if pending is None:
+            return done("yellow", "apt", "Could not ask apt whether %s has a pending update" % comp,
+                        "`apt-get -s upgrade` did not answer on %s, so Ares cannot tell whether a Debian security fix is waiting." % c["host"],
+                        "sudo apt-get update && apt-get -s upgrade", ev)
+        prefixes = DPKG_COMPONENTS.get(comp, (comp,))
+        mine = [p for p in pending if any(p["pkg"].startswith(x) for x in prefixes)]
+        c["pending_pkgs"] = sorted(set(p["pkg"] for p in mine))
+        ev["pending"] = ["%s %s (%s)" % (p["pkg"], p["to"], p["origin"].split()[0] if p["origin"] else "?") for p in mine][:10]
+        sec = [p for p in mine if "security" in (p["origin"] or "").lower()]
+        if sec:
+            return done("red", "critical", "%s %s has a Debian security update waiting (%s)" % (comp, ver, ", ".join(sorted(set(p["pkg"] for p in sec))[:4])),
+                        "Debian published a security fix for %s on %s and apt has not installed it yet: %s." % (
+                            comp, c["host"], "; ".join(ev["pending"][:5])), self.fix_for(c, feeds), ev)
+        if mine:
+            return done("yellow", "behind", "%s %s has a Debian update waiting (%s)" % (comp, ver, ", ".join(c["pending_pkgs"][:4])),
+                        "apt has a newer package for %s on %s that is not a security update: %s." % (comp, c["host"], "; ".join(ev["pending"][:5])),
+                        self.fix_for(c, feeds), ev)
+        if not usable:
+            # apt says nothing is waiting, but with no CVE feed tonight that is "not checked", never a pass (house rule)
+            return done("skip", "feed", "Not checked: apt has nothing pending for %s, but the CVE feeds did not answer" % comp,
+                        "Neither CISA KEV nor NVD could be read tonight, so Ares cannot confirm %s is clear." % comp, None, ev)
+        return done("pass", "current", evidence=ev)
+
+    def _judge_github(self, c, feeds, done, rec, now, vt):
+        comp, ver, prod = c["component"], c.get("version"), c.get("product")
+        latest, released = feeds.gh[prod].get("latest"), feeds.gh[prod].get("released")
+        rec["latest"], rec["released"] = latest, released
+        lt = vtuple(latest)
+        if lt is None or vcmp(vt, lt) is None:
+            return done("skip", "cycle", "Not checked: no usable latest release for %s on GitHub" % prod, "The GitHub releases list gave no version.")
+        hits, usable = feeds.critical(prod, now)
+        rec["cves"] = [h["id"] for h in hits]
+        if vcmp(vt, lt) >= 0:
+            return done("pass", "current", evidence={"latest": latest, "cves_seen": rec["cves"][:10], "source": "github releases"})
+        n, unit = behind_by(vt, lt)
+        ev = {"installed": ver, "latest": latest, "released": released, "internet_facing": c["internet_facing"], "source": "github releases"}
+        if hits:
+            ev["cves"] = rec["cves"][:10]
+            return done("red", "critical", "%s %s has a critical CVE and the fix (%s, released %s) is not installed" % (comp, ver, latest, released),
+                        "%s runs %s and is %s. Critical CVEs on record for %s: %s. The fix %s was released %s."
+                        % (comp, ver, plural(n, unit + " release") + " behind", prod, ", ".join(rec["cves"][:5]), latest, released),
+                        self.fix_for(c, feeds), ev)
+        if not usable:
+            ev["cve_feeds"] = "unavailable"
+        return done("yellow", "behind", "%s %s is behind by %s (latest %s)" % (comp, ver, plural(n, unit + " release"), latest),
+                    "%s is behind the latest %s release on GitHub. No critical CVE is on record%s." % (
                         comp, prod, " (but the CVE feeds could not be read tonight, so severity is unknown)" if not usable else ""),
                     self.fix_for(c, feeds), ev)
 
