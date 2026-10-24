@@ -311,8 +311,9 @@ def check_repo(path, name):
                 "Found in: " + ", ".join(sorted(found[label])[:10]) + ". The repo is public, so treat it as leaked.",
                 "Rotate the credential first, then remove the file from the repo (history keeps old copies, so rotation is what actually fixes it).",
                 {"files": sorted(found[label])[:20]})
-        else:
-            add(k, "pass", "Code", asset, "secret_scan")
+        # No `pass` here, ever (Ares 2.0, 2026-10-21). Absence from HEAD is not proof a leaked credential is dead: this scan
+        # auto-closed a live service_role finding when the file left HEAD. Closing is security_audit_ares2's job
+        # (full-history scan + liveness probe); the audit also drops any code:*:secret:* pass that reaches it from here.
     # dependency audit
     try:
         a = subprocess.run(["npm", "audit", "--json", "--package-lock-only", "--omit=dev"], cwd=path, capture_output=True, text=True, timeout=180)

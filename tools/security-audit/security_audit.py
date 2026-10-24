@@ -55,6 +55,8 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, "/opt/bestly/cron")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import security_audit_ares2 as ares2  # noqa: E402  (Ares 2.0: history scan, liveness, repo visibility, escalation)
+
 JOB = "security-audit"
 OWNER = "Ares (security)"
 
@@ -1255,12 +1257,16 @@ def split_web_items(items):
     return checks, fps
 
 
+GITHUB_TOKEN = [""]    # set once per run by main(); read server-side from Vault, never printed or written
+
+
 def clone_repo(dest):
+    """Authenticated full clone (Ares 2.0: the audit must keep working after the repo goes private, and the history
+    scan needs every commit). The token goes in an env-scoped HTTP header, never in argv, the URL or .git/config."""
     try:
-        res = subprocess.run(["git", "clone", "--depth", "1", "--quiet", REPO_URL, dest],
-                             capture_output=True, text=True, timeout=300,
-                             env={"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""),
-                                  "GIT_TERMINAL_PROMPT": "0"})
+        res = subprocess.run(["git", "clone", "--quiet", REPO_URL, dest],
+                             capture_output=True, text=True, timeout=900,
+                             env=ares2.git_env(GITHUB_TOKEN[0]))
         return res.returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
@@ -1272,7 +1278,8 @@ class Ctx:
     """Everything the run touches from outside, so selftest can swap it for fakes."""
 
     def __init__(self, db, vercel_token="", supa_token="", api=http_json, web=run_web_checks,
-                 clone=clone_repo, now=None, cf_token="", resolve=dns_state):
+                 clone=clone_repo, now=None, cf_token="", resolve=dns_state, ares=None):
+        self.ares = ares        # ares2.Ares, or None (then none of the Ares 2.0 steps run)
         self.db, self.vercel_token, self.supa_token = db, vercel_token, supa_token
         self.api, self.web, self.clone = api, web, clone
         self.cf_token, self.resolve = cf_token, resolve
@@ -1484,26 +1491,46 @@ def run_audit(ctx, args, live, state):
 
     try:
         # ---- STEP 3: web checks -------------------------------------------------
-        fps, fp_status, web_error = {}, {}, None
-        if args.no_web:
+        fps, fp_status, web_error, ares_error, ares_out = {}, {}, None, None, None
+        if args.no_web and ctx.ares is None:
             web_error = "skipped by --no-web"
         else:
             tmp = tempfile.mkdtemp(prefix="security-audit-")
             try:
                 repo = os.path.join(tmp, REPO_NAME)
-                if not ctx.clone(repo):
+                cloned = ctx.clone(repo)
+                if not cloned:
                     log("git clone failed; the code checks will record skip")
-                items, web_error = ctx.web(hosts, apexes, MAIL_DOMAINS, repo)
-                if not web_error:
-                    web_checks, fetched = split_web_items(items)
-                    checks.extend(web_checks)
-                    monitored = set(hosts)
-                    fps, fp_status = {}, {}
-                    for h in sorted(monitored | set(prev_fps) | set(fetched)):
-                        fps[h], fp_status[h] = fingerprint_step(h, prev_fps.get(h), fetched.get(h), monitored)
-                    fps = {h: v for h, v in fps.items() if v}
+                # ---- Ares 2.0: full-history scan, liveness, repo visibility, legacy keys (before the HEAD-only scan, which it replaces)
+                if ctx.ares is not None:
+                    try:
+                        ares_out = ctx.ares.run(checks, repo if cloned else None, tmp, unverified, inventory, live)
+                    except Exception as exc:  # noqa: BLE001 -- loud: the run is marked failed, never quietly reverts to HEAD-only
+                        ares_error = "Ares 2.0 scan failed: %s: %s" % (type(exc).__name__, str(exc)[:160])
+                        log(ares_error)
+                if args.no_web:
+                    web_error = "skipped by --no-web"
+                else:
+                    items, web_error = ctx.web(hosts, apexes, MAIL_DOMAINS, repo)
+                    if not web_error:
+                        web_checks, fetched = split_web_items(items)
+                        if ctx.ares is not None and not ares_error:
+                            # the history scan covers HEAD and supersedes the HEAD-only secret scan: its verdicts win
+                            web_checks = [c for c in web_checks if not re.match(r"^code:[^:]+:secret:", str(c.get("key", "")))]
+                        else:
+                            # the HEAD-only scan may report a hit, never a pass: absence from HEAD is not proof of anything
+                            web_checks = [c for c in web_checks if not (re.match(r"^code:[^:]+:secret:", str(c.get("key", "")))
+                                                                        and c.get("result") == "pass")]
+                        checks.extend(web_checks)
+                        monitored = set(hosts)
+                        fps, fp_status = {}, {}
+                        for h in sorted(monitored | set(prev_fps) | set(fetched)):
+                            fps[h], fp_status[h] = fingerprint_step(h, prev_fps.get(h), fetched.get(h), monitored)
+                        fps = {h: v for h, v in fps.items() if v}
             finally:
                 shutil.rmtree(tmp, ignore_errors=True)
+        if ares_error:
+            problems.append(ares_error)
         if web_error:
             problems.append("website checks: " + web_error)
             log("web checks failed: " + web_error)
@@ -1689,8 +1716,9 @@ def run_audit(ctx, args, live, state):
                     check="pi:agent_reporting", title="Not checked: the Pi scan failed to run",
                     detail=str(exc)[:200], fix=None, evidence={})])
             # ---- STEP 6: fingerprints onto the run's inventory -----------------------
-            if fps:
-                inventory["fingerprints"] = fps
+            if fps or ctx.ares is not None:
+                if fps:
+                    inventory["fingerprints"] = fps
                 db.patch("security_audit_runs?id=eq.%s" % run, {"inventory": inventory})
             if errors:
                 problems.append("%d checks could not be recorded" % len(errors))
@@ -1705,7 +1733,18 @@ def run_audit(ctx, args, live, state):
                 red_titles, open_yellow = [c["title"] or c["key"] for c in checks.items if c["result"] == "red"], \
                     checks.count("yellow")
             summary = build_summary(checks, outcomes, red_titles, open_yellow, unverified, web_error)
-            failed = bool(web_error) or bool(errors)
+            if ctx.ares is not None:
+                # 7. coverage escalation: a quiet blind spot is a miss. One Ares-signed push for everything that went quiet.
+                esc = ares2.coverage_escalation(db, unverified, now)
+                pushed = ares2.push_escalation(db, esc, live)
+                if ares_out:
+                    summary += " History scan: %d repos, %d commits, %d distinct secrets, %d still work." % (
+                        ares_out.get("repos", 0), ares_out.get("commits", 0), ares_out.get("secrets", 0), ares_out.get("live", 0))
+                if esc:
+                    summary += " Escalated to Jared: %d%s." % (len(esc), "" if pushed else " (push not sent)")
+                if ctx.ares.enforced:
+                    summary += " Rules enforced: %s." % ", ".join(x.split(" ")[0] for x in ctx.ares.enforced)
+            failed = bool(web_error) or bool(errors) or bool(ares_error)
             res = db.rpc("security_run_finish", {"p_run": run,
                                                  "p_summary": ("Run failed: %s. " % "; ".join(problems) + summary) if failed else summary,
                                                  "p_failed": failed})
@@ -1760,10 +1799,17 @@ def main(argv=None):
     if not (url and key):
         raise RuntimeError("no SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY on the Pi (env or %s)" % ENV_FILE)
     db = Db(url, key)
+    supa_token = get_token(db, SUPABASE_SERVICE, SUPABASE_ACCOUNT, SUPABASE_VAULT_NAME)
+    # GitHub token from Vault, read server-side (security_github_token RPC, else pi:github:token); never printed.
+    GITHUB_TOKEN[0] = ares2.get_github_token(db, http_json, vault_shim=lambda s, a: vault_shim(s, a))
+    if not GITHUB_TOKEN[0]:
+        log("no GitHub token in Vault: cloning anonymously (works only while the repo is public)")
+    ares = ares2.Ares(db, http_json, GITHUB_TOKEN[0], supa_token, logf=log)
     ctx = Ctx(db,
               get_token(db, VERCEL_SERVICE, VERCEL_ACCOUNT, VERCEL_VAULT_NAME),
-              get_token(db, SUPABASE_SERVICE, SUPABASE_ACCOUNT, SUPABASE_VAULT_NAME),
-              cf_token=get_token(db, CLOUDFLARE_SERVICE, CLOUDFLARE_ACCOUNT, CLOUDFLARE_VAULT_NAME))
+              supa_token,
+              cf_token=get_token(db, CLOUDFLARE_SERVICE, CLOUDFLARE_ACCOUNT, CLOUDFLARE_VAULT_NAME),
+              ares=ares)
     stamp = datetime.now().strftime("%Y%m%d")
     try:
         summary = run_audit(ctx, args, live, state)
