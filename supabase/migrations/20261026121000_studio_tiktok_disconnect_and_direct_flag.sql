@@ -1,0 +1,4 @@
+-- Repo copy of two migrations applied 2026-10-26 via MCP (social_disconnect_clears_refresh_token, studio_tt_direct_enabled).
+-- Applied state is the source of truth; see pg_proc for the exact bodies.
+-- social_disconnect(p_client, p_platform, p_by): now also nulls refresh_token and refresh_expires_at.
+-- studio_flags 'tt_direct_post_all' = false; studio_tt_direct_enabled(p_token text) true if flag on or client slug = 'bestly-test'.

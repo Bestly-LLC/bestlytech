@@ -1,0 +1,232 @@
+<!-- Studio TikTok posting screen (Direct Post), 2026-10-26. Appended to the client board (board.html) just before </body>.
+     Built to TikTok's Content Posting API guidelines (developers.tiktok.com/docs/en/content-sharing-guidelines, updated Aug 4, 2026):
+     creator nickname and avatar from creator_info, no default privacy, Comment/Duet/Stitch off and greyed when the creator turned them off,
+     commercial content disclosure with the required labels, Music Usage / Branded Content consent line, preview, explicit Post tap,
+     processing notice, status polling, no watermark. Server side: edge function studio-tiktok-post.
+     Shown only where studio_tt_direct_enabled(token) is true (bestly-test until TikTok approves; then studio_flags.tt_direct_post_all). -->
+<style id="ttpost-css">
+.ttbtn{cursor:pointer;border:1.5px solid var(--accent);background:var(--accent-wash);color:var(--accent);font:inherit;font-weight:600;min-height:44px;padding:0 16px;border-radius:999px}
+.ttc{display:grid;gap:14px;text-align:left}
+.ttc .tt-who{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--rule);border-radius:16px;background:var(--sink)}
+.ttc .tt-av{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--rule);flex:none}
+.ttc .tt-who b{display:block;font-size:16px;line-height:1.25}
+.ttc .tt-who span{display:block;font-size:13px;line-height:1.4;color:var(--ink-3)}
+.ttc video{width:100%;max-height:46dvh;border-radius:14px;background:#000;display:block;object-fit:contain}
+.ttc .tt-l{font-size:14px;font-weight:600;color:var(--ink);display:block;margin:0 0 6px}
+.ttc textarea,.ttc select{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--raise);border:1.5px solid var(--rule);border-radius:12px;padding:10px 12px;min-height:48px}
+.ttc textarea{min-height:96px;resize:vertical}
+.ttc textarea:focus,.ttc select:focus{outline:2px solid var(--accent);outline-offset:1px}
+.ttc .tt-cnt{font-size:12px;color:var(--ink-3);text-align:right;margin-top:4px}
+.ttc fieldset{border:1.5px solid var(--rule);border-radius:14px;margin:0;padding:10px 14px 6px;min-width:0}
+.ttc legend{font-size:14px;font-weight:600;padding:0 6px}
+.ttc .tt-ck{display:flex;gap:12px;align-items:flex-start;padding:10px 0;min-height:44px;cursor:pointer;font-size:16px;line-height:1.35}
+.ttc .tt-ck input{width:22px;height:22px;margin:1px 0 0;flex:none;accent-color:var(--accent)}
+.ttc .tt-ck small{display:block;font-size:13px;color:var(--ink-3);line-height:1.4;margin-top:2px}
+.ttc .tt-ck.off{opacity:.5;cursor:not-allowed}
+.ttc .tt-hint{font-size:13px;line-height:1.45;color:var(--ink-3);margin:0}
+.ttc .tt-warn{font-size:14px;line-height:1.45;color:var(--hold);background:var(--hold-wash);border-radius:12px;padding:10px 12px;margin:0}
+.ttc .tt-bad{font-size:14px;line-height:1.45;color:#B3261E;background:rgba(179,38,30,.08);border-radius:12px;padding:10px 12px;margin:0}
+.ttc .tt-ok{font-size:15px;line-height:1.45;color:var(--go);background:var(--go-wash);border-radius:12px;padding:10px 12px;margin:0;font-weight:600}
+.ttc .tt-info{font-size:14px;line-height:1.45;color:var(--ink);background:var(--accent-wash);border-radius:12px;padding:10px 12px;margin:0}
+.ttc .tt-consent{font-size:13px;line-height:1.5;color:var(--ink-2);margin:0}
+.ttc .tt-consent a,.ttc .tt-hint a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.ttc .tt-pick{display:grid;gap:8px}
+.ttc .tt-row{display:flex;gap:12px;align-items:center;padding:10px;border:1.5px solid var(--rule);border-radius:14px;background:var(--raise);cursor:pointer;min-height:56px;text-align:left;font:inherit;color:var(--ink);width:100%}
+.ttc .tt-row b{display:block;font-size:15px;line-height:1.3}
+.ttc .tt-row span{font-size:13px;color:var(--ink-3)}
+.ttc .tt-dis{border:1.5px solid var(--rule);border-radius:14px;padding:6px 14px 10px}
+#ttWhy{flex:1 1 100%;font-size:13px;line-height:1.4;color:var(--ink-3);margin:0 0 8px;text-align:left}
+#ttPost:disabled{opacity:.45;cursor:not-allowed}
+@media (prefers-reduced-motion:no-preference){.ttc .tt-ok,.ttc .tt-bad,.ttc .tt-info{animation:ttin .24s var(--ease)}@keyframes ttin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}}
+</style>
+<script id="ttpost-js">
+(() => {
+"use strict";
+const FN = SB + "/functions/v1/studio-tiktok-post";
+const LBL = { PUBLIC_TO_EVERYONE: "Everyone", MUTUAL_FOLLOW_FRIENDS: "Friends", FOLLOWER_OF_CREATOR: "Followers", SELF_ONLY: "Only me" };
+const MUSIC = "https://www.tiktok.com/legal/page/global/music-usage-confirmation/en";
+const BRANDED = "https://www.tiktok.com/legal/page/global/bc-policy/en";
+const sec = n => n + " second" + (n === 1 ? "" : "s");
+let ON = false, CONNECTED = false, POLL = null;
+
+async function call(body){
+  try{
+    const r = await fetch(FN, { method: "POST", headers: { apikey: KEY, "Content-Type": "application/json" }, body: JSON.stringify({ token: TOKEN, ...body }) });
+    return await r.json();
+  }catch{ return { ok: false, error: "unreachable", message: "Could not reach Studio. Check your connection and try again." }; }
+}
+const eligible = it => !!it && it.status === "approved" && it.media_type === "video" && /^https:\/\//i.test(it.media_url || "") && !isMember();
+const allItems = () => (BOARD && (BOARD.all || BOARD.items)) || [];
+
+/* ── entry points ───────────────────────────────────────────────────── */
+const _pst = typeof postStatusTags === "function" ? postStatusTags : null;
+if(_pst){
+  window.postStatusTags = function(it){
+    let h = _pst(it);
+    try{ if(ON && CONNECTED && eligible(it)) h += `<button type="button" class="tag state ttbtn" data-ttpost="${esc(it.id)}">Post to${NBS}TikTok</button>`; }catch{}
+    return h;
+  };
+}
+function addSettingsButton(){
+  if(!ON || !CONNECTED) return;
+  const tile = document.querySelector('#acctRows [data-acct="tiktok"]');
+  if(!tile || tile.querySelector("[data-ttpost]") || !tile.querySelector(".badge.ok")) return;
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "btn send cbtn"; b.dataset.ttpost = ""; b.style.marginTop = "8px"; b.style.marginRight = "8px";
+  b.textContent = "Post a video to TikTok";
+  const first = tile.querySelector("[data-disconnect]");
+  if(first) first.parentNode.insertBefore(b, first); else tile.appendChild(b);
+}
+new MutationObserver(() => { try{ addSettingsButton(); }catch{} }).observe(document.body, { childList: true, subtree: true });
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("[data-ttpost]");
+  if(!b) return;
+  e.preventDefault(); e.stopPropagation();
+  openTT(b.dataset.ttpost || null);
+}, true);
+
+async function init(){
+  try{
+    const on = await rpc("studio_tt_direct_enabled", { p_token: TOKEN });
+    ON = on === true;
+    if(!ON) return;
+    let st = ACCTS;
+    if(!st || !st.accounts){ try{ st = await rpc("client_social_state_for", { p_token: TOKEN }); }catch{} }
+    const a = st && (st.accounts || []).find(x => x.platform === "tiktok");
+    CONNECTED = !!(a && a.connected);
+    if(CONNECTED){ (BOARD.items || []).forEach((it, i) => { if(eligible(it)) try{ repaintCard(i); }catch{} }); addSettingsButton(); }
+  }catch{}
+}
+(function wait(n){
+  if(typeof BOARD !== "undefined" && BOARD && BOARD.all && TOKEN) return init();
+  if(n > 120) return;
+  setTimeout(() => wait(n + 1), 750);
+})(0);
+setInterval(() => { try{ if(ON && !CONNECTED && ACCTS && (ACCTS.accounts || []).some(x => x.platform === "tiktok" && x.connected)){ CONNECTED = true; addSettingsButton(); (BOARD.items || []).forEach((it, i) => { if(eligible(it)) try{ repaintCard(i); }catch{} }); } }catch{} }, 4000);
+
+/* ── the posting screen ─────────────────────────────────────────────── */
+function stopPoll(){ if(POLL){ clearTimeout(POLL); POLL = null; } }
+function shell(sub, body, row){
+  $("sheetTitle").textContent = "Post to TikTok";
+  $("sheetSub").textContent = sub;
+  $("sheetBody").innerHTML = `<div class="ttc">${body}</div>`;
+  $("sheetRow").innerHTML = row || '<button class="btn ghost" id="sheetCancel">Close</button>';
+  const c = $("sheetCancel"); if(c) c.addEventListener("click", () => { stopPoll(); closeSheet(); });
+  showSheet();
+}
+async function openTT(itemId){
+  stopPoll();
+  if(PEEK){ toast("You are viewing only. Nothing was posted."); return; }
+  shell("Checking your TikTok account.", `<p class="tt-info">Asking TikTok about your account…</p>`);
+  const cr = await call({ op: "creator" });
+  if(!cr || cr.ok === false){ shell("Something went wrong.", `<p class="tt-bad">${esc((cr && cr.message) || "Could not reach TikTok. Please try again.")}</p>`); return; }
+  if(!cr.connected){ shell("TikTok is not linked.", `<p class="tt-warn">Link your TikTok in Settings, then come back here.</p>`); return; }
+  if(!cr.can_post){ shell("TikTok will not take a post right now.", `<p class="tt-warn">${esc(cr.message || "Please try again later.")}</p>`); return; }
+  const items = allItems().filter(eligible);
+  if(!items.length){ shell("No video to post yet.", `<p class="tt-warn">Approve a video first. Only a video you have approved can be posted to TikTok.</p>`); return; }
+  const it = itemId ? items.find(x => x.id === itemId) : null;
+  if(it) return composer(it, cr.creator);
+  // pick one of the approved videos
+  shell("Pick the video to post.", `<div class="tt-pick">${items.map(x => `<button type="button" class="tt-row" data-pickv="${esc(x.id)}"><div><b>${esc(x.title || "Video")}</b><span>${esc(x.code || "")}${x.code ? " · " : ""}Approved</span></div></button>`).join("")}</div>`);
+  $("sheetBody").querySelectorAll("[data-pickv]").forEach(b => b.onclick = () => composer(items.find(x => x.id === b.dataset.pickv), cr.creator));
+}
+
+function composer(it, cr){
+  const cap = (() => { try{ const c = capOf(it, "tiktok"); return [c.text, (c.tags || []).map(t => String(t).startsWith("#") ? t : "#" + t).join(" ")].filter(Boolean).join("\n\n"); }catch{ return String(it.caption || ""); } })();
+  const opts = (cr.privacy_level_options || []).filter(p => LBL[p]);
+  const av = /^https:\/\//i.test(cr.avatar_url || "") ? `<img class="tt-av" src="${esc(cr.avatar_url)}" alt="">` : `<span class="tt-av" aria-hidden="true"></span>`;
+  const max = Number(cr.max_video_post_duration_sec || 0);
+  const ck = (id, label, off, hint) => `<label class="tt-ck${off ? " off" : ""}" for="${id}"><input type="checkbox" id="${id}"${off ? " disabled" : ""}><span>${label}${hint ? `<small>${hint}</small>` : ""}</span></label>`;
+  const body = `
+    <div class="tt-who">${av}<div><b>${esc(cr.nickname || "Your TikTok")}</b><span>${cr.username ? "@" + esc(cr.username) + " · " : ""}This video will be posted to this TikTok account.</span></div></div>
+    <div><video id="ttVid" controls playsinline preload="metadata" src="${esc(it.media_url)}"${it.thumb_url ? ` poster="${esc(it.thumb_url)}"` : ""}></video></div>
+    <p class="tt-warn" id="ttLen" hidden></p>
+    <div><label class="tt-l" for="ttTitle">Caption</label><textarea id="ttTitle" maxlength="2200" spellcheck="true">${esc(cap)}</textarea><div class="tt-cnt" id="ttCnt"></div></div>
+    <div><label class="tt-l" for="ttPriv">Who can view this video</label>
+      <select id="ttPriv"><option value="" selected disabled>Choose who can view this video</option>${opts.map(p => `<option value="${p}">${LBL[p]}</option>`).join("")}</select>
+      <p class="tt-hint" id="ttPrivNote" hidden>Branded content visibility cannot be set to private.</p></div>
+    <fieldset><legend>Allow people to</legend>
+      ${ck("ttCom", "Comment", cr.comment_disabled, cr.comment_disabled ? "Turned off in your TikTok settings." : "")}
+      ${ck("ttDuet", "Duet", cr.duet_disabled, cr.duet_disabled ? "Turned off in your TikTok settings." : "")}
+      ${ck("ttStitch", "Stitch", cr.stitch_disabled, cr.stitch_disabled ? "Turned off in your TikTok settings." : "")}
+    </fieldset>
+    <div class="tt-dis">
+      ${ck("ttDisc", "<b>Disclose video content</b>", false, "Turn this on to say that this video promotes yourself, a brand, a product or a service.")}
+      <div id="ttDiscBox" hidden>
+        ${ck("ttOwn", "<b>Your brand</b>", false, "You are promoting yourself or your own business.")}
+        ${ck("ttBr", "<b>Branded content</b>", false, "You are promoting another brand or a third party.")}
+        <p class="tt-info" id="ttLabelNote" hidden></p>
+      </div>
+    </div>
+    ${ck("ttAi", "This video was made with AI", false, "Adds TikTok's AI-generated content label.")}
+    <p class="tt-consent" id="ttConsent"></p>
+    <p class="tt-hint">After you post, it can take a few minutes for your video to be processed and show on your TikTok profile.</p>
+    <div id="ttStatus" role="status" aria-live="polite"></div>`;
+  shell("Check each choice, then tap Post. Nothing is sent to TikTok until you do.", body,
+    '<p id="ttWhy"></p><button class="btn ghost" id="sheetCancel">Close</button><button class="btn send" id="ttPost" disabled>Post to TikTok</button>');
+  const g = id => $(id);
+  const S = { len: true, sending: false, done: false };
+  const vid = g("ttVid");
+  if(max > 0 && vid) vid.addEventListener("loadedmetadata", () => {
+    const d = Math.round(vid.duration || 0);
+    if(d > max){ S.len = false; const w = g("ttLen"); w.hidden = false; w.textContent = `This video is ${sec(d)} long. This TikTok account can post videos up to ${sec(max)}.`; sync(); }
+  });
+  function sync(){
+    const disc = g("ttDisc").checked, own = disc && g("ttOwn").checked, br = disc && g("ttBr").checked;
+    g("ttDiscBox").hidden = !disc;
+    // "Only me" is not allowed for branded content
+    const so = g("ttPriv").querySelector('option[value="SELF_ONLY"]');
+    if(so){ so.disabled = br; so.textContent = br ? "Only me (not available for branded content)" : LBL.SELF_ONLY; }
+    if(br && g("ttPriv").value === "SELF_ONLY"){ g("ttPriv").value = ""; }
+    g("ttPrivNote").hidden = !br;
+    // labels TikTok requires us to show
+    const ln = g("ttLabelNote");
+    if(disc && (own || br)){ ln.hidden = false; ln.textContent = br ? "Your video will be labeled as 'Paid partnership'." : "Your video will be labeled as 'Promotional content'."; }
+    else ln.hidden = true;
+    // the consent line TikTok requires
+    g("ttConsent").innerHTML = (disc && br)
+      ? `By posting, you agree to TikTok's <a href="${BRANDED}" target="_blank" rel="noopener">Branded Content Policy</a> and <a href="${MUSIC}" target="_blank" rel="noopener">Music Usage Confirmation</a>.`
+      : `By posting, you agree to TikTok's <a href="${MUSIC}" target="_blank" rel="noopener">Music Usage Confirmation</a>.`;
+    g("ttCnt").textContent = g("ttTitle").value.length.toLocaleString("en-US") + " of 2,200";
+    // Post is only live when every required choice is made
+    let why = "";
+    if(!g("ttPriv").value) why = "Choose who can view this video.";
+    else if(disc && !own && !br) why = "You need to indicate if your content promotes yourself, a third party, or both.";
+    else if(!S.len) why = "This video is longer than this TikTok account can post.";
+    g("ttWhy").textContent = S.done ? "" : why;
+    const b = g("ttPost"); b.disabled = !!why || S.sending || S.done; b.title = why;
+  }
+  ["ttTitle", "ttPriv", "ttCom", "ttDuet", "ttStitch", "ttDisc", "ttOwn", "ttBr", "ttAi"].forEach(id => { const el = g(id); el.addEventListener("input", sync); el.addEventListener("change", sync); });
+  sync();
+
+  g("ttPost").addEventListener("click", async () => {
+    if(S.sending || S.done) return;
+    S.sending = true; sync();
+    const b = g("ttPost"), st = g("ttStatus");
+    b.textContent = "Sending…";
+    st.innerHTML = `<p class="tt-info">Sending your video to TikTok. Keep this open.</p>`;
+    const disc = g("ttDisc").checked;
+    const r = await call({ op: "post", item_id: it.id, title: g("ttTitle").value, privacy_level: g("ttPriv").value,
+      allow_comment: g("ttCom").checked, allow_duet: g("ttDuet").checked, allow_stitch: g("ttStitch").checked,
+      disclose: { on: disc, own: disc && g("ttOwn").checked, branded: disc && g("ttBr").checked }, ai_generated: g("ttAi").checked, consent: true });
+    if(!r || !r.ok){ S.sending = false; b.textContent = "Post to TikTok"; st.innerHTML = `<p class="tt-bad">${esc((r && r.message) || "That did not send. Nothing was posted. Please try again.")}</p>`; sync(); return; }
+    S.done = true; b.textContent = "Sent to TikTok"; sync();
+    st.innerHTML = `<p class="tt-info">Your video is with TikTok. It can take a few minutes to process and show on your profile.</p>`;
+    const started = Date.now();
+    const tick = async () => {
+      if(!$("sheet").classList.contains("up") || !g("ttStatus")) return;
+      const s = await call({ op: "status", id: r.id });
+      if(s && s.status === "published"){
+        g("ttStatus").innerHTML = `<p class="tt-ok">Posted to TikTok.${s.permalink ? ` <a href="${esc(s.permalink)}" target="_blank" rel="noopener" style="color:inherit">See it on${NBS}TikTok</a>` : ""}</p><p class="tt-hint">It can take a few minutes to show on your profile.</p>`;
+        toast("Posted to TikTok.", { ok: true }); return;
+      }
+      if(s && s.status === "failed"){ g("ttStatus").innerHTML = `<p class="tt-bad">TikTok could not post this video${s.fail_reason ? ": " + esc(String(s.fail_reason).replace(/_/g, " ")) : "."}</p>`; S.done = false; S.sending = false; b.textContent = "Try again"; sync(); return; }
+      if(s && s.tiktok_status === "SEND_TO_USER_INBOX"){ g("ttStatus").innerHTML = `<p class="tt-info">Sent. Open TikTok to finish posting it.</p>`; return; }
+      if(Date.now() - started > 180000){ g("ttStatus").innerHTML = `<p class="tt-info">TikTok is still processing. You can close this. It will show on your profile in a few minutes.</p>`; return; }
+      POLL = setTimeout(tick, 4000);
+    };
+    POLL = setTimeout(tick, 3000);
+  });
+}
+})();
+</script>
