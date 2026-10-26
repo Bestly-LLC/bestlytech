@@ -50,7 +50,7 @@ async function call(body){
     say("Connecting…");
     const r = await call({ op: "tiktok_finish", k: state, code });
     if (r.ok) return say("Connected.", `<p><b>${esc(r.handle || "Your TikTok")}</b> is now connected to Bestly Studio${r.client ? " for " + esc(r.client) : ""}.</p>
-      <p class="mute">Here is how it works: each video we make lands in your TikTok <b>drafts</b>. You open it, paste the caption from your board, add the deck as a product, and tap Post. Nothing goes out until you do.</p>
+      <p class="mute">Here is how it works: approved videos can go to your TikTok <b>drafts</b>, or you can post one from Studio yourself. Open Settings, tap Post a video to TikTok, check each choice, then tap Post. Nothing goes out until you do.</p>
       <p class="mute">You can close this tab and go back to your board.</p>`);
     return say("Not connected.", `<p class="bad">${esc(WHY[r.error] || "Something went wrong connecting. " + (r.detail || r.error || ""))}</p>${WHY[r.error] && r.error.startsWith("link") ? "" : retry}`);
   }
