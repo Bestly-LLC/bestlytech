@@ -59,8 +59,8 @@ async function call(body){
   const r = await call({ op: "tiktok_start", k });
   if (!r.ok) return say(r.error === "link_used" ? "Already connected." : "Can't connect yet.", `<p>${esc(WHY[r.error] || r.error)}</p>`);
   say(`Connect TikTok${r.client ? " for " + esc(r.client) : ""}`,
-    `<p>Bestly Studio will send the videos you approve to your TikTok drafts, ready to post. Nothing posts by itself — you tap Post in TikTok, and you can disconnect any time from your board.</p>
-     <p class="mute">Log in with the TikTok account the videos should go to. Leave both permissions ticked.</p><hr>
+    `<p>Bestly Studio will read your TikTok name and photo, and can send or post the videos you approve. Nothing posts by itself: you tap Post, and you can disconnect any time from your board.</p>
+     <p class="mute">Log in with the TikTok account the videos should go to. Leave every permission ticked.</p><hr>
      <p><a class="btn" href="${esc(r.authorize_url)}">Continue to TikTok</a></p>`);
 })();
 </script></body></html>

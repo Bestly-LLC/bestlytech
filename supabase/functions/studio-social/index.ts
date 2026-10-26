@@ -338,6 +338,9 @@ Deno.serve(async (req) => {
     const go = new URL("https://www.instagram.com/oauth/authorize");
     go.searchParams.set("enable_fb_login", "0");
     go.searchParams.set("force_authentication", "1");
+    // 2026-10-25: Instagram Login ignores force_authentication; force_reauth is the documented switch. Without it
+    // Meta silently reuses whichever Instagram account is signed in on the browser (Jared got @kangaroo, then @jared_best).
+    go.searchParams.set("force_reauth", "true");
     go.searchParams.set("client_id", app.id);
     go.searchParams.set("redirect_uri", REDIRECT);
     go.searchParams.set("response_type", "code");
@@ -404,7 +407,14 @@ Deno.serve(async (req) => {
     if (!app) return J({ ok: false, error: "not_set_up", client: l.approval_clients?.name ?? null }, 503);
     const go = new URL("https://www.tiktok.com/v2/auth/authorize/");
     go.searchParams.set("client_key", app.key);
-    go.searchParams.set("scope", TT_SCOPES);
+    // 2026-10-26: Direct Post needs video.publish. Only requested for the Studio test client until TikTok approves
+    // the app for production (then flag tt_direct_post_all turns it on for everyone), so live clients' connects do not change.
+    let scopes = TT_SCOPES;
+    try {
+      const { data: fl } = await db.from("studio_flags").select("value").eq("key", "tt_direct_post_all").maybeSingle();
+      if (l.approval_clients?.slug === "bestly-test" || (fl as any)?.value === true) scopes += ",video.publish";
+    } catch { /* keep the drafts-only scope */ }
+    go.searchParams.set("scope", scopes);
     go.searchParams.set("response_type", "code");
     go.searchParams.set("redirect_uri", TT_REDIRECT);
     go.searchParams.set("state", String(b.k));
