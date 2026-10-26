@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { SEOHead } from "@/components/SEOHead";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Button } from "@/components/ui/button";
@@ -70,7 +71,15 @@ const faqs = [
   },
   {
     q: "Where do you post?",
-    a: "We post to your Instagram account, which you connect once. We also make videos in the vertical shape that TikTok and Reels use.",
+    a: "To your own accounts, which you connect yourself. Instagram works today. TikTok connects through TikTok's own login, and you post each video yourself with a tap on the Studio posting screen. TikTok is still reviewing Bestly Studio, so for now TikTok is open to approved test accounts only.",
+  },
+  {
+    q: "Does Bestly post on my TikTok without asking?",
+    a: "No. You connect your own TikTok account and review every video and caption. Studio sends a video to TikTok only after you approve it and tap Post, and you choose who can see it. You can disconnect any time from your board.",
+  },
+  {
+    q: "What does Studio see on my TikTok?",
+    a: "Your basic profile (name and picture), so you can see which account is connected, and the permission to post the videos you approve. Nothing else. The Privacy Policy has the details and how to delete your data.",
   },
   {
     q: "What does it cost?",
@@ -204,6 +213,30 @@ export default function BestlyStudio() {
         </div>
       </section>
 
+      {/* Your accounts */}
+      <section className="border-b border-border bg-background">
+        <div className="mx-auto max-w-3xl px-6 py-20 lg:py-24">
+          <AnimatedSection animation="fade-in" className="mb-8">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">Your accounts, your say</p>
+            <h2 className="font-modern text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              You connect your own accounts. Nothing posts until you say so.
+            </h2>
+          </AnimatedSection>
+          <ul className="space-y-4 text-foreground">
+            <li className="flex gap-4"><UserCheck className="mt-1 h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><span>Each business connects its own Instagram and TikTok accounts, on the platform's own login page. We never see your password.</span></li>
+            <li className="flex gap-4"><Send className="mt-1 h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><span>For TikTok, you look at the video and its caption, choose who can view it and whether to allow comments, Duet and Stitch, then tap Post. Nothing is sent to TikTok before that tap.</span></li>
+            <li className="flex gap-4"><History className="mt-1 h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><span>Studio adds no watermark or logo to your videos.</span></li>
+            <li className="flex gap-4"><Smartphone className="mt-1 h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><span>You can disconnect an account from your board at any time. We then delete the saved sign-in for it.</span></li>
+          </ul>
+          <p className="mt-6 text-sm text-muted-foreground">
+            TikTok is still reviewing Bestly Studio. Until that finishes, TikTok is open to approved test accounts only.{" "}
+            <Link to="/studio/terms" className="text-foreground underline underline-offset-4">Terms of Service</Link>{" "}
+            and{" "}
+            <Link to="/studio/privacy" className="text-foreground underline underline-offset-4">Privacy Policy</Link>.
+          </p>
+        </div>
+      </section>
+
       {/* Who it is for */}
       <section className="border-b border-border bg-secondary/20">
         <div className="mx-auto max-w-7xl px-6 py-20 lg:px-8 lg:py-24">
@@ -269,6 +302,12 @@ export default function BestlyStudio() {
               Or email {EMAIL}
             </a>
           </div>
+          <p className="mt-10 text-sm text-muted-foreground">
+            Bestly Studio is made by Bestly LLC, Los Angeles.{" "}
+            <Link to="/studio/terms" className="underline underline-offset-4 hover:text-foreground">Terms</Link>
+            {" · "}
+            <Link to="/studio/privacy" className="underline underline-offset-4 hover:text-foreground">Privacy</Link>
+          </p>
         </div>
       </section>
     </>

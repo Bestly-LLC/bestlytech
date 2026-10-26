@@ -43,6 +43,8 @@ const TermsOfUse = lazyPage(() => import("./pages/TermsOfUse"));
 const DeveloperCompliance = lazyPage(() => import("./pages/DeveloperCompliance"));
 const Contact = lazyPage(() => import("./pages/Contact"));
 const ProductLegal = lazyPage(() => import("./pages/ProductLegal"));
+const StudioPrivacy = lazyPage(() => import("./pages/StudioLegal").then((m) => ({ default: m.StudioPrivacy })));
+const StudioTerms = lazyPage(() => import("./pages/StudioLegal").then((m) => ({ default: m.StudioTerms })));
 const ReportSite = lazyPage(() => import("./pages/ReportSite"));
 const Hire = lazyPage(() => import("./pages/Hire"));
 const GetStarted = lazyPage(() => import("./pages/GetStarted"));
@@ -204,6 +206,8 @@ const App = () => {
                   <Route path="/cloud" element={<InHouseCloud />} />
                   <Route path="/in-house-cloud" element={<InHouseCloud />} />
                   <Route path="/studio" element={<BestlyStudio />} />
+                  <Route path="/studio/privacy" element={<StudioPrivacy />} />
+                  <Route path="/studio/terms" element={<StudioTerms />} />
                   <Route path="/neckpilot" element={<NeckPilot />} />
                   <Route path="/agent" element={<BestlyAgent />} />
                   <Route path="/bestly-agent" element={<Navigate to="/agent" replace />} />

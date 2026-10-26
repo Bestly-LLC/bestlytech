@@ -24,7 +24,7 @@ Say these, in plain words. Each line says where it is true.
   notes sent to studio@bestly.tech arrive in the Studio Inbox, where Bestly picks them up.
 - **Posting.** After you approve, a post can go out to your Instagram account (you connect the account once). Auto-posting is a
   switch per client, off until the client and Bestly turn it on; otherwise a Bestly person presses Post. Say only "we post it to your
-  Instagram". TikTok is not a posting promise (inbox mode, sandbox-limited today). No promise for Facebook, LinkedIn or anything else.
+  Instagram". TikTok: updated 2026-10-26. Say that each business connects its own TikTok through TikTok's own login, reviews the video and caption, chooses who can view it, and taps Post; nothing is sent before that tap; TikTok is still under TikTok's review, so it is open to approved test accounts only. Never promise TikTok posting for everyone until the review passes. No promise for Facebook, LinkedIn or anything else.
 - **Who it is for.** Small businesses, solo professionals, real estate agents (as an audience; see the real estate rule below).
 - **How we work with AI, if asked.** We use software, including AI tools, to draft, design and edit. A person at Bestly checks every
   post. (Fine in the FAQ and when a viewer asks. Do not use "AI" as the headline.)
