@@ -15,12 +15,18 @@
 // reply parsing, Ava calls, choosing, the Turo invoice queue).
 //
 // Hard rules (the reason this can run without a human in the loop):
-//   - Guest drafts pass reviewGuard + moneyGuard first. In 'full' they are inserted already approved and the Pi reader sends them
-//     (claims_send_claim); in 'guest_approval' they wait pending for Jared as in v1.
-//   - Reviews: may say Jared will leave an honest review of how the trip and car were handled; never ties the review
-//     to payment, insurance or the claim (Turo can treat that as leverage and it hurts the claim). Enforced by
-//     reviewGuard() after the model writes, not just by the prompt.
-//   - No made-up money: every dollar amount in a draft must be one the case actually has (estimate, plan max, invoices).
+//   - RETURN GATE (2026-10-26, Jared): no message to a guest on any channel (Turo thread or Turo invoice message) until the Turo
+//     reservation has ENDED and Jared tapped "Complete trip" on that trip's guest page (lax_guest_links.host_completed_at). Never a
+//     reply during a live trip. While gated the case is opened and the message is drafted, then HELD (claim_drafts.status = 'held',
+//     claim_cases.status = 'waiting_return'); when the gate opens claims_gate_sweep() wakes the case and the held draft goes out.
+//     The gate is the SQL function claims_gate(case_id); a failed lookup counts as closed. The watchdog claims_guard_watch() backs it up.
+//   - NO DOLLAR AMOUNTS, NO SPEAKING FOR TURO (Jared): never state or guess a deductible, plan cap, out-of-pocket max or any coverage
+//     figure, never describe Turo's plans, policies, processes or payment options. The only dollar figure a guest message may carry is
+//     the body shop estimate total. guest_max is null unless the guest states an amount; it is internal only and never repeated.
+//   - NO REVIEWS: guest messages never mention reviews, ratings or stars. Enforced by reviewGuard() / planGuard() after the model
+//     writes, not just by the prompt.
+//   - Guest drafts pass reviewGuard + planGuard + moneyGuard first. In 'full' they are inserted already approved (when the gate is open)
+//     and the Pi reader sends them (claims_send_claim); in 'guest_approval' they wait pending for Jared as in v1.
 //   - Every run checks in with Team Watch: agent_beat('claims-closer', ok, summary).
 //
 // Auth: service key (cron/invoke_edge_function) or an admin JWT. verify_jwt = false.
@@ -91,18 +97,19 @@ type Msg = { message_id: string; sent_at: string; role: string; author: string |
 type Draft = Record<string, any>;
 
 // ---------------------------------------------------------------- guards
-const LEVERAGE = /\b(if|unless|as long as|provided|depend\w*|in exchange|otherwise|so that|avoid|instead of|in return|pay\w*|insur\w*|claim\w*|invoice\w*|settle\w*|resolv\w*|cooperat\w*|handle[sd]? this|reflect\w*|affect\w*|impact\w*|consequen\w*|future rentals?|ability to rent)\b/i;
+// Guest messages never mention reviews, ratings or stars, in any form (Jared, 2026-10-26).
 export function reviewGuard(text: string): { ok: boolean; cleaned: string } {
   const sentences = text.split(/(?<=[.!?])\s+/);
-  let ok = true;
-  const kept = sentences.filter((s) => {
-    if (!/\b(review|rating|rate you|stars?)\b/i.test(s)) return true;
-    if (LEVERAGE.test(s)) { ok = false; return false; }
-    return true;
-  });
-  return { ok, cleaned: kept.join(" ").trim() };
+  const kept = sentences.filter((s) => !/\b(review\w*|rating\w*|rate you|stars?)\b/i.test(s));
+  return { ok: kept.length === sentences.length, cleaned: kept.join(" ").trim() };
 }
 
+// Jared's rule: hosts never tell a guest their deductible / plan cap / out-of-pocket max, and never speak for Turo (its plans, policies,
+// processes, payment options). Same wording list the SQL watchdog (claims_guard_watch) uses, slightly stricter.
+const TURO_VOICE = /deductible|out[-\s]of[-\s]pocket|protection|\bplan\s+(max|cap)|\b(turo|coverage|insurance)\s+plan|\bcap(s|ped)?\b|\bmax(imum)?\b|\bturo['\u2019]s\b|\b(through|via|in|on|using|with)\s+(the\s+)?turo\b|\bturo\s+(app|polic|process|team|support|insurance|rules?|claims?)|clause\s*2\.6|car[-\s]sharing agreement|terms of service/i;
+export function planGuard(text: string): boolean { return !TURO_VOICE.test(text); }
+
+// dollar figures: only the body shop estimate total may appear in a guest message
 function moneyGuard(text: string, allowed: number[]): boolean {
   for (const m of text.matchAll(/\$\s?([0-9][0-9,]*(?:\.[0-9]{1,2})?)/g)) {
     const v = Number(m[1].replace(/,/g, ""));
@@ -111,43 +118,53 @@ function moneyGuard(text: string, allowed: number[]): boolean {
   return true;
 }
 
+// strip any sentence that carries a plan / cap / dollar figure out of text the model will read (old cases still have "$500" in goal and facts)
+const SCRUB = /out[-\s]of[-\s]pocket|plan\s+(max|cap)|protection|deductible|\bturo['\u2019]s\b|\bguest\s+(owes|plan)|\$\s?[0-9]/i;
+const scrub = (t?: string | null) => t ? t.split(/(?<=[.!?])\s+/).filter((x) => !SCRUB.test(x)).join(" ") || null : null;
+
+// a coverage amount the GUEST stated in their own message (internal use only, never repeated to anyone)
+function guestStatedMax(body: string): number | null {
+  const m = /(deductible|out[-\s]of[-\s]pocket|max(?:imum)?|cap|coverage|protection plan)[^$.\n]{0,60}\$\s?([0-9][0-9,]*(?:\.[0-9]{1,2})?)|\$\s?([0-9][0-9,]*(?:\.[0-9]{1,2})?)[^.\n]{0,40}(deductible|out[-\s]of[-\s]pocket|max(?:imum)?)/i.exec(body);
+  const v = m ? (m[2] ?? m[3]) : null;
+  return v ? Number(v.replace(/,/g, "")) : null;
+}
+
 // ---------------------------------------------------------------- drafting
 const SYSTEM = `You write short Turo messages for Jared, a Turo host, to a guest who damaged his car. You write AS Jared, first person.
-Goal, in order: (1) the guest runs the repair through their personal auto insurance so the full repair is paid; (2) if they won't,
-they pay their Turo protection plan's out-of-pocket max through the Turo app; (3) Turo's claims team steps in if they stall.
+Goal: the guest runs the repair through their personal auto insurance so the full repair is paid.
 Voice: calm, direct, friendly but firm, plain words, 2 to 5 short sentences, no emoji, no greetings longer than "Hi <name>,".
-Facts only from the CASE data. Never invent amounts, dates, damage, promises, legal threats or Turo policy.
-Insurance: ask for their insurer's name and policy number; Jared will handle the rest with the estimate. Adjusters can see clause 2.6 of the Turo car sharing agreement.
-Reviews: you MAY say once that Jared will leave an honest review of how the trip and the car were handled. NEVER link the review to paying,
-insurance, the claim, cooperating or how this gets resolved, and never hint the review could change. If in doubt, leave reviews out.
+Facts only from the CASE data. Never invent amounts, dates, damage, promises or legal threats.
+Insurance: ask for their insurer's name and policy number; Jared will handle the rest with the estimate.
+Hard rules: the only dollar figure you may ever write is the body shop estimate total, and only when the CASE gives it. Never mention a deductible, plan cap,
+out-of-pocket max, protection plan or any coverage amount. Never describe or explain Turo's plans, policies, processes, claim steps or payment options, and never tell the
+guest how or where to pay. You speak for Jared only, never for Turo. Never mention reviews, ratings or stars.
 Never mention AI, drafts, automation or that someone else is writing. Never ask the guest to message outside Turo.
 Reply ONLY with JSON: {"message": "<the message>", "reason": "<one line for Jared: why this message now>"}`;
 
 async function draft(kind: string, c: Case, trip: any, thread: Msg[], extra: string): Promise<{ message: string; reason: string } | null> {
-  const allowed = [Number(c.guest_max ?? 500), ...(c.invoice_max ? [Number(c.invoice_max)] : []), ...(c.estimate_amount ? [Number(c.estimate_amount)] : []),
-    ...((c.invoices ?? []) as any[]).map((i) => Number(i.amount)).filter((n) => !Number.isNaN(n))];
+  const allowed = c.estimate_amount ? [Number(c.estimate_amount)] : [];   // the repair estimate is the only dollar figure a guest message may carry
   const caseData = {
     guest_first_name: c.guest_first, reservation: c.reservation_id,
     trip: trip ? { start: fmt(trip.starts_at), end: fmt(trip.ends_at), car: "2020 Tesla Model 3" } : null,
-    path: c.path, status: c.status, goal: c.goal, facts: c.facts,
+    path: c.path, status: c.status, goal: scrub(c.goal), facts: scrub(c.facts),
     estimate: c.estimate_amount ? money(Number(c.estimate_amount)) : "not yet (body shop estimate coming)",
-    guest_plan_max: money(Number(c.guest_max ?? 500)),
+    invoice_posted: await invoiceDone(c),
     insurer_on_file: c.insurer && Object.keys(c.insurer).length ? c.insurer : null,
-    open_invoices: c.invoices, escalate_cutoff: fmt(c.escalate_by),
+    escalate_cutoff: fmt(c.escalate_by),
   };
   const convo = thread.slice(-14).map((m) => `${m.role === "GUEST" ? (m.author ?? "Guest") : "Jared"} (${fmt(m.sent_at)}): ${(m.body ?? "").slice(0, 700)}`).join("\n");
   const task = {
-    follow_up: "The guest has not replied. Write a polite, short follow-up that asks for their auto insurance details (insurer name + policy number) so it can go through insurance. If insurance was already asked, gently restate it and mention the alternative of paying through the Turo app.",
+    follow_up: "The guest has not replied. Write a polite, short follow-up that asks for their auto insurance details (insurer name + policy number) so it can go through insurance. If insurance was already asked, gently restate it. Do not offer, name or describe any other way to pay.",
     insurance_ask: "Ask the guest whether they have personal auto insurance and, if so, for their insurer's name and policy number so Jared can run the repair through it.",
-    reply: "Reply to the guest's latest message. Answer what they said using only the CASE facts, then move toward the goal (insurance details, or paying through the Turo app). If they share insurance details, thank them and say Jared will open the claim with the estimate. If they dispute fault, stay calm: the pre-trip photos show the corner was undamaged at handoff and the damage was found at check-in.",
-    estimate: "Tell the guest the body shop estimate total, that an invoice for the guest plan's maximum is now in the Turo app with the estimate attached (that is the most Turo lets Jared invoice and it will not cover the whole repair), and that the way to get the full repair covered is their personal auto insurance: ask for the insurer's name and policy number. Never say the guest owes more than the plan maximum out of pocket.",
+    reply: "Reply to the guest's latest message. Answer what they said using only the CASE facts, then move toward the goal (their insurance details). If they share insurance details, thank them and say Jared will open the claim with the estimate. If they dispute fault, stay calm and stick to what the CASE facts say about the handoff photos and the check-in; invent nothing.",
+    estimate: "Tell the guest the body shop estimate total (the only dollar figure you may write). If invoice_posted is true, also say an invoice with the estimate and photos is up. Then ask for their personal auto insurance details (insurer name + policy number) so the full repair can run through it. Never say what the guest owes, what a plan covers, or how to pay.",
   }[kind] ?? "Write the next helpful message toward the goal.";
   const user = `CASE: ${JSON.stringify(caseData)}\n\nCONVERSATION (oldest first):\n${convo || "(none)"}\n\nTASK: ${task}${extra ? `\nNOTE: ${extra}` : ""}`;
 
   for (let attempt = 0; attempt < 2; attempt++) {
     let r;
     try {
-      r = await llm({ task: "write", system: SYSTEM + (attempt ? "\nYour last draft broke the review or money rule. Leave reviews and any unlisted dollar amounts out entirely." : ""),
+      r = await llm({ task: "write", system: SYSTEM + (attempt ? "\nYour last draft broke a hard rule. Leave out reviews, plans, caps, deductibles, anything about how Turo works or how to pay, and every dollar figure except the estimate total." : ""),
         user, json: true, job: SLUG, ref: String(c.reservation_id), fn: SLUG, paid: "never", privacy: "private", deadlineMs: 45_000, maxTokens: 500,
         validate: (j) => typeof j?.message === "string" && j.message.trim().length >= 20 && j.message.length <= 900 ? null : "message missing or wrong length" });
     } catch (e) {
@@ -157,7 +174,7 @@ async function draft(kind: string, c: Case, trip: any, thread: Msg[], extra: str
     let msg = String(r.json.message).trim();
     const g = reviewGuard(msg);
     if (!g.ok) { if (attempt === 0) continue; msg = g.cleaned; }
-    if (!moneyGuard(msg, allowed)) { if (attempt === 0) continue; return null; }
+    if (!planGuard(msg) || !moneyGuard(msg, allowed)) { if (attempt === 0) continue; return null; }
     if (msg.length < 20) return null;
     return { message: msg, reason: String(r.json.reason ?? "").slice(0, 240) };
   }
@@ -167,7 +184,7 @@ async function draft(kind: string, c: Case, trip: any, thread: Msg[], extra: str
 // Plain fallback when every free model is down (follow-ups only; replies need judgment, so Jared gets pinged instead).
 function fallbackFollowUp(c: Case) {
   const n = c.guest_first ? ` ${c.guest_first}` : "";
-  return `Hi${n}, following up on the bumper damage from your trip. Do you have personal auto insurance? If so, send me your insurer's name and policy number and I'll handle the claim with the body shop estimate. Otherwise we can settle it through the Turo app.`;
+  return `Hi${n}, following up on the damage found after your trip. Do you have personal auto insurance? If so, please send me your insurer's name and policy number and I'll handle the claim with the body shop estimate. If not, just let me know.`;
 }
 
 // ---------------------------------------------------------------- one case
@@ -195,24 +212,58 @@ async function work(c: Case, daily: boolean, settings: Record<string, any>): Pro
   const notes: string[] = [];
   const thread = (inbox ?? []) as Msg[];
   const all = (drafts ?? []) as Draft[];
-  // hands-off: a draft written before autonomy was switched on (or while the guards were unsure) goes out now if it passes them
-  if (settings.autonomy === "full") {
-    for (const d of all.filter((x) => x.status === "pending" && x.kind !== "escalation")) {
+  // ---- RETURN GATE: nothing reaches the guest until the reservation has ended AND Jared tapped Complete trip, and never during a live trip.
+  // claims_gate() is the single source of truth (fails closed: if the lookup breaks, nothing is released).
+  const { data: gateRow } = await db.rpc("claims_gate", { p_case: c.id });
+  const gate = (gateRow ?? { ok: false, live: false, reason: "gate lookup failed" }) as Record<string, any>;
+  if (gate.ok && c.status === "waiting_return") { c.status = "waiting_guest"; await db.from("claim_cases").update({ status: "waiting_guest" }).eq("id", c.id); }
+
+  // a coverage amount the guest states themselves is the only way guest_max is ever set (internal use; never repeated back to anyone)
+  if (c.guest_max == null) {
+    const said = [...thread].reverse().find((m) => m.role === "GUEST" && guestStatedMax(m.body ?? "") != null);
+    if (said) {
+      const v = guestStatedMax(said.body ?? "")!;
+      c.guest_max = v;
+      await db.from("claim_cases").update({ guest_max: v }).eq("id", c.id);
+      await event(c, "note", "Guest stated a coverage amount in their own message (internal only, never repeated)", { amount: v, message_id: said.message_id });
+    }
+  }
+
+  // hands-off: a draft written before autonomy was switched on, or held until the gate opened, goes out now if it passes every guard
+  if (gate.ok) {
+    const waiting = all.filter((x) => ["pending", "held"].includes(x.status) && x.kind !== "escalation" && (x.status === "held" || settings.autonomy === "full"));
+    for (const d of waiting) {
       const g = reviewGuard(d.body);
-      const allowedNow = [Number(c.guest_max ?? 500), ...(c.invoice_max ? [Number(c.invoice_max)] : []), ...(c.estimate_amount ? [Number(c.estimate_amount)] : [])];
-      if (!g.ok || !moneyGuard(d.body, allowedNow)) continue;
+      const allowedNow = c.estimate_amount ? [Number(c.estimate_amount)] : [];
+      if (!g.ok || !planGuard(d.body) || !moneyGuard(d.body, allowedNow)) {
+        if (d.status === "held") {   // written under old rules or edited: never send it; a fresh draft is written below
+          await db.from("claim_drafts").update({ status: "rejected", last_error: "held draft broke the no-dollar / no-Turo-voice / no-review rules", updated_at: new Date().toISOString() }).eq("id", d.id);
+          d.status = "rejected"; notes.push(`dropped held ${d.kind} (broke the rules)`);
+        }
+        continue;
+      }
       const nowIso = new Date().toISOString();
-      const { error: upErr } = await db.from("claim_drafts").update({ status: "approved", approved_at: nowIso, verify_snippet: snippetOf(d.body), updated_at: nowIso }).eq("id", d.id).eq("status", "pending");
+      const auto = settings.autonomy === "full";
+      const { error: upErr } = await db.from("claim_drafts").update(auto
+        ? { status: "approved", approved_at: nowIso, verify_snippet: snippetOf(d.body), updated_at: nowIso }
+        : { status: "pending", updated_at: nowIso }).eq("id", d.id).eq("status", d.status);
       if (!upErr) {
-        d.status = "approved";
-        await event(c, "approved", `Sending a ${String(d.kind).replace("_", " ")} to ${c.guest_first ?? "the guest"}`, { draft_id: d.id, auto: true });
-        await db.from("turo_reader_state").update({ poke_at: nowIso }).eq("id", 1);
-        notes.push(`sent waiting ${d.kind}`);
+        const was = d.status;
+        d.status = auto ? "approved" : "pending";
+        if (auto) {
+          await event(c, "approved", `Trip is complete: sending the ${String(d.kind).replace("_", " ")} to ${c.guest_first ?? "the guest"}`, { draft_id: d.id, auto: true, was });
+          await db.from("turo_reader_state").update({ poke_at: nowIso }).eq("id", 1);
+        } else {
+          await event(c, "draft", `Trip is complete: ${String(d.kind).replace("_", " ")} for ${c.guest_first ?? "the guest"} is ready for Jared`, { draft_id: d.id });
+          await notify(`Claims: message to ${c.guest_first ?? "guest"} ready for your OK`, d.body.slice(0, 220), `claims-draft-${d.id}`);
+        }
+        notes.push(`${auto ? "sent" : "released"} ${was === "held" ? "held " : "waiting "}${d.kind}`);
       }
     }
   }
   const pending = all.find((d) => d.status === "pending" && d.kind !== "escalation");
   const inFlight = all.find((d) => ["approved", "sending"].includes(d.status));
+  const held = all.find((d) => d.status === "held" && d.kind !== "escalation");
   const lastGuest = [...thread].reverse().find((m) => m.role === "GUEST");
   const lastHost = [...thread].reverse().find((m) => m.role === "HOST");
   const now = Date.now();
@@ -278,7 +329,11 @@ async function work(c: Case, daily: boolean, settings: Record<string, any>): Pro
   // ---- what to say next (one pending draft per case, nothing while a message is going out)
   let kind: string | null = null, extra = "", forMsg: string | null = null;
   const lastSentAt = Math.max(...all.filter((d) => d.status === "sent").map((d) => Date.parse(d.sent_at)), 0, lastHost ? Date.parse(lastHost.sent_at) : 0);
-  if (!pending && !inFlight) {
+  // never draft or reply during a live trip, and never while a watchdog hold is on the case; after the trip, draft but hold until Complete trip
+  if (gate.live) notes.push("trip is live; not messaging the guest");
+  else if (c.outbound_hold) notes.push("outbound held by the watchdog");
+  else if (held && !gate.ok) notes.push("message held until the trip is complete");
+  if (!pending && !inFlight && !held && !gate.live && !c.outbound_hold) {
     if (lastGuest && Date.parse(lastGuest.sent_at) > lastSentAt && !all.some((d) => d.for_message_id === lastGuest.message_id)) {
       kind = "reply"; forMsg = lastGuest.message_id;
     } else if (c.estimate_amount && !all.some((d) => d.kind === "estimate" && ["approved", "sending", "sent", "pending"].includes(d.status))
@@ -306,11 +361,16 @@ async function work(c: Case, daily: boolean, settings: Record<string, any>): Pro
         notes.push("reply draft failed; pinged Jared");
       } else notes.push(`${kind} draft failed`);
     } else {
-      const auto = settings.autonomy === "full";
+      const hold = !gate.ok;   // draft now, send when the trip has ended and Jared has tapped Complete trip
+      const auto = settings.autonomy === "full" && !hold;
       const nowIso = new Date().toISOString();
-      const { data: row } = await db.from("claim_drafts").insert({ case_id: c.id, reservation_id: c.reservation_id, kind, body: d.message, reason: d.reason, for_message_id: forMsg,
-        ...(auto ? { status: "approved", approved_at: nowIso, verify_snippet: snippetOf(d.message), notified_at: nowIso } : {}) }).select("id").single();
-      if (auto) {
+      const { data: row } = await db.from("claim_drafts").insert({ case_id: c.id, reservation_id: c.reservation_id, kind, body: d.message,
+        reason: hold ? `${d.reason} (held until the trip is over and you tap Complete trip)`.slice(0, 300) : d.reason, for_message_id: forMsg,
+        ...(hold ? { status: "held" } : auto ? { status: "approved", approved_at: nowIso, verify_snippet: snippetOf(d.message), notified_at: nowIso } : {}) }).select("id").single();
+      if (hold) {
+        await event(c, "held", `Drafted a ${kind.replace("_", " ")} for ${c.guest_first ?? "the guest"} and holding it until the trip is over and Jared taps Complete trip`, { draft_id: row?.id, reason: gate.reason });
+        if (["open", "waiting_guest"].includes(c.status)) { c.status = "waiting_return"; await db.from("claim_cases").update({ status: "waiting_return" }).eq("id", c.id); }
+      } else if (auto) {
         await event(c, "approved", `Sending a ${kind.replace("_", " ")} to ${c.guest_first ?? "the guest"}`, { draft_id: row?.id, auto: true });
         await db.from("turo_reader_state").update({ poke_at: nowIso }).eq("id", 1);   // the Pi sends within ~15 s
       } else {
@@ -318,14 +378,14 @@ async function work(c: Case, daily: boolean, settings: Record<string, any>): Pro
         await notify(`Claims: message to ${c.guest_first ?? "guest"} ready for your OK`, d.message.slice(0, 220), `claims-draft-${row?.id}`);
         await db.from("claim_drafts").update({ notified_at: nowIso }).eq("id", row?.id);
       }
-      notes.push(`${auto ? "sent" : "drafted"} ${kind}`);
+      notes.push(`${hold ? "held" : auto ? "sent" : "drafted"} ${kind}`);
       if (kind === "follow_up") await db.from("claim_cases").update({ follow_up_at: null }).eq("id", c.id);
     }
   }
 
-  await db.from("claim_cases").update({ needs_work: false, work_reason: null, last_run_at: new Date().toISOString(),
+  await db.from("claim_cases").update({ needs_work: false, work_reason: null, held_for_gate: !gate.ok, last_run_at: new Date().toISOString(),
     ...(daily ? { last_daily_at: new Date().toLocaleDateString("en-CA", { timeZone: TZ }) } : {}), updated_at: new Date().toISOString() }).eq("id", c.id);
-  return `${c.guest_first ?? c.reservation_id}: ${notes.join(", ") || (pending ? "waiting on your OK" : inFlight ? "message going out" : "nothing new")}`;
+  return `${c.guest_first ?? c.reservation_id}: ${notes.join(", ") || (pending ? "waiting on your OK" : inFlight ? "message going out" : held ? "message held for the trip" : "nothing new")}`;
 }
 
 // ---------------------------------------------------------------- entry
