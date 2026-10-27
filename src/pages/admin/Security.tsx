@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { askScout } from "@/components/admin/scoutBus";
 import { SecurityTokensCard } from "./SecurityTokensCard";
+import { ComplianceTab } from "./ComplianceTab";
 import { Binoculars } from "lucide-react";
 import { pollInterval } from "@/lib/polling";
 import {
@@ -342,6 +343,7 @@ export default function Security() {
           <TabsTrigger value="findings">Open{open.length ? ` (${open.length})` : ""}</TabsTrigger>
           <TabsTrigger value="runs">Runs</TabsTrigger>
           <TabsTrigger value="trail">Audit trail</TabsTrigger>
+          <TabsTrigger value="compliance">Compliance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="findings" className="mt-4 space-y-4">
@@ -412,6 +414,10 @@ export default function Security() {
               ))}
             </ul>
           )}
+        </TabsContent>
+
+        <TabsContent value="compliance" className="mt-4">
+          <ComplianceTab />
         </TabsContent>
       </Tabs>
 
