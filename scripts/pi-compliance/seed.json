@@ -1,0 +1,3450 @@
+{
+ "findings": [
+  {
+   "key": "W-01",
+   "audit_ref": "websites:W-01",
+   "area": "websites",
+   "title": "parentiq.io (and parentiq-seven.vercel.app) home",
+   "detail": "\"Trusted by families like yours\": six named testimonials (Sarah M., Michael T., Jennifer L., David K., Amanda R., Robert H.), \"78% less heated exchanges\", \"5+ hrs saved weekly\", \"Join thousands of families\". Product is a Bestly portfolio app, not known to have thousands of users.",
+   "law": "No fake/unsubstantiated testimonials or claims. FTC Consumer Reviews & Testimonials Rule 16 CFR Part 465 (eff. Oct 21 2024) https://www.ecfr.gov/current/title-16/chapter-I/subchapter-B/part-465 ; FTC Act s.5; Cal. B&P 17500",
+   "severity": "critical",
+   "readiness": "fail",
+   "status": "watching",
+   "status_note": "Fix shipped 2026-10-26 by another agent; Vera marks it fixed after 3 clean days of checks.",
+   "fix": "Delete testimonials + stats unless each is a real, documented user who used it; keep only demo UI labeled \"Sample data\".",
+   "lawyer": false
+  },
+  {
+   "key": "W-02",
+   "audit_ref": "websites:W-02",
+   "area": "websites",
+   "title": "school-pilot-nine.vercel.app (public, no auth)",
+   "detail": "\"Trusted by 250+ schools nationwide\", \"50K+ students\", \"12K+ teachers\", \"99.9% uptime\", quote from \"Diana Martinez, Superintendent, Lincoln Heights District\", badges \"FERPA & COPPA compliant\", \"SOC 2 aligned\". /privacy and /terms render a 404.",
+   "law": "Same as W-01 + no false compliance claims (FTC Act s.5; B&P 17500). FERPA/COPPA 16 CFR 312",
+   "severity": "critical",
+   "readiness": "fail",
+   "status": "watching",
+   "status_note": "Fix shipped 2026-10-26 by another agent; Vera marks it fixed after 3 clean days of checks.",
+   "fix": "Take site offline or strip all stats/quote/badges; add privacy+terms before any data collection.",
+   "lawyer": true
+  },
+  {
+   "key": "W-03",
+   "audit_ref": "websites:W-03",
+   "area": "websites",
+   "title": "quoterra-a7eff299.vercel.app (public)",
+   "detail": "\"Trusted by 1,000+ Property Owners\", \"Join thousands of satisfied property owners\", \"All contractors are licensed, insured, and verified by us\"; Stripe.js loaded; photo-upload quote flow; /privacy and /terms 404; (c) 2025.",
+   "law": "Same as W-01; CalOPPA B&P 22575",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "watching",
+   "status_note": "Fix shipped 2026-10-26 by another agent; Vera marks it fixed after 3 clean days of checks.",
+   "fix": "Unpublish (pause Vercel project) or remove claims + add policy. Ownership unclear (see Questions).",
+   "lawyer": true
+  },
+  {
+   "key": "W-04",
+   "audit_ref": "websites:W-04",
+   "area": "websites",
+   "title": "bestly.tech/hoku and /products (HOKU cards)",
+   "detail": "/hoku shows 4 named testimonials (Sarah M., David L., Emma R., Michael K.), \"Join thousands who have discovered...\", \"Pharmaceutical-Grade\", \"Dermatologist reviewed\", \"protect and heal\". /products labels HOKU \"Coming Soon\". hoku-clean.com says NOT for sale and \"Customer reviews will appear here once collected and verifiable\"; its terms say HOKU \"is not a drug\". The two sites contradict each other.",
+   "law": "FTC Reviews Rule 16 CFR 465; FD&C Act drug-vs-cosmetic claims (21 USC 321(g),(i)); FTC Endorsement Guides 16 CFR 255 (expert claims); B&P 17500",
+   "severity": "critical",
+   "readiness": "fail",
+   "status": "watching",
+   "status_note": "Fix shipped 2026-10-26 by another agent; Vera marks it fixed after 3 clean days of checks.",
+   "fix": "Remove testimonials, \"thousands\", \"pharmaceutical-grade\", \"dermatologist reviewed\" (unless documented), \"heal\". Mirror hoku-clean.com wording.",
+   "lawyer": true
+  },
+  {
+   "key": "W-05",
+   "audit_ref": "websites:W-05",
+   "area": "websites",
+   "title": "bestly.tech /cloud, footer badges on every page, home \"Open about it\"",
+   "detail": "/cloud: \"GDPR, HIPAA, SOC 2, CCPA - built in.\" Home: \"GDPR and CCPA compliant.\" Footer badges \"GDPR Compliant / CCPA Ready / Zero Data Resale\" on all pages. No SOC 2 report, no GDPR representative/DPA, no BAA page found.",
+   "law": "No unsubstantiated compliance claims. FTC Act s.5 / B&P 17500; HIPAA 45 CFR 164 (BAA)",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "watching",
+   "status_note": "Fix shipped 2026-10-26 by another agent; Vera marks it fixed after 3 clean days of checks.",
+   "fix": "Replace with factual, provable statements (\"designed to support\", list what you actually do); drop HIPAA/SOC 2 unless attested.",
+   "lawyer": true
+  },
+  {
+   "key": "W-06",
+   "audit_ref": "websites:W-06",
+   "area": "websites",
+   "title": "bestly.tech /privacy (Cookie Yeti policy, Oct 1 2026) vs /privacy-policy s.15 (Oct 15 2026) vs /terms-of-use",
+   "detail": "/privacy table: \"Personal identifiers (name, email, IP): No\"; \"Raw page content is not uploaded\"; \"No other parties receive any information\"; payments by Apple/Google only. /privacy-policy s.15 says extension collects email (Pro), up to 5,000 chars of banner HTML, install ID, 24-month analytics, and shares with Stripe, Resend, OpenAI. /terms-of-use says web subscriptions go via Stripe. Footer \"Cookie Yeti Privacy\" -> /privacy (the weaker/inaccurate one); master policy says the product-specific one controls on conflict.",
+   "law": "Privacy statements must be accurate. FTC Act s.5; B&P 17200; CalOPPA 22575(b); Chrome Web Store User Data policy",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "watching",
+   "status_note": "Fix shipped 2026-10-26 by another agent; Vera marks it fixed after 3 clean days of checks.",
+   "fix": "Make /privacy a mirror of s.15 (single source of truth); add Stripe/Resend/OpenAI; fix \"no IP/identifiers\" claim.",
+   "lawyer": false
+  },
+  {
+   "key": "W-07",
+   "audit_ref": "websites:W-07",
+   "area": "websites",
+   "title": "bestly.tech /terms-of-service (Dec 4 2024), /terms-of-use (Mar 25 2026), /terms (dup of ToU)",
+   "detail": "Two \"master\" terms conflict: JAMS Streamlined Rules (ToS) vs AAA (ToU); both say binding on all Services; assent is \"by accessing\" (browsewrap). ToS is 22 months old; says refund policies \"will become active upon launch of eCommerce\". No customer agreement/DPA/AI-recording terms for Bestly Agent (paid B2B), no In-House Cloud terms.",
+   "law": "Clear, non-conflicting contract terms; assent (browsewrap risk); Maya/Bestly Agent service terms",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Merge into one Terms; add Bestly Agent + Cloud service terms (AI, recording, call-owner consent duties, DPA).",
+   "lawyer": true
+  },
+  {
+   "key": "W-08",
+   "audit_ref": "websites:W-08",
+   "area": "websites",
+   "title": "bestly.tech /privacy-policy (Last Updated Oct 15 2026)",
+   "detail": "PASS: link in footer (\"Privacy Policy\"), nav (\"Legal\"), cookie banner; dated; change process (s.17); categories (s.3). FAIL: no Do Not Track / GPC statement; no statement on whether other parties collect info across sites (site loads Google Fonts + Cloudflare); \"effective date\" given only as \"Last Updated\".",
+   "law": "CalOPPA B&P 22575(a),(b) (categories + third-party categories; change-notice process; effective date; DNT response; whether other parties collect over time/across sites) https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=22575 (verified via https://california.public.law/codes/ca_bus_and_prof_code_section_22575)",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add 3 sentences: DNT/GPC response; third parties on site (Cloudflare, Google Fonts, ElevenLabs on click); add \"Effective date\".",
+   "lawyer": false
+  },
+  {
+   "key": "W-09",
+   "audit_ref": "websites:W-09",
+   "area": "websites",
+   "title": "all sites using Google Fonts (bestly.tech, parentiq, hoascope, hoku-clean, eldoraluxe, MND, MTD, goldenhour, purelyhunza)",
+   "detail": "fonts.googleapis.com/gstatic.com requested on page load; no consent gate; not named in bestly.tech policy.",
+   "law": "GDPR Art. 6/44 (IP sent to Google); LG Munchen I, 3 O 17493/20 (Jan 20 2022, EUR 100 damages)",
+   "severity": "low",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Self-host fonts (build-time).",
+   "lawyer": false
+  },
+  {
+   "key": "W-10",
+   "audit_ref": "websites:W-10",
+   "area": "websites",
+   "title": "bestly.tech Maya widget (any page, \"Talk to Maya\") + /agent",
+   "detail": "Launch panel text: \"Maya is an AI. Conversations are recorded and transcribed to help you, and starting one means you agree (privacy).\" Policy s.16 matches; phone says AI at start. Gaps: consent is implied by clicking start (no affirmative checkbox/button); ElevenLabs not named on the panel; /agent FAQ says \"If someone asks, she tells them\" vs home \"Tells callers it's an AI\" vs policy \"says she is an AI at the start of every call\" (inconsistent); 17941 has no stated penalty (UCL applies).",
+   "law": "Recording consent: Cal. Penal Code 632, 632.7, 637.2 ($5,000/violation civil) https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=PEN&sectionNum=632 ; Smith v. LoanMe (Cal. 2021) (632.7 binds parties); vendor \"capability\" theory (Ambriz v. Google, N.D. Cal. 2025; Taylor v. ConverseNow, N.D. Cal. Aug 2025) per https://www.pii.ai/blog/cipa-632-7-mobile-sms-phone ; Bot disclosure B&P 17941 https://california.public.law/codes/ca_bus_and_prof_code_section_17941",
+   "severity": "high",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Make the CTA \"I agree - start (AI, recorded, processed by ElevenLabs)\"; align FAQ/home/policy to one statement; confirm ElevenLabs no-train/zero-retention; log consent timestamp.",
+   "lawyer": true
+  },
+  {
+   "key": "W-11",
+   "audit_ref": "websites:W-11",
+   "area": "websites",
+   "title": "bestly.tech /contact",
+   "detail": "/contact form (name, email, phone, category, message) has no privacy notice/link near the submit button (footer link only). /hire, /get-started, /report-site DO have one.",
+   "law": "CCPA notice at collection (if CCPA applies, 11 CCR 7012); CalOPPA good practice",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add \"We use this to reply. Privacy Policy\" line.",
+   "lawyer": false
+  },
+  {
+   "key": "W-13",
+   "audit_ref": "websites:W-13",
+   "area": "websites",
+   "title": "Accessibility, all sites (axe-core, WCAG 2.1 AA)",
+   "detail": "Serious color-contrast: bestly.tech home/contact/privacy/get-started (3 nodes), /agent (3 + definition-list 1 + dlitem 16), hoascope (4), hoku-clean (35), eldoraluxe (4; plus CRITICAL button-name x4, link-name x4), MND (2), goldenhour (6, client), purelyhunza (20). Clean: parentiq, MTD, school-pilot, studio, vesta-app. No accessibility statement on bestly.tech; eldoraluxe footer \"Accessibility\" has no target.",
+   "law": "ADA Title III; Cal. Unruh Act Civ. Code 51/52 (min. $4,000/violation + fees) https://www.clym.io/regulations/unruh-civil-rights-act",
+   "severity": "medium",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Fix contrast tokens, add aria-labels to eldora icon buttons/links, fix /agent definition lists; add accessibility statement + contact.",
+   "lawyer": false
+  },
+  {
+   "key": "W-14",
+   "audit_ref": "websites:W-14",
+   "area": "websites",
+   "title": "bestly.tech Cookie Yeti Pro web subscriptions ($0.99/mo, $7.99/yr via Stripe)",
+   "detail": "ToU s.4.2: \"cancel through account settings or by contacting support@\" and \"refund within 14 days\". Checkout/cancel UI lives in extension/Stripe (not auditable from web). /cookie-yeti/cancel is only a \"Checkout cancelled\" page. No annual-reminder or price-change language.",
+   "law": "CA Automatic Renewal Law B&P 17600 et seq. as amended by AB 2863 eff. Jul 1 2025 (affirmative consent, same-medium/online cancel, annual reminder, 7-30 day price-change notice, 3-yr consent records) https://www.cooley.com/news/insight/2025/2025-06-04-california-automatic-renewal-law-amendments-take-effect-on-july-1-2025 ; ROSCA 15 USC 8401-05. FTC click-to-cancel rule was vacated (8th Cir. 2025); FTC opened new ANPRM Mar 2026 https://www.bclplaw.com/en-US/events-insights-news/im-not-dead-yet-is-the-demise-of-the-ftcs-click-to-cancel-exaggerated.html",
+   "severity": "high",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Verify: consent checkbox/terms next to Buy; one-click online cancel; annual reminder email via Resend; 3-yr consent log.",
+   "lawyer": true
+  },
+  {
+   "key": "W-15",
+   "audit_ref": "websites:W-15",
+   "area": "websites",
+   "title": "minutenewsdaily.com (+ /news/*, feed.xml)",
+   "detail": "Site hosts ~10 MP4 clips/day (public Supabase bucket \"review/video/minute-news-daily/*.mp4\"), also pushed in RSS enclosures; clips are derived from Bloomberg Television, ABC7, ABC13, WHO 13 YouTube videos (\"The clip comes from the news outlet\"); naming the source is not a license. No DMCA agent/takedown page, no contact.",
+   "law": "Copyright: 17 USC 106, 501, 107 (fair use is fact-specific). Statutory damages $750-$30,000 per work; up to $150,000 willful https://www.bitlaw.com/source/17usc/504.html",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "watching",
+   "status_note": "Fix shipped 2026-10-26 by another agent; Vera marks it fixed after 3 clean days of checks.",
+   "fix": "Stop republishing third-party broadcast footage unless licensed; use original footage/own voiceover over licensed or public-domain/government/CC clips; register DMCA agent (copyright.gov, $6) + takedown contact; kill switch on the MND cron.",
+   "lawyer": true
+  },
+  {
+   "key": "W-16",
+   "audit_ref": "websites:W-16",
+   "area": "websites",
+   "title": "minutenewsdaily.com email signup; minutetechdaily.com",
+   "detail": "MND collects email (Supabase mnd_subscribe) with only \"One short email a day. Unsubscribe anytime.\"; no privacy link, no terms, no contact, no postal address anywhere on the site (only \"(c) 2026 Bestly LLC\"). Site says \"The daily email starts soon.\" MTD has no form (mailto only). AI host voice IS disclosed (\"Host voice is AI-generated\") - PASS.",
+   "law": "CalOPPA 22575(a) (email = PII); CAN-SPAM 15 USC 7701 et seq. (postal address, unsubscribe; up to $53,088/email) ; CCPA notice if applicable",
+   "severity": "medium",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add footer Privacy/Terms/Contact (reuse bestly.tech policy), consent line near form, postal address in every email.",
+   "lawyer": false
+  },
+  {
+   "key": "W-17",
+   "audit_ref": "websites:W-17",
+   "area": "websites",
+   "title": "eldoraluxe.com (= eldora-collection.vercel.app)",
+   "detail": "Footer \"Privacy Policy / Terms of Service / Accessibility\" are not links; /privacy,/terms,/about,/shop 404; consult form says \"BY SENDING, YOU AGREE TO OUR PRIVACY POLICY\". Newsletter/consult forms collect name, email, phone. Contact email [email] is a DIFFERENT domain from eldoraluxe.com.",
+   "law": "CalOPPA 22575; FTC Jewelry Guides 16 CFR 23 / Green Guides 16 CFR 260 https://www.ftc.gov/node/54413 ; FTC Act s.5; B&P 17500",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Publish privacy/terms/accessibility pages and link them; confirm eldora.com ownership or change mailbox.",
+   "lawyer": false
+  },
+  {
+   "key": "W-18",
+   "audit_ref": "websites:W-18",
+   "area": "websites",
+   "title": "eldoraluxe.com claims",
+   "detail": "\"Maison de haute joaillerie - Paris - Dubai\", \"heritage of Versailles\", \"FINE JEWELRY - SINCE 2024\" vs \"Over a decade of artistry, thousands of pieces commissioned\", \"A Parisian Atelier in Dubai\", \"Find a Boutique\", \"IGI-certified\", \"Carbon-neutral production, recycled 18k gold, conflict-free\", \"none of the cost to the earth\", \"AI Design Studio\". Footer: \"(c) 2024 El D'Ora. A Bestly LLC Brand\" / \"by Emporeko Global\". Internal notes say name spelling unconfirmed and product still being developed.",
+   "law": "FTC s.5 deception; Jewelry Guides (lab-grown disclosure ok: \"lab-grown\" shown), Green Guides s.260 (qualified env. claims); B&P 17500",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Remove origin/heritage/\"decade\"/\"thousands\"/boutique claims, qualify or delete sustainability claims, show true seller identity + address.",
+   "lawyer": true
+  },
+  {
+   "key": "W-19",
+   "audit_ref": "websites:W-19",
+   "area": "websites",
+   "title": "hoascope.com (= hoa-cure-105bffac.vercel.app), /privacy, /terms (Jun 15 2026)",
+   "detail": "Policies exist and are linked in footer; no legal entity name or postal address; \"All plans include ... GDPR compliance\" claim; no processors named (Stripe) beyond \"hosting and database providers\"; no DNT statement; $49/$99 per month plans with no renewal/cancellation terms (B2B, so ARL likely n/a). Collects photo evidence of residents' violations.",
+   "law": "CalOPPA; FTC s.5; Davis-Stirling Act / HOA fining due process; money transmission (if funds held)",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add operator = Bestly LLC + address; drop GDPR claim or substantiate; name Stripe/Supabase; add DNT line.",
+   "lawyer": true
+  },
+  {
+   "key": "W-20",
+   "audit_ref": "websites:W-20",
+   "area": "websites",
+   "title": "parentiq.io /privacy, /terms (Mar 17 2026)",
+   "detail": "Policy collects children's first names + birth years, school details, custody documents, medical records, message content; AI tone analysis of parent-to-parent messages (vendor unnamed); teen accounts 13-17; SMS to older children. No operator name/address, no CCPA/GDPR rights, no DNT, no processor list (Stripe, AI), no retention, no TCPA SMS consent, no data-breach contact. Terms: governing law \"laws of the United States\", no entity. Footer Pricing/Help/About/Careers/Blog are dead \"#\" links. Also claims \"court-ready\", \"legal-grade\", \"bank-grade security\".",
+   "law": "CalOPPA; COPPA amended rule (compliance Apr 22 2026) https://www.whitecase.com/insight-alert/unpacking-ftcs-coppa-amendments-what-you-need-know ; WA My Health My Data Act (no size threshold; private action); CCPA sensitive PI if it applies",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Rewrite policy (entity, address, categories, vendors, retention, rights, SMS consent, MHMDA consent), name AI vendor, drop \"court-ready/bank-grade\".",
+   "lawyer": true
+  },
+  {
+   "key": "W-21",
+   "audit_ref": "websites:W-21",
+   "area": "websites",
+   "title": "bestly.tech /turo-key, /turo-lax",
+   "detail": "Entry form collects phone + last name; SMS line: \"We'll text this number... Msg & data rates may apply. Reply STOP\" but no frequency/terms; NO privacy link anywhere on the page (no footer); code also logs scan source + device_id + user agent (\"card-scan\"), car location shown to guest.",
+   "law": "CalOPPA 22575 (policy on first significant page); TCPA/CTIA SMS disclosures; CCPA notice at collection",
+   "severity": "medium",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add footer \"Privacy\" + \"Terms\" link and a one-line notice; add message frequency.",
+   "lawyer": false
+  },
+  {
+   "key": "W-22",
+   "audit_ref": "websites:W-22",
+   "area": "websites",
+   "title": "bestly.tech JS bundles LaxGuest/DriverKey (Turo guest pages)",
+   "detail": "Public JS hard-codes \"733 N Kings Rd, West Hollywood, CA 90069\" as the car home/return address and in button text. Not shown on business/legal pages.",
+   "law": "Owner rule: business uses show 3rd St address; personal-safety",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Decide if car-spot street can stay public; otherwise load from server per-trip.",
+   "lawyer": false
+  },
+  {
+   "key": "W-23",
+   "audit_ref": "websites:W-23",
+   "area": "websites",
+   "title": "cloud.bestly.tech (Nextcloud login, Bestly Sign public pages)",
+   "detail": "Origin returned 530/503 (\"Bestly Cloud origin is temporarily unreachable\") on every path at audit time and on one retry. robots.txt (Cloudflare) loads. Could not audit login page or LibreSign pages.",
+   "law": "Privacy policy link, e-sign consent (ESIGN 15 USC 7001; UETA Civ. Code 1633.1)",
+   "severity": "info",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Re-run when origin is back (Section D).",
+   "lawyer": false
+  },
+  {
+   "key": "W-25",
+   "audit_ref": "websites:W-25",
+   "area": "websites",
+   "title": "vesta-app.bestly.tech / app.bestly.tech / vesta-beta-ten.vercel.app (Vesta beta)",
+   "detail": "Invite-only \"for women\"; collects email/passkey; \"How we handle your data\" is a non-link; /privacy and /terms 404. vesta.bestly.tech is a clearly labeled concept walkthrough (no data).",
+   "law": "Unruh Act (Civ. Code 51) sex-based exclusion; CalOPPA; MHMDA",
+   "severity": "high",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Publish privacy/terms before inviting real users; get counsel on women-only membership.",
+   "lawyer": true
+  },
+  {
+   "key": "W-26",
+   "audit_ref": "websites:W-26",
+   "area": "websites",
+   "title": "purelyhunza.vercel.app",
+   "detail": "Shopify checkout; balm \"comfort, relief\"; \"Royal Family of Hunza\" heritage; \"0+ families supported/0 chemicals\" counters; free-guide email capture with only \"We respect your privacy\"; /policies#privacy links 404 on direct load.",
+   "law": "FTC s.5/FDA claims; CalOPPA; owner = partner?",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Confirm owner; if Bestly-hosted, add policy pages, substantiate claims, FDA registration plan.",
+   "lawyer": true
+  },
+  {
+   "key": "W-27",
+   "audit_ref": "websites:W-27",
+   "area": "websites",
+   "title": "goldenhourgardendesign.com (OWNER = CLIENT)",
+   "detail": "/book.html collects name, email, phone, up to 5 photos, posts to a Google Apps Script URL; no privacy policy/terms page anywhere; (c) 2024; cdn.tailwindcss.com used in production (supply-chain + perf); 6 contrast failures; no testimonials.",
+   "law": "CalOPPA; Unruh",
+   "severity": "medium",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add privacy page + consent line; self-build Tailwind; contrast.",
+   "lawyer": false
+  },
+  {
+   "key": "W-30",
+   "audit_ref": "websites:W-30",
+   "area": "websites",
+   "title": "CCPA/CPRA + other state privacy laws applicability",
+   "detail": "No sale/share, no ad pixels, so no \"Do Not Sell or Share\" link or GPC handling needed even if CCPA applied; the real question is volume. Cookie Yeti installs + MND subscribers could approach 35K-100K in a year. AB 566 browser opt-out signals start Jan 2027 (https://cppa.ca.gov/announcements/2025/20251008_2.html).",
+   "law": "CCPA thresholds: >$26,625,000 revenue, OR 100,000+ CA consumers/households, OR 50%+ revenue from selling/sharing https://www.cppa.ca.gov/regulations/cpi_adjustment.html (penalties $2,663 / $7,988 intentional); other states https://www.enzuzo.com/blog/us-state-privacy-laws : TX/NE exclude SBA small business (but sensitive-data sale needs consent), MD/NH/DE/CT/RI 35K consumers, MN/NJ/VA/CO/IA/KY/IN 100K, MT 25K; WA MHMDA no threshold",
+   "severity": "info",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Track monthly unique CA consumers; add rights language now.",
+   "lawyer": false
+  },
+  {
+   "key": "A-01",
+   "audit_ref": "apps:A-01",
+   "area": "apps",
+   "title": "InventoryProof privacy policy",
+   "detail": "URL 200 (SPA; rendered). \"Last updated Dec 3, 2024\" (app launched Mar 2026). Never names Bestly LLC. Says \"approximate location\" but label says Precise Location. AI vendor unnamed (\"Proofy AI services\"). No Do-Not-Track statement. Says 18+ only; app rated 4+. Predates Property Transaction Reports, view-tracking links.",
+   "law": "Accurate, current policy naming operator; CalOPPA B&P 22575; FTC Act s5; Apple 5.1.1(i) (https://developer.apple.com/app-store/review/guidelines/)",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Rewrite: Bestly LLC as operator, AI subprocessors by name, precise location, report-share viewer emails, DNT line, effective date",
+   "lawyer": false
+  },
+  {
+   "key": "A-02",
+   "audit_ref": "apps:A-02",
+   "area": "apps",
+   "title": "InventoryProof App Privacy label",
+   "detail": "Label: Purchases, Precise Location, Email, Phone, Photos/Videos, User ID, all \"App Functionality\", no tracking. Policy also collects name, usage/IP/device, beneficiary names/addresses (estate data), analytics, AI processing. Missing: Name, Other User Content, Usage Data/Diagnostics, Analytics purpose",
+   "law": "Label must match practice (Apple App Privacy rules)",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Run Xcode Privacy Report + network capture; update label (instant, no review)",
+   "lawyer": false
+  },
+  {
+   "key": "A-03",
+   "audit_ref": "apps:A-03",
+   "area": "apps",
+   "title": "In-app account deletion",
+   "detail": "Notes' 2026-09-26 audit of main (v1.3 build 10 = live code): \"No in-app account deletion\". Listing says \"Delete your account and all data at any time from Settings\"; Terms s10 same. Also Sign in with Apple token revocation needed",
+   "law": "Guideline 5.1.1(v) \"must also offer account deletion within the app\" (https://developer.apple.com/app-store/review/guidelines/)",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Ship delete-account (auth + data purge + SIWA revoke). Confirm on a device first. Note privacy-clerk execute/redact migration is NOT installed (notes 2026-10-11), so deletion promises may not be fulfillable",
+   "lawyer": false
+  },
+  {
+   "key": "A-04",
+   "audit_ref": "apps:A-04",
+   "area": "apps",
+   "title": "Subscription disclosures",
+   "detail": "Listing has auto-renew + trial text, Terms/Privacy links, Pro $2.99 and $19.99. Terms cite a \"refund policy\" that does not exist and 30-day price-change notice. Audit says paywall shows developer text and a non-dismissable \"Data deletes in N days\" banner (pressure)",
+   "law": "Guideline 3.1.2(c); CA Auto-Renewal Law as amended by AB 2863, eff. July 1, 2025 (https://ktslaw.com/en/insights/alert/2024/10/california-latest-automatic-renewal-law-amendments-take-effect-in-july-2025)",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Verify paywall shows price/period/trial end/links; remove dev text; keep consent records (3 yrs under ARL); write refund text (\"Apple handles\")",
+   "lawyer": true
+  },
+  {
+   "key": "A-05",
+   "audit_ref": "apps:A-05",
+   "area": "apps",
+   "title": "Support URL",
+   "detail": "inventoryproof.com/support renders \"404 Page not found\". Public page shows no app-support link (ASC requires one; may point elsewhere)",
+   "law": "Guideline 1.5 easy way to contact developer",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Create /support with email; check ASC field",
+   "lawyer": false
+  },
+  {
+   "key": "A-06",
+   "audit_ref": "apps:A-06",
+   "area": "apps",
+   "title": "Estate planning: Will and Living Trust generation (Pro feature)",
+   "detail": "Listing: \"Create trust and will questionnaires\"; Terms s2/s7: \"Will and Living Trust document generation\", \"templates... not legal advice\"; ~3,100 lines of will/trust code in app; policy collects state of residence \"for legal document generation\"",
+   "law": "Unauthorized practice of law B&P 6125-6126 (misdemeanor); legal document assistant registration/disclosures B&P 6400-6415 (https://law.justia.com/codes/california/code-bpc/division-3/chapter-5-5/article-3/section-6410-5); wills excluded from e-sign CA Civ 1633.3(b) (https://california.public.law/codes/ca_civ_code_section_1633.3)",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Pull document generation (keep \"who gets what\" beneficiary tagging + letter of wishes), or partner with attorney-reviewed vendor, or register as LDA with bond and disclosures",
+   "lawyer": true
+  },
+  {
+   "key": "A-07",
+   "audit_ref": "apps:A-07",
+   "area": "apps",
+   "title": "AI processing disclosure/consent",
+   "detail": "Video frames sent to AI for item detection; policy only says \"Proofy AI services\". Videos of a home can capture faces, documents, addresses",
+   "law": "Guideline 5.1.2(i): disclose and get explicit permission before sharing personal data with third-party AI (https://developer.apple.com/app-store/review/guidelines/)",
+   "severity": "high",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "In-app consent screen before first upload naming provider; zero-retention/no-training terms with vendor",
+   "lawyer": false
+  },
+  {
+   "key": "A-08",
+   "audit_ref": "apps:A-08",
+   "area": "apps",
+   "title": "Planned Amazon order-history sync",
+   "detail": "Jared wants \"Knot-style\" sync, US first. Storing user Amazon passwords would be a security and Apple 5.1.1 problem",
+   "law": "Amazon Conditions of Use bar robots/data mining; CFAA; Cal. Penal 502. Amazon v. Perplexity: PI granted Mar 10, 2026; Ninth Circuit lifted it (reported Aug 4, 2026) holding CFAA unlikely to reach user-directed agent (https://aiweekly.co/alerts/ninth-circuit-lifts-amazon-block-on-perplexitys-comet-ai-agent). Contract/ToS and trademark claims survive",
+   "severity": "high",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Prefer: user uploads Amazon \"Request My Data\" export; or user-authorized email-receipt parsing; or a licensed aggregator. Avoid credential storage/headless login from servers",
+   "lawyer": true
+  },
+  {
+   "key": "A-09",
+   "audit_ref": "apps:A-09",
+   "area": "apps",
+   "title": "Planned Facebook Marketplace posting",
+   "detail": "No consumer-app posting API found",
+   "law": "Meta Marketplace listing APIs limited to \"eligible third-party partners\" (https://developers.secure.facebook.com/docs/marketplace/partnerships/); Meta Platform Terms bar automation",
+   "severity": "medium",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Use share sheet / prefilled listing deep link; apply to partner program only if needed",
+   "lawyer": false
+  },
+  {
+   "key": "A-10",
+   "audit_ref": "apps:A-10",
+   "area": "apps",
+   "title": "Property Transaction Reports (agents/landlords)",
+   "detail": "Terms (Dec 2024) predate the feature; no AI-accuracy, not-an-inspection, or insurer-acceptance disclaimer; sharing collects viewer emails",
+   "law": "Not an inspection or disclosure (Cal. Civ 1102 TDS); FTC s5 on \"defensible record\"; ToS disclaimers",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add disclaimers in Terms + on PDF footer; add viewer-email handling to policy",
+   "lawyer": true
+  },
+  {
+   "key": "A-11",
+   "audit_ref": "apps:A-11",
+   "area": "apps",
+   "title": "Age rating",
+   "detail": "4+ shown; policy says 18+; AI + estate/finance content",
+   "law": "Apple age-rating questionnaire (new tiers, deadline was Jan 31, 2026) (https://9to5mac.com/2025/07/24/apple-notifies-developers-of-new-app-store-age-rating-system/)",
+   "severity": "low",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Re-answer questionnaire honestly; align policy",
+   "lawyer": false
+  },
+  {
+   "key": "B-01",
+   "audit_ref": "apps:B-01",
+   "area": "apps",
+   "title": "Cookie Yeti: two conflicting privacy policies",
+   "detail": "bestly.tech/privacy (linked from App Store, site \"Privacy Policy\" button, footer) says no email, no personal identifiers, \"no other parties receive any information\", payments only via Apple/Google. bestly.tech/privacy-policy s15 (linked from CWS) discloses email (Pro), Stripe, Resend, OpenAI (banner HTML, up to 5,000 chars), domain+origin. The Oct 15 text is accurate; the Oct 1 text is not",
+   "law": "FTC Act s5 deception (15 USC 45); CWS policy treats inconsistency as violation (https://developer.chrome.com/docs/webstore/program-policies/user-data-faq)",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "watching",
+   "status_note": "Fix shipped 2026-10-26 by another agent; Vera marks it fixed after 3 clean days of checks.",
+   "fix": "Replace /privacy content with s15 (or redirect); update all store links",
+   "lawyer": false
+  },
+  {
+   "key": "B-02",
+   "audit_ref": "apps:B-02",
+   "area": "apps",
+   "title": "Chrome Web Store listing hygiene",
+   "detail": "Listing is v1.1.6 (Jul 9) while App Store is 1.2.6 and notes say 1.2.5 was \"in review\" on Chrome Sep 26: check dashboard for stuck/rejected submissions. Tab declares \"Personally identifiable information\" while /privacy says none. Developer address shown is the OLD \"733 Kings Rd 205\" (now 5850 W 3rd St). \"Non-trader\" though it sells subscriptions. Manifest (v1.1.6): permissions storage, activeTab, tabs, cookies, alarms, scripting + host <all_urls>, content script all_frames on all URLs; no permission justification on page",
+   "law": "CWS Program Policies: accurate privacy-practices tab, minimum permissions, listed justification, EU trader status",
+   "severity": "medium",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Update address/trader status; add permission justifications (tabs/cookies/scripting/all_urls) and drop unneeded ones (activeTab redundant, check tabs); resubmit",
+   "lawyer": false
+  },
+  {
+   "key": "B-03",
+   "audit_ref": "apps:B-03",
+   "area": "apps",
+   "title": "Prominent disclosure + Limited Use",
+   "detail": "Notes (apple-rework audit): analytics + community learning default ON while in-app copy says nothing leaves the device. Domain + banner HTML leave device",
+   "law": "CWS User Data Policy: in-product disclosure + affirmative consent before collecting \"website content/web history\"; Limited Use statement on homepage (https://developer.chrome.com/docs/webstore/program-policies/limited-use)",
+   "severity": "high",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add first-run disclosure + opt-in/clear toggle; add Limited Use sentence to /cookie-yeti",
+   "lawyer": false
+  },
+  {
+   "key": "B-04",
+   "audit_ref": "apps:B-04",
+   "area": "apps",
+   "title": "Cookie Yeti App Store label",
+   "detail": "Label: only Usage Data (Product Interaction), not linked. Policy: domains visited (Browsing History), banner HTML, page-guard reports, email for Pro, OpenAI processing",
+   "law": "Apple App Privacy",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Update label; add AI-sharing consent if any content reaches OpenAI from iOS",
+   "lawyer": false
+  },
+  {
+   "key": "B-05",
+   "audit_ref": "apps:B-05",
+   "area": "apps",
+   "title": "\"Privacy-first\" marketing claims",
+   "detail": "Site-wide \"GDPR Compliant / CCPA Ready / Zero Data Resale\" badges. Hero says \"Never sold or shared\". \"It never goes stale / AI fixes reach everyone\" while the live status panel shows Success Rate 13.4% (907 patterns, 552 domains). Page says Mac \"Coming soon\" but App Store text says Mac is supported. Hero counter 1,284 is a mockup",
+   "law": "FTC Act s5 + substantiation; GDPR/CCPA badge claims",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Replace badges with specific truthful statements; label demo numbers \"example\"; reconcile Mac claim; show success rate with context or hide",
+   "lawyer": false
+  },
+  {
+   "key": "B-06",
+   "audit_ref": "apps:B-06",
+   "area": "apps",
+   "title": "Cookie Yeti Pro billing (Stripe/web)",
+   "detail": "0 activation codes issued; Terms say Chrome Web Store processes purchases but policy says Stripe; audit found \"Subscribed on Chrome?\" grants Pro from email alone",
+   "law": "CA ARL AB 2863; Apple 3.1.3(b) multiplatform; Chrome Store payments no longer exist",
+   "severity": "medium",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Single story: Stripe for Chrome, IAP for Apple; implement click-to-cancel, renewal notices, consent records before first web sale",
+   "lawyer": true
+  },
+  {
+   "key": "C-01",
+   "audit_ref": "apps:C-01",
+   "area": "apps",
+   "title": "ParentIQ: children's data / COPPA",
+   "detail": "Collects children's first names, birth years, school; \"Teen accounts 13-17 created by parents\"; marketing says older kids get SMS. Parent-supplied data is usually outside COPPA, but any under-13 who receives/replies to SMS or has a role creates collection from a child. Policy claims COPPA compliance but states no retention schedule or security program",
+   "law": "Amended COPPA Rule effective June 23, 2025; compliance deadline Apr 22, 2026 (written security program, retention policy, separate-disclosure consent) (https://www.federalregister.gov/documents/2025/04/22/2025-05904/childrens-online-privacy-protection-rule); civil penalty up to $53,088/violation (2025 figure)",
+   "severity": "high",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Block child roles under 13 or build VPC; publish retention schedule; write the security program (annual review); no child SMS without parent consent",
+   "lawyer": true
+  },
+  {
+   "key": "C-02",
+   "audit_ref": "apps:C-02",
+   "area": "apps",
+   "title": "ParentIQ marketing claims and testimonials",
+   "detail": "\"78% less heated exchanges\", \"5+ hrs saved weekly\", \"thousands of families\", 6 named testimonials, \"100% records preserved\", \"court-ready\", \"Bank-grade\"",
+   "law": "FTC Consumer Review Rule 16 CFR 465 (eff. Oct 21, 2024; up to $53,088/violation) (https://www.jdsupra.com/legalnews/five-stars-zero-tolerance-ftc-turns-up-3594404/); FTC Act s5; CA B&P 17500",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "watching",
+   "status_note": "Fix shipped 2026-10-26 by another agent; Vera marks it fixed after 3 clean days of checks.",
+   "fix": "Remove stats/testimonials until real, documented and consented; say \"timestamped records\" not \"court-ready\"",
+   "lawyer": false
+  },
+  {
+   "key": "C-03",
+   "audit_ref": "apps:C-03",
+   "area": "apps",
+   "title": "ParentIQ policy/Terms",
+   "detail": "Policy/Terms never name the operating entity or address; governing law \"United States\"; deletion by email only; AI vendors unnamed though message text is analyzed by AI; no retention period",
+   "law": "CalOPPA; CCPA-style notices; vendor disclosure",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Name Bestly LLC, address, vendors, retention, CA venue",
+   "lawyer": true
+  },
+  {
+   "key": "C-04",
+   "audit_ref": "apps:C-04",
+   "area": "apps",
+   "title": "ParentIQ \"Stripe-powered weekly payouts\" between parents",
+   "detail": "Marketing: expense splitting + payouts",
+   "law": "Money transmission (FinCEN MSB; CA Money Transmission Act)",
+   "severity": "high",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Use Stripe Connect so Stripe is the transmitter; get counsel sign-off before launch",
+   "lawyer": true
+  },
+  {
+   "key": "C-05",
+   "audit_ref": "apps:C-05",
+   "area": "apps",
+   "title": "SchoolPilot (student data)",
+   "detail": "Names, emails, phones, grades, attendance in Supabase (RLS on all 40 tables; advisors show 0 errors, 13 WARN for SECURITY DEFINER helper functions callable by authenticated users, 2 INFO). Single demo-sized tenant; unknown if real students. No public privacy policy/ToS/DPA found; no App Store listing",
+   "law": "FERPA school-official exception 34 CFR 99.31(a)(1) (written agreement, direct control); CA SOPIPA B&P 22584 (no targeted ads/profiles/sale; reasonable security; delete on school request) (https://california.public.law/codes/business_and_professions_code_section_22584); Ed Code 49073.1 contract terms; COPPA if under 13",
+   "severity": "high",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Publish student privacy policy; DPA template (CA-SDPC NDPA); deletion-on-request tool; confirm data is synthetic or covered by school agreement",
+   "lawyer": true
+  },
+  {
+   "key": "C-06",
+   "audit_ref": "apps:C-06",
+   "area": "apps",
+   "title": "CA AADC / age-assurance laws",
+   "detail": "CAADCA covers CCPA-definition \"businesses\" (revenue > $26.625M or 100k consumers or 50% revenue from selling) (https://www.jacksonlewis.com/insights/navigating-california-consumer-privacy-act-30-essential-faqs-covered-businesses-including-clarifying-regulations-effective-1126). Bestly is almost certainly below. None of the apps should be in the Kids Category (Guidelines 1.3/5.1.4)",
+   "law": "CAADCA: 9th Cir. Mar 12, 2026 left DPIA, data-use limits, dark-pattern ban enjoined but allowed age estimation, high-privacy defaults, monitoring/geolocation signals (https://www.cooley.com/news/insight/2026/2026-03-30-netchoice-v-bonta-ninth-circuit-narrows-injunction-against-californias-ageappropriate-design-code-act). Texas app-store law enjoined Dec 23, 2025 (https://www.privacyworld.blog/2025/12/federal-judge-enjoins-enforcement-of-texas-app-store-age-verification-law/); CA AB 1043 eff. Jan 1, 2027",
+   "severity": "low",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "No action; add age-signal handling before Jan 1, 2027",
+   "lawyer": false
+  },
+  {
+   "key": "VD-01",
+   "audit_ref": "apps:D-01",
+   "area": "apps",
+   "title": "Vesta women-only access (US)",
+   "detail": "Gate today = self-attest \"I am a woman, 18+\" + invite code + human approval. Giggle: Tickle v Giggle [2024] FCA 960, appeal [2026] FCAFC 64 (A$20,000, direct discrimination); High Court REFUSED special leave Sept 10, 2026 (https://www.hcourt.gov.au/cases-and-judgments/judgments/special-leave-dispositions/giggle-girls-pty-ltd-acn-632-152-017-anor-v-tickle; https://www.thepinknews.com/2026/09/11/final-high-court-decision-giggle-for-girls-v-tickle-trans-discrimination-case/). Notes still list it as pending: update. India: Transgender Persons Act 2019 s3 covers public services",
+   "law": "CA Unruh Act Civ 51/52: min $4,000 per offense + fees; applies to online businesses (White v. Square, 2019); no clear safe harbor for women-only social apps",
+   "severity": "high",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Keep self-ID model (ToS \"people who identify as women\"), appeal path, no documentary gate; get CA + state counsel opinion before US launch",
+   "lawyer": true
+  },
+  {
+   "key": "VD-02",
+   "audit_ref": "apps:D-02",
+   "area": "apps",
+   "title": "Biometric / ID verification",
+   "detail": "No ID/selfie tables exist; passkeys store public keys only (not biometrics)",
+   "law": "BIPA 740 ILCS 14 ($1,000 negligent/$5,000 reckless, per person after 2024 amendment) (https://dwt.com/blogs/privacy--security-law-blog/2024/08/illinois-bipa-biometrics-law-amended-for-damages); Texas CUBI up to $25,000/violation (AG); WA biometric law + MHMDA",
+   "severity": "high",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Do not build ID/face matching; if ever: written release, retention schedule, no sale",
+   "lawyer": true
+  },
+  {
+   "key": "VD-03",
+   "audit_ref": "apps:D-03",
+   "area": "apps",
+   "title": "Consumer health data (US)",
+   "detail": "Rooms: PTSD, postpartum, abuse, marriage; crisis flags; journals. profiles.country IN so far (confirm zero US users)",
+   "law": "WA My Health My Data Act (any size, private action via CPA); NV SB 370 (AG); CT amendments (https://www.paubox.com/blog/the-state-laws-that-regulate-health-data-outside-of-hipaa); CA CMIA s56.06 mental-health apps",
+   "severity": "high",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Separate consumer-health-data policy, opt-in consent, 30-day deletion, no ad SDKs",
+   "lawyer": true
+  },
+  {
+   "key": "VD-04",
+   "audit_ref": "apps:D-04",
+   "area": "apps",
+   "title": "India DPDP Act 2023 + Rules 2025",
+   "detail": "In-app Terms/Privacy exist; contact [email]; no named India grievance officer; \"child\" = under 18, self-attested 18+ only; data in Mumbai (good) [Fact-check: Gazette notification G.S.R. 846(E) is dated Nov 13, 2025; main duties start about May 13, 2027.]",
+   "law": "Rules notified Nov 13, 2025; consent/notice/security/children's duties apply ~May 2027 (18 months); consent managers 12 months (https://www.bdo.in/en-gb/news/2025/digital-personal-data-protection-rules-2025-%E2%80%94-check-provisions,-implementation-plan,-penalties). MeitY floated cutting 18 to 12 months, not adopted in sources found (https://www.storyboard18.com/digital/meity-seeks-industry-views-on-fast-tracking-dpdp-act-rollout-proposes-12-month-compliance-timeline-88332.htm). Penalties up to INR 250 crore (security), INR 200 crore (children/breach notice). Interim: IT Act s43A + SPDI Rules 2011 (mental health data = sensitive)",
+   "severity": "high",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Name grievance officer; itemized notice; erasure flow; 18+ gate with neutral age screen",
+   "lawyer": true
+  },
+  {
+   "key": "VD-05",
+   "audit_ref": "apps:D-05",
+   "area": "apps",
+   "title": "UGC moderation (India IT Rules) and US Take It Down Act",
+   "detail": "Report button + admin queue + watchdog alert for open reports > 60 min exist; reports table 0 rows. Posts appear text-only (no media table seen). Pakistan PECA/regulator rules not verified",
+   "law": "IT Rules amended Feb 20, 2026: 2-hour NCII, 3-hour govt orders, grievance 7 days (https://www.mondaq.com/india/media-entertainment-law/1749104/indias-new-law-governing-synthetic-media); Take It Down Act 48-hour removal since May 19, 2026, FTC civil penalties (https://www.insideprivacy.com/united-states/federal-trade-commission/the-take-it-down-acts-notice-and-removal-requirements-enter-into-effect/); Apple 1.2 (filter, report, block, contact)",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add \"report intimate image\" path + 48h SLA before any media upload; publish grievance contact",
+   "lawyer": true
+  },
+  {
+   "key": "VD-06",
+   "audit_ref": "apps:D-06",
+   "area": "apps",
+   "title": "Crisis flagging and duty of care",
+   "detail": "Crisis regexes flag posts/replies (not DMs), admin queue, internal 2-hour rule, SOS = emergency contact + GPS",
+   "law": "No statutory duty; negligent-undertaking tort risk if marketing promises monitoring (Restatement 2d Torts 323/324A); Section 230 does not cover own promises; Apple 1.4",
+   "severity": "high",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Terms + crisis sheet: \"not an emergency service, not monitored 24/7\"; staffed coverage or no promise; keep flags admin-only; second admin",
+   "lawyer": true
+  },
+  {
+   "key": "VD-07",
+   "audit_ref": "apps:D-07",
+   "area": "apps",
+   "title": "Age gating and deletion for store release",
+   "detail": "Delete is \"email request within 30 days\"; no in-app delete",
+   "law": "Apple 5.1.1(v), Google Play account-deletion policy; DPDP erasure",
+   "severity": "medium",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add in-app delete before Play/App Store",
+   "lawyer": false
+  },
+  {
+   "key": "E-01",
+   "audit_ref": "apps:E-01",
+   "area": "apps",
+   "title": "Arrivekey Tesla Fleet API terms",
+   "detail": "Policy (Sep 27) says Tesla token stored encrypted, trip-time location shown to guest, unlock/honk commands for guest. Guest is not the authorizing Tesla user",
+   "law": "Fleet API Agreement: explicit opt-in consent (s9.3), express opt-in for precise geolocation + visible indicator (s9.3.5), no making User data available to third parties except Users in the app (s5.6.7), Tesla may terminate any time (s10.2.1), pay-per-use since Jan 1, 2025 (https://digitalassets.tesla.com/tesla-contents/image/upload/Fleet-API-Agreement-EN.pdf; https://developer.tesla.com/docs/fleet-api/announcements)",
+   "severity": "high",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Confirm approved Fleet API app + scopes; host consent screen naming guest sharing; evaluate Tesla \"Fleet\" account for multi-car hosts",
+   "lawyer": true
+  },
+  {
+   "key": "E-02",
+   "audit_ref": "apps:E-02",
+   "area": "apps",
+   "title": "Turo ToS",
+   "detail": "Arrivekey is host-entered, no Turo data ingestion (no API exists); host types guest first names",
+   "law": "Turo bars scraping/bots, contacting users except for bookings, hosts using guest info to collect more data (https://turo.com/policies/terms)",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Never scrape Turo or auto-read Turo messages; no Turo/Park My Share logos without permission; state non-affiliation",
+   "lawyer": false
+  },
+  {
+   "key": "E-03",
+   "audit_ref": "apps:E-03",
+   "area": "apps",
+   "title": "Location + tracking disclosure",
+   "detail": "Policy covers when-in-use pin, App Clip one-time confirm, car location during trip. Need ASC App Privacy answers + guest-facing notice that car location is visible",
+   "law": "iOS purpose strings; App Clip location confirmation; Cal. Penal 637.7 and Civ 1936 (rental vehicle tracking; verify P2P applicability); Apple 5.1.1",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Show guest notice on trip page; file ASC label (precise location, name, user ID)",
+   "lawyer": true
+  },
+  {
+   "key": "F-01",
+   "audit_ref": "apps:F-01",
+   "area": "apps",
+   "title": "HOKU cosmetic vs drug claims",
+   "detail": "Site: \"cleanses and refreshes\", \"gentle on sensitive skin\", \"same thing your white blood cells make\", \"Research-backed\", disclaimer present. No acne/antimicrobial claims found. Daily auto-generated Instagram posts (claim_check gate)",
+   "law": "FD&C Act: intended use from all claims; FDA warning letter to HOCl facial spray over drug/COVID claims and embedded reviews (https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/warning-letters/novabay-pharmaceuticals-inc-610816-11022020); FIFRA if \"kills germs/disinfects\"",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Hard-ban list in claim_check (acne, eczema, rosacea, infection, kills, antibacterial, antimicrobial, disinfect, sanitize, heal, inflammation, COVID); moderate future reviews; substantiate \"sensitive skin\"/\"research-backed\" or drop",
+   "lawyer": true
+  },
+  {
+   "key": "F-02",
+   "audit_ref": "apps:F-02",
+   "area": "apps",
+   "title": "MoCRA duties",
+   "detail": "Bestly named as distributor on product page, so Bestly is the \"responsible person\". Filler (Ted) facility registration unknown. Site 200 ppm vs supplier quote 250 ppm; label not reviewed",
+   "law": "Facility registration + product listing (unless small business exemption), serious adverse-event reports in 15 business days (apply to all), safety substantiation records, label domestic contact (https://www.fda.gov/cosmetics/cosmetics-laws-regulations/modernization-cosmetics-regulation-act-2022-mocra)",
+   "severity": "high",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Small-business test ($1M 3-yr avg cosmetic sales, FD&C s612, verify); AE intake mailbox + 15-day SOP; safety substantiation file (stability/preservative-free micro testing); label check",
+   "lawyer": true
+  },
+  {
+   "key": "F-03",
+   "audit_ref": "apps:F-03",
+   "area": "apps",
+   "title": "HOKU product claims",
+   "detail": "\"Consistent potency to the last spray\", \"needs no preservative\", \"200+ sprays\" need stability and micro data; \"Made under FDA cosmetic regs\" must not imply FDA approval",
+   "law": "FTC Act s5 substantiation",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Get filler stability data or soften",
+   "lawyer": false
+  },
+  {
+   "key": "F-06",
+   "audit_ref": "apps:F-06",
+   "area": "apps",
+   "title": "Aerosol shipping",
+   "detail": "4 oz bag-on-valve; Jared's ~30 certificate questions open. Eli plans to hold a pallet",
+   "law": "Consumer aerosols are dangerous goods; limited-quantity 49 CFR 173.306/173.27; ground-only unless air-compliant (https://www.faa.gov/hazmat/safecargo/resources/aerosol-fact-sheet); Amazon FBA dangerous-goods review; hazmat training 49 CFR 172 Subpart H",
+   "severity": "medium",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Filler gives SDS, DOT classification, CARB statement; use ground LTD QTY; train whoever ships",
+   "lawyer": false
+  },
+  {
+   "key": "F-07",
+   "audit_ref": "apps:F-07",
+   "area": "apps",
+   "title": "Product liability insurance",
+   "detail": "None seen",
+   "law": "Marketplace requirements (Amazon requires CGL for larger sellers; verify)",
+   "severity": "medium",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Quote GL + products $1M/$2M",
+   "lawyer": false
+  },
+  {
+   "key": "G-01",
+   "audit_ref": "apps:G-01",
+   "area": "apps",
+   "title": "El Dora site claims",
+   "detail": "eldoraluxe.com: \"Maison... Paris, Dubai\", \"Fine jewelry since 2024\", \"Over a decade of artistry, thousands of pieces\", \"heritage of Versailles\", \"carbon-neutral production, recycled 18k gold, conflict-free\", \"Lifetime resizing\" warranty, FAQ \"Are El D'Ora diamonds real diamonds?\". Footer \"A Bestly LLC Brand\" and \"by Emporeko Global\". Contact is [email] (different domain)",
+   "law": "FTC Act s5; CA B&P 17500; FTC Jewelry Guides 16 CFR 23 (lab-grown must be clearly disclosed near \"diamond\") (https://www.ftc.gov/node/54413); Green Guides 16 CFR 260",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Verify each fact or delete; put \"lab-grown\" before each \"diamond\"; substantiate sustainability; publish warranty terms",
+   "lawyer": true
+  },
+  {
+   "key": "G-02",
+   "audit_ref": "apps:G-02",
+   "area": "apps",
+   "title": "El Dora legal pages",
+   "detail": "Privacy Policy, Terms, Accessibility links all point to \"/\"; form says \"By sending, you agree to our Privacy Policy\"; newsletter signup live; copyright 2024",
+   "law": "CalOPPA B&P 22575; CAN-SPAM",
+   "severity": "medium",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Publish policies; fix links",
+   "lawyer": false
+  },
+  {
+   "key": "G-03",
+   "audit_ref": "apps:G-03",
+   "area": "apps",
+   "title": "CA jewelry lead/cadmium + CPSIA",
+   "detail": "Designs/pricing pending; materials unknown",
+   "law": "H&S 25214.1 et seq.: anyone selling jewelry in CA; certificate from manufacturer; documents within 28 days; $2,500/day civil; criminal for knowing (https://dtsc.ca.gov/californias-metal-containing-jewelry-law-fact-sheet). Children's jewelry (<=15): lead 100 ppm, cadmium 300 ppm",
+   "severity": "medium",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Get compliance certificates from manufacturer; no child-marketed pieces without CPSIA testing",
+   "lawyer": false
+  },
+  {
+   "key": "G-04",
+   "audit_ref": "apps:G-04",
+   "area": "apps",
+   "title": "Country of origin + tariffs",
+   "detail": "Notes assume 15% now and 100% risk; pricing buffer 25%",
+   "law": "19 USC 1304 marking; IEEPA tariffs ended Feb 24, 2026 after SCOTUS ruling (https://www.nationaljeweler.com/articles/14724-ieepa-tariffs-terminated-new-10-tariff-already-imposed); India jewelry now +10% under Section 301 since Jul 24, 2026 plus MFN ~5.5-6% (https://gjepc.org/solitaire/?p=37374, secondary source)",
+   "severity": "medium",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Mark origin; ask customs broker for HTS and rate",
+   "lawyer": false
+  },
+  {
+   "key": "G-05",
+   "audit_ref": "apps:G-05",
+   "area": "apps",
+   "title": "El Dora name, domain, ownership",
+   "detail": "Name unconfirmed (El Dora/Eldora/El D'Ora/\"El Dior\"); domain in Rohit's GoDaddy, July 2027 expiry, no auto-renew; no written ownership of brand/site",
+   "law": "Trademark clearance; contract",
+   "severity": "high",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Written brand/IP agreement; USPTO clearance (Class 14); transfer domain via Eli",
+   "lawyer": true
+  },
+  {
+   "key": "H-01",
+   "audit_ref": "apps:H-01",
+   "area": "apps",
+   "title": "Bestly Cloud / Bestly Sign AGPL",
+   "detail": "Footer notice + LibreSign (AGPL-3.0) link retained; source \"on request at [email]\". Custom apps bestlytheme/bestlymail likely derivative. Doc-editor component licensing unchecked (OnlyOffice AGPL requires logo retention, Collabora/CODE limits)",
+   "law": "AGPL-3.0 s5 (notices), s6 (written offer or source with hardware), s13 (offer source to remote network users); keep copyright and legal notices",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Publish a public source link (repo/tarball) and a 3-year written offer in shipped-box docs; confirm LibreSign COPYING for extra terms; avoid Nextcloud/LibreSign marks beyond \"not affiliated\"",
+   "lawyer": false
+  },
+  {
+   "key": "H-02",
+   "audit_ref": "apps:H-02",
+   "area": "apps",
+   "title": "E-signature legality",
+   "detail": "LibreSign with email-OTP, no account for signers (notes 2026-10-13). No e-sign specific terms, audit-trail retention, or consumer-consent step; LibreSign's own CA is not a trusted QES for EU",
+   "law": "ESIGN 15 USC 7001; CA UETA Civ 1633.1 et seq.: intent, consent, association, retention; exclusions incl. wills/codicils/testamentary trusts (Civ 1633.3)",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add e-sign terms; export audit log; limit marketing to US ESIGN",
+   "lawyer": true
+  },
+  {
+   "key": "H-03",
+   "audit_ref": "apps:H-03",
+   "area": "apps",
+   "title": "Bestly Cloud compliance claims",
+   "detail": "\"GDPR, HIPAA, SOC 2, CCPA - built in\"; \"Bestly can't see it... never retain your data\" while Nimbus remotely monitors/repairs. HIPAA needs BAA; SOC 2 needs an auditor report",
+   "law": "FTC Act s5",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Reword to \"designed to help you meet\"; remove SOC 2 unless attested",
+   "lawyer": false
+  },
+  {
+   "key": "I-01",
+   "audit_ref": "apps:I-01",
+   "area": "apps",
+   "title": "Open-source attributions",
+   "detail": "No acknowledgments screen seen",
+   "law": "MIT/BSD/Apache notice reproduction; no GPL in App Store binaries",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add Settings > Acknowledgments (LicensePlist / license-checker); scan for GPL/AGPL deps",
+   "lawyer": false
+  },
+  {
+   "key": "I-02",
+   "audit_ref": "apps:I-02",
+   "area": "apps",
+   "title": "Promised CCPA/GDPR rights",
+   "detail": "Policies promise access/delete in 30 days; Vera clerk's execute/redact migration not installed; privacy@ inbox untested",
+   "law": "Voluntary promises are enforceable under s5; CCPA likely not mandatory (below thresholds)",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Install migration (needs Jared OK), test inbox",
+   "lawyer": false
+  },
+  {
+   "key": "D-01",
+   "audit_ref": "agents:D-01",
+   "area": "agents",
+   "title": "Reese (RoofGuard cold caller)",
+   "detail": "[DB] rg_leads line types: voip 456, unverified 377, landline 282, mobile 28, unknown 19. 50 states x ~25 leads. calling_enabled=false; cron roofguard-dial runs */5 (gated). Call Guard only PARTLY in prod: call_gate, call_line_ok, call_consents (0 rows) exist; call_gate_selftest, maya_call_settings, call_guard_nightly do NOT [NOTE call-guard/built-awaiting-migration says never applied; DB shows partial].",
+   "law": "AI voice = \"artificial voice\" under TCPA; prior express (written, for telemarketing) consent before calling wireless numbers. 47 USC 227(b)(1)(A)(iii); FCC-24-17 para 2,5, fn 13; 47 CFR 64.1200(a)(1)-(2). Residential-line artificial-voice rule is 227(b)(1)(B) (business landlines not covered). One-to-one consent rule vacated Jan 2025, so no \"one seller\" limit, but consent still required.",
+   "severity": "critical",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Finish Call Guard; dial ONLY landline + business-published VoIP (call_gate result must be ok); never mobile/unverified/unknown; log gate result per call; nightly alert if any call to a non-ok line.",
+   "lawyer": true
+  },
+  {
+   "key": "D-02",
+   "audit_ref": "agents:D-02",
+   "area": "agents",
+   "title": "Reese + Maya outbound",
+   "detail": "[DB] maya_leads 1,484 rows, dnc_checked=false on ALL; rg_leads dnc=true only 3; rg_dnc 2 rows; hunter_optouts 0. [NOTE hunter/phase1-engine] \"no National DNC scrub yet\". No written internal-DNC policy found.",
+   "law": "Federal DNC protects residential subscribers only (64.1200(c)(2)); B2B calls exempt from TSR (16 CFR 310.6(b)(7)); but sole-proprietor/mobile numbers, state DNC lists (some cover business lines; MO B2B bill pending), internal DNC: written policy, honor within 10 business days, keep 5 yrs (64.1200(d)).",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Subscribe to National DNC + state lists for states you dial (small-biz access is per area code); scrub every 31 days; add internal-DNC written policy (1 page) and honor opt-out in <=10 business days; keep rg_dnc/hunter_optouts as single source.",
+   "lawyer": true
+  },
+  {
+   "key": "D-03",
+   "audit_ref": "agents:D-03",
+   "area": "agents",
+   "title": "Reese",
+   "detail": "[EL] Reese prompt: \"If asked... say you are an AI assistant. Never claim to be human\"; fixed openers \"it's Reese from RoofGuard, on a recorded line\" [DB rg_openers]; [NOTE legal/ai-agent-disclosures] AI_DISCLOSE_STATES = {ME} only. Persona uses fillers and \"honestly\" scripting, so first impression is human.",
+   "law": "Disclose AI at call start where required: CA PUC 2874 (live intro must say if message uses an AI-generated \"artificial voice\"), Maine (misleading-bot ban), NJ (bot disclosure at start - per secondary source), Colorado AI Act, Oregon HB 3865 (eff 1/1/2026), Utah (on request). Plus FTC Act/UDAP deception if a human-sounding persona hides AI.",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Disclose in the first line in all states: \"Hi, it's Reese, an AI assistant for RoofGuard, on a recorded line.\" Costs almost nothing, removes 5+ state laws at once.",
+   "lawyer": true
+  },
+  {
+   "key": "D-05",
+   "audit_ref": "agents:D-05",
+   "area": "agents",
+   "title": "Reese + Maya",
+   "detail": "[DB] leads in all 50 states, ~25 each. No registrations on file (company-filings lane to confirm). Exemptions may cover B2B/existing customers, unverified. [Fact-check: the Texas AG stipulation (Nov 6, 2025) says consent-based text marketing is exempt from registration.]",
+   "law": "State mini-TCPAs & telemarketer registration: FL FTSA/HB 1031, OK, MD HB 1228, WA, OR HB 3865, TX SB 140 (Chapter 302 registration: $200/location + $10,000 bond; AG $5,000/violation; DTPA private action), plus registration/bond regimes in other states. Missouri (LBMC's home) B2B bills pending.",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Phase 1: dial only states where counsel confirms no registration needed or you are exempt (start MO + CA + 2-3 states). Don't dial TX/FL/OK/MD/WA/OR until cleared.",
+   "lawyer": true
+  },
+  {
+   "key": "D-06",
+   "audit_ref": "agents:D-06",
+   "area": "agents",
+   "title": "Leo (Turo guest line, phone + trip-page voice)",
+   "detail": "[EL] Leo first_message \"Hi, I'm Leo, the AI trip helper for your Tesla rental. What can I help with?\" - no recording notice; privacy record_voice=true, retention_days=-1 (unlimited). [DB] agent_calls leo: 79 conversations, ALL with audio+transcript; 0 transcripts mention \"record\". trip_consents 0 rows.",
+   "law": "CA Penal Code 632 all-party consent (guests are mostly out-of-state: CA, FL, WA, PA, IL, MD, MT, NH etc. are all-party). Civil damages $5,000 per violation, 637.2 [STAT]. SB 690 does NOT narrow 632.",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "watching",
+   "status_note": "Fix shipped 2026-10-26 by another agent; Vera marks it fixed after 3 clean days of checks.",
+   "fix": "Add to first_message: \"Heads up, this is an AI helper and calls are recorded.\" On the trip-page voice UI, show a one-line notice + consent tap (store in trip_consents). Set retention 90 days.",
+   "lawyer": true
+  },
+  {
+   "key": "D-07",
+   "audit_ref": "agents:D-07",
+   "area": "agents",
+   "title": "Maya (inbound phone + site widget)",
+   "detail": "[EL] first_message \"Hi, this is Maya, Bestly's AI assistant. Calls are recorded. How can I help?\"; retention 90 days; record_voice true. [DB] only 2 of 37 Maya transcripts contain the word \"record\" (35 are web sessions - widget probably skips spoken first message). [NOTE maya/widget-live] site MayaIntro text says conversations are recorded and starting one is consent.",
+   "law": "Same 632 + AI disclosure (CA BOT Act B&P 17941 is online-only and safe-harbored by disclosure; Utah safe harbor).",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Confirm the widget shows the written notice BEFORE mic opens (screenshot test) or force the first message in the widget.",
+   "lawyer": false
+  },
+  {
+   "key": "D-08",
+   "audit_ref": "agents:D-08",
+   "area": "agents",
+   "title": "Maya outbound (planned cold calls)",
+   "detail": "[EL] Maya number [phone] supports_outbound=false. [DB] maya_leads line types: landline 465, voip 450, mobile 292, unverified 275; dnc_checked=false on all; maya_call_settings table absent.",
+   "law": "Same as D-01..D-05.",
+   "severity": "critical",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Do not enable until D-01/D-02/D-03/D-05 closed.",
+   "lawyer": true
+  },
+  {
+   "key": "D-09",
+   "audit_ref": "agents:D-09",
+   "area": "agents",
+   "title": "Ava (Jared's personal assistant)",
+   "detail": "[EL] Ava prompt has good rules (recording notice on turn 2; never claims human). [DB] ava_calls: 44 outbound, 25 in Jared's clone voice, 14 clone-voice calls to numbers NOT in saved contacts; outbound \"purpose\" fields include prank scripts using fake official-sounding entities, sexually explicit content aimed at a third party, and one \"Sell them Bestly services, don't hang up till they agree to buy\". Recording words appear in 37 of 44 outbound transcripts. Retention -1 (unlimited).",
+   "law": "(a) Recording notice (632). (b) AI-cloned voice = artificial voice: consent needed to call cell phones (FCC-24-17); no personal-use exemption. (c) Calls that mislead the recipient about who/what is calling (UDAP; harassment statutes e.g. CA Penal Code 653m [STAT]). (d) CA PUC 2874 if ADAD.",
+   "severity": "medium",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Block outbound to non-saved contacts unless purpose is business-approved; disclose AI when using the Jared voice with anyone not in on it; no prank/explicit scripts to third parties; add recording line to every outbound opener.",
+   "lawyer": false
+  },
+  {
+   "key": "D-10",
+   "audit_ref": "agents:D-10",
+   "area": "agents",
+   "title": "Ava voice clone",
+   "detail": "[DB] ava_voice_bank(meeting, part, seconds, score, xi_sample_id) = samples cut from meetings. ava_settings: jared_voice_for_contacts, pvc_state.",
+   "law": "Cloning your OWN voice is lawful (consent is yours); risks are (i) deceiving third parties, (ii) clone built from other people's speech (meeting audio) without their 632 consent, (iii) vendor terms.",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Confirm clips contain only Jared's speech and meeting participants consented to recording; keep consent record.",
+   "lawyer": false
+  },
+  {
+   "key": "D-11",
+   "audit_ref": "agents:D-11",
+   "area": "agents",
+   "title": "Voice provenance (Maya/Reese/Leo + planned local TTS)",
+   "detail": "[EL] voice IDs for Maya/Reese/Leo not matched in first 25 voices of the workspace listing (list truncated).",
+   "law": "ElevenLabs commercial license applies to library/premade voices; a voice cloned from a real person needs that person's written consent (CA Civ. Code 3344 right of publicity; TN ELVIS Act; NY). Local open-source TTS models often carry non-commercial licenses.",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Jared to confirm each voice is premade/designed/own. Before the local-TTS move: check each model + voice licence permits commercial use.",
+   "lawyer": false
+  },
+  {
+   "key": "D-12",
+   "audit_ref": "agents:D-12",
+   "area": "agents",
+   "title": "Leo SMS / 10DLC",
+   "detail": "[NOTE leo/10dlc-telnyx-verification] brand refused until Telnyx account verification complete. [DB] leo_sms_log 379 rows = 378 `demo_send` + 1 `refused not_live`; leo_sms_optouts table exists (hashed). Consent line added on /turo-key and /turo-lax [NOTE].",
+   "law": "TCR brand + campaign registration; carriers require documented opt-in, STOP/HELP, brand name in replies; EIN must match legal name exactly (Telnyx guide). TX SB 140 treats marketing texts as telephone solicitation. FCC revocation rule: any reasonable means, honored within 10 business days (in effect); \"revoke-all\" delayed to Jan 31, 2027.",
+   "severity": "medium",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Finish Telnyx account verification, then brand + CUSTOMER_CARE campaign; sample messages must match campaign; keep consent screenshots; first SMS says \"Reply STOP to opt out, HELP for help\". Texts transactional only (no promos) until a marketing campaign is approved.",
+   "lawyer": false
+  },
+  {
+   "key": "D-13",
+   "audit_ref": "agents:D-13",
+   "area": "agents",
+   "title": "Leo outbound calls to guests",
+   "detail": "[DB] agent_calls: 1 outbound Leo call (Oct 12), 4 inbound, 74 web.",
+   "law": "Artificial-voice call to a cell = consent required; guest gave number to Turo, not Bestly; informational/transactional calls usually fall under \"consent by providing number in connection with the transaction\" only if given to the caller.",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Prefer inbound/in-page voice; for outbound calls add consent line on the trip page (already added) and log acceptance in trip_consents; no promos.",
+   "lawyer": true
+  },
+  {
+   "key": "D-14",
+   "audit_ref": "agents:D-14",
+   "area": "agents",
+   "title": "Caller ID / STIR-SHAKEN",
+   "detail": "[EL] numbers on Telnyx SIP trunks (Reese [phone], Ava [phone], Leo [phone], Maya [phone]). Reese dials the whole US from a Missouri number.",
+   "law": "Truth in Caller ID (47 USC 227(e)): no misleading caller ID with intent to defraud, up to $10,000/violation. Calls must carry A-level STIR/SHAKEN attestation to avoid labelling/blocking.",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Confirm Telnyx shows A attestation + CNAM \"RoofGuard\"/\"Bestly\"; register numbers with carrier analytics (Free Caller Registry / Hiya / First Orion).",
+   "lawyer": false
+  },
+  {
+   "key": "D-15",
+   "audit_ref": "agents:D-15",
+   "area": "agents",
+   "title": "RoofGuard cold email (CAN-SPAM)",
+   "detail": "[DB] rg_outreach_settings enabled=true, cap 10 first-touches/day; drafts: 26 pending (none sent yet in this table), ALL 26 carry new address \"5850 W 3rd St, Ste E PMB1012\" + \"This is a business partnership solicitation\" + 'Reply \"STOP\"'. 0 drafts with the old Kings Rd address. suppressed_emails = 0 rows; no evidence a STOP-reply processor writes to it. [NOTE outreach] the stored routine description STILL says compliance address 733 N Kings Rd #205 (stale, can regress). Earlier sends (Sept) used the old address.",
+   "law": "Accurate headers, ad identification, valid postal address (CMRA private mailbox allowed), opt-out honored within 10 business days, no B2B exception.",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Update the `outreach` bestly_memory note + any prompts to the 3rd St address; confirm the PMB is registered with the CMRA (iPostal1 Form 1583 on file); add automated STOP handler -> suppressed_emails + check before every send; add List-Unsubscribe header.",
+   "lawyer": false
+  },
+  {
+   "key": "D-16",
+   "audit_ref": "agents:D-16",
+   "area": "agents",
+   "title": "Hunter - CCPA/B2B lead data",
+   "detail": "[DB] maya_leads 1,484 + rg_leads 1,164 + hunter_apollo_enrich 111. Cookie Yeti install base could change the 100,000 count (other lane). Privacy-policy promises still bind via UCL/FTC Act s.5 even if CCPA doesn't.",
+   "law": "CCPA applies only if >$26.625M revenue, or buys/sells/shares PI of >=100,000 CA consumers, or >=50% revenue from selling/sharing. B2B/employee exemption expired 1/1/2023 (sole-proprietor contacts are \"consumers\" if CCPA applies).",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Jared: confirm Cookie Yeti/InventoryProof CA user counts. Keep a short lead-data notice (source, how to opt out) in first contact (Reese already offers removal).",
+   "lawyer": false
+  },
+  {
+   "key": "D-18",
+   "audit_ref": "agents:D-18",
+   "area": "agents",
+   "title": "Hunter - Apollo",
+   "detail": "[DB] hunter_apollo_enrich 111 rows; caps apollo_cap_maya/reese in hunter_settings. Hunter scores leads with third-party AI (Jev/TypeSafe, free LLM ladder) and hands leads to Eli/LBMC.",
+   "law": "Apollo ToS s.3(e): Business Contact Information may not be distributed/sold/licensed to third parties without written permission, not used to train AI; s.6: you alone are responsible for lawful use; s.3(d)/(f): no resale, automated scraping outside API.",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Ask Apollo (or read the order form) whether sending contact fields to an LLM API and to LBMC/Eli is permitted; mark Apollo-sourced fields and exclude them from third-party hand-offs and LLM prompts until answered.",
+   "lawyer": false
+  },
+  {
+   "key": "D-19",
+   "audit_ref": "agents:D-19",
+   "area": "agents",
+   "title": "Hunter - open data sources",
+   "detail": "[NOTE hunter/phase1-engine] sources OSM/Overpass, City of LA open data, SEC, Wikidata.",
+   "law": "OpenStreetMap ODbL needs attribution (and share-alike for derived DBs); SEC EDGAR fair-access limits.",
+   "severity": "low",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Add OSM attribution on any public page; keep lead DB internal.",
+   "lawyer": false
+  },
+  {
+   "key": "D-20",
+   "audit_ref": "agents:D-20",
+   "area": "agents",
+   "title": "Privacy requests (Vera)",
+   "detail": "[DB] privacy_execute and privacy_redact functions DO NOT exist (never applied). privacy_cases: 1 (cancelled). support_tickets kind=privacy: 2 done. privacy_unmapped() returns 9 columns not on the data map incl. maya_leads.email/phone (1,484 rows), hunter_optouts.email/phone, studio_signups.email, studio_magic_links.email, lax_guest_links.sms_phone, call_consents.phone_key. privacy_data_map: 87 rows (delete 25, review 36, keep 15, blank 11). [NOTE vera] [email] receipt unverified.",
+   "law": "CCPA (if applicable) 45 days to respond; privacy-policy promise is enforceable regardless (UCL/FTC Act s.5).",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Approve the privacy_execute/redact migration; map the 9 columns (lead tables = delete); send a test email to [email] and confirm a ticket appears.",
+   "lawyer": false
+  },
+  {
+   "key": "D-21",
+   "audit_ref": "agents:D-21",
+   "area": "agents",
+   "title": "Retention vs promises",
+   "detail": "[EL] retention_days: Maya 90; Reese -1, Ava -1, Leo -1 (unlimited), all record_voice=true. [DB] agent_calls/ava_calls/rg_calls keep full transcripts; no purge cron exists for them (retention crons cover other tables only). Oldest rows Oct 4-11.",
+   "law": "Policy s.16 promises 90-day recording retention for Maya; retention longer than promised or needed = UDAP + data minimisation exposure.",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "watching",
+   "status_note": "Fix shipped 2026-10-26 by another agent; Vera marks it fixed after 3 clean days of checks.",
+   "fix": "Set 90 days on Reese/Ava/Leo (needs your OK; I did not write); add nightly purge of transcripts/audio older than 90 days (keep summaries).",
+   "lawyer": false
+  },
+  {
+   "key": "D-22",
+   "audit_ref": "agents:D-22",
+   "area": "agents",
+   "title": "Backend security (Cal. Civ. Code 1798.81.5 \"reasonable security\")",
+   "detail": "[DB] RLS on for all public tables (0 without); 0 ERROR advisors; legacy keys disabled; team_is_admin fixed. But 760 anon-executable SECURITY DEFINER functions (759 distinct) incl. secret/settlement/claims RPCs - sampled ones are token-gated (db_watchdog_ok) but admin_login_email(p_username) is ungated and returns an admin email to anyone who guesses the username. 1 function has mutable search_path.",
+   "law": "Reasonable security for PI; Supabase advisors.",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Revoke EXECUTE from anon/PUBLIC on all non-public RPCs, allowlist the few that the website needs; fix admin_login_email.",
+   "lawyer": false
+  },
+  {
+   "key": "D-24",
+   "audit_ref": "agents:D-24",
+   "area": "agents",
+   "title": "Public repo leak - breach analysis",
+   "detail": "[NOTE] Legacy service_role JWT in public git history (commit 775534d) valid at least Sept 22 -> Oct 21+; only 24 h of edge logs checked (\"no outside use\"); legacy keys now disabled [DB/API]. Data reachable with that key: Turo guest names/phones/emails, call transcripts, contacts (934), leads; I found NO SSN/DL numbers (seller_intakes has 0 rows; settlement_profile holds Jared's own details). A cold-pitch email quoting private job names proves outsiders read the repo. HPB hashkey + Talk signaling secret still unverified.",
+   "law": "Civ. Code 1798.82: notice if unauthorized ACQUISITION of unencrypted PI (name + SSN/DL/financial acct/medical/biometric etc., or email+password). 30 calendar days from discovery; AG sample if >500 CA residents.",
+   "severity": "high",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Write a dated incident record NOW: discovery 2026-10-21, key disabled date, log-review result, data categories, conclusion. Outer notice deadline if it ever becomes a breach: 2026-11-20 (30 days). Pull longest available Supabase API/edge/auth logs for the exposure window and look for service-role calls from unknown IPs. Confirm repo is private (see automatable check).",
+   "lawyer": true
+  },
+  {
+   "key": "D-25",
+   "audit_ref": "agents:D-25",
+   "area": "agents",
+   "title": "Minute News Daily + sister brands (7 clip brands)",
+   "detail": "[DB] social_posts: minutenewsdaily posted 44 IG, 44 Bluesky, 44 Threads, 11 TikTok since Oct 20 (all ai_generated=true); sister brands money/game/laughs/beats/style/pod already posting. [NOTE mnd-handoff] pipeline downloads picked sections from 21-33 news channels; approval gate relaxed (WeHo auto_approve=true; Dr. Evil \"autonomous\"; Claude one-time approval Oct 20).",
+   "law": "Copyright: clips cut from YouTube news channels via yt-dlp are derivative of others' footage; fair use is fact-specific (commentary hook + \"why it matters\" card help but are thin); YouTube ToS bars downloading; platform \"reused/inauthentic content\" demonetization. 17 USC 504(c) statutory damages up to $150,000 per work if willful [STAT].",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "watching",
+   "status_note": "Fix shipped 2026-10-26 by another agent; Vera marks it fixed after 3 clean days of checks.",
+   "fix": "Prefer public-domain/government/licensed sources and Creative Commons; where you must use news footage, keep it short, with real original commentary, source credit, and a 24-hour takedown SLA; keep a source log per clip (mnd_used exists). Counsel review of the pipeline.",
+   "lawyer": true
+  },
+  {
+   "key": "D-26",
+   "audit_ref": "agents:D-26",
+   "area": "agents",
+   "title": "Automated content - AI labels & sponsorship",
+   "detail": "[DB] MND + MTD posts ai_generated=true (trigger trg_social_posts_ai_label exists). Sister brands (money, game, laughs, beats, style, pod) show ai_generated=false although [NOTE clip-network-handoff] says VoiceStudio/AI voice is being used for them. MTD has sponsored tag asset.",
+   "law": "Platform rules (YouTube altered/synthetic disclosure; Meta/TikTok AI labels); FTC Endorsement Guides for sponsored segments.",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Set ai_generated=true by default for any clip with synthetic voice/imagery; verify per brand.",
+   "lawyer": false
+  },
+  {
+   "key": "D-27",
+   "audit_ref": "agents:D-27",
+   "area": "agents",
+   "title": "DMCA designated agent (17 USC 512(c)(2))",
+   "detail": "Directory search not scriptable from here. Minute sites have newsletter signup + planned Advertise page; Studio/Cloud accept client uploads.",
+   "law": "Needed only to keep safe harbor for user-posted content hosted on your sites (comments, uploads, client submissions).",
+   "severity": "low",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "If any site accepts user content, register an agent online (Copyright Office) and put contact on the site; renewals are periodic - set a calendar alert.",
+   "lawyer": false
+  },
+  {
+   "key": "D-28",
+   "audit_ref": "agents:D-28",
+   "area": "agents",
+   "title": "Newsletter (mnd_subscribers)",
+   "detail": "[DB] mnd_subscribers 1 row; mnd_subscribe_attempts exists.",
+   "law": "CAN-SPAM + CA double-opt-in best practice.",
+   "severity": "low",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Confirm unsubscribe link + address in every send.",
+   "lawyer": false
+  },
+  {
+   "key": "D-29",
+   "audit_ref": "agents:D-29",
+   "area": "agents",
+   "title": "Nickel (class-action claims)",
+   "detail": "[DB] settlement_claims: skipped 233, found 29, ready 9, needs_you 6, paid 1, filed 0. [NOTE] Filer never solves CAPTCHA, never touches SSN/bank, files only approved claims; lock-screen \"Yes, file all\" needs Face ID, one-shot, 3-day window; AI may answer only profile/class_member_yes keyword-checked.",
+   "law": "Claim forms are signed under penalty of perjury; claiming a class you are not in = fraud exposure; some administrators ban automated filing.",
+   "severity": "medium",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Keep the proven/likely evidence gate; never auto-answer class membership by AI; show EVERY class name (digest shows only 3 + \"N more\") before the sworn tap; keep receipts.",
+   "lawyer": false
+  },
+  {
+   "key": "D-30",
+   "audit_ref": "agents:D-30",
+   "area": "agents",
+   "title": "Regulated clients (medical/dental, AB 3030)",
+   "detail": "[NOTE legal/ai-agent-disclosures] flagged, not done.",
+   "law": "HIPAA BAAs (client + ElevenLabs); CA AB 3030 AI disclaimer for patient communications.",
+   "severity": "high",
+   "readiness": "gate",
+   "status": "open",
+   "status_note": null,
+   "fix": "Do not sell Maya to clinics until BAA + disclaimer exist.",
+   "lawyer": true
+  },
+  {
+   "key": "D-31",
+   "audit_ref": "agents:D-31",
+   "area": "agents",
+   "title": "LBMC / Eli relationship",
+   "detail": "Reese prompt says \"calling for an independent referral partner of the program run by Legacy Building Maintenance Company\". No written agreement seen in DB.",
+   "law": "TCPA vicarious liability: the seller (LBMC) can be liable for calls placed on its behalf; the caller must identify the responsible business (64.1200(b)).",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Written referral/marketing agreement: who is the \"caller\", indemnity, approved scripts, call-recording sharing.",
+   "lawyer": true
+  },
+  {
+   "key": "FC-01",
+   "audit_ref": "filings:C-01",
+   "area": "filings",
+   "title": "Entity in good standing (formation date, file no., active/suspended)",
+   "detail": "bizfile blocked; Mercury lists legal name Bestly LLC; EIN prefix suggests 2024 formation (inference)",
+   "law": "SOS bizfile Business Search",
+   "severity": "high",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Read status + \"Date Filed\" in bizfile; also FTB Entity Status Letter (public). Everything below depends on the formation month",
+   "lawyer": false
+  },
+  {
+   "key": "FC-02",
+   "audit_ref": "filings:C-02",
+   "area": "filings",
+   "title": "Statement of Information (LLC-12) biennial",
+   "detail": "Mercury shows no $20 SOS payment (only 2 x $5 on 2026-05-21)",
+   "law": "$20; due every 2 years in registration month + 5 prior months (even/odd year by registration year); updates between periods are free; late = $250 penalty (FTB-collected), then suspension. https://bpd.cdn.sos.ca.gov/llc/forms/llc-12.pdf ; https://www.sos.ca.gov/business-programs/business-entities/statements . Since Aug 1 2026 online SOI filing needs bizfile \"User Access\"",
+   "severity": "high",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Pull filing history; file/confirm the SOI now",
+   "lawyer": false
+  },
+  {
+   "key": "FC-03",
+   "audit_ref": "filings:C-03",
+   "area": "filings",
+   "title": "Principal office address on file",
+   "detail": "Oct 18 change put the iPostal1 PMB (5850 W 3rd St Ste E PMB1012) on business docs; notes say SOS/FTB/CDTFA/Mercury profiles NOT yet changed [Fact-check: the LLC-12 form says full street address, no P.O. Box; it does not mention PMBs, so a PMB ban is unverified.]",
+   "law": "Item 4a must be a physical street address; P.O. Boxes and \"in care of\" not allowed. Mailing address (4b) CAN be a PO Box/c-o. Same LLC-12 PDF",
+   "severity": "medium",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Principal office = actual location (home, 733 N Kings Rd, West Hollywood) and PMB as mailing address (4b) only. Trade-off: home address becomes public record. Alternative: a real leased desk/co-working address",
+   "lawyer": false
+  },
+  {
+   "key": "FC-04",
+   "audit_ref": "filings:C-04",
+   "area": "filings",
+   "title": "Agent for service of process",
+   "detail": "Agent not visible; no registered-agent vendor payments in Mercury",
+   "law": "Individual agent: CA resident with PHYSICAL CA street address, no PO box/c-o, name+address public; or a registered 1505 corporate agent. Same PDF",
+   "severity": "high",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Confirm agent and address; PMB must NOT be the agent address. Commercial agent (~$100-300/yr) keeps home address off agent field",
+   "lawyer": false
+  },
+  {
+   "key": "FC-05",
+   "audit_ref": "filings:C-05",
+   "area": "filings",
+   "title": "FTB $800 annual LLC tax",
+   "detail": "No FTB payment in Mercury Apr-Oct 2026 (2026 $800 was due Apr 15 2026); older years invisible",
+   "law": "Due 15th day of 4th month of the tax year (Apr 15); first-year due 15th day of 4th month after SOS filing. First-year exemption only for tax years beginning 1/1/2021 to before 1/1/2024. https://www.ftb.ca.gov/file/business/types/limited-liability-company/index.html ; https://www.ftb.ca.gov/about-ftb/data-reports-plans/limited-liability-company-limited-liability-partnership-and-limited-partnership-first-year-annual-tax-exemption.pdf",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Check FTB MyFTB/Entity Status; pay and file late if owed (penalty abatement request via CPA)",
+   "lawyer": true
+  },
+  {
+   "key": "FC-06",
+   "audit_ref": "filings:C-06",
+   "area": "filings",
+   "title": "Form 568 + LLC gross-receipts fee",
+   "detail": "no FTB/CPA payments seen",
+   "law": "568 due Apr 15 (single-member owned by individual) or Mar 15 (multi-member); extension automatic to Oct 15, payment not extended. Fee on total CA income: <$250k $0; $250-499,999 $900; $500-999,999 $2,500; $1M-4.99M $6,000; $5M+ $11,790; Form 3536 est. due Jun 15. Same FTB page; dates per https://businessanywhere.io/california-form-568/ (secondary)",
+   "severity": "high",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Confirm 568 filed for each year since formation; est. fee $0 at current volume",
+   "lawyer": true
+  },
+  {
+   "key": "FC-08",
+   "audit_ref": "filings:C-08",
+   "area": "filings",
+   "title": "Federal tax classification; implied partnership",
+   "detail": "Memory: Eli \"business-side partner\" with expected cut on InventoryProof; Rohit \"partner\"; HOKU, El Dora, Vesta with them; no written agreements found; Jared stated Eli \"is due a cut\"",
+   "law": "1 owner = disregarded (Schedule C/Sch E); 2+ owners = partnership by default, Form 1065 + K-1s due Mar 15. https://www.irs.gov/node/5184",
+   "severity": "high",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "Put each deal on paper as (a) referral/commission or independent-contractor fee (1099-NEC) OR (b) a real multi-member operating agreement. Do not leave it handshake",
+   "lawyer": true
+  },
+  {
+   "key": "FC-09",
+   "audit_ref": "filings:C-09",
+   "area": "filings",
+   "title": "1099-NEC for contractors",
+   "detail": "Mercury shows only Venmo outflows (Apr-May 2026, $56-$109); no contractor payroll visible",
+   "law": "$2,000 threshold for payments made in 2026 (was $600); due Jan 31 (Feb 1 2027 since Jan 31 is Sunday). https://www.natptax.com/news-insights/blog/form-1099-filing-changes-under-the-new-2-000-threshold/ (secondary; confirm at irs.gov)",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Collect W-9 before paying any contractor/partner; list 2026 payees",
+   "lawyer": true
+  },
+  {
+   "key": "FC-10",
+   "audit_ref": "filings:C-10",
+   "area": "filings",
+   "title": "Estimated taxes (federal 1040-ES + CA 540-ES; 568 if multi-member)",
+   "detail": "No IRS/FTB/EFTPS debit in Mercury",
+   "law": "Quarterly: Apr 15, Jun 15, Sep 15, Jan 15",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "CPA to compute from YTD Turo + Bestly income",
+   "lawyer": true
+  },
+  {
+   "key": "FC-11",
+   "audit_ref": "filings:C-11",
+   "area": "filings",
+   "title": "CDTFA seller's permit + returns",
+   "detail": "Permit not verifiable (lookup blocked); no CDTFA payment in Mercury; Libra card exists in admin but notes say CDTFA profile not updated",
+   "law": "Return required EVERY period incl. zero; late return/payment 10% of tax; frequency assigned by CDTFA (quarterly/quarterly-prepay/monthly/annual). https://trykintsugi.com/blog/how-to-file-california-sales-tax-online.md (secondary; confirm with CDTFA)",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Verify permit status/frequency; file zero returns if no taxable sales",
+   "lawyer": true
+  },
+  {
+   "key": "FC-12",
+   "audit_ref": "filings:C-12",
+   "area": "filings",
+   "title": "What Bestly sells that is taxable",
+   "detail": "Bestly Agent, Bestly Cloud, Bestly Sign, Cookie Yeti etc. are SaaS/software sold from CA",
+   "law": "Today SaaS/hosted services generally not taxable; physical goods (HOKU, El Dora) taxable at retail. NEW: SB 122 signed Jun 29 2026 makes prewritten software and SaaS taxable effective Jan 1 2027 (custom software, digital audio/video works, books, video games, IaaS excluded; sourcing to buyer CA billing address; $5M single-customer rule). CDTFA emergency regs (Reg 1600 etc.) drafted Sept 2026, NOT final. Sources: https://www.hklaw.com/en/insights/publications/2026/09/coming-attractions-california-previews-rules-saas-digital-products-tax ; https://www.bdo.com/insights/tax/california-moves-to-subject-digital-prewritten-software-to-sales-and-use-tax ; https://taxcloud.com/sales-tax-radar/califor",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Decide by Dec 2026: collect CA tax on CA customers' SaaS from Jan 1 2027 (Stripe Tax or manual), or confirm exemption; custom web builds may stay exempt only if truly special-order; physical products need resale certs/permit; App Store sales: Apple's treatment after 2027 is unconfirmed",
+   "lawyer": true
+  },
+  {
+   "key": "FC-13",
+   "audit_ref": "filings:C-13",
+   "area": "filings",
+   "title": "Libra logging into CDTFA with Jared's credentials",
+   "detail": "Memory: Libra to use Jared's own username/password from the Pi browser [Fact-check 2026-10-26: no CDTFA notice of an Aug 2026 new system or invalidated logins was found; the July 8, 2026 release (NR 26-05) added Quick File inside the existing Online Services. Third-party access runs on per-account security codes and access types (All, File and Pay, etc.).]",
+   "law": "Official delegate path: representative creates own account, requests access, client approves in system or gives security code (mailed to business mailing address, 7-10 business days); Access types (e.g. File and Pay) can file/pay but not relief requests.  https://cdtfa.ca.gov/formspubs/l-557.pdf . The notices retrieved say NOTHING permitting or forbidding credential sharing; CDTFA customer line 1-800-400-7115",
+   "severity": "medium",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Use delegate/representative access or Limited Access Code for Libra (own login, revocable), keep Jared as approver; get CDTFA to confirm in writing that automation is allowed; give Libra read-only + draft, human taps submit",
+   "lawyer": true
+  },
+  {
+   "key": "FC-14",
+   "audit_ref": "filings:C-14",
+   "area": "filings",
+   "title": "City of LA Business Tax Registration Certificate",
+   "detail": "Registered? unknown. Operations are at home in WeHo (outside City) BUT Turo handoffs/deliveries at LAX (City of LA), and the 3rd St PMB is a City of LA address now on public filings",
+   "law": "Annual renewal due Feb 28 (Feb 29 leap years) even with zero revenue; small business exemption if global gross receipts < $100,000 but still must file renewals. https://finance.lacity.gov/key-points-remember ; https://finance.lacity.gov/tax-education/business-tax-registration-renewal/renewal-deadlines-forms-and-online-services . City runs AB63/SB1146 tax-discovery letters from FTB data to home-based/self-employed with no BTRC (20 business days to respond): https://finance.lacity.gov/sites/g/files/wph1721/files/2026-06/a_AB63-Notification-Letter-FINAL.pdf",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Do not assume PMB = presence (a mail drop is weak nexus, not settled). Ask Office of Finance or CPA whether LAX-based Turo activity requires BTRC; if yes register and claim <$100k exemption; if not, answer any AB63 letter stating WeHo business address",
+   "lawyer": true
+  },
+  {
+   "key": "FC-15",
+   "audit_ref": "filings:C-15",
+   "area": "filings",
+   "title": "City of West Hollywood business tax certificate",
+   "detail": "No WeHo payment in Mercury",
+   "law": "\"All City businesses require a Tax Certificate.\" Home-based businesses need one within 30 days of starting; the home-occupation exemption (one-time ~$29) is for individually-owned (not an entity) with no employees per a 2021 local-news article (verify current). https://www.weho.org/home/showpublisheddocument/63111/638954449271870000 ; https://wehoonline.com/home-based-businesses-independent-contractors-and-freelancers-in-weho-required-to-file-for-a-business-tax-certificate/",
+   "severity": "medium",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Confirm with WeHo Business Tax ([email], 323-848-6451/6319) and register LLC as home-based/Turo; also check Planning for home-occupation rules",
+   "lawyer": false
+  },
+  {
+   "key": "FC-16",
+   "audit_ref": "filings:C-16",
+   "area": "filings",
+   "title": "Fictitious Business Names (LA County)",
+   "detail": "Mercury DBAs: NONE. Bestly trades as Bestly, InventoryProof, Cookie Yeti, Bestly Agent/Cloud/Sign, HOKU, El Dora, ArriveKey",
+   "law": "FBN needed for any business name other than the name in the articles; LA County Registrar-Recorder/County Clerk; 5-year term; publication in a newspaper required after filing (confirm). Statute pages (leginfo) blocked; County page confirms filing duty for names not including the owner surname",
+   "severity": "medium",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "File FBN for \"Bestly\" (without LLC) and each customer-facing brand Bestly itself operates (not client brands); do NOT file for brands owned by Eli/Rohit/client until ownership is papered",
+   "lawyer": true
+  },
+  {
+   "key": "FC-17",
+   "audit_ref": "filings:C-17",
+   "area": "filings",
+   "title": "Trademarks",
+   "detail": "USPTO/Justia unreachable. Web search found a LIVE \"VESTA\" registration (6/30/2026) and many BEST*/HOKU filings: VESTA, HOKU, BESTLY and COOKIE YETI (YETI is a famous mark) are higher risk. Client box shows (R) on an unregistered mark (client/store-launch-ops)",
+   "law": "Unregistered marks give common-law rights only where used; USPTO clearance recommended before scale",
+   "severity": "high",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Run formal knockout searches (class 9/42 apps, class 3 HOKU, class 14 El Dora) via attorney; file ITU for BESTLY (classes 9, 42) once cleared; confirm the written (R)-vs-TM notice to Elizabeth was sent",
+   "lawyer": true
+  },
+  {
+   "key": "FC-18",
+   "audit_ref": "filings:C-18",
+   "area": "filings",
+   "title": "Partner operating agreement + IP assignments",
+   "detail": "eli/partners, eli/inventoryproof (insurer deal; Rohit presenting; Jared built app), Vesta concept authored by Rohit, \"Eli reviews client contracts\" rule only",
+   "law": "CA does not require an operating agreement but IP built by Jared for deals with Eli/Rohit needs written ownership and revenue terms",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Single-member operating agreement; written IP assignment/work-for-hire from every contributor; one-page deal memo per venture (who owns code, brand, domain, revenue split); keep insurer-facing brief free of partner comp",
+   "lawyer": true
+  },
+  {
+   "key": "FC-19",
+   "audit_ref": "filings:C-19",
+   "area": "filings",
+   "title": "El Dora domain (eldoraluxe.com)",
+   "detail": "Write-up sent to Eli Sept 23; not confirmed done",
+   "law": "Core brand asset in Rohit's GoDaddy account, expires Jul 11 2027, auto-renew OFF (Supabase eldora/domain-risk)",
+   "severity": "medium",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Ask stays with Eli (Jared must not go direct); follow up Nov 2026; escalate by Mar 2027",
+   "lawyer": false
+  },
+  {
+   "key": "FC-20",
+   "audit_ref": "filings:C-20",
+   "area": "filings",
+   "title": "Business insurance",
+   "detail": "Only Tesla Insurance (vehicle) seen; no GL, product liability, cyber, tech E&O, or media/IP policy in Mercury",
+   "law": "No statute requires GL for an LLC, but landlords/Amazon/retailers/insurer clients require it; workers' comp mandatory if any employee",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": null,
+   "fix": "Bind: GL + product liability ($1M/$2M; HOKU/El Dora), cyber, tech E&O (covers Bestly Agent), possibly media liability. Verify Tesla/Turo policy covers commercial sharing",
+   "lawyer": true
+  },
+  {
+   "key": "FC-22",
+   "audit_ref": "filings:C-22",
+   "area": "filings",
+   "title": "CA Delete Act data broker registration",
+   "detail": "Hunter pulls leads (Apollo) for Maya/Reese outreach; only \"broker\" if lists are sold/licensed to others",
+   "law": "Business that knowingly collects and SELLS PI of consumers with no direct relationship; registration by Jan 31, $6,000 fee, $200/day penalties, DROP processing every 45 days from Aug 1 2026 (30 days from Jan 1 2027). https://privacy.ca.gov/data-brokers",
+   "severity": "low",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Keep lead data internal; never resell; if a client product shares lists, register first",
+   "lawyer": true
+  },
+  {
+   "key": "FC-23",
+   "audit_ref": "filings:C-23",
+   "area": "filings",
+   "title": "Automatic renewal / subscription terms (BPC 17600)",
+   "detail": "not reviewed",
+   "law": "Out of this slice (websites/apps agents)",
+   "severity": "medium",
+   "readiness": "unknown",
+   "status": "open",
+   "status_note": null,
+   "fix": "Covered by app/web agents",
+   "lawyer": true
+  },
+  {
+   "key": "FC-24",
+   "audit_ref": "filings:C-24",
+   "area": "filings",
+   "title": "Address-change propagation",
+   "detail": "Memory: website/legal pages done Oct 18; CDTFA/App Store/Stripe/Mercury profiles NOT changed. CDTFA security codes mail to the mailing address on file",
+   "law": "Mailing-address change must reach SOS (SOI), FTB, CDTFA, IRS (Form 8822-B), LA/WeHo, Mercury (stays home by choice), Apple/Stripe",
+   "severity": "medium",
+   "readiness": "partial",
+   "status": "open",
+   "status_note": null,
+   "fix": "After C-03 decision, update each agency once",
+   "lawyer": false
+  }
+ ],
+ "checks": [
+  {
+   "id": "web.bestly.privacy-policy.vendors",
+   "area": "websites",
+   "title": "bestly.tech/privacy-policy names Stripe, Resend and OpenAI",
+   "kind": "http_contains",
+   "target": "https://www.bestly.tech/privacy-policy",
+   "params": {
+    "rendered": true,
+    "all": [
+     "Stripe",
+     "Resend",
+     "OpenAI"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-06"
+  },
+  {
+   "id": "web.bestly.privacy.parity",
+   "area": "websites",
+   "title": "bestly.tech/privacy names Stripe, Resend, OpenAI and email (matches /privacy-policy)",
+   "kind": "http_contains",
+   "target": "https://www.bestly.tech/privacy",
+   "params": {
+    "rendered": true,
+    "all": [
+     "Stripe",
+     "Resend",
+     "OpenAI",
+     "email"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-06"
+  },
+  {
+   "id": "web.bestly.privacy.parity-b01",
+   "area": "websites",
+   "title": "Cookie Yeti privacy page matches the master policy",
+   "kind": "http_contains",
+   "target": "https://www.bestly.tech/privacy",
+   "params": {
+    "rendered": true,
+    "all": [
+     "Stripe",
+     "Resend",
+     "OpenAI",
+     "email"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "B-01"
+  },
+  {
+   "id": "web.bestly.privacy.no-stale-claims",
+   "area": "websites",
+   "title": "bestly.tech/privacy no longer says nobody else receives data",
+   "kind": "http_absent",
+   "target": "https://www.bestly.tech/privacy",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "No other parties receive any information"
+    ],
+    "regex": [
+     "identifiers \\(name, email, IP\\)\\W{0,6}No\\b"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "B-01"
+  },
+  {
+   "id": "web.bestly.privacy-policy.dnt",
+   "area": "websites",
+   "title": "Privacy policy answers Do Not Track",
+   "kind": "http_contains",
+   "target": "https://www.bestly.tech/privacy-policy",
+   "params": {
+    "rendered": true,
+    "regex": [
+     "do not track"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-08"
+  },
+  {
+   "id": "web.bestly.privacy-policy.maya",
+   "area": "websites",
+   "title": "Privacy policy has the Maya (AI assistant) section",
+   "kind": "http_contains",
+   "target": "https://www.bestly.tech/privacy-policy",
+   "params": {
+    "rendered": true,
+    "all": [
+     "Maya, Our AI Assistant"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-10"
+  },
+  {
+   "id": "web.bestly.home.maya-notice",
+   "area": "websites",
+   "title": "Maya launch panel says AI and recorded before the mic opens",
+   "kind": "http_contains",
+   "target": "https://www.bestly.tech/",
+   "params": {
+    "rendered": true,
+    "click": "Talk to Maya",
+    "all": [
+     "Maya is an AI",
+     "recorded"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-10"
+  },
+  {
+   "id": "web.bestly.home.no-compliance-badges",
+   "area": "websites",
+   "title": "Home has no GDPR/CCPA compliance badges",
+   "kind": "http_absent",
+   "target": "https://www.bestly.tech/",
+   "params": {
+    "rendered": true,
+    "regex": [
+     "gdpr,? (and ccpa )?compliant",
+     "ccpa ready"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-05"
+  },
+  {
+   "id": "web.bestly.cloud.no-compliance-claims",
+   "area": "websites",
+   "title": "/cloud makes no HIPAA / SOC 2 / built-in compliance claims",
+   "kind": "http_absent",
+   "target": "https://www.bestly.tech/cloud",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "HIPAA",
+     "SOC 2"
+    ],
+    "regex": [
+     "gdpr,?.{0,40}built in"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-05"
+  },
+  {
+   "id": "web.bestly.cloud.no-compliance-claims-h03",
+   "area": "websites",
+   "title": "Bestly Cloud page makes no compliance claims it cannot prove",
+   "kind": "http_absent",
+   "target": "https://www.bestly.tech/cloud",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "HIPAA",
+     "SOC 2"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "H-03"
+  },
+  {
+   "id": "web.bestly.hoku.no-fake-proof",
+   "area": "websites",
+   "title": "bestly.tech/hoku has no invented reviews or drug-like claims",
+   "kind": "http_absent",
+   "target": "https://www.bestly.tech/hoku",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "Sarah M.",
+     "David L.",
+     "Emma R.",
+     "Michael K.",
+     "Join thousands",
+     "Pharmaceutical",
+     "Dermatologist reviewed",
+     "protect and heal"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-04"
+  },
+  {
+   "id": "web.bestly.home.no-old-address",
+   "area": "websites",
+   "title": "/ does not show the old Kings Rd address",
+   "kind": "http_absent",
+   "target": "https://www.bestly.tech/",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "733 N",
+     "Kings Rd"
+    ]
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "web.bestly.privacy-policy.no-old-address",
+   "area": "websites",
+   "title": "/privacy-policy does not show the old Kings Rd address",
+   "kind": "http_absent",
+   "target": "https://www.bestly.tech/privacy-policy",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "733 N",
+     "Kings Rd"
+    ]
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "web.bestly.terms.no-old-address",
+   "area": "websites",
+   "title": "/terms-of-use does not show the old Kings Rd address",
+   "kind": "http_absent",
+   "target": "https://www.bestly.tech/terms-of-use",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "733 N",
+     "Kings Rd"
+    ]
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "web.bestly.contact.no-old-address",
+   "area": "websites",
+   "title": "/contact does not show the old Kings Rd address",
+   "kind": "http_absent",
+   "target": "https://www.bestly.tech/contact",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "733 N",
+     "Kings Rd"
+    ]
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "web.bestly.cloud.no-old-address",
+   "area": "websites",
+   "title": "/cloud does not show the old Kings Rd address",
+   "kind": "http_absent",
+   "target": "https://www.bestly.tech/cloud",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "733 N",
+     "Kings Rd"
+    ]
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "web.bestly.home.footer-address",
+   "area": "websites",
+   "title": "Home footer shows the 3rd St business address",
+   "kind": "http_contains",
+   "target": "https://www.bestly.tech/",
+   "params": {
+    "rendered": true,
+    "all": [
+     "5850 W 3rd St",
+     "PMB1012"
+    ]
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "web.bestly.contact.footer-address",
+   "area": "websites",
+   "title": "Contact page shows the 3rd St business address",
+   "kind": "http_contains",
+   "target": "https://www.bestly.tech/contact",
+   "params": {
+    "rendered": true,
+    "all": [
+     "5850 W 3rd St"
+    ]
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "web.bestly.bundles.no-home-address",
+   "area": "websites",
+   "title": "Public site code does not hard-code the home address",
+   "kind": "http_absent",
+   "target": "https://www.bestly.tech/",
+   "params": {
+    "assets": true,
+    "banned": [
+     "733 N Kings"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-22"
+  },
+  {
+   "id": "web.bestly.terms-of-service.fresh",
+   "area": "websites",
+   "title": "Terms of Service updated within 12 months",
+   "kind": "policy_fresh",
+   "target": "https://www.bestly.tech/terms-of-service",
+   "params": {
+    "rendered": true,
+    "max_age_days": 365
+   },
+   "every": "daily",
+   "finding_key": "W-07"
+  },
+  {
+   "id": "web.bestly.privacy-policy.fresh",
+   "area": "websites",
+   "title": "Privacy policy updated within 12 months",
+   "kind": "policy_fresh",
+   "target": "https://www.bestly.tech/privacy-policy",
+   "params": {
+    "rendered": true,
+    "max_age_days": 365
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "web.bestly.turo-key.privacy-link",
+   "area": "websites",
+   "title": "/turo-key links to the privacy policy",
+   "kind": "http_contains",
+   "target": "https://www.bestly.tech/turo-key",
+   "params": {
+    "rendered": true,
+    "all": [
+     "Privacy"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-21"
+  },
+  {
+   "id": "web.bestly.turo-lax.privacy-link",
+   "area": "websites",
+   "title": "/turo-lax links to the privacy policy",
+   "kind": "http_contains",
+   "target": "https://www.bestly.tech/turo-lax",
+   "params": {
+    "rendered": true,
+    "all": [
+     "Privacy"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-21"
+  },
+  {
+   "id": "web.bestly.home.third-party",
+   "area": "websites",
+   "title": "/ loads only approved third parties, sets no cookies",
+   "kind": "page_hosts",
+   "target": "https://www.bestly.tech/",
+   "params": {
+    "allow": [
+     "bestly.tech",
+     "fonts.googleapis.com",
+     "fonts.gstatic.com",
+     "static.cloudflareinsights.com",
+     "cloudflareinsights.com",
+     "rcqfqhguwpmaarseifqg.supabase.co",
+     "js.stripe.com",
+     "m.stripe.network",
+     "m.stripe.com",
+     "unpkg.com",
+     "vercel.live"
+    ],
+    "deny": [
+     "google-analytics",
+     "googletagmanager",
+     "facebook.net",
+     "facebook.com/tr",
+     "analytics.tiktok",
+     "hotjar",
+     "fullstory",
+     "clarity.ms",
+     "segment.",
+     "intercom",
+     "drift.com",
+     "crisp.chat",
+     "tawk.to",
+     "doubleclick"
+    ],
+    "max_cookies": 0,
+    "max_local_storage": 0
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "web.bestly.cloud.third-party",
+   "area": "websites",
+   "title": "/cloud loads only approved third parties, sets no cookies",
+   "kind": "page_hosts",
+   "target": "https://www.bestly.tech/cloud",
+   "params": {
+    "allow": [
+     "bestly.tech",
+     "fonts.googleapis.com",
+     "fonts.gstatic.com",
+     "static.cloudflareinsights.com",
+     "cloudflareinsights.com",
+     "rcqfqhguwpmaarseifqg.supabase.co",
+     "js.stripe.com",
+     "m.stripe.network",
+     "m.stripe.com",
+     "unpkg.com",
+     "vercel.live"
+    ],
+    "deny": [
+     "google-analytics",
+     "googletagmanager",
+     "facebook.net",
+     "facebook.com/tr",
+     "analytics.tiktok",
+     "hotjar",
+     "fullstory",
+     "clarity.ms",
+     "segment.",
+     "intercom",
+     "drift.com",
+     "crisp.chat",
+     "tawk.to",
+     "doubleclick"
+    ],
+    "max_cookies": 0,
+    "max_local_storage": 0
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "web.bestly.agent.third-party",
+   "area": "websites",
+   "title": "/agent loads only approved third parties, sets no cookies",
+   "kind": "page_hosts",
+   "target": "https://www.bestly.tech/agent",
+   "params": {
+    "allow": [
+     "bestly.tech",
+     "fonts.googleapis.com",
+     "fonts.gstatic.com",
+     "static.cloudflareinsights.com",
+     "cloudflareinsights.com",
+     "rcqfqhguwpmaarseifqg.supabase.co",
+     "js.stripe.com",
+     "m.stripe.network",
+     "m.stripe.com",
+     "unpkg.com",
+     "vercel.live"
+    ],
+    "deny": [
+     "google-analytics",
+     "googletagmanager",
+     "facebook.net",
+     "facebook.com/tr",
+     "analytics.tiktok",
+     "hotjar",
+     "fullstory",
+     "clarity.ms",
+     "segment.",
+     "intercom",
+     "drift.com",
+     "crisp.chat",
+     "tawk.to",
+     "doubleclick"
+    ],
+    "max_cookies": 0,
+    "max_local_storage": 0
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "web.bestly.cookie-yeti.limited-use",
+   "area": "apps",
+   "title": "Cookie Yeti page carries the Chrome Web Store Limited Use statement",
+   "kind": "http_contains",
+   "target": "https://www.bestly.tech/cookie-yeti",
+   "params": {
+    "rendered": true,
+    "regex": [
+     "limited use"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "B-03"
+  },
+  {
+   "id": "web.parentiq.no-fake-proof",
+   "area": "websites",
+   "title": "parentiq.io has no invented testimonials or user counts",
+   "kind": "http_absent",
+   "target": "https://parentiq.io/",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "Trusted by families",
+     "Sarah M.",
+     "Michael T.",
+     "Jennifer L.",
+     "David K.",
+     "Amanda R.",
+     "Robert H.",
+     "78%",
+     "thousands of families"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-01"
+  },
+  {
+   "id": "web.parentiq.no-overclaims",
+   "area": "websites",
+   "title": "parentiq.io makes no court-ready / bank-grade claims",
+   "kind": "http_absent",
+   "target": "https://parentiq.io/",
+   "params": {
+    "rendered": true,
+    "regex": [
+     "court-ready",
+     "bank-grade",
+     "legal-grade"
+    ],
+    "banned": [
+     "5+ hrs"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "C-02"
+  },
+  {
+   "id": "web.parentiq.privacy-entity",
+   "area": "websites",
+   "title": "ParentIQ privacy policy names Bestly LLC",
+   "kind": "http_contains",
+   "target": "https://parentiq.io/privacy",
+   "params": {
+    "rendered": true,
+    "all": [
+     "Bestly LLC"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-20"
+  },
+  {
+   "id": "web.parentiq.privacy-address",
+   "area": "websites",
+   "title": "ParentIQ privacy policy gives the business address",
+   "kind": "http_contains",
+   "target": "https://parentiq.io/privacy",
+   "params": {
+    "rendered": true,
+    "all": [
+     "5850 W 3rd St"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "C-03"
+  },
+  {
+   "id": "web.schoolpilot.no-fake-stats",
+   "area": "websites",
+   "title": "SchoolPilot demo site has no invented stats or compliance badges",
+   "kind": "http_absent",
+   "target": "https://school-pilot-nine.vercel.app/",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "250+ schools",
+     "FERPA & COPPA compliant",
+     "Diana Martinez",
+     "50K+"
+    ],
+    "pass_if_status_gte": 400
+   },
+   "every": "daily",
+   "finding_key": "W-02"
+  },
+  {
+   "id": "web.quoterra.no-fake-claims",
+   "area": "websites",
+   "title": "Quoterra demo has no invented customer counts or license claims",
+   "kind": "http_absent",
+   "target": "https://quoterra-a7eff299.vercel.app/",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "Trusted by 1,000+",
+     "thousands of satisfied",
+     "licensed, insured, and verified"
+    ],
+    "pass_if_status_gte": 400
+   },
+   "every": "daily",
+   "finding_key": "W-03"
+  },
+  {
+   "id": "web.eldora.privacy-page",
+   "area": "websites",
+   "title": "El Dora has a real privacy page",
+   "kind": "http_contains",
+   "target": "https://eldoraluxe.com/privacy",
+   "params": {
+    "rendered": true,
+    "all": [
+     "Privacy Policy"
+    ],
+    "min_len": 1500
+   },
+   "every": "daily",
+   "finding_key": "W-17"
+  },
+  {
+   "id": "web.eldora.privacy-page-g02",
+   "area": "websites",
+   "title": "El Dora privacy page is linked and real",
+   "kind": "http_contains",
+   "target": "https://eldoraluxe.com/privacy",
+   "params": {
+    "rendered": true,
+    "all": [
+     "Privacy Policy"
+    ],
+    "min_len": 1500
+   },
+   "every": "daily",
+   "finding_key": "G-02"
+  },
+  {
+   "id": "web.eldora.no-unsubstantiated",
+   "area": "websites",
+   "title": "El Dora makes no unproven heritage or sustainability claims",
+   "kind": "http_absent",
+   "target": "https://eldoraluxe.com/",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "Versailles",
+     "thousands of pieces",
+     "Over a decade",
+     "Find a Boutique",
+     "Carbon-neutral",
+     "conflict-free"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-18"
+  },
+  {
+   "id": "web.eldora.no-unsubstantiated-g01",
+   "area": "websites",
+   "title": "El Dora claims substantiated",
+   "kind": "http_absent",
+   "target": "https://eldoraluxe.com/",
+   "params": {
+    "rendered": true,
+    "banned": [
+     "Versailles",
+     "thousands of pieces",
+     "Over a decade",
+     "Find a Boutique",
+     "Carbon-neutral",
+     "conflict-free"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "G-01"
+  },
+  {
+   "id": "web.mnd.privacy-link",
+   "area": "websites",
+   "title": "Minute News Daily links a privacy policy",
+   "kind": "http_contains",
+   "target": "https://minutenewsdaily.com/",
+   "params": {
+    "rendered": true,
+    "all": [
+     "Privacy"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-16"
+  },
+  {
+   "id": "web.mnd.dmca-page",
+   "area": "websites",
+   "title": "Minute News Daily has a DMCA / takedown page",
+   "kind": "http_contains",
+   "target": "https://minutenewsdaily.com/dmca",
+   "params": {
+    "rendered": true,
+    "all": [
+     "DMCA"
+    ],
+    "min_len": 500
+   },
+   "every": "daily",
+   "finding_key": "W-15"
+  },
+  {
+   "id": "web.mnd.feed-no-outlet-footage",
+   "area": "websites",
+   "title": "MND feed carries no clips from named news outlets",
+   "kind": "http_absent",
+   "target": "https://minutenewsdaily.com/feed.xml",
+   "params": {
+    "regex": [
+     "bloomberg",
+     "abc7",
+     "abc13",
+     "who 13",
+     "source:"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-15"
+  },
+  {
+   "id": "web.mnd.feed-no-outlet-footage-d25",
+   "area": "websites",
+   "title": "MND clips come from licensed or original sources",
+   "kind": "http_absent",
+   "target": "https://minutenewsdaily.com/feed.xml",
+   "params": {
+    "regex": [
+     "bloomberg",
+     "abc7",
+     "abc13",
+     "who 13",
+     "source:"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "D-25"
+  },
+  {
+   "id": "web.hoascope.operator",
+   "area": "websites",
+   "title": "HOAscope privacy policy names the operator",
+   "kind": "http_contains",
+   "target": "https://hoascope.com/privacy",
+   "params": {
+    "rendered": true,
+    "all": [
+     "Bestly LLC"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-19"
+  },
+  {
+   "id": "web.cloud.reachable",
+   "area": "websites",
+   "title": "cloud.bestly.tech answers",
+   "kind": "http_status",
+   "target": "https://cloud.bestly.tech/",
+   "params": {
+    "expect": [
+     200,
+     301,
+     302,
+     303,
+     401
+    ]
+   },
+   "every": "daily",
+   "finding_key": "W-23"
+  },
+  {
+   "id": "web.studio.reachable",
+   "area": "websites",
+   "title": "studio.bestly.tech answers",
+   "kind": "http_status",
+   "target": "https://studio.bestly.tech/",
+   "params": {
+    "expect": [
+     200
+    ]
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "web.inventoryproof.support",
+   "area": "apps",
+   "title": "inventoryproof.com/support is a real page",
+   "kind": "http_absent",
+   "target": "https://www.inventoryproof.com/support",
+   "params": {
+    "rendered": true,
+    "regex": [
+     "page not found",
+     "404"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "A-05"
+  },
+  {
+   "id": "web.inventoryproof.privacy-entity",
+   "area": "apps",
+   "title": "InventoryProof privacy policy names Bestly LLC",
+   "kind": "http_contains",
+   "target": "https://www.inventoryproof.com/privacy",
+   "params": {
+    "rendered": true,
+    "all": [
+     "Bestly LLC"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "A-01"
+  },
+  {
+   "id": "web.inventoryproof.privacy-fresh",
+   "area": "apps",
+   "title": "InventoryProof privacy policy updated within 12 months",
+   "kind": "policy_fresh",
+   "target": "https://www.inventoryproof.com/privacy",
+   "params": {
+    "rendered": true,
+    "max_age_days": 365
+   },
+   "every": "daily",
+   "finding_key": "A-01"
+  },
+  {
+   "id": "web.github.repo-private",
+   "area": "agents",
+   "title": "The bestlytech GitHub repo is private",
+   "kind": "http_status",
+   "target": "https://api.github.com/repos/Bestly-LLC/bestlytech",
+   "params": {
+    "expect": [
+     404
+    ]
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "el.leo.disclosure",
+   "area": "agents",
+   "title": "Leo says he is an AI and that calls are recorded",
+   "kind": "elevenlabs",
+   "target": "leo",
+   "params": {
+    "agent_id": "agent_2501m4mb0gppf23943pftcjqem0a",
+    "rules": [
+     "first_message_ai",
+     "first_message_record"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "D-06"
+  },
+  {
+   "id": "el.maya.disclosure",
+   "area": "agents",
+   "title": "Maya says she is an AI and that calls are recorded",
+   "kind": "elevenlabs",
+   "target": "maya",
+   "params": {
+    "agent_id": "agent_3701m4jbjnyef6ga4ys73xtbz37s",
+    "rules": [
+     "first_message_ai",
+     "first_message_record"
+    ]
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "el.maya.retention",
+   "area": "agents",
+   "title": "Maya keeps recordings 90 days or less",
+   "kind": "elevenlabs",
+   "target": "maya",
+   "params": {
+    "agent_id": "agent_3701m4jbjnyef6ga4ys73xtbz37s",
+    "rules": [
+     "retention_1_90"
+    ]
+   },
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "el.leo.retention",
+   "area": "agents",
+   "title": "Leo keeps recordings 90 days or less",
+   "kind": "elevenlabs",
+   "target": "leo",
+   "params": {
+    "agent_id": "agent_2501m4mb0gppf23943pftcjqem0a",
+    "agent_name": "Leo",
+    "rules": [
+     "retention_1_90"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "D-21"
+  },
+  {
+   "id": "el.reese.retention",
+   "area": "agents",
+   "title": "Reese keeps recordings 90 days or less",
+   "kind": "elevenlabs",
+   "target": "reese",
+   "params": {
+    "agent_id": null,
+    "agent_name": "Reese",
+    "rules": [
+     "retention_1_90"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "D-21"
+  },
+  {
+   "id": "el.ava.retention",
+   "area": "agents",
+   "title": "Ava keeps recordings 90 days or less",
+   "kind": "elevenlabs",
+   "target": "ava",
+   "params": {
+    "agent_id": null,
+    "agent_name": "Ava",
+    "rules": [
+     "retention_1_90"
+    ]
+   },
+   "every": "daily",
+   "finding_key": "D-21"
+  },
+  {
+   "id": "sql.privacy.unmapped",
+   "area": "agents",
+   "title": "Every personal-data column is on the privacy data map",
+   "kind": "sql_zero",
+   "target": "select count(*) from privacy_unmapped()",
+   "params": {},
+   "every": "daily",
+   "finding_key": "D-20"
+  },
+  {
+   "id": "sql.privacy.execute-redact",
+   "area": "agents",
+   "title": "privacy_execute and privacy_redact are installed",
+   "kind": "sql_true",
+   "target": "select count(*) = 2 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('privacy_execute','privacy_redact')",
+   "params": {},
+   "every": "daily",
+   "finding_key": "D-20"
+  },
+  {
+   "id": "sql.call.outbound-while-off",
+   "area": "agents",
+   "title": "No real outbound RoofGuard calls while calling is switched off",
+   "kind": "sql_zero",
+   "target": "select count(*) from rg_calls where direction='outbound' and not coalesce(is_test,false) and queued_at > now()-interval '1 day' and (select not coalesce(calling_enabled,false) from rg_settings limit 1)",
+   "params": {},
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "sql.call.non-landline",
+   "area": "agents",
+   "title": "No RoofGuard call to a mobile, unverified or unknown line",
+   "kind": "sql_zero",
+   "target": "select count(*) from rg_calls c join rg_leads l on l.id=c.lead_id where c.direction='outbound' and not coalesce(c.is_test,false) and (l.line_type is distinct from 'landline' and not (l.line_type='voip' and l.phone_source in ('website','osm','directory','sec','wikidata')))",
+   "params": {},
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "sql.call.dnc-calls",
+   "area": "agents",
+   "title": "No real call to a number on the do-not-call list",
+   "kind": "sql_zero",
+   "target": "select count(*) from rg_calls c join rg_leads l on l.id=c.lead_id where not coalesce(c.is_test,false) and coalesce(l.dnc,false)",
+   "params": {},
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "sql.call.maya-dnc-gate",
+   "area": "agents",
+   "title": "When calling is on, every queued Maya lead has a DNC check",
+   "kind": "sql_zero",
+   "target": "select case when (select coalesce(calling_enabled,false) from rg_settings limit 1) then (select count(*) from maya_leads where queued_at is not null and coalesce(dnc_checked,false)=false) else 0 end",
+   "params": {},
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "sql.reese.openers-ai",
+   "area": "agents",
+   "title": "Every active Reese opener says it is an AI",
+   "kind": "sql_zero",
+   "target": "select count(*) from rg_openers where active and script !~* '\\mAI\\M'",
+   "params": {},
+   "every": "daily",
+   "finding_key": "D-03"
+  },
+  {
+   "id": "sql.outreach.drafts-address",
+   "area": "agents",
+   "title": "RoofGuard emails carry the 3rd St address and a stop line",
+   "kind": "sql_zero",
+   "target": "select count(*) from rg_outreach_drafts where (status in ('pending','approved') or (status='sent' and created_at > '2026-10-19')) and (body !~ '5850 W 3rd St' or body ~* 'Kings Rd' or body !~* '(stop|unsubscribe)')",
+   "params": {},
+   "every": "daily",
+   "finding_key": "D-15"
+  },
+  {
+   "id": "sql.outreach.note-address",
+   "area": "agents",
+   "title": "The outreach routine note no longer names the old address",
+   "kind": "sql_zero",
+   "target": "select count(*) from bestly_memory where key='outreach' and body ilike '%733 N Kings Rd #205%'",
+   "params": {},
+   "every": "daily",
+   "finding_key": "D-15"
+  },
+  {
+   "id": "sql.leo.transcripts-record",
+   "area": "agents",
+   "title": "Every new Leo call mentions recording",
+   "kind": "sql_zero",
+   "target": "select count(*) from agent_calls where agent_slug='leo' and created_at > now()-interval '1 day' and coalesce(transcript::text,'') !~* 'record'",
+   "params": {},
+   "every": "daily",
+   "finding_key": "D-06"
+  },
+  {
+   "id": "sql.social.ai-flags",
+   "area": "agents",
+   "title": "Minute brand posts with AI voice are labeled AI",
+   "kind": "sql_zero",
+   "target": "select count(*) from social_posts where posted_at > now()-interval '1 day' and brand like 'minute%daily' and not coalesce(ai_generated,false)",
+   "params": {},
+   "every": "daily",
+   "finding_key": "D-26"
+  },
+  {
+   "id": "sql.cy.reports-no-path",
+   "area": "apps",
+   "title": "Cookie Yeti reports keep the site origin only",
+   "kind": "sql_zero",
+   "target": "select count(*) from missed_banner_reports where page_url ~ '^https?://[^/]+/.+'",
+   "params": {},
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "sql.db.rls-off",
+   "area": "agents",
+   "title": "Every public table has row-level security on",
+   "kind": "sql_zero",
+   "target": "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity",
+   "params": {},
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "sql.db.team-is-admin",
+   "area": "agents",
+   "title": "team_is_admin() keeps its session_user fix",
+   "kind": "sql_true",
+   "target": "select pg_get_functiondef('public.team_is_admin'::regproc) ~ 'session_user'",
+   "params": {},
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "sql.db.anon-secdef-baseline",
+   "area": "agents",
+   "title": "Anonymous-callable database functions do not grow past the baseline",
+   "kind": "sql_true",
+   "target": "select count(*) <= 760 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef and has_function_privilege('anon', p.oid, 'execute')",
+   "params": {},
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "sql.retention.purge-90d",
+   "area": "agents",
+   "title": "No call transcript is older than 90 days",
+   "kind": "sql_zero",
+   "target": "select (select count(*) from agent_calls where created_at < now()-interval '90 days') + (select count(*) from ava_calls where created_at < now()-interval '90 days') + (select count(*) from rg_calls where queued_at < now()-interval '90 days')",
+   "params": {},
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "deadline.tick",
+   "area": "filings",
+   "title": "Deadline reminders (30, 7 and 1 days ahead)",
+   "kind": "deadline",
+   "target": "compliance_deadlines",
+   "params": {},
+   "every": "daily",
+   "finding_key": null
+  },
+  {
+   "id": "ios.inventoryproof",
+   "area": "apps",
+   "title": "InventoryProof App Store listing is readable; version changes are logged",
+   "kind": "listing",
+   "target": "itunes:6758317473",
+   "params": {
+    "track_id": "6758317473",
+    "country": "us"
+   },
+   "every": "weekly",
+   "finding_key": null
+  },
+  {
+   "id": "ios.cookieyeti",
+   "area": "apps",
+   "title": "Cookie Yeti App Store listing is readable; version changes are logged",
+   "kind": "listing",
+   "target": "itunes:6759732250",
+   "params": {
+    "track_id": "6759732250",
+    "country": "us"
+   },
+   "every": "weekly",
+   "finding_key": null
+  },
+  {
+   "id": "domain.bestly.tech",
+   "area": "filings",
+   "title": "bestly.tech is not about to expire",
+   "kind": "domain_expiry",
+   "target": "bestly.tech",
+   "params": {
+    "min_days": 60
+   },
+   "every": "weekly",
+   "finding_key": null
+  },
+  {
+   "id": "domain.inventoryproof.com",
+   "area": "filings",
+   "title": "inventoryproof.com is not about to expire",
+   "kind": "domain_expiry",
+   "target": "inventoryproof.com",
+   "params": {
+    "min_days": 60
+   },
+   "every": "weekly",
+   "finding_key": null
+  },
+  {
+   "id": "domain.parentiq.io",
+   "area": "filings",
+   "title": "parentiq.io is not about to expire",
+   "kind": "domain_expiry",
+   "target": "parentiq.io",
+   "params": {
+    "min_days": 60
+   },
+   "every": "weekly",
+   "finding_key": null
+  },
+  {
+   "id": "domain.hoascope.com",
+   "area": "filings",
+   "title": "hoascope.com is not about to expire",
+   "kind": "domain_expiry",
+   "target": "hoascope.com",
+   "params": {
+    "min_days": 60
+   },
+   "every": "weekly",
+   "finding_key": null
+  },
+  {
+   "id": "domain.hoku-clean.com",
+   "area": "filings",
+   "title": "hoku-clean.com is not about to expire",
+   "kind": "domain_expiry",
+   "target": "hoku-clean.com",
+   "params": {
+    "min_days": 60
+   },
+   "every": "weekly",
+   "finding_key": null
+  },
+  {
+   "id": "domain.eldoraluxe.com",
+   "area": "filings",
+   "title": "eldoraluxe.com is not about to expire",
+   "kind": "domain_expiry",
+   "target": "eldoraluxe.com",
+   "params": {
+    "min_days": 60
+   },
+   "every": "weekly",
+   "finding_key": "FC-19"
+  },
+  {
+   "id": "domain.minutenewsdaily.com",
+   "area": "filings",
+   "title": "minutenewsdaily.com is not about to expire",
+   "kind": "domain_expiry",
+   "target": "minutenewsdaily.com",
+   "params": {
+    "min_days": 60
+   },
+   "every": "weekly",
+   "finding_key": null
+  },
+  {
+   "id": "domain.minutetechdaily.com",
+   "area": "filings",
+   "title": "minutetechdaily.com is not about to expire",
+   "kind": "domain_expiry",
+   "target": "minutetechdaily.com",
+   "params": {
+    "min_days": 60
+   },
+   "every": "weekly",
+   "finding_key": null
+  },
+  {
+   "id": "domain.goldenhourgardendesign.com",
+   "area": "filings",
+   "title": "goldenhourgardendesign.com is not about to expire",
+   "kind": "domain_expiry",
+   "target": "goldenhourgardendesign.com",
+   "params": {
+    "min_days": 60
+   },
+   "every": "weekly",
+   "finding_key": null
+  }
+ ],
+ "deadlines": [
+  {
+   "key": "soi-llc12-2026",
+   "due": "2026-10-31",
+   "what": "Statement of Information (LLC-12) window may close",
+   "note": "Late filing adds a $250 penalty, then suspension. Pull the filing history first: if the LLC was formed in October 2024 the even-year window ends Oct 31.",
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "cdtfa-q3-2026",
+   "due": "2026-11-02",
+   "what": "CDTFA Q3 2026 sales tax return (if quarterly)",
+   "note": "Due Oct 31, which is a Saturday, so Monday. A return is required every period, even with zero sales.",
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "repo-leak-incident-record",
+   "due": "2026-11-20",
+   "what": "Close the repo-key leak incident record",
+   "note": "30 days after discovery on Oct 21, 2026. Write the dated record: discovery, key disabled date, log review, data categories, conclusion.",
+   "money": false,
+   "uncertain": false,
+   "owner_slug": "security-auditor"
+  },
+  {
+   "key": "eli-eldora-domain-followup",
+   "due": "2026-11-16",
+   "what": "Follow up with Eli on moving eldoraluxe.com out of the GoDaddy account",
+   "note": "Ask goes through Eli, not direct.",
+   "money": false,
+   "uncertain": false,
+   "owner_slug": "privacy-clerk",
+   "remind_days": [
+    7,
+    1
+   ]
+  },
+  {
+   "key": "sb122-decision",
+   "due": "2026-12-15",
+   "what": "Decide the California SB 122 plan for software and SaaS sales tax",
+   "note": "Collect CA tax on CA customers from Jan 1, 2027 (Stripe Tax or by hand) or confirm an exemption. CDTFA rules are still draft.",
+   "money": false,
+   "uncertain": false,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "w9-2026",
+   "due": "2026-12-31",
+   "what": "Collect a W-9 from every 2026 contractor and partner payee",
+   "note": "Needed before the Feb 1 1099-NEC filing.",
+   "money": false,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk",
+   "remind_days": [
+    14,
+    3
+   ]
+  },
+  {
+   "key": "sb122-live",
+   "due": "2027-01-01",
+   "what": "California SB 122 takes effect: prewritten software and SaaS become taxable",
+   "note": "Custom software is exempt. Sourcing is the buyer billing address.",
+   "money": false,
+   "uncertain": false,
+   "owner_slug": "privacy-clerk",
+   "remind_days": [
+    30,
+    7,
+    1
+   ]
+  },
+  {
+   "key": "est-tax-2027-q4",
+   "due": "2027-01-15",
+   "what": "Q4 2026 estimated taxes (federal 1040-ES and California 540-ES)",
+   "note": "CPA computes from year-to-date Turo and Bestly income.",
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "fcc-revoke-all",
+   "due": "2027-01-31",
+   "what": "FCC TCPA revoke-all rule takes effect",
+   "note": "Any reasonable opt-out by text or call must stop all messages. Check Leo SMS, Reese and Maya opt-out handling first.",
+   "money": false,
+   "uncertain": false,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "1099-nec-2027",
+   "due": "2027-02-01",
+   "what": "1099-NEC to every 2026 contractor and to the IRS",
+   "note": "Jan 31 is a Sunday. The 2026 threshold is $2,000.",
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "cdtfa-q4-2026",
+   "due": "2027-02-01",
+   "what": "CDTFA Q4 2026 sales tax return (if quarterly)",
+   "note": "Jan 31 is a Sunday.",
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "la-btrc-2027",
+   "due": "2027-03-01",
+   "what": "City of LA business tax registration renewal (if registered)",
+   "note": "Due Feb 28, a Sunday, so file by Fri Feb 26. Required even with zero revenue if registered.",
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "multi-member-returns-2027",
+   "due": "2027-03-15",
+   "what": "Form 1065 and California 568 (only if the LLC has more than one owner)",
+   "note": "Applies only if profits are shared with Eli or Rohit without a written agreement that says otherwise.",
+   "money": false,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "ftb-568-800-2027",
+   "due": "2027-04-15",
+   "what": "Form 568 and the $800 California LLC annual tax",
+   "note": "Plus Form 1040 Schedule C and California 540. An extension to Oct 15 does not extend payment.",
+   "money": true,
+   "uncertain": false,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "est-tax-2027-q1",
+   "due": "2027-04-15",
+   "what": "Q1 2027 estimated taxes",
+   "note": null,
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "cdtfa-q1-2027",
+   "due": "2027-04-30",
+   "what": "CDTFA Q1 2027 sales tax return (if quarterly)",
+   "note": null,
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "india-dpdp",
+   "due": "2027-05-13",
+   "what": "India DPDP Act main duties begin (Vesta)",
+   "note": "Name a grievance officer, itemized notice, erasure flow, 18+ gate. MeitY floated a 12-month cut, not adopted.",
+   "money": false,
+   "uncertain": false,
+   "owner_slug": "privacy-clerk",
+   "remind_days": [
+    90,
+    30,
+    7
+   ]
+  },
+  {
+   "key": "eldora-domain-renew",
+   "due": "2027-06-11",
+   "what": "Renew or transfer eldoraluxe.com",
+   "note": "It expires Jul 11, 2027 with auto-renew off, in a partner account.",
+   "money": false,
+   "uncertain": false,
+   "owner_slug": "privacy-clerk",
+   "remind_days": [
+    60,
+    30,
+    7
+   ]
+  },
+  {
+   "key": "est-tax-2027-q2",
+   "due": "2027-06-15",
+   "what": "Q2 2027 estimated taxes (and FTB 3536 if California income is $250,000 or more)",
+   "note": null,
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "cdtfa-q2-2027",
+   "due": "2027-08-02",
+   "what": "CDTFA Q2 2027 sales tax return (if quarterly)",
+   "note": "Jul 31 is a Saturday.",
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "est-tax-2027-q3",
+   "due": "2027-09-15",
+   "what": "Q3 2027 estimated taxes",
+   "note": null,
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "extended-returns-2027",
+   "due": "2027-10-15",
+   "what": "Extended 1040 and 568 deadline for 2026",
+   "note": null,
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "cdtfa-q3-2027",
+   "due": "2027-11-01",
+   "what": "CDTFA Q3 2027 sales tax return (if quarterly)",
+   "note": "Oct 31 is a Sunday.",
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "est-tax-2028-q4",
+   "due": "2028-01-18",
+   "what": "Q4 2027 estimated taxes",
+   "note": "Jan 15 is a Saturday and Jan 17 is Martin Luther King Jr. Day.",
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "cdtfa-q4-2027",
+   "due": "2028-01-31",
+   "what": "CDTFA Q4 2027 sales tax return and 1099-NEC (if quarterly)",
+   "note": null,
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "la-btrc-2028",
+   "due": "2028-02-29",
+   "what": "City of LA business tax registration renewal (if registered)",
+   "note": "Leap year.",
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "multi-member-returns-2028",
+   "due": "2028-03-15",
+   "what": "Form 1065 and California 568 (only if the LLC has more than one owner)",
+   "note": null,
+   "money": false,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "ftb-568-800-2028",
+   "due": "2028-04-17",
+   "what": "Form 568 and the $800 California LLC annual tax",
+   "note": "Apr 15 is a Saturday.",
+   "money": true,
+   "uncertain": false,
+   "owner_slug": "privacy-clerk"
+  },
+  {
+   "key": "est-tax-2028-q1",
+   "due": "2028-04-17",
+   "what": "Q1 2028 estimated taxes",
+   "note": "Apr 15 is a Saturday.",
+   "money": true,
+   "uncertain": true,
+   "owner_slug": "privacy-clerk"
+  }
+ ],
+ "law_sources": [
+  {
+   "id": "ftc-press",
+   "platform": "FTC",
+   "name": "FTC press releases",
+   "url": "https://www.ftc.gov/news-events/news/press-releases",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "ftc-business-blog",
+   "platform": "FTC",
+   "name": "FTC business guidance blog",
+   "url": "https://www.ftc.gov/business-guidance/blog",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "ftc-coppa",
+   "platform": "FTC",
+   "name": "FTC COPPA rule page",
+   "url": "https://www.ftc.gov/legal-library/browse/rules/childrens-online-privacy-protection-rule-coppa",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "fcc-robocalls",
+   "platform": "FCC",
+   "name": "FCC robocalls and TCPA enforcement",
+   "url": "https://www.fcc.gov/enforcement/areas/robocalls",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "fcc-tcpa-news",
+   "platform": "FCC",
+   "name": "FCC consumer news: robocalls and robotexts",
+   "url": "https://www.fcc.gov/consumers/guides/stop-unwanted-robocalls-and-texts",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "cppa-news",
+   "platform": "California Privacy Protection Agency",
+   "name": "CPPA announcements",
+   "url": "https://cppa.ca.gov/announcements/",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "cppa-regs",
+   "platform": "California Privacy Protection Agency",
+   "name": "CPPA regulations",
+   "url": "https://cppa.ca.gov/regulations/",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "cdtfa-news",
+   "platform": "CDTFA",
+   "name": "CDTFA news releases",
+   "url": "https://www.cdtfa.ca.gov/news/",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "cdtfa-saas",
+   "platform": "CDTFA",
+   "name": "CDTFA software and digital products rulemaking",
+   "url": "https://www.cdtfa.ca.gov/lawguides/",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "ftb-news",
+   "platform": "FTB",
+   "name": "FTB newsroom",
+   "url": "https://www.ftb.ca.gov/about-ftb/newsroom/index.html",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "sos-statements",
+   "platform": "California Secretary of State",
+   "name": "CA SOS statements of information",
+   "url": "https://www.sos.ca.gov/business-programs/business-entities/statements",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "fincen-boi",
+   "platform": "FinCEN",
+   "name": "FinCEN beneficial ownership reporting",
+   "url": "https://www.fincen.gov/boi",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "apple-guidelines",
+   "platform": "Apple",
+   "name": "Apple App Review Guidelines",
+   "url": "https://developer.apple.com/app-store/review/guidelines/",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "apple-news",
+   "platform": "Apple",
+   "name": "Apple developer news",
+   "url": "https://developer.apple.com/news/",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "cws-policies",
+   "platform": "Google Chrome",
+   "name": "Chrome Web Store program policies",
+   "url": "https://developer.chrome.com/docs/webstore/program-policies/",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "cws-limited-use",
+   "platform": "Google Chrome",
+   "name": "Chrome Web Store limited use policy",
+   "url": "https://developer.chrome.com/docs/webstore/program-policies/limited-use",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "fda-mocra",
+   "platform": "FDA",
+   "name": "FDA MoCRA cosmetics law page",
+   "url": "https://www.fda.gov/cosmetics/cosmetics-laws-regulations/modernization-cosmetics-regulation-act-2022-mocra",
+   "kind": "page",
+   "browser": false
+  },
+  {
+   "id": "meity-dpdp",
+   "platform": "India MeitY",
+   "name": "India MeitY data protection (DPDP) framework",
+   "url": "https://www.meity.gov.in/data-protection-framework",
+   "kind": "page",
+   "browser": true
+  },
+  {
+   "id": "tesla-fleet-terms",
+   "platform": "Tesla",
+   "name": "Tesla Fleet API announcements (terms and fees)",
+   "url": "https://developer.tesla.com/docs/fleet-api/announcements",
+   "kind": "page",
+   "browser": true
+  }
+ ],
+ "context": "Bestly LLC is a one-owner California LLC (owner Jared Best, West Hollywood CA). Business mailing address: 5850 W 3rd St, Ste E PMB1012, Los Angeles CA 90036 (a private mailbox, not where work happens). Privacy-first multi-app studio. Bestly sells software and services from California to customers in the US and some abroad.\nPRODUCTS: Cookie Yeti (browser extension plus iOS/Mac app that clears cookie banners; Pro subscriptions $0.99/mo, $7.99/yr, $99.99 lifetime; Stripe on the web, Apple IAP in the app; banner HTML is sent to OpenAI). InventoryProof (iOS home inventory app, free plus Pro; AI looks at video frames; estate-planning questionnaires). ParentIQ (co-parenting web app, children's names and birth years, AI tone analysis, planned expense payouts). SchoolPilot (student data demo, no real school yet). Vesta (women-only social and wellbeing beta, India invite-only). Arrivekey (Tesla Fleet API app for Turo hosts). HOKU (HOCl facial spray, not for sale yet, cosmetic not drug; California aerosol shipping). El Dora (lab-grown jewelry lead site, brand ownership unclear). Bestly Cloud / Sign (Nextcloud and LibreSign, AGPL). Bestly Agent / Maya (AI phone assistant sold to businesses; ElevenLabs voices; recorded calls). Minute News Daily and sister clip brands (AI-made short videos from news clips posted on Instagram, TikTok, Bluesky, Threads). Turo car-sharing side business (Tesla fleet in LA).\nAI PHONE AGENTS: Maya (inbound/site), Leo (Turo guests), Reese (planned outbound B2B cold calls for RoofGuard, switched off), Ava (Jared's personal assistant). Recording all-party consent (CA Penal Code 632), AI disclosure, TCPA artificial voice rules, state mini-TCPAs, do-not-call lists.\nAPPLIES TO US: FTC Act s5 and California UCL (advertising claims, testimonials, 16 CFR 465), CAN-SPAM, TCPA, CalOPPA, COPPA (amended rule, compliance Apr 22 2026), Apple App Review Guidelines (5.1.1 account deletion, 3.1.2 subscriptions), Chrome Web Store policies, California Automatic Renewal Law (AB 2863), CIPA (SB 690 signed Sep 30 2026 limits website claims from 2027), FD&C Act and MoCRA (HOKU), copyright/DMCA (clip network), California sales tax (SB 122 makes SaaS taxable from Jan 1 2027), FTB $800 LLC tax, Statement of Information, CDTFA seller's permit, India DPDP Act (Vesta).\nLIKELY DOES NOT APPLY YET: CCPA thresholds ($26,625,000 revenue, 100,000 consumers, or 50 percent of revenue from selling data) are almost certainly not met; no data is sold; no ad pixels. HIPAA and SOC 2 are not claimed. Texas, Utah and other state AI/telemarketing laws matter only where Reese or Maya dial.\nUNKNOWN TO US (never guess): LLC formation month, whether the CDTFA permit is active and its filing frequency, whether Eli or Rohit are legally partners, how many California users Cookie Yeti has, whether ParentIQ/SchoolPilot have real users.\nTEAM SLUGS for actions: privacy-clerk (Vera, compliance), security-auditor (Ares), platform-radar (Radar), spark (marketing), cdtfa-filer (Libra, sales tax), scout (chief of staff)."
+}
