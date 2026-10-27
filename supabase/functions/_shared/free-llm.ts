@@ -16,10 +16,11 @@
 // Off switch: public.llm_providers.enabled (per provider). Cooldowns: llm_providers.cooldown_until.
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
+import { CANDIDATES, buildOutOfRoom, type ProviderRow, type RoomOut } from "./free-llm-status.ts";
 
 export type LlmTask = "judge" | "pick" | "extract" | "triage" | "write" | "reflect" | "classify" | "summarize" | "code";
 export type LlmPrivacy = "private" | "public";
-type Provider = "groq" | "cloudflare" | "local" | "gemini" | "openrouter" | "freellm" | "anthropic";
+type Provider = "groq" | "cloudflare" | "local" | "gemini" | "openrouter" | "freellm" | "anthropic" | "sambanova" | "cerebras";
 type Outcome = "ok" | "rate_limited" | "timeout" | "error" | "bad_json" | "invalid"
   | "skipped_size" | "skipped_off" | "skipped_budget" | "skipped_privacy" | "skipped_nokey";
 
@@ -48,7 +49,7 @@ export interface LlmResult {
   model: string;
   provider: Provider;
   cost_usd: number;
-  tried: { provider: string; model: string; outcome: Outcome; ms: number }[];
+  tried: { provider: string; model: string; outcome: Outcome; ms: number; lastChance?: boolean }[];
 }
 
 export class LlmUnavailable extends Error {
@@ -339,6 +340,8 @@ async function keys(): Promise<Record<string, string>> {
   if (raw.gemini_api_key) v.gemini_api_key = pick(raw.gemini_api_key, /AIza[0-9A-Za-z_\-]{30,}/);
   if (raw.openrouter_api_key) v.openrouter_api_key = pick(raw.openrouter_api_key, /sk-or-[A-Za-z0-9_\-]{20,}/);
   if (raw.freellm_api_key) v.freellm_api_key = pick(raw.freellm_api_key, /freellmapi-[A-Za-z0-9]{20,}/);
+  // 2026-10-27: vetted no-training providers Jared can connect (free-llm-status.ts CANDIDATES). Keep the first token only.
+  for (const c of CANDIDATES) if (raw[c.keyName]) v[c.keyName] = String(raw[c.keyName]).trim().split(/\s+/)[0];
   _keys = { at: Date.now(), v };
   return v;
 }
@@ -346,7 +349,7 @@ async function keys(): Promise<Record<string, string>> {
 let _prov: { at: number; v: Record<string, any> } | null = null;
 async function providers(): Promise<Record<string, any>> {
   if (_prov && Date.now() - _prov.at < 60_000) return _prov.v;
-  const { data } = await db().from("llm_providers").select("name, enabled, private_ok, cooldown_until, cooldown_reason, daily_cap");
+  const { data } = await db().from("llm_providers").select("*");   // 2026-10-27: * so llm_providers.outage_note (new column) is read when it exists and never breaks the read when it does not
   const v = Object.fromEntries((data ?? []).map((p: any) => [p.name, p]));
   _prov = { at: Date.now(), v };
   return v;
@@ -397,6 +400,86 @@ async function rateLimited(rung: Rung, f: Fail) {
     return;
   }
   await cooldown(rung.provider, f.retryAfter, f.message);
+}
+
+/* ───────── 2026-10-27: more free rungs, honest last chance, plain-words status ───────── */
+
+/** Connected candidate providers (free-llm-status.ts): a llm_providers row that is enabled AND the key in Vault. Added as OpenAI-compatible rungs. */
+function candidateRungs(prov: Record<string, any>, k: Record<string, string>): Rung[] {
+  return CANDIDATES.filter((c) => prov[c.name]?.enabled && k[c.keyName]).map((c) => ({ provider: c.name as Provider, model: c.model, maxIn: c.maxIn }));
+}
+const isCandidate = (p: string) => CANDIDATES.some((c) => c.name === p);
+
+/**
+ * Groq's free limits are per MODEL, so every extra chat model on the same key is more headroom. The ladder had three. This reads Groq's
+ * own model list (cached 6 hours) and adds up to GROQ_EXTRA_MAX more chat models that are not already on it, best tool callers first.
+ * A model that writes a bad tool call comes back as "invalid" (postChat) and the ladder moves on, so a weak extra costs one request.
+ */
+const GROQ_EXTRA_MAX = 3;
+const GROQ_KNOWN = new Set([M.groqBig, M.groqSmall, M.groqQwen]);
+const GROQ_EXTRA_PREF: RegExp[] = [/llama-3\.3-70b/i, /kimi-k2/i, /llama-4-(scout|maverick)/i, /qwen/i, /gpt-oss/i, /llama-3\.1-8b/i];
+const GROQ_NOT_CHAT = /guard|safeguard|whisper|tts|orpheus|embed|vision|compound|allam|playai/i;
+let _groqExtra: { at: number; ids: string[] } | null = null;
+async function groqExtraModels(key: string): Promise<string[]> {
+  if (_groqExtra && Date.now() - _groqExtra.at < 6 * 3600_000) return _groqExtra.ids;
+  try {
+    const r = await fetch("https://api.groq.com/openai/v1/models", { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(5000) });
+    if (!r.ok) throw new Error(`models ${r.status}`);
+    const j = await r.json();
+    const rank = (id: string) => { const i = GROQ_EXTRA_PREF.findIndex((re) => re.test(id)); return i < 0 ? 99 : i; };
+    const ids = ((j.data ?? []) as any[]).filter((m) => m?.id && m.active !== false && !GROQ_NOT_CHAT.test(String(m.id)) && !GROQ_KNOWN.has(String(m.id)) && rank(String(m.id)) < 99)
+      .map((m) => String(m.id)).sort((a, b) => rank(a) - rank(b)).slice(0, GROQ_EXTRA_MAX);
+    _groqExtra = { at: Date.now(), ids };
+  } catch (e) {
+    console.error("groq extra models", (e as Error).message);
+    _groqExtra = { at: Date.now() - 6 * 3600_000 + 10 * 60_000, ids: ["llama-3.3-70b-versatile"] };   // list unreadable: the one long-lived Groq model, retried in 10 minutes
+  }
+  return _groqExtra.ids;
+}
+
+/** Put the extra Groq models after the last Groq rung and the connected candidates just before the training providers (gemini/openrouter). */
+function withExtras(ladder: Rung[], groqX: Rung[], candX: Rung[]): Rung[] {
+  const out = [...ladder];
+  if (groqX.length) { const i = out.map((r) => r.provider).lastIndexOf("groq"); out.splice(i < 0 ? out.length : i + 1, 0, ...groqX); }
+  if (candX.length) { const i = out.findIndex((r) => r.provider === "gemini" || r.provider === "openrouter" || r.provider === "local"); out.splice(i < 0 ? out.length : i, 0, ...candX); }
+  return out;
+}
+
+/** A provider is tried once more in a live chat when it was only skipped for a pause. Not again for this long (a dead host would cost a timeout every step). */
+const LAST_CHANCE_GAP_MS = 120_000, LAST_CHANCE_TIMEOUT_MS = 6000;
+const lastChanceAt = new Map<string, number>();
+
+/** In-process sit-out times (model -> epoch ms), so the "out of room" message can say when a Groq model frees up. */
+export function rateLimitHints(): { modelSkipUntil: Record<string, number> } {
+  const now = Date.now();
+  return { modelSkipUntil: Object.fromEntries([...modelSkip.entries()].filter(([, t]) => t > now)) };
+}
+
+/** Which bestly_memory incident title speaks for which provider's host (used only when llm_providers.outage_note is empty). */
+const INCIDENT_WORDS: Record<string, RegExp> = { freellm: /hestia|freellm|bestly-pi|\bthe pi\b/i };
+
+/**
+ * The reply when every free rung failed: per-provider reasons, ONE vetted new provider to connect, paid AI only if allowed.
+ * Reads llm_providers (and, for a down host with no outage_note, the newest incident note). Never throws: on any read error it
+ * still builds the message from what it has.
+ */
+export async function outOfRoomMessage(input: { tried: LlmResult["tried"]; noPaid: boolean }): Promise<RoomOut> {
+  let rows: ProviderRow[] = [];
+  try { const { data } = await db().from("llm_providers").select("*"); rows = (data ?? []) as ProviderRow[]; } catch { /* message still builds */ }
+  const incidents: Record<string, string> = {};
+  try {
+    const need = rows.filter((r) => INCIDENT_WORDS[r.name] && !String(r.outage_note ?? "").trim()).map((r) => r.name);
+    if (need.length) {
+      const since = new Date(Date.now() - 3 * 86_400_000).toISOString();
+      const { data } = await db().from("bestly_memory").select("title, key, updated_at").eq("active", true).like("key", "incident/%").gte("updated_at", since)
+        .order("updated_at", { ascending: false }).limit(30);
+      for (const n of need) {
+        const hit = ((data ?? []) as any[]).find((m) => INCIDENT_WORDS[n].test(String(m.title ?? "")));
+        if (hit) incidents[n] = String(hit.title).slice(0, 140);
+      }
+    }
+  } catch { /* optional */ }
+  return buildOutOfRoom({ rows, tried: input.tried, noPaid: input.noPaid, hints: rateLimitHints(), incidents });
 }
 
 const SECRET_RE = /(sk-ant-[A-Za-z0-9_\-]{10,}|sk-[A-Za-z0-9_\-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sb_secret_[A-Za-z0-9_\-]{10,}|gsk_[A-Za-z0-9]{20,}|cfut_[A-Za-z0-9_\-]{10,}|AIza[0-9A-Za-z_\-]{30,}|xox[abpr]-[A-Za-z0-9\-]{10,}|eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,})/g;
@@ -628,7 +711,9 @@ async function usedToday(p: Provider): Promise<number> {
     const { data } = await db().from("ai_spend").select("free_units").eq("provider", p).gte("at", since).limit(5000);
     return (data ?? []).reduce((a: number, r: any) => a + Number(r.free_units ?? 0), 0);
   }
-  const { count } = await db().from("ai_spend").select("id", { count: "exact", head: true }).eq("provider", p).gte("at", since);
+  // 2026-10-27: only requests that were answered count. Failed 429s used to be counted too, so a bad rate-limit day could trip
+  // daily_cap (Groq 2,700) and silently skip a provider that still had free room.
+  const { count } = await db().from("ai_spend").select("id", { count: "exact", head: true }).eq("provider", p).eq("ok", true).gte("at", since);
   return count ?? 0;
 }
 
@@ -701,6 +786,12 @@ function freellmUrl(k: Record<string, string>): string {
 
 async function callFreeLLM(model: string, req: LlmRequest, t: number, k: Record<string, string>): Promise<Call> {
   return openaiCompat(freellmUrl(k), k.freellm_api_key, model, req, Math.min(t, 30_000));
+}
+
+async function callCandidate(rung: Rung, req: LlmRequest, t: number, k: Record<string, string>): Promise<Call> {
+  const c = CANDIDATES.find((x) => x.name === rung.provider)!;
+  if (!k[c.keyName]) throw new Fail("skipped_nokey", `no ${c.keyName}`);
+  return openaiCompat(c.baseUrl, k[c.keyName], rung.model, req, Math.min(t, 40_000));
 }
 
 async function callLocal(model: string, req: LlmRequest, t: number): Promise<Call> {
@@ -803,7 +894,8 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
   const tried: LlmResult["tried"] = [];
   const [prov, k] = await Promise.all([providers(), keys()]);
 
-  const ladder: Rung[] = routes(req.task, privacy, await freellmChain(req.task === "code"));
+  const groqX: Rung[] = k.groq_api_key && req.task !== "write" ? (await groqExtraModels(k.groq_api_key)).map((m) => ({ provider: "groq" as Provider, model: m, maxIn: GROQ_MAX })) : [];
+  const ladder: Rung[] = withExtras(routes(req.task, privacy, await freellmChain(req.task === "code")), groqX, candidateRungs(prov, k));
   const paidRung: Rung = { provider: "anthropic", model: paidModel, maxIn: 190_000 };
   if (paid === "first") ladder.unshift(paidRung);
   else if (paid === "fallback") ladder.push(paidRung);
@@ -840,6 +932,7 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
         case "gemini": c = await callGemini(rung.model, req, left, k); break;
         case "openrouter": c = await callOpenRouter(rung.model, req, left, k); break;
         case "freellm": c = await callFreeLLM(rung.model, req, flWait(fl, left, 30_000), k); break;
+        case "sambanova": case "cerebras": c = await callCandidate(rung, req, left, k); break;
         default: c = await callAnthropic(rung.model, req, left);
       }
       const ms = Date.now() - t0;
@@ -1004,7 +1097,8 @@ export async function llmChat(input: ChatRequest): Promise<ChatResult> {
   for (let pass = 0; pass < 3; pass++) {
     try { return await llmChatOnce({ ...input, deadlineMs: deadline - Date.now() }); } catch (e) { last = e; }
     const tried = (last as LlmUnavailable)?.tried ?? [];
-    if (tried.some((t) => t.outcome === "ok" || t.outcome === "invalid" || t.outcome === "error" || t.outcome === "timeout")) break;
+    // 2026-10-27: a last-chance probe of a paused provider (lastChance) failing says nothing about Groq's per-minute wait, so it does not end the retry.
+    if (tried.some((t) => !t.lastChance && (t.outcome === "ok" || t.outcome === "invalid" || t.outcome === "error" || t.outcome === "timeout"))) break;
     const soonest = Math.min(...[...modelSkip.values()].filter((t) => t > Date.now()));
     const wait = soonest - Date.now();
     if (!Number.isFinite(wait) || wait > 20_000 || Date.now() + wait + 8000 > deadline) break;
@@ -1022,16 +1116,31 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
   const tried: LlmResult["tried"] = [];
   const [prov, k] = await Promise.all([providers(), keys()]);
 
-  const chain = [...(await freellmChain(code)), ...(code ? CODE_CHAT_TAIL : CHAT_TAIL)];
+  // 2026-10-27: more Groq chat models (each has its own free limits) and any connected no-training candidate (SambaNova, Cerebras) join the chat ladder.
+  const groqX: Rung[] = !code && k.groq_api_key ? (await groqExtraModels(k.groq_api_key)).map((m) => ({ provider: "groq" as Provider, model: m, maxIn: GROQ_MAX })) : [];
+  const chain = withExtras([...(await freellmChain(code)), ...(code ? CODE_CHAT_TAIL : CHAT_TAIL)], groqX, candidateRungs(prov, k));
   // v-next (2026-10-13): a live chat turn gives FreeLLM at most 2 attempts / ~25 s; one "All models exhausted" 429 or timeout sends it to Groq.
   // The code ladder keeps its longer waits (qwen3-coder writes long files) and is not capped.
   const fl = newFlBudget(!code && (input.scope ?? "chat") === "chat");
   const toolNames = new Set<string>(((input.tools ?? []) as any[]).map((t) => String(t?.function?.name ?? "")).filter(Boolean));
-  for (const rung of chain) {
-    const left = deadline - Date.now();
+  // 2026-10-27 (Jared: every provider must be genuinely tried before Scout gives up): a rung skipped only because its provider is paused
+  // (FreeLLM's host cooldown, Cloudflare's daily-cap pause, a soft daily cap) is held, and if nothing answered it is tried ONCE in a second
+  // pass with a short timeout. A pause can be a false alarm; a pass that works clears the pause. A provider with a written outage_note
+  // (a known multi-day outage) is not probed, and no provider is probed more than once every two minutes.
+  const held: Rung[] = [];
+  let lastChance = false;
+  for (let pass = 0; pass < 2; pass++) {
+  lastChance = pass === 1;
+  if (lastChance && (tried.some((x) => x.outcome === "ok") || !held.length)) break;
+  for (const rung of (lastChance ? held : chain)) {
+    const left = lastChance ? Math.min(deadline - Date.now(), LAST_CHANCE_TIMEOUT_MS) : deadline - Date.now();
     const skip = (outcome: Outcome) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0 });
     if (left < 3000) { skip("timeout"); continue; }
     const p = prov[rung.provider];
+    const holdIt = () => { if (!String(p?.outage_note ?? "").trim()) held.push(rung); };
+    if (lastChance) {
+      if (Date.now() - (lastChanceAt.get(rung.provider) ?? 0) < LAST_CHANCE_GAP_MS) { skip("skipped_off"); continue; }
+    }
     if (rung.provider === "freellm" && flBlocked(fl)) { skip("skipped_off"); continue; }
     if (p && !p.enabled) { skip("skipped_off"); continue; }
     if (p && !p.private_ok) { skip("skipped_privacy"); continue; }
@@ -1039,17 +1148,17 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
     // costs one quick request, and false pauses were a main reason Scout asked for paid AI (scout_free_watch lifts them).
     if ((modelSkip.get(rung.model) ?? 0) > Date.now()) { skip("rate_limited"); continue; }
     // Except FreeLLM: its cooldown means the Mac mini is unreachable (freellm_watch), so skip instead of a 25 s timeout.
-    if (rung.provider === "freellm" && p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now()) { skip("skipped_off"); continue; }
+    if (!lastChance && rung.provider === "freellm" && p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now()) { holdIt(); skip("skipped_off"); continue; }
     // v39: a daily-cap pause is not a "false pause": Cloudflare answers 429 until 00:00 UTC, every time. Skipping it saves a
     // wasted round trip on every step (16 straight 429s in 40 minutes on Oct 6 before this).
-    if (p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now() && /^Daily free cap/i.test(String((p as any).cooldown_reason ?? ""))) { skip("skipped_budget"); continue; }
+    if (!lastChance && p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now() && /^Daily free cap/i.test(String((p as any).cooldown_reason ?? ""))) { holdIt(); skip("skipped_budget"); continue; }
     // v4: size the context to THIS rung's window (Groq 8K tokens/min keeps the old small budget; big windows see much more).
     const toolTok = estTokens(JSON.stringify(input.tools ?? []));
     const window = rung.provider === "groq" ? 3800 : 24_000;
     const sendMsgs = input.trim ? input.trim(messages, window) : messages;
     const need = estTokens(JSON.stringify(sendMsgs)) + toolTok + maxTokens;
     if (need > rung.maxIn) { skip("skipped_size"); continue; }
-    if (p?.daily_cap && (await usedToday(rung.provider)) >= p.daily_cap) { skip("skipped_budget"); continue; }
+    if (!lastChance && p?.daily_cap && (await usedToday(rung.provider)) >= p.daily_cap) { holdIt(); skip("skipped_budget"); continue; }
 
     const gptOss = rung.model.includes("gpt-oss");
     const body: Record<string, unknown> = {
@@ -1060,6 +1169,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
     };
     if (input.tools?.length) { body.tools = input.tools; body.tool_choice = input.toolChoice ?? "auto"; }
 
+    if (lastChance) lastChanceAt.set(rung.provider, Date.now());   // stamped only when a request really goes out
     const t0 = Date.now();
     try {
       let j: any;
@@ -1074,6 +1184,10 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       } else if (rung.provider === "openrouter") {
         if (!k.openrouter_api_key) throw new Fail("skipped_nokey", "no openrouter_api_key");
         j = await postChat("https://openrouter.ai/api/v1/chat/completions", k.openrouter_api_key, body, Math.min(left, 30_000));
+      } else if (isCandidate(rung.provider)) {
+        const cand = CANDIDATES.find((x) => x.name === rung.provider)!;
+        if (!k[cand.keyName]) throw new Fail("skipped_nokey", `no ${cand.keyName}`);
+        j = await postChat(cand.baseUrl, k[cand.keyName], body, Math.min(left, 30_000));
       } else {
         if (!k.cloudflare_ai_token || !k.cloudflare_account_id) throw new Fail("skipped_nokey", "no cloudflare token/account");
         j = await postChat(`https://api.cloudflare.com/client/v4/accounts/${k.cloudflare_account_id}/ai/v1/chat/completions`, k.cloudflare_ai_token, body, Math.min(left, 60_000));
@@ -1128,11 +1242,15 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       await log(logReq, rung.provider, c.model, "ok", ms, c);
       tried.push({ provider: rung.provider, model: c.model, outcome: "ok", ms });
       if (isFl) liveOk(rung.model);
+      if (lastChance) {   // the pause was a false alarm: lift it
+        try { await db().from("llm_providers").update({ cooldown_until: null, cooldown_reason: null }).eq("name", rung.provider); } catch { /* best effort */ }
+        if (prov[rung.provider]) prov[rung.provider].cooldown_until = null;
+      }
       return { content, toolCalls, provider: rung.provider, model: c.model, tried, rescued, inTokens: inT || need, outTokens: outT };
     } catch (e) {
       const ms = Date.now() - t0;
       const f = e instanceof Fail ? e : new Fail("error", (e as Error).message);
-      tried.push({ provider: rung.provider, model: rung.model, outcome: f.outcome, ms });
+      tried.push({ provider: rung.provider, model: rung.model, outcome: f.outcome, ms, ...(lastChance ? { lastChance: true } : {}) });
       if (f.outcome.startsWith("skipped")) continue;
       await log(logReq, rung.provider, rung.model, f.outcome, ms, undefined, f.message);
       if (f.outcome === "rate_limited") await rateLimited(rung, f);
@@ -1145,6 +1263,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       }
     }
   }
+  }
   throw new LlmUnavailable("all_failed", tried);
 }
 
@@ -1154,7 +1273,8 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
 export async function llmProbe(provider: Exclude<Provider, "anthropic">): Promise<{ provider: string; ok: boolean; model?: string; ms: number; error?: string }> {
   const k = await keys();
   const req: LlmRequest = { task: "classify", system: "You are a health check.", user: 'Return {"ok":true}', json: true, maxTokens: 200, job: "canary", fn: "free-llm" };
-  const model = provider === "groq" ? M.groqSmall : provider === "cloudflare" ? M.cfBig : provider === "local" ? M.local
+  const cand = CANDIDATES.find((c) => c.name === provider);
+  const model = cand ? cand.model : provider === "groq" ? M.groqSmall : provider === "cloudflare" ? M.cfBig : provider === "local" ? M.local
     : provider === "gemini" ? M.gemini : provider === "freellm" ? M.freellm : M.openrouter;
   const t0 = Date.now();
   try {
@@ -1162,7 +1282,8 @@ export async function llmProbe(provider: Exclude<Provider, "anthropic">): Promis
       : provider === "cloudflare" ? await callCloudflare(model, req, 30_000, k)
       : provider === "local" ? await callLocal(model, req, 45_000)
       : provider === "gemini" ? await callGemini(model, req, 20_000, k)
-      : provider === "freellm" ? await callFreeLLM(model, req, 20_000, k) : await callOpenRouter(model, req, 20_000, k);
+      : provider === "freellm" ? await callFreeLLM(model, req, 20_000, k)
+      : cand ? await callCandidate({ provider, model, maxIn: cand.maxIn }, req, 20_000, k) : await callOpenRouter(model, req, 20_000, k);
     const ms = Date.now() - t0;
     const j = parseJson(c.text);
     await log(req, provider, c.model, j?.ok === true ? "ok" : "invalid", ms, c);

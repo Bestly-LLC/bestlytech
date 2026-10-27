@@ -1,5 +1,5 @@
 import { SECRET_KEY, isServiceRequest } from "../_shared/keys.ts";
-import { llm, llmChat, llmVision, LlmUnavailable, thinkingLeak, stripToolSyntax, hasToolSyntax, rescueToolCalls, rawToolJson, narratesStep, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0. v36: llmVision for the free look tool
+import { llm, llmChat, llmVision, outOfRoomMessage, LlmUnavailable, thinkingLeak, stripToolSyntax, hasToolSyntax, rescueToolCalls, rawToolJson, narratesStep, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0. v36: llmVision for the free look tool
 // admin-chat — Scout, the assistant inside bestly.tech/admin.
 //
 // Rules, in order of how much trouble breaking them causes:
@@ -1670,7 +1670,6 @@ const DOING: Record<string, string> = {
   commit_files: "committing a code change", db_write: "updating data", mac_run: "preparing a Mac mini job", pi_command: "talking to the Pi",
   send_email: "sending an email", kitchen_chef: "asking the chef", look: "looking at your files", notify: "sending a notification", code_job: "handing code to the Mac mini",
 };
-const pt12 = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" });
 /** v41 output scrub: no tool syntax, no NEEDS_TOOLS, no thinking out loud ever reaches a saved message. "" = a failed step, not a reply. */
 // 2026-10-19 (natural phrasing, Jared: "i would never ask like that"): links he pastes and plain "look this up" questions are read BEFORE
 // the model runs (see prefetchReach in _shared/web-reach.ts). The result rides in the newest user turn of every model path for this
@@ -1719,9 +1718,9 @@ async function saidNoPaid(threadId: string): Promise<boolean> {
     return ((data ?? []) as any[]).some((m) => NO_PAID_RE.test(String(m.body ?? "")));
   } catch { return false; }
 }
-/** The OPTIONS line under "Free AI is out of room": no paid offer once he has said no to paid in this thread. */
-const roomOptions = (back: string, noPaid: boolean) =>
-  noPaid ? `OPTIONS: Wait and retry at ${back} | Check what's using the free AI` : `OPTIONS: Use paid AI for this one | Wait and retry at ${back}`;
+// 2026-10-27: the "Free AI is out of room until X" dead end is gone. When every free rung has been tried, outOfRoomMessage()
+// (_shared/free-llm.ts + free-llm-status.ts) says the real reason per provider, recommends ONE vetted new free provider to
+// connect, and builds the OPTIONS line (no paid offer once he has said no to paid in this thread, see saidNoPaid above).
 const RUN_RESUME_MS = 60 * 60_000;  // a hand-typed "keep going" picks the memory back up if it is this fresh
 
 /** Same tool + same arguments = same hash (key order and the confirmation flags don't matter). */
@@ -1913,6 +1912,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   }
   const used: string[] = [];
   let replied = false, acted = false, fails = 0, nudges = 0, lastErr = "";
+  let lastTried: ChatResult["tried"] = [];   // 2026-10-27: what the last failed ladder actually tried, so the out-of-room message can say why per provider
   const goal = prior?.goal ?? text.replace(/\s+/g, " ").slice(0, 600);
   // v41 (chief of staff): classify once, in code. A question answers within 8 tool calls; a task gets 25 a round.
   const isQ = classifyAsk(goal) === "question" && !(prior?.pending);   // autopilot texts ("Autopilot fix attempt...") classify as tasks, so only real questions get the 8-call budget
@@ -1934,17 +1934,18 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   // the work was going fine. Now: pause and retry in 30 s, up to PAUSE_MAX times, then say plainly the free AI is out of
   // room right now. Paid AI is still only offered after 3 real failed tries (v38) or when he asks.
   const noPaid = await noPaidP;
-  const busyPause = () => {
+  const busyPause = async () => {
     const pauses = (prior?.pauses ?? 0) + 1;
     const st: RunState = { ...snapshot(), pauses };
     // v83 (2026-10-19): a question used to give up on the first busy reply. Questions pause and retry too now; only after
     // PAUSE_MAX pauses does Scout say the free AI is out of room (and a task carries on by itself while it waits).
     const out = pauses > PAUSE_MAX;
-    const back = pt12(Date.now() + 30 * 60_000);
-    // v41: ONE honest message when the free AI is out of room (no "busy, picking it back up" chatter): when, and what he can do.
+    // v41: ONE honest message when the free AI is out of room (no "busy, picking it back up" chatter).
+    // 2026-10-27: it now says why per provider and which new free provider to connect (outOfRoomMessage), not just a time.
+    const room = out ? await outOfRoomMessage({ tried: lastTried, noPaid }) : null;
     return {
-      answer: out
-        ? `Free AI is out of room until ${back}.${notes.length ? ` Last thing I found: ${oneLine(notes[notes.length - 1])}` : ""}\n\n${roomOptions(back, noPaid)}`
+      answer: room
+        ? `${room.text}${notes.length ? `\n\nLast thing I found: ${oneLine(notes[notes.length - 1])}` : ""}\n\n${room.options}`
         : "Waiting for the free AI to free up.",
       why: "", tools: used, more: !out || !isQ, stalled: out, paused: !out, state: st,
     };
@@ -1992,6 +1993,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
       // 2026-10-17: say WHY no free rung answered. "Isn't answering right now" with no cause hid a size/cooldown skip
       // for weeks and made a capacity problem look like a stuck job.
       const un = e as LlmUnavailable;
+      if (un?.tried?.length) lastTried = un.tried;
       lastErr = un?.tried?.length
         ? [...new Set(un.tried.map((t) => `${t.provider}/${t.outcome}`))].slice(0, 6).join(", ")
         : String((e as Error)?.message ?? "unknown").slice(0, 200);
@@ -3404,14 +3406,11 @@ Deno.serve(async (req) => {
             { paid_needed: true, out_of_credit: true },
           );
         }
-        const back = pt12(Date.now() + 30 * 60_000);
-        if (await saidNoPaid(threadId)) {
-          return await say(`Free AI is out of room until ${back}. ${free.why}\n\n${roomOptions(back, true)}`, { free: true });
-        }
-        return await say(
-          `Free AI is out of room until ${back}. ${free.why} Paid AI costs about 5 to 50 cents; yes turns the Paid AI switch on for one hour, then it turns itself off.\n\n${roomOptions(back, false)}`,
-          { paid_needed: true },
-        );
+        // 2026-10-27: no dead end. Why per provider, one new provider to connect, paid AI only if he has not said no in this thread.
+        const noPaidHere = await saidNoPaid(threadId);
+        const room = await outOfRoomMessage({ tried: [], noPaid: noPaidHere });
+        if (noPaidHere) return await say(`${room.text}\n\n${room.options}`, { free: true });
+        return await say(`${room.text}\n\n${room.options}`, { paid_needed: true });
       }
     }
   }

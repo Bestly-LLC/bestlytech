@@ -3,11 +3,15 @@
 //               raise/resolve ai.free.<provider> incidents. Cron 5:30 AM LA (free-llm-canary).
 //   op test     run the phase-1 checks (routing, privacy, size, scrub, each provider, fallback).
 //   op run      {task, system, user, json?, privacy?, paid?} one llm() call, for manual checks.
+//   op fallback_selftest  2026-10-27: builds the "every free AI is out" reply from made-up and live data and checks it (per-provider reasons,
+//               one provider to connect with its key location, 12-hour times, paid offer only when allowed, candidate list matches the table);
+//               raises/resolves scout.free_fallback.selftest_message (signed by Scout). Cron scout-free-fallback-selftest (commented in the migration).
 // Auth: service key (apikey or Bearer) or an admin JWT. verify_jwt = false (new sb_secret keys are not JWTs).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { llm, llmProbe, LlmUnavailable, scrub } from "../_shared/free-llm.ts";
 import { corsWith } from "../_shared/cors.ts";
+import { llm, llmProbe, LlmUnavailable, scrub, outOfRoomMessage } from "../_shared/free-llm.ts";
+import { buildOutOfRoom, checkRoomMessage, CANDIDATES, type ProviderRow, type TriedLite } from "../_shared/free-llm-status.ts";
 
 const secretKeys = (() => {
   const out: string[] = [];
@@ -49,6 +53,48 @@ async function canary() {
   }
   await db.rpc("free_llm_watch");
   return results;
+}
+
+async function fallbackSelftest() {
+  const bad: string[] = [];
+  const now = Date.now();
+  const iso = (msAgo: number) => new Date(now - msAgo).toISOString();
+  const rows: ProviderRow[] = [
+    { name: "freellm", enabled: true, private_ok: true, last_ok_at: iso(20 * 3600_000), cooldown_until: iso(-600_000), cooldown_reason: "freellm_watch: Couldn't resolve host name",
+      last_error: `${iso(1800_000)} error: error sending request: dns error: failed to lookup address information` },
+    { name: "groq", enabled: true, private_ok: true, last_ok_at: iso(300_000) },
+    { name: "cloudflare", enabled: true, private_ok: true, daily_cap: 9000, last_ok_at: iso(3600_000) },
+    { name: "gemini", enabled: true, private_ok: false },
+    { name: "local", enabled: true, private_ok: true },
+  ];
+  const tried: TriedLite[] = [
+    { provider: "freellm", model: "gpt-oss-120b", outcome: "skipped_off" },
+    { provider: "groq", model: "openai/gpt-oss-120b", outcome: "rate_limited" },
+    { provider: "cloudflare", model: "@cf/openai/gpt-oss-120b", outcome: "skipped_budget" },
+  ];
+  const a = buildOutOfRoom({ rows, tried, now, noPaid: false, hints: { modelSkipUntil: { "openai/gpt-oss-120b": now + 90_000 } } });
+  bad.push(...checkRoomMessage(a, { noPaid: false, expectOffline: "freellm" }).map((x) => `made-up data: ${x}`));
+  const b = buildOutOfRoom({ rows, tried, now, noPaid: true });
+  bad.push(...checkRoomMessage(b, { noPaid: true }).map((x) => `no-paid thread: ${x}`));
+  try {
+    const live = await outOfRoomMessage({ tried: [], noPaid: false });
+    bad.push(...checkRoomMessage(live, { noPaid: false }).map((x) => `live data: ${x}`));
+  } catch (e) { bad.push(`live build threw: ${(e as Error).message}`); }
+  // The candidate table (what the autoconnect SQL reads) must match the list the code recommends from.
+  const { data, error } = await db.from("llm_provider_candidates").select("name, key_name, base_url, model, rank").order("rank");
+  if (error) bad.push(`llm_provider_candidates unreadable: ${error.message}`);
+  else {
+    const t = (data ?? []).map((r: any) => `${r.name}|${r.key_name}|${r.base_url}|${r.model}`).join(",");
+    const c = CANDIDATES.map((x) => `${x.name}|${x.keyName}|${x.baseUrl}|${x.model}`).join(",");
+    if (t !== c) bad.push("llm_provider_candidates does not match CANDIDATES in free-llm-status.ts");
+  }
+  if (bad.length) {
+    await db.rpc("bestly_raise", { p_key: "scout.free_fallback.selftest_message", p_kind: "problem", p_severity: "warning", p_title: "Scout's free-AI fallback message failed its self-test",
+      p_body: bad.join("; ").slice(0, 600), p_area: "ai", p_healed: false });
+  } else {
+    await db.rpc("bestly_raise", { p_key: "scout.free_fallback.selftest_message", p_kind: "resolved", p_severity: "info", p_title: "Scout's free-AI fallback message passes its self-test" });
+  }
+  return { ok: bad.length === 0, problems: bad, sample: a.text.replace(/\u00a0/g, " ").slice(0, 900), options: a.options };
 }
 
 async function test() {
@@ -102,12 +148,13 @@ Deno.serve(async (req) => {
     switch (body.op) {
       case "canary": return J({ ok: true, canary: await canary() });
       case "test": return J({ ok: true, ...(await test()) });
+      case "fallback_selftest": return J({ ...(await fallbackSelftest()) });
       case "run": {
         const r = await llm({ task: body.task ?? "summarize", system: String(body.system ?? ""), user: String(body.user ?? ""), json: !!body.json,
           privacy: body.privacy === "public" ? "public" : "private", paid: body.paid ?? "never", job: "manual", fn: "free-llm", maxTokens: body.maxTokens });
         return J({ ok: true, ...r });
       }
-      default: return J({ ok: false, error: "op must be canary, test or run" }, 400);
+      default: return J({ ok: false, error: "op must be canary, test, run or fallback_selftest" }, 400);
     }
   } catch (e) {
     return J({ ok: false, error: (e as Error).message, tried: (e as any).tried }, 200);
