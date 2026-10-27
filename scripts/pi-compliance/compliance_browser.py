@@ -57,6 +57,14 @@ def one(browser, req):
         except Exception:  # noqa: BLE001
             pass
         time.sleep(2.5)
+        # a slow Pi can hand back a half-drawn single-page app: wait until the text is a real page's worth and stops growing
+        last = -1
+        for _ in range(7):
+            n = settle_eval(pg, "document.body ? document.body.innerText.length : 0", 0)
+            if n >= 600 and n == last:
+                break
+            last = n
+            time.sleep(2)
         if req.get("click"):
             try:
                 pg.get_by_text(req["click"], exact=False).first.click(timeout=8000)

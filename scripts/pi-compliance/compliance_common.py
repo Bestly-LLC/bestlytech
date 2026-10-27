@@ -148,6 +148,8 @@ def ev_absent(chk):
         return True, f"page is offline (HTTP {st})"
     if st is not None and st >= 400:
         return False, f"page answered HTTP {st}"
+    if (p.get("rendered") or False) and len(txt) < 250:
+        return None, f"page drew only {len(txt)} characters, so an absent phrase proves nothing"
     hit = [n for n in p.get("banned", []) if norm(n) in txt]
     hit += [f"/{r}/" for r in p.get("regex", []) if re.search(r, txt, re.I)]
     if hit:
@@ -357,7 +359,16 @@ def ev_deadline(chk, dry):
 
 
 # ------------------------------------------------------------------ driver
-def run_checks(checks, dry=False, only=None):
+def _thin_page(c):
+    pg = _page_cache.get((c["target"], (c["params"] or {}).get("click")))
+    if not pg:
+        return False
+    if c["kind"] == "page_hosts":
+        return len(pg.get("hosts", [])) < 2
+    return len(pg.get("text", "")) < 700
+
+
+def run_checks(checks, dry=False, only=None, _retry=False):
     checks = [c for c in checks if not only or c["id"].startswith(only)]
     # warm the browser cache once, in batches, for every page-based check
     reqs = []
@@ -400,6 +411,10 @@ def run_checks(checks, dry=False, only=None):
                 ok, d = None, f"unknown kind {k}"
         except Exception as e:  # noqa: BLE001
             ok, d = None, f"{type(e).__name__}: {str(e)[:200]}"
+        if ok is False and not _retry and c["kind"] in ("http_contains", "policy_fresh", "page_hosts") and _thin_page(c):
+            _page_cache.pop((c["target"], (c["params"] or {}).get("click")), None)   # half-drawn page: render once more before calling it a failure
+            return_again = run_checks([c], dry=dry, _retry=True)
+            ok, d = return_again[0]["ok"], return_again[0]["detail"]
         out.append({"id": c["id"], "ok": ok, "detail": d, "ms": int((time.time() - t0) * 1000)})
     return out
 
