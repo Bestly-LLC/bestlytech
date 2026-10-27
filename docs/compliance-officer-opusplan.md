@@ -15,7 +15,7 @@ Jared asked for an AI employee, free to run, that keeps every Bestly platform, a
 |---|---|
 | Tables | `compliance_findings`, `compliance_checks`, `compliance_runs`, `compliance_deadlines`, `law_watch_sources`, `law_watch_items`, `compliance_context` (admin read through `privacy_is_admin()`; written only by service-role functions; no personal data) |
 | Functions | `compliance_check_report`, `compliance_law_report`, `compliance_deadline_tick`, `compliance_alert`, `compliance_run_sql` (read-only), `admin_compliance_overview` (the only one the admin page can call) |
-| Migrations | `20261027054240_compliance_officer.sql` (data, functions), `20261027055945_compliance_officer_team.sql` (team card, tools, clerk-tick check) |
+| Migrations | `20261027054240_compliance_officer.sql` (data, functions), `20261027055945_compliance_officer_team.sql` (team card, tools, clerk-tick check), `20261027063057_compliance_check_report_finding_less_news.sql` (a finding-less check that fails its first run is news), `20261027063831_compliance_officer_memory_note.sql` |
 | Pi code | `scripts/pi-compliance/` in this repo, installed at `/opt/bestly/cron/jobs/compliance_{common,daily,weekly}.py` and `/opt/bestly/cron/compliance_browser.py`; `compliance_seed.py` + `seed.json` load the first rows |
 | Admin page | Admin, Security, **Compliance** tab (`src/pages/admin/ComplianceTab.tsx`): open findings worst first, what is due soon, checks failing now, law changes, last run |
 | Team | Vera's card is "Compliance Officer" (reports to Ares / security-auditor); tools "Privacy Desk" (the 10-minute data-request clerk) and "Law Watch". Team Watch raises "gone quiet" through the Fix Ladder; `pi_jobs_watch` pings Scout if a job misses its slot |
@@ -42,3 +42,11 @@ Remove the two crontab lines (the pre-change backup is `/home/pi/crontab.before-
 ## Cost
 
 Zero. No paid AI call anywhere in the jobs: checks are plain code, the law watch uses the FreeLLM ladder, ElevenLabs is read through the existing Vault key (read-only GETs), and no new Cloudflare Worker route was added.
+
+## Known limits and first-run facts
+
+- First run (Oct 26): 72 daily checks, 45 passing, 27 failing and already known from the audit (a first failure on a known finding is a quiet baseline); weekly: 11 checks plus 19 law pages read (FCC, FTB and CDTFA pages are read through the Pi Chrome because they refuse plain requests). Law pages baseline on their first read and are judged from the second week.
+- Vera found one thing the audit did not: the `Bestly-LLC/bestlytech` GitHub repo is public (finding `VX-01`). Only Jared can change that setting.
+- The Pi's IPv6 route to Cloudflare black-holes, so `compliance_common.py` tries IPv4 first. A slow Pi can return a half-drawn single-page app, so `compliance_browser.py` waits until the page text settles and a thin page is re-rendered once before a check is called failed.
+- The daily run takes about 9 minutes (the Pi Chrome renders 24 pages one after another). If more than half the checks cannot run, the job fails and Scout hears about it.
+- Money interrupts only for a certain payment due within 7 days. The Oct 31 Statement of Information and Nov 2 CDTFA return are marked uncertain (formation month and filing frequency are not known), so they wait in the 7 PM recap.
