@@ -25,7 +25,7 @@ type Case = {
   created_at: string; verify_sent_at: string | null; reminded_at: string | null; verified_at: string | null; scanned_at: string | null;
   approved_at: string | null; executed_at: string | null; done_at: string | null;
   scan: Scan | null; review_ticked: string[] | null; note: string | null; result: { places?: number; deleted?: number; blanked?: number } | null;
-  export_ready: boolean; redacted: boolean; last_error: string | null;
+  export_ready: boolean; redacted: boolean; last_error: string | null; auto_approved?: boolean;
 };
 
 const NAMES: Record<string, string> = {
@@ -63,12 +63,25 @@ export function PrivacyCasePanel({ code, onChanged }: { code: string; onChanged?
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [auto, setAuto] = useState<boolean | null>(null);
+  const [autoBusy, setAutoBusy] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error } = await rpcArgs<Case | null>("admin_privacy_case", { p_code: code });
     if (error) { setLoadErr(true); return; }
     setLoadErr(false); setC(data ?? null);
+    const a = await rpcArgs<{ auto: boolean }>("admin_privacy_auto", {});
+    if (!a.error && a.data) setAuto(a.data.auto === true);
   }, [code]);
+
+  async function flipAuto() {
+    if (auto === null) return;
+    setAutoBusy(true); setErr(null);
+    const { error } = await rpcArgs("admin_privacy_set_auto", { p_on: !auto });
+    setAutoBusy(false);
+    if (error) { setErr(errText(error)); return; }
+    setAuto(!auto);
+  }
 
   useEffect(() => {
     void load();
@@ -125,6 +138,20 @@ export function PrivacyCasePanel({ code, onChanged }: { code: string; onChanged?
     <section className="mt-3 rounded-xl bg-violet-500/[0.07] p-3 ring-1 ring-violet-400/20" aria-label={`Privacy case for ${code}`}>
       <h3 className="flex items-center gap-2 text-[14px] font-semibold text-violet-100"><ShieldCheck className="h-4 w-4" aria-hidden />Privacy case</h3>
 
+      {auto !== null && (
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-white/[0.05] px-3 py-2 ring-1 ring-white/10">
+          <div className="min-w-0">
+            <p className="text-[14px] font-medium text-white">Delete on her own</p>
+            <p className="text-[13px] leading-snug text-white/70">{auto ? "On. Once someone confirms by email, Vera does the request and tells you after." : "Off. Vera waits for your tap on each request."}</p>
+          </div>
+          <button type="button" role="switch" aria-checked={auto} aria-label="Delete on her own" disabled={autoBusy} onClick={() => void flipAuto()}
+            className={cn("relative inline-flex h-[44px] w-[64px] shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-50", press)}>
+            <span className={cn("block h-[30px] w-[52px] rounded-full ring-1 ring-white/15 motion-safe:transition-colors motion-safe:duration-200", auto ? "bg-emerald-400/80" : "bg-white/15")} />
+            <span className={cn("absolute top-1/2 h-[26px] w-[26px] -translate-y-1/2 rounded-full bg-white shadow motion-safe:transition-all motion-safe:duration-200", auto ? "left-[34px]" : "left-[8px]")} />
+          </button>
+        </div>
+      )}
+
       <ol className="mt-2 grid grid-cols-5 gap-1" aria-label="Progress">
         {STEPS.map((s, i) => {
           const reached = i <= current && at[i];
@@ -144,12 +171,12 @@ export function PrivacyCasePanel({ code, onChanged }: { code: string; onChanged?
         {c.status === "no_email" && <p>They didn't leave an email, so I can't send a link. Call them back to get one, or mark them verified yourself once you're sure who they are.</p>}
         {c.status === "could_not_verify" && <p>They never tapped the link in 14{NB}days. Call them back and resend the link, mark them verified if you've confirmed who they are, or cancel the request as unverifiable.</p>}
         {c.status === "verified" && <p>They confirmed. I'm looking up their records now.</p>}
-        {c.status === "approved" && <p>Approved. I'm {isExport ? "building their data file" : "deleting now"}. This page updates by itself.</p>}
+        {c.status === "approved" && <p>{c.auto_approved ? "Approved automatically. " : "Approved. "}I'm {isExport ? "building their data file" : "deleting now"}. This page updates by itself.</p>}
         {c.status === "needs_jared" && <p>{scan.owner ? "This looks like one of us, so I won't touch anything. " : ""}{c.note ?? "This one needs you. Read the ticket and handle it by hand."}</p>}
         {c.status === "cancelled" && <p>Cancelled. {c.note ?? ""}</p>}
         {c.status === "done" && (
           <p>
-            {c.action === "delete" && c.result ? `Done. I removed or blanked their information from ${places(c.result.places ?? 0)} and emailed them.` : "Done. I emailed them."}
+            {c.action === "delete" && c.result ? `Done${c.auto_approved ? " automatically" : ""}. I removed or blanked their information from ${places(c.result.places ?? 0)} and emailed them.` : "Done. I emailed them."}
             {c.redacted ? " Their email and phone are no longer stored in this case." : ""}
           </p>
         )}

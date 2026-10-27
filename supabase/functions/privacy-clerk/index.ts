@@ -2,13 +2,16 @@
 // Carries out the privacy requests Maya files as support_tickets (kind = 'privacy').
 //
 //   tick (cron, every 10 min)   opens a case for every open privacy ticket, emails the confirmation link, reminds after
-//                               3 days, gives up after 14, scans after they confirm, pushes Jared once, executes after his
-//                               tap, emails the person, closes the ticket, redacts the record, checks the data map daily.
+//                               3 days, gives up after 14, scans after they confirm, then (privacy_clerk_state.auto_execute,
+//                               on by default since 2026-10-26) approves and runs the request herself; with the switch off she
+//                               pushes Jared once and waits for his tap. Then emails the person, closes the ticket, redacts
+//                               the record, checks the data map daily.
 //   {run:"case",    code}       work one case right now (called by privacy-verify and the admin RPCs)
 //   {run:"execute", code}       same, after Jared taps Delete now
 //
-// Rules she never breaks: she does not delete anything until Jared approves (status 'approved' is set only by
-// admin_privacy_approve); the owner guard and the 25-row blast guard live in SQL (privacy_scan / privacy_execute);
+// Rules she never breaks: nothing runs before the person has confirmed by email (or Jared marked them verified); status
+// 'approved' is set only by admin_privacy_approve or privacy_auto_approve (switch on); the owner guard and the 25-row blast
+// guard live in SQL (privacy_scan / privacy_auto_approve / privacy_execute) and always stop the run for Jared, switch or not;
 // she never emails a denial. Every alert is signed "Vera:". Only the service key (or an admin) may call her.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -29,6 +32,7 @@ type Case = {
   scan: Record<string, any> | null; review_ticked: string[]; approved_at: string | null; executed_at: string | null; result: Record<string, any> | null;
   export_path: string | null; export_expires_at: string | null; downloaded_at: string | null; confirm_sent_at: string | null; done_at: string | null;
   redacted_at: string | null; status: string; note: string | null; attempts: number; last_error: string | null; created_at: string;
+  auto_approved?: boolean; pending_calls?: string[]; pending_files?: string[];
 };
 type Ticket = { code: string; name: string | null; email: string | null; phone: string | null; issue: string | null; status: string; conversation_id: string | null; created_at: string };
 
@@ -123,6 +127,28 @@ async function deleteConversation(key: string, id: string): Promise<boolean> {
   return r.ok || r.status === 404;
 }
 
+// ---------------------------------------------------------------- automatic approval (the switch)
+/** With auto_execute on, approve a verified, scanned case ourselves. Returns true when the case is now 'approved'.
+ *  The owner guard and blast guard still stop it (they hand the case to Jared), exactly as they would after a tap. */
+async function tryAuto(c: Case, who: string): Promise<boolean> {
+  const { data: st } = await sb.from("privacy_clerk_state").select("auto_execute").eq("id", true).maybeSingle();
+  if (!st?.auto_execute) return false;
+  const { data: a, error } = await sb.rpc("privacy_auto_approve", { p_case: c.id });
+  if (error) throw new Error(`could not approve the request: ${error.message}`);
+  if (a?.approved) { Object.assign(c, { status: "approved", scan: a.scan, approved_at: new Date().toISOString(), auto_approved: true }); return true; }
+  const code = c.ticket_code;
+  if (a?.reason === "owner") {
+    await setCase(c, { status: "needs_jared", note: "This request names one of your own addresses or numbers, so I did not touch it." }, true);
+    await raiseIssue("privacy.guard", `Vera: I stopped on ${who}`, `${code}: this names one of your own addresses or numbers. Nothing was changed.`, `Open ${code} in Maya.`, "warning", false);
+  } else if (a?.reason === "blast") {
+    const where = (a.scan?.blast ?? []).map((b: { table: string; rows: number }) => `${b.table} (${b.rows}${NB}rows)`).join(", ");
+    await setCase(c, { status: "needs_jared", scan: a.scan, scanned_at: new Date().toISOString(), note: `More than 25 rows for one person in ${where}. I stopped.` }, true);
+    await raiseIssue("privacy.guard", `Vera: I stopped on ${who}`, `${code}: more than 25 rows for one person in ${where}. Nothing was changed.`,
+      "Look at the records before anything is deleted; this is a bigger footprint than one customer should have.", "warning", false);
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------- one case
 async function work(c: Case, t: Ticket) {
   const who = t.name?.trim() || fmtPhone(c.phone ?? t.phone) || "Someone";
@@ -210,6 +236,8 @@ async function work(c: Case, t: Ticket) {
         return;
       }
       await setCase(c, { status: "ready", scan, scanned_at: new Date().toISOString() }, true);
+      if (await tryAuto(c, who)) { await work(c, t); return; }
+      if (c.status !== "ready") return;
       const body = c.action === "export"
         ? `Tap to send their data file: ${count(scan.total, "record")} in ${count(scan.places, "place")}. Ticket ${code}.`
         : `Tap to delete their data: ${count(scan.total, "record")} in ${count(scan.places, "place")}${convs ? `, plus ${count(convs, "call recording")}` : ""}. Ticket ${code}.`;
@@ -220,7 +248,11 @@ async function work(c: Case, t: Ticket) {
       return;
     }
 
-    case "ready": return;
+    case "ready": {
+      // waiting for a tap; if the switch was turned on since, or her guard cleared, she goes ahead
+      if (await tryAuto(c, who)) await work(c, t);
+      return;
+    }
 
     case "approved": {
       if (c.action === "export") { await finishExport(c, t, who); return; }
@@ -293,6 +325,9 @@ async function finishDelete(c: Case, t: Ticket, who: string) {
   };
 
   if (!c.executed_at) {
+    // save the call ids and uploaded-file paths of THIS person's rows first: once the rows are gone the ids are too
+    const { error: ce } = await sb.rpc("privacy_collect", { p_case: c.id });
+    if (ce) { await fail(ce); return; }
     const { data, error } = await sb.rpc("privacy_execute", { p_case: c.id });
     if (error) { await fail(error); return; }
     c.executed_at = new Date().toISOString(); c.result = data;
@@ -300,10 +335,17 @@ async function finishDelete(c: Case, t: Ticket, who: string) {
   }
   const result = (c.result ?? (await sb.from("privacy_cases").select("result").eq("id", c.id).single()).data?.result ?? {}) as Record<string, any>;
 
-  // Maya's call records: every conversation from their number, plus the call the ticket came from
+  const { data: pend } = await sb.from("privacy_cases").select("pending_calls,pending_files").eq("id", c.id).single();
+  const pendingCalls = (pend?.pending_calls ?? []) as string[];
+  const pendingFiles = (pend?.pending_files ?? []) as string[];
+
+  // Call recordings in ElevenLabs (DELETE /v1/convai/conversations/{id}). Only ids that came from THIS person's own rows
+  // (matched by their exact number or email before the rows were removed), Maya's calls from their number, and the call the
+  // ticket was filed on. 404 means it is already gone.
   if (!result.calls_done) {
     const key = await elKey();
-    const ids = new Set(await mayaConversationsFor(key, last10(c.phone)));
+    const ids = new Set<string>(pendingCalls);
+    for (const id of await mayaConversationsFor(key, last10(c.phone))) ids.add(id);
     if (t.conversation_id) ids.add(t.conversation_id);
     let gone = 0;
     for (const id of ids) { if (await deleteConversation(key, id)) gone++; else throw new Error(`could not delete the call ${id} from ElevenLabs`); }
@@ -312,7 +354,18 @@ async function finishDelete(c: Case, t: Ticket, who: string) {
     c.result = result;
   }
 
-  const places = Number(result.places ?? 0) + (result.calls_deleted > 0 ? 1 : 0);
+  // Uploaded documents (seller onboarding ID and bank papers) live in Storage, not in the table that was just cleared
+  if (!result.files_done) {
+    if (pendingFiles.length) {
+      const { error: fe } = await sb.storage.from("intake-documents").remove(pendingFiles);
+      if (fe) throw new Error(`could not remove their uploaded documents: ${fe.message}`);
+    }
+    result.files_deleted = pendingFiles.length; result.files_done = true;
+    await sb.from("privacy_cases").update({ result, pending_calls: [], pending_files: [], updated_at: new Date().toISOString() }).eq("id", c.id);
+    c.result = result;
+  }
+
+  const places = Number(result.places ?? 0) + (result.calls_deleted > 0 ? 1 : 0) + (result.files_deleted > 0 ? 1 : 0);
   const keeps = [...new Set(((result.keep ?? []) as { reason: string }[]).map((k) => k.reason).filter(Boolean))];
   let emailed = true;
   if (c.email && !c.confirm_sent_at) {
@@ -324,7 +377,7 @@ async function finishDelete(c: Case, t: Ticket, who: string) {
   await setCase(c, { status: "done", done_at: new Date().toISOString(), confirm_sent_at: c.confirm_sent_at ?? new Date().toISOString(), note: `Deleted ${changed} records.` }, true);
   await closeTicket(code, `Vera: deleted ${changed} records${result.calls_deleted ? ` and ${result.calls_deleted} call recordings` : ""}`);
   await resolveIssue(issueKey, `Vera: ${code} is done`);
-  await recap(code, `Vera: deleted ${who}'s data`, `${code}: ${count(changed, "record")} in ${count(Number(result.places ?? 0), "place")}${result.calls_deleted ? `, ${count(result.calls_deleted, "call recording")}` : ""}. ${emailed ? "They were emailed." : "They are on the do-not-email list, so I could not tell them. Call them if you want them to know."}`);
+  await recap(code, `Vera: deleted ${who}'s data`, `${code}: ${count(changed, "record")} in ${count(Number(result.places ?? 0), "place")}${result.calls_deleted ? `, ${count(result.calls_deleted, "call recording")}` : ""}. ${c.auto_approved ? "Done automatically. " : ""}${emailed ? "They were emailed." : "They are on the do-not-email list, so I could not tell them. Call them if you want them to know."}`);
 }
 
 async function finishExport(c: Case, t: Ticket, who: string) {

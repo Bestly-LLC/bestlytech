@@ -113,3 +113,11 @@ In `src/components/admin/maya/TicketCard.tsx`, privacy tickets get a **Privacy c
 - Deleting data inside the iOS apps or browser extensions (Cookie Yeti keeps data on the device; InventoryProof's storage needs its own check — list it as a "Check the app" line in the done email only if a future map entry says so).
 - Stripe customer deletion (billing records are kept; the plan is canceled separately).
 - Verifying by phone or SMS.
+
+## Addendum 2026-10-26 — fully automatic (Jared: "verified requests get deleted without your tap")
+
+- `privacy_clerk_state.auto_execute` (default true). On: once a case is verified and scanned, the clerk calls `privacy_auto_approve()` (same owner guard and 25-row blast guard, fresh scan stored) and runs the request in the same pass: collect call ids and uploaded-file paths, `privacy_execute`, delete the ElevenLabs recordings, remove Storage files, send `privacy-done`, close the ticket, redact 20 minutes later. Off: back to the push and the tap. Flip it with the switch on the Privacy case panel (`admin_privacy_set_auto`), or `update privacy_clerk_state set auto_execute = false`.
+- No `review` rows remain. Every column is delete, blank or keep with a legal reason (migration `20261026230000_privacy_auto_execute.sql`). `privacy_unmapped()` must return 0 rows.
+- `privacy_extra()` protects what a delete must not reach: a cloud lead that became a deal, and an outreach-ledger row marked `opted_out`.
+- Call recordings: ids come from this person's own rows (`agent_calls`, `ava_calls`, `rg_calls`, `contact_submissions`, matched by exact number or email, only where the map says delete), saved by `privacy_collect()` BEFORE the rows go, plus Maya's calls from their number and the call the ticket was filed on. `DELETE /v1/convai/conversations/{id}`; 404 counts as gone; the key comes from Vault (`ava_secret`).
+- Known limit: a phone number is not verified, only the email is. A row matched by the phone alone is removed even if its email is someone else's. Tighten by requiring the ticket phone to equal the caller ID Maya saw.
