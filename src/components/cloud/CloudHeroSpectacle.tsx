@@ -127,7 +127,7 @@ export function CloudHeroSpectacle() {
               transition={{ duration: 0.6, ease, delay: 0.4 }}
               className="mt-10 flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground lg:justify-start"
             >
-              {["$0 per-seat fees", "Never sold, never retained", "On premises & on brand"].map((t) => (
+              {["$0 per-seat fees", "Your data is never sold", "On premises & on brand"].map((t) => (
                 <div key={t} className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-primary" />
                   <span>{t}</span>

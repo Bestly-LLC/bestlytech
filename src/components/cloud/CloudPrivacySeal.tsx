@@ -165,9 +165,9 @@ export function CloudPrivacySeal() {
               <span className="text-primary">That's your whole cloud.</span>
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg leading-relaxed text-muted-foreground lg:mx-0">
-              We never sell, share, or retain your data. It lives on hardware in
-              your office — Bestly can't see it, and there's nothing for us to
-              monetize.
+              We never sell or share your data. It lives on hardware in your
+              office, and there's nothing for us to monetize. Bestly monitors
+              and repairs the server remotely to keep it healthy.
             </p>
             <span
               ref={sealRef}

@@ -69,14 +69,14 @@ export const products: Product[] = [
   {
     id: "hoku",
     name: "HOKU",
-    description: "Pharmaceutical-grade skincare, simplified. A daily facial mist backed by science.",
+    description: "A face spray made from water, salt, and electricity. Cleanses and refreshes. Not yet for sale.",
     href: "https://hoku-clean.com",
     image: hokuBottle,
     icon: Droplets,
     category: "Health",
     status: "Coming Soon",
     webUrl: "https://hoku-clean.com",
-    features: ["Pharmaceutical-grade formula", "Single-step daily routine", "Dermatologist reviewed", "Clean ingredients only"],
+    features: ["Water, salt, and electricity", "Sealed can, no pump", "Fragrance free", "Not yet for sale"],
   },
   {
     id: "neckpilot",

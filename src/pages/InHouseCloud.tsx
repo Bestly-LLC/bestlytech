@@ -161,7 +161,7 @@ const pillars = [
   {
     icon: Lock,
     title: "Your data stops leaving the building",
-    body: "Files, email, chat, video, and AI prompts process on hardware inside your office. No third-party data center, no cross-border transfers, no foreign-jurisdiction subpoena risk. GDPR, HIPAA, SOC 2, CCPA — built in.",
+    body: "Files, email, chat, video, and AI prompts process on hardware inside your office. No third-party data center, no cross-border transfers, no foreign-jurisdiction subpoena risk. Designed to help you meet privacy rules like GDPR and CCPA.",
   },
   {
     icon: Cpu,

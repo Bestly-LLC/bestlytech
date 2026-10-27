@@ -4,52 +4,62 @@ import { SEOHead } from "@/components/SEOHead";
 export default function CookieYetiPrivacy() {
 
   const effectiveDate = "October 1, 2026";
-  const lastUpdated = "October 1, 2026";
+  const lastUpdated = "October 26, 2026";
 
   const sections = [
-    { title: "1. Personal Data We Do NOT Collect", content: (
+    { title: "1. Data Cookie Yeti Collects", content: (
       <>
         <p className="text-muted-foreground leading-relaxed mb-4">
-          Cookie Yeti does its work on your device. We never collect, transmit, store, sell, or share any of the following:
+          Cookie Yeti closes cookie pop-ups on the websites you visit and picks the most private option for you. This policy applies to the Chrome extension and the Safari extension for Mac, iPhone and iPad. The extension collects:
         </p>
         <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
-          <li>Your browsing history</li><li>The specific pages you visit, or full URLs (paths, query strings, or anything after the domain)</li>
-          <li>Cookies from the websites you visit</li>
-          <li>Personally identifiable information</li><li>Names, emails, addresses, phone numbers</li>
-          <li>IP addresses</li><li>Device identifiers</li><li>Authentication credentials</li>
-          <li>Precise location data</li><li>Financial or payment data</li>
-          <li>Health, biometric, or sensitive personal data</li>
+          <li><strong className="text-foreground">Website domain and address (origin only).</strong> When Cookie Yeti handles, misses or gets stuck on a cookie banner, it sends the site's domain (for example "example.com") and origin. It never sends the full page address, page path, search terms or page content outside the banner.</li>
+          <li><strong className="text-foreground">Cookie banner details.</strong> The CSS selector of the banner button, the action taken (accept, reject, necessary, save or close), the consent platform's name, and, when a banner is missed or you tap "Report", up to 5,000 characters of the banner's own HTML so we can teach Cookie Yeti to handle it.</li>
+          <li><strong className="text-foreground">Page-guard reports.</strong> If Cookie Yeti notices it scrolled a page or kept reopening something on a site, it sends the domain, a short reason (for example "scroll_jump"), the extension version and the browser type (Chrome or Safari).</li>
+          <li><strong className="text-foreground">Anonymous usage analytics.</strong> A random install ID created on your device and simple events such as "installed", "banner handled today" or "upgrade started", with the extension version and platform. No email, web address, domain or IP address is stored with these events. You can turn this off in the extension's settings.</li>
+          <li><strong className="text-foreground">Email address (Pro only).</strong> If you buy Cookie Yeti Pro or activate it on another device, we collect your email address to send an activation code and confirm your subscription. Payment card details go directly to Stripe; we never see or store them.</li>
+          <li><strong className="text-foreground">Cookies on your device.</strong> The extension reads the names of cookies on the sites you visit, only on your device, to remove known tracking cookies. Cookie names and values are never sent to us.</li>
         </ul>
         <p className="text-muted-foreground leading-relaxed mt-4">
-          Cookie Yeti contains no advertising SDKs and no third-party trackers. The only information that ever leaves your device is the anonymous, non-personal data described in the next two sections.
+          Cookie Yeti does not collect your name, browsing history, full web addresses, page content (other than the cookie banner itself), passwords, form entries, location, or financial information, and it does not track you across websites. It contains no advertising SDKs and no third-party trackers.
         </p>
       </>
     )},
-    { title: "2. Anonymous Product Analytics", content: (
+    { title: "2. How We Use and Handle This Data", content: (
+      <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+        <li>Domains, selectors and banner HTML are used only to recognize and close cookie banners for all Cookie Yeti users, and to switch off a banner rule that misbehaves.</li>
+        <li>Page-guard reports are used only to stop Cookie Yeti acting on a site where it causes problems. When several reports arrive for the same site, Cookie Yeti leaves that site alone for everyone for a period, then tries again.</li>
+        <li>Anonymous analytics are used only to count installs and usage and to find bugs.</li>
+        <li>Your email is used only to send activation codes, confirm Pro access and answer your support requests. We do not send marketing email to it unless you ask us to.</li>
+        <li>Banner HTML may be processed by an AI service (OpenAI) to write a new banner rule. Only the banner snippet is sent, never your identity.</li>
+        <li>We never sell this data, never use it for advertising, and never use it to build a profile of you.</li>
+      </ul>
+    )},
+    { title: "3. How and Where We Store It, and for How Long", content: (
+      <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+        <li>Data sent by the extension is stored in our database hosted by Supabase in the United States. It is encrypted in transit (HTTPS/TLS) and at rest, and only Bestly LLC staff who run Cookie Yeti can access it.</li>
+        <li>Your settings, your own learned banner rules, your Pro status and sites Cookie Yeti has paused are stored only in your browser's extension storage on your device. Removing the extension deletes them.</li>
+        <li>Page-guard reports are deleted after 90 days. Banner rules and banner reports are kept while they help Cookie Yeti work and are deleted when a rule is retired. Anonymous analytics events are kept for up to 24 months. Your email is kept while you have Pro access and deleted on request after that.</li>
+      </ul>
+    )},
+    { title: "4. Who We Share It With", content: (
       <>
         <p className="text-muted-foreground leading-relaxed mb-4">
-          To understand whether the extension is working and where it can improve, Cookie Yeti collects anonymous product analytics — for example, that it ran, whether it handled a cookie banner successfully, and basic feature usage counts.
+          We do not sell, rent or trade Cookie Yeti data. We share it only with the service providers that run Cookie Yeti for us, under contracts that limit them to that purpose:
         </p>
-        <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
-          <li>Each install is tied only to a random identifier that we generate. It is not linked to your name, email, account, or any other personal information.</li>
-          <li>Analytics never include your browsing history, the pages you were on, or the content of any page.</li>
-          <li>We use this data only to measure reliability and improve the product. We never sell it.</li>
+        <ul className="list-disc pl-6 space-y-2 text-muted-foreground mb-4">
+          <li><strong className="text-foreground">Supabase</strong> — database and server hosting for all of the data above. <a href="https://supabase.com/privacy" className="text-foreground hover:underline" target="_blank" rel="noopener noreferrer">Supabase Privacy Policy</a>.</li>
+          <li><strong className="text-foreground">Stripe</strong> — payment processing for Cookie Yeti Pro bought on our website (your email and payment details).</li>
+          <li><strong className="text-foreground">Resend</strong> — sending activation-code emails (your email address).</li>
+          <li><strong className="text-foreground">OpenAI</strong> — writing new banner rules from cookie banner HTML snippets (no identity or email is sent).</li>
+          <li><strong className="text-foreground">Apple / Google</strong> — purchase confirmation when you buy through their app marketplaces.</li>
         </ul>
+        <p className="text-muted-foreground leading-relaxed">
+          Banner rules (domain, selector and action) are shared with other Cookie Yeti users so their extension can close the same banners. We may also disclose data if required by law.
+        </p>
       </>
     )},
-    { title: "3. Community Learning (Domain Only)", content: (
-      <>
-        <p className="text-muted-foreground leading-relaxed mb-4">
-          Some cookie walls are trickier than others. When Cookie Yeti runs into one, it can share a small note with our community learning system so the extension gets better at handling that site for everyone.
-        </p>
-        <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
-          <li>We share only the <strong>domain</strong> of the site (for example, <code>example.com</code>) — never the full URL, never the specific page you were on, and never the path or query string.</li>
-          <li>We never attach personal data, and this is not linked to you.</li>
-          <li><strong>Raw page content is not uploaded by default.</strong> Cookie Yeti does not send us the HTML or text of the pages you visit.</li>
-        </ul>
-      </>
-    )},
-    { title: "4. Information Stored Locally on Your Device", content: (
+    { title: "5. Information Stored Locally on Your Device", content: (
       <>
         <p className="text-muted-foreground leading-relaxed mb-4">Cookie Yeti stores the following locally using secure browser storage:</p>
         <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
@@ -59,54 +69,25 @@ export default function CookieYetiPrivacy() {
         <p className="text-muted-foreground leading-relaxed mt-4">This data stays on your device and is deleted when the extension is removed.</p>
       </>
     )},
-    { title: "5. How Cookie Yeti Works", content: (
-      <p className="text-muted-foreground leading-relaxed">Cookie Yeti detects cookie consent banners on web pages and automatically applies your locally stored preferences. This processing happens on your device. Raw page content is not uploaded by default — the only data that leaves your device is the anonymous analytics and domain-only community learning described above.</p>
+    { title: "6. How Cookie Yeti Works", content: (
+      <p className="text-muted-foreground leading-relaxed">Cookie Yeti detects cookie consent banners on web pages and automatically applies your locally stored preferences. This processing happens on your device. The only data that leaves your device is what section 1 describes.</p>
     )},
-    { title: "6. Payments & Purchases", content: (
-      <p className="text-muted-foreground leading-relaxed">All purchases are processed by official app marketplaces. Bestly LLC does not store or receive payment credentials. Only anonymous confirmation of purchase status is received.</p>
+    { title: "7. Payments & Purchases", content: (
+      <p className="text-muted-foreground leading-relaxed">Purchases are processed by Apple (App Store), by Google, or by Stripe when you buy on our website. Bestly LLC does not store or receive your card details; Apple, Google and Stripe handle them. If you buy on our website, Stripe also gives us your email address so we can send your activation code and confirm your subscription.</p>
     )},
-    { title: "7. Third-Party Access & Infrastructure", content: (
-      <>
-        <p className="text-muted-foreground leading-relaxed mb-4">
-          Bestly LLC does not sell your data or share it with third-party advertisers or trackers. Cookie Yeti embeds no third-party analytics or advertising SDKs.
-        </p>
-        <p className="text-muted-foreground leading-relaxed mb-4">
-          The anonymous analytics and domain-only community learning described above are transmitted to and stored on Bestly LLC's own backend, which is hosted on <strong>Supabase</strong> (a managed cloud database platform). Supabase processes this data solely as a data processor on our behalf and under our instructions; it does not use it for its own purposes. No other third parties receive any data from Cookie Yeti.
-        </p>
-        <p className="text-muted-foreground leading-relaxed mb-4">
-          Purchases are processed by Apple (Mac App Store) or Google (Chrome Web Store) through their official marketplaces. Bestly LLC does not receive or store any payment credentials.
-        </p>
-        <p className="text-muted-foreground leading-relaxed">
-          <strong>Complete list of parties that receive any data from Cookie Yeti:</strong>
-        </p>
-        <ul className="list-disc pl-6 space-y-2 text-muted-foreground mt-2">
-          <li><strong>Bestly LLC</strong> — anonymous analytics and domain signals only, to operate and improve the Service.</li>
-          <li><strong>Supabase</strong> — infrastructure provider hosting Bestly's database. Acts as data processor under Bestly's instructions. <a href="https://supabase.com/privacy" className="text-foreground hover:underline" target="_blank" rel="noopener noreferrer">Supabase Privacy Policy</a>.</li>
-          <li><strong>Apple / Google</strong> — purchase confirmation only, via their respective app marketplaces.</li>
-        </ul>
-        <p className="text-muted-foreground leading-relaxed mt-4">No other parties receive any information.</p>
-      </>
-    )},
-    { title: "8. Data Retention & Deletion", content: (
-      <>
-        <p className="text-muted-foreground leading-relaxed mb-4">Your local settings remain on your device and are deleted upon uninstall; you can clear them manually at any time in the extension settings.</p>
-        <p className="text-muted-foreground leading-relaxed mb-4">Anonymous analytics and community-learning records are tied only to a random install identifier — not to you — and are stored on Bestly's Supabase-hosted backend. These records are retained in aggregate only as long as needed to operate and improve the Service and are not associated with any individual.</p>
-        <p className="text-muted-foreground leading-relaxed">To request deletion of any anonymous records associated with your install ID, contact us at <a href="mailto:support@bestly.tech" className="text-foreground hover:underline">support@bestly.tech</a>.</p>
-      </>
-    )},
-    { title: "9. Children's Privacy", content: (
+    { title: "8. Children's Privacy", content: (
       <p className="text-muted-foreground leading-relaxed">Cookie Yeti is not intended for children under 13. No data is knowingly collected from children.</p>
     )},
-    { title: "10. User Rights & Controls", content: (
-      <p className="text-muted-foreground leading-relaxed">Users may disable, remove, or clear Cookie Yeti data at any time.</p>
+    { title: "9. Your Choices and Rights", content: (
+      <p className="text-muted-foreground leading-relaxed">You can turn off anonymous analytics in the extension's settings, pause Cookie Yeti on any site, or remove the extension at any time. To see or delete data tied to your email or install ID, email <a href="mailto:privacy@bestly.tech" className="text-foreground hover:underline">privacy@bestly.tech</a> or <a href="mailto:support@bestly.tech" className="text-foreground hover:underline">support@bestly.tech</a>.</p>
     )},
-    { title: "11. Security Practices", content: (
-      <p className="text-muted-foreground leading-relaxed">We use secure browser storage and minimal permissions. All data transmitted from the extension to Bestly's servers is sent over HTTPS (TLS), ensuring it is encrypted in transit. We collect and transmit only the anonymous, non-personal data described in this policy, and we do not log or store any information that could identify you.</p>
+    { title: "10. Security Practices", content: (
+      <p className="text-muted-foreground leading-relaxed">We use secure browser storage and minimal permissions. Data sent from the extension to Bestly's servers travels over HTTPS (TLS) and is encrypted at rest. Only Bestly LLC staff who run Cookie Yeti can access it.</p>
     )},
-    { title: "12. Policy Changes", content: (
+    { title: "11. Policy Changes", content: (
       <p className="text-muted-foreground leading-relaxed">We may update this policy periodically and will reflect changes on this page.</p>
     )},
-    { title: "13. Contact Information", content: (
+    { title: "12. Contact Information", content: (
       <p className="text-muted-foreground leading-relaxed">
         Bestly LLC<br />
         Email: <a href="mailto:support@bestly.tech" className="text-foreground hover:underline">support@bestly.tech</a><br />
@@ -119,7 +100,7 @@ export default function CookieYetiPrivacy() {
     <>
       <SEOHead
         title="Cookie Yeti Privacy Policy | Bestly LLC"
-        description="Bestly LLC Privacy Policy for Cookie Yeti. No personal data, no browsing history, no data selling. Anonymous analytics only, and we share only a site's domain to improve the product."
+        description="Bestly LLC Privacy Policy for Cookie Yeti. What the extension collects (site domains, cookie banner details, anonymous analytics, and email for Pro), who we share it with, and how long we keep it. We never sell it."
         path="/cookie-yeti/privacy"
       />
       <div className="mx-auto max-w-4xl px-6 py-16 lg:px-8 lg:py-24">
@@ -136,7 +117,7 @@ export default function CookieYetiPrivacy() {
         </AnimatedSection>
 
         <AnimatedSection delay={40}>
-          <div className="mb-12 rounded-xl border border-border overflow-hidden">
+          <div className="mb-12 rounded-xl border border-border overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
@@ -149,32 +130,46 @@ export default function CookieYetiPrivacy() {
               </thead>
               <tbody className="divide-y divide-border">
                 <tr>
-                  <td className="px-4 py-3 text-muted-foreground">Browsing history / full URLs</td>
+                  <td className="px-4 py-3 text-muted-foreground">Browsing history / full URLs / page content</td>
                   <td className="px-4 py-3 font-medium text-green-600">No</td>
                   <td className="px-4 py-3 text-muted-foreground">—</td>
                   <td className="px-4 py-3 text-muted-foreground">—</td>
                   <td className="px-4 py-3 text-muted-foreground">—</td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-muted-foreground">Personal identifiers (name, email, IP)</td>
+                  <td className="px-4 py-3 text-muted-foreground">Site domain and origin; cookie banner details (up to 5,000 characters of banner HTML)</td>
+                  <td className="px-4 py-3 font-medium text-foreground">Yes</td>
+                  <td className="px-4 py-3 text-muted-foreground">Recognize and close banners for all users</td>
+                  <td className="px-4 py-3 text-muted-foreground">Supabase; OpenAI (banner snippet only, to write rules)</td>
+                  <td className="px-4 py-3 text-muted-foreground">Kept while the rule is useful</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 text-muted-foreground">Page-guard reports</td>
+                  <td className="px-4 py-3 font-medium text-foreground">Yes</td>
+                  <td className="px-4 py-3 text-muted-foreground">Stop Cookie Yeti acting on sites where it causes problems</td>
+                  <td className="px-4 py-3 text-muted-foreground">Supabase</td>
+                  <td className="px-4 py-3 text-muted-foreground">Deleted after 90 days</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 text-muted-foreground">Anonymous product analytics (random install ID)</td>
+                  <td className="px-4 py-3 font-medium text-foreground">Yes</td>
+                  <td className="px-4 py-3 text-muted-foreground">Count installs and usage, find bugs</td>
+                  <td className="px-4 py-3 text-muted-foreground">Supabase</td>
+                  <td className="px-4 py-3 text-muted-foreground">Up to 24 months</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 text-muted-foreground">Email address (Pro only)</td>
+                  <td className="px-4 py-3 font-medium text-foreground">Yes</td>
+                  <td className="px-4 py-3 text-muted-foreground">Activation codes, Pro access, support</td>
+                  <td className="px-4 py-3 text-muted-foreground">Supabase; Stripe; Resend</td>
+                  <td className="px-4 py-3 text-muted-foreground">While you have Pro; deleted on request</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 text-muted-foreground">Name, passwords, form entries, location, card details</td>
                   <td className="px-4 py-3 font-medium text-green-600">No</td>
                   <td className="px-4 py-3 text-muted-foreground">—</td>
                   <td className="px-4 py-3 text-muted-foreground">—</td>
                   <td className="px-4 py-3 text-muted-foreground">—</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3 text-muted-foreground">Anonymous product analytics</td>
-                  <td className="px-4 py-3 font-medium text-foreground">Yes</td>
-                  <td className="px-4 py-3 text-muted-foreground">Measure reliability, improve features</td>
-                  <td className="px-4 py-3 text-muted-foreground">Bestly LLC only (hosted on Supabase)</td>
-                  <td className="px-4 py-3 text-muted-foreground">Aggregate; no personal link</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3 text-muted-foreground">Site domain (community learning)</td>
-                  <td className="px-4 py-3 font-medium text-foreground">Yes</td>
-                  <td className="px-4 py-3 text-muted-foreground">Improve banner detection for all users</td>
-                  <td className="px-4 py-3 text-muted-foreground">Bestly LLC only (hosted on Supabase)</td>
-                  <td className="px-4 py-3 text-muted-foreground">Aggregate; not linked to you</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3 text-muted-foreground">Local preferences (device only)</td>

@@ -365,7 +365,7 @@ export function CloudScrollHero() {
           {/* Trust chips: centered on mobile, pinned right on desktop; pill
               backgrounds keep them readable over the device */}
           <div ref={pillsRef} className="mt-8 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-sm text-muted-foreground lg:absolute lg:right-[6vw] lg:top-1/2 lg:mt-0 lg:-translate-y-1/2 lg:flex-col lg:items-end lg:gap-3">
-            {["$0 per-seat fees", "Never sold, never retained", "On premises & on brand"].map((t) => (
+            {["$0 per-seat fees", "Your data is never sold", "On premises & on brand"].map((t) => (
               <span
                 key={t}
                 className="flex items-center gap-2 rounded-full border border-border bg-background/75 px-4 py-2 text-foreground shadow-sm backdrop-blur-sm"

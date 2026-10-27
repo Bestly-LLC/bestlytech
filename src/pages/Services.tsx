@@ -40,7 +40,7 @@ const services = [
   {
     icon: Shield,
     title: "Compliance Engineering",
-    description: "Privacy-first architecture, GDPR/CCPA compliance. Launch with confidence.",
+    description: "Privacy-first design, built to help you meet privacy rules like GDPR and CCPA. Launch with confidence.",
   },
   {
     icon: Smartphone,

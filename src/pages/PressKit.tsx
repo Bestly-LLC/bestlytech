@@ -35,9 +35,9 @@ const PressKit = () => {
     },
     {
       name: "HOKU",
-      tagline: "Premium Hypochlorous Acid Skincare.",
+      tagline: "Hypochlorous acid face spray.",
       description:
-        "A premium skincare brand delivering pharmaceutical-grade hypochlorous acid formulations using advanced electrolysis manufacturing and vacuum-sealed packaging.",
+        "A face spray made from water, salt, and electricity. It cleanses and refreshes skin, comes in a sealed can with no pump, and is not yet for sale.",
       category: "Physical Product",
       status: "Coming Soon",
     },

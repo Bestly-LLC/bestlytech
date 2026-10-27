@@ -26,8 +26,7 @@ const footerNavigation = {
 };
 
 const trustBadges = [
-  { label: "GDPR Compliant", icon: Shield },
-  { label: "CCPA Ready", icon: CheckCircle2 },
+  { label: "Designed to help meet GDPR & CCPA", icon: Shield },
   { label: "Zero Data Resale", icon: CheckCircle2 },
 ];
 

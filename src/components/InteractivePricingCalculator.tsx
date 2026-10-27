@@ -611,7 +611,7 @@ export function InteractivePricingCalculator() {
               the startup cost only, $0/mo, with on-demand support ({fmt(ON_DEMAND_CALL)}/call) pay-as-you-go and
               never part of the monthly math. AI runs locally for $0; add your own key for Claude, GPT,
               or Gemini only if you want hosted models. One server covers a team of up to 50. Your data
-              stays on your hardware — Bestly never sells, shares, or retains it.
+              stays on your hardware — Bestly never sells or shares it.
             </p>
           </div>
         </div>

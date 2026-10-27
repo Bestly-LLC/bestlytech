@@ -70,8 +70,7 @@ const CONFIG = {
   },
   platforms: [
     { name: "Chrome", available: true, icon: Chrome },
-    { name: "iPhone & iPad", available: true, icon: Globe },
-    { name: "Mac", available: false, icon: Globe },
+    { name: "iPhone, iPad & Mac", available: true, icon: Globe },
   ],
   links: {
     chrome: "https://chromewebstore.google.com/detail/cookie-yeti/gjlefkpmampiooonpcfeibchdhemddfc",
@@ -85,8 +84,8 @@ const CONFIG = {
     },
     {
       icon: Zap,
-      title: "It never goes stale",
-      description: "Other cookie blockers slowly stop working — the maker moves on and the tool quietly rots. Cookie Yeti keeps learning. When a pop-up is tricky, our AI figures out how to close it, and that fix instantly reaches everyone using Cookie Yeti. It keeps getting smarter on its own, with nothing for you to update.",
+      title: "It keeps getting better",
+      description: "Cookie blockers can stop working when websites change their pop-ups. Cookie Yeti keeps adding fixes. When a pop-up is tricky, our AI works out how to close it, and the fix is shared with everyone using Cookie Yeti. Nothing for you to update.",
     },
     {
       icon: CheckCircle2,
@@ -124,7 +123,7 @@ const CONFIG = {
     },
     {
       question: "Does it work on mobile?",
-      answer: "Yes! Cookie Yeti is available on Safari for iPhone and iPad. Download it from the App Store and enable it in Settings → Safari → Extensions.",
+      answer: "Yes! Cookie Yeti is available on Safari for iPhone, iPad and Mac. Download it from the App Store and turn it on in Safari's extension settings.",
     },
     {
       question: "How much does Cookie Yeti cost?",
@@ -171,13 +170,8 @@ function StoreCTAs({ center = false }: { center?: boolean }) {
         className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-[hsl(var(--cy-ink)/0.12)] bg-white px-7 py-4 text-base font-bold text-[hsl(var(--cy-ink))] transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[hsl(var(--cy-teal)/0.5)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[hsl(var(--cy-teal)/0.3)]"
       >
         <Apple className="h-5 w-5" />
-        Get it on iPhone &amp; iPad
+        Get it on iPhone, iPad &amp; Mac
       </a>
-      <div className="inline-flex items-center justify-center gap-2 rounded-full border border-dashed border-[hsl(var(--cy-ink)/0.2)] px-5 py-3 text-sm font-semibold text-[hsl(var(--cy-ink)/0.55)]">
-        <Globe className="h-4 w-4" />
-        Mac
-        <span className="text-[hsl(var(--cy-ink)/0.4)]">· Coming soon</span>
-      </div>
     </div>
   );
 }
@@ -334,7 +328,7 @@ export default function CookieYeti() {
                 <StoreCTAs />
               </div>
               <p className="mt-5 text-sm font-semibold text-[hsl(var(--cy-ink-2))]">
-                Free on Chrome, iPhone &amp; iPad · Mac coming soon
+                Free on Chrome, iPhone, iPad &amp; Mac
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[hsl(var(--cy-ink-2))]">
                 <span className="inline-flex items-center gap-1.5">
@@ -447,7 +441,7 @@ export default function CookieYeti() {
                   </span>
                   <div>
                     <p className="text-lg font-black leading-none text-[hsl(var(--cy-ink))]">1,284</p>
-                    <p className="text-[11px] font-semibold text-[hsl(var(--cy-ink-2))]">banners zapped</p>
+                    <p className="text-[11px] font-semibold text-[hsl(var(--cy-ink-2))]">banners zapped (example)</p>
                   </div>
                 </div>
               </div>
@@ -657,8 +651,8 @@ export default function CookieYeti() {
                   us: "Cookie Yeti actually rejects the tracking.",
                 },
                 {
-                  them: "Other blockers go stale and quietly stop working.",
-                  us: "Cookie Yeti keeps learning, so it never goes stale.",
+                  them: "Other blockers can quietly stop working when sites change.",
+                  us: "Cookie Yeti keeps adding fixes as sites change.",
                 },
                 {
                   them: "Other blockers are famous for breaking sites.",
@@ -666,7 +660,7 @@ export default function CookieYeti() {
                 },
                 {
                   them: "Most work in just one browser.",
-                  us: "Cookie Yeti works on Chrome, iPhone & iPad — Mac soon.",
+                  us: "Cookie Yeti works on Chrome, iPhone, iPad & Mac.",
                 },
                 {
                   them: "Some got bought by ad and antivirus companies.",
@@ -1159,7 +1153,7 @@ export default function CookieYeti() {
               Cookie Yeti Is Here
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-lg text-white/80">
-              Now on Chrome, iPhone &amp; iPad. Add it free &mdash; Mac coming soon.
+              Now on Chrome, iPhone, iPad &amp; Mac. Add it free.
             </p>
           </AnimatedSection>
           <AnimatedSection delay={100}>

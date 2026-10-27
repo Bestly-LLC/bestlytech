@@ -12,7 +12,6 @@ import {
   Heart,
   CheckCircle,
   ExternalLink,
-  Star,
   Zap,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -20,33 +19,26 @@ import hokuBottle from "@/assets/hoku-bottle.png";
 import hokuLifestyle from "@/assets/hoku-lifestyle.jpg";
 import hokuVacuum from "@/assets/hoku-vacuum.png";
 
-const testimonials = [
-  { text: "HOKU has transformed my skincare routine. Clean, effective, and gentle!", name: "Sarah M." },
-  { text: "Finally, a science-backed solution that actually works. No more harsh chemicals.", name: "David L." },
-  { text: "The vacuum-sealed spray is genius. Every spray feels fresh and potent.", name: "Emma R." },
-  { text: "I've tried many products but HOKU is different. My skin has never felt better.", name: "Michael K." },
-];
-
 const benefits = [
   {
     icon: Leaf,
     title: "Naturally Gentle",
-    description: "HOCl is the same molecule naturally produced by your white blood cells to protect and heal.",
+    description: "Hypochlorous acid is the same thing your white blood cells make to keep you clean.",
   },
   {
     icon: Shield,
-    title: "Pharmaceutical-Grade",
-    description: "Advanced electrolysis manufacturing ensures consistent purity and potency in every bottle.",
+    title: "Three Simple Ingredients",
+    description: "Water, salt, and electricity. No alcohol, no fragrance, no oils, no preservatives.",
   },
   {
     icon: Package,
-    title: "Vacuum-Sealed",
-    description: "Proprietary packaging preserves freshness and extends shelf life without preservatives.",
+    title: "Sealed Can, No Pump",
+    description: "The liquid sits in a sealed bag inside the can, so air never reaches it. The last spray is the same as the first.",
   },
   {
     icon: Heart,
-    title: "For All Skin Types",
-    description: "Gentle enough for sensitive skin, effective enough for daily use without irritation.",
+    title: "Gentle on Sensitive Skin",
+    description: "No alcohol, no fragrance, no oils. Nothing that stings.",
   },
 ];
 
@@ -60,8 +52,8 @@ const Hoku = () => {
   return (
     <>
       <SEOHead
-        title="HOKU - Premium Hypochlorous Acid Skincare | Bestly LLC"
-        description="HOKU delivers pharmaceutical-grade hypochlorous acid skincare using advanced electrolysis manufacturing. Gentle, effective skincare inspired by nature."
+        title="HOKU - Hypochlorous Acid Face Spray (Coming Soon) | Bestly LLC"
+        description="HOKU is a face spray made from water, salt, and electricity. It cleanses and refreshes skin. Not yet for sale. Join the waitlist."
       />
 
       {/* Hero — warm golden gradient matching hoku-clean.com */}
@@ -83,7 +75,7 @@ const Hoku = () => {
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ backgroundColor: "hsl(35 60% 50%)" }} />
                   <span className="relative inline-flex h-2 w-2 rounded-full" style={{ backgroundColor: "hsl(35 60% 50%)" }} />
                 </span>
-                Coming Soon
+                Coming soon · Not yet available to purchase
               </div>
 
               <h1 className="text-5xl font-semibold tracking-tight sm:text-6xl lg:text-7xl" style={{ color: "hsl(35 50% 30%)" }}>
@@ -96,15 +88,15 @@ const Hoku = () => {
               </p>
 
               <p className="mt-6 text-lg leading-relaxed text-muted-foreground max-w-lg">
-                A skin-refreshing spray that helps cleanse away environmental debris. Known for being gentle and well-tolerated on sensitive skin.
+                A face spray that cleanses and refreshes. Just water, salt, and electricity. Gentle on sensitive skin. Not on sale yet.
               </p>
 
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
                 <Button size="lg" asChild
                   className="text-white border-0"
                   style={{ backgroundColor: "hsl(35 50% 45%)" }}>
-                  <a href="https://hoku-clean.com/shop" target="_blank" rel="noopener noreferrer">
-                    Shop the Collection
+                  <a href="https://hoku-clean.com" target="_blank" rel="noopener noreferrer">
+                    Join the Waitlist
                     <ExternalLink className="ml-2 h-4 w-4" />
                   </a>
                 </Button>
@@ -133,7 +125,7 @@ const Hoku = () => {
           <div className="grid grid-cols-3 gap-8 text-center">
             {[
               { value: "3", label: "Simple Ingredients" },
-              { value: "100%", label: "Vacuum-Sealed" },
+              { value: "200+", label: "Sprays Per Can" },
               { value: "0", label: "Harsh Chemicals" },
             ].map((m) => (
               <AnimatedSection key={m.label}>
@@ -152,7 +144,7 @@ const Hoku = () => {
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
               Made with 3 Ingredients
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground">Pure, simple, effective</p>
+            <p className="mt-4 text-lg text-muted-foreground">Pure and simple</p>
           </AnimatedSection>
 
           <div className="grid gap-8 sm:grid-cols-3 max-w-3xl mx-auto mb-12">
@@ -217,9 +209,9 @@ const Hoku = () => {
 
               <AnimatedSection delay={400}>
                 <div className="mt-8 p-5 rounded-xl border border-border bg-card">
-                  <p className="text-sm font-medium text-foreground mb-1">What competitors won't tell you:</p>
+                  <p className="text-sm font-medium text-foreground mb-1">Why it comes in a can:</p>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    Most HOCl sprays lose potency with every pump. HOKU's vacuum-sealed technology ensures every spray delivers uncompromised HOCl — pure, charged, and protected.
+                    Hypochlorous acid breaks down when it meets air, and a pump bottle pulls air in every time you press it. HOKU's can never lets air back in, so spray two hundred works like spray one.
                   </p>
                 </div>
               </AnimatedSection>
@@ -237,7 +229,7 @@ const Hoku = () => {
                 The Science of HOCl
               </h2>
               <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
-                Hypochlorous acid is naturally produced by white blood cells. It's a gentle cleansing ingredient often used in dermatology for its mild, soothing properties.
+                Hypochlorous acid is produced by your own white blood cells. HOKU makes it by running an electric current through salt water. It is manufactured as a cosmetic under FDA regulations for Bestly LLC.
               </p>
               <div className="mt-8">
                 <Button variant="outline" size="lg" asChild
@@ -253,40 +245,11 @@ const Hoku = () => {
             <AnimatedSection delay={100}>
               <img
                 src={hokuVacuum}
-                alt="HOKU vacuum-sealed technology comparison"
+                alt="HOKU sealed can technology comparison"
                 className="rounded-2xl shadow-premium w-full"
                 loading="lazy"
               />
             </AnimatedSection>
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="border-t border-border" style={{ backgroundColor: "hsl(35 30% 96%)" }}>
-        <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
-          <AnimatedSection className="text-center mb-16">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              What Our Customers Say
-            </h2>
-          </AnimatedSection>
-
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto">
-            {testimonials.map((t, i) => (
-              <AnimatedSection key={t.name} delay={i * 80}>
-                <div className="rounded-2xl border border-border bg-card p-6 h-full flex flex-col">
-                  <div className="flex gap-0.5 mb-4">
-                    {[...Array(5)].map((_, j) => (
-                      <Star key={j} className="h-4 w-4 fill-current" style={{ color: "hsl(35 60% 50%)" }} />
-                    ))}
-                  </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed flex-grow">
-                    "{t.text}"
-                  </p>
-                  <p className="mt-4 text-sm font-semibold text-foreground">— {t.name}</p>
-                </div>
-              </AnimatedSection>
-            ))}
           </div>
         </div>
       </section>
@@ -299,9 +262,9 @@ const Hoku = () => {
               Simple Daily Ritual
             </h2>
             <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
-              Incorporate HOKU into your morning and evening skincare routine.
-              After cleansing, mist your face and let it air dry before
-              applying moisturizer. Gentle enough for multiple daily applications.
+              Mist HOKU onto clean skin from six to eight inches away, morning
+              and night. No rinsing. Layer anything you like on top, or nothing
+              at all.
             </p>
           </AnimatedSection>
         </div>
@@ -312,17 +275,17 @@ const Hoku = () => {
         <div className="mx-auto max-w-7xl px-6 py-24 lg:px-8 lg:py-32">
           <AnimatedSection className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Ready to Experience Optimized Clean Skincare?
+              Be First When HOKU Launches
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Join thousands who have discovered the benefits of hypochlorous acid for clear, healthy-looking skin.
+              HOKU is not on sale yet. Leave your email and we will tell you the day it goes on sale.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
               <Button size="lg" asChild
                 className="text-white border-0"
                 style={{ backgroundColor: "hsl(35 50% 45%)" }}>
-                <a href="https://hoku-clean.com/shop" target="_blank" rel="noopener noreferrer">
-                  Shop the Collection
+                <a href="https://hoku-clean.com" target="_blank" rel="noopener noreferrer">
+                  Visit hoku-clean.com
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </a>
               </Button>
@@ -331,7 +294,7 @@ const Hoku = () => {
               productId="hoku"
               productName="HOKU"
               className="mt-8"
-              buttonText="Get Notified for New Products"
+              buttonText="Notify Me at Launch"
             />
             <div className="mt-6">
               <Button variant="outline" size="lg" asChild>
@@ -347,8 +310,10 @@ const Hoku = () => {
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-sm text-muted-foreground">
-              HOKU is a product of Bestly LLC. This product is not intended to
-              diagnose, treat, cure, or prevent any disease. All products are
+              HOKU is a product of Bestly LLC. HOKU is a cosmetic. It is not
+              intended to diagnose, treat, cure, or prevent any disease.
+              Customer reviews will appear here once they are collected and
+              verifiable. All products are
               subject to our{" "}
               <Link to="/terms-of-service" className="underline hover:text-foreground">
                 Terms of Service

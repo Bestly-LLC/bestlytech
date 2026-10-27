@@ -188,7 +188,7 @@ export function CloudDockCTA() {
           <p className="mx-auto mt-3 max-w-2xl text-base text-muted-foreground sm:text-lg">
             Thirty minutes on a call, a side-by-side cost comparison, and zero
             pressure. Bring your stack home — on hardware you own, with data we
-            never sell or retain.
+            never sell.
           </p>
           <div className="pointer-events-auto mt-6 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link

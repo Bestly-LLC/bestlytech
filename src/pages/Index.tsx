@@ -44,14 +44,14 @@ const focusAreas = [
 const featuredProducts = [
   { name: "Cookie Yeti", pitch: "Browser extension that dismisses cookie banners instantly and blocks 200,000+ malicious banner domains. Browse cleaner, faster, more private.", href: "/cookie-yeti", image: cookieYetiIcon },
   { name: "InventoryProof", pitch: "Walk through your home with your phone. Get an insurance-ready PDF inventory in minutes. The thing you should do before something burns down.", href: "https://inventoryproof.com", image: inventoryproofIcon },
-  { name: "HOKU", pitch: "Pharmaceutical-grade skincare, simplified. One daily facial mist. No subscriptions, no upsells.", href: "https://hoku-clean.com", image: hokuBottle },
+  { name: "HOKU", pitch: "A face spray made from water, salt, and electricity. Cleanses and refreshes. Coming soon, not yet for sale.", href: "https://hoku-clean.com", image: hokuBottle },
 ];
 
 const trustPrinciples = [
   { name: "Collect less", body: "We only ask for what's strictly needed to make the product work. Then we stop.", icon: Database },
   { name: "Ask first", body: "No silent data collection. No background telemetry. If we want it, we ask, and 'no' is a real answer.", icon: Shield },
   { name: "Never sell", body: "Your data is not a product. We don't sell it, broker it, or hand it to ad networks. Ever.", icon: Lock },
-  { name: "Open about it", body: "GDPR and CCPA compliant. Source code available on request for the open parts. Plain-English policies, no dark patterns.", icon: Globe },
+  { name: "Open about it", body: "Designed to help you meet privacy rules like GDPR and CCPA. Source code available on request for the open parts. Plain-English policies, no dark patterns.", icon: Globe },
 ];
 
 const marqueeWords = ["AI agents", "Answers every call", "Private cloud", "Extensions", "Hardware", "Apps", "Privacy", "No data sales", "Built in LA"];
