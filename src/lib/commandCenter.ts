@@ -195,6 +195,8 @@ export interface Wx {
   hours: WxHour[]; days: WxDay[]; alerts: WxAlert[];
   air: { aqi: number | null; pm25: number | null; label: string } | null;
   sunrise: number | null; sunset: number | null;
+  /** every sunrise and sunset across the forecast days, oldest first (the chart marks the ones inside its 24 hours) */
+  suns: { t: number; kind: "sunrise" | "sunset" }[];
 }
 
 const cToF = (c: number) => (c * 9) / 5 + 32;
@@ -243,6 +245,13 @@ export function normalizeWx(j: any): Wx {
     hours, days, alerts,
     air: air && air.aqi != null ? { aqi: air.aqi, pm25: air.pm25, label: aqiLabel(air.aqi) } : null,
     sunrise: today?.sunrise ? new Date(today.sunrise).getTime() : null, sunset: today?.sunset ? new Date(today.sunset).getTime() : null,
+    suns: (j?.forecastDaily?.days ?? [])
+      .flatMap((d: any) => [
+        d.sunrise ? { t: new Date(d.sunrise).getTime(), kind: "sunrise" as const } : null,
+        d.sunset ? { t: new Date(d.sunset).getTime(), kind: "sunset" as const } : null,
+      ])
+      .filter((x: { t: number } | null): x is { t: number; kind: "sunrise" | "sunset" } => !!x && Number.isFinite(x.t))
+      .sort((a: { t: number }, b: { t: number }) => a.t - b.t),
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -307,13 +316,34 @@ export function headline(wx: Wx): string {
 
 /* ───────── calendar items on the weather ───────── */
 
-export interface WxEvent { title: string; start: string; end: string; all_day?: boolean; calendar?: string; location?: string; source?: string; turo?: "pickup" | "return" }
+export interface WxEvent { title: string; start: string; end: string; all_day?: boolean; calendar?: string; location?: string; source?: string; turo?: "pickup" | "return"; at?: string }
 export interface WxEventsPayload { events: WxEvent[]; updated_at: string | null; calendar_at: string | null; err: string | null }
 
 export async function loadWxEvents(): Promise<WxEventsPayload> {
   const { data, error } = await rpc.rpc("admin_cc_wx_events");
   if (error) throw new Error(error.message || "could not load calendar items");
   return data as WxEventsPayload;
+}
+
+/**
+ * The time an event actually happens. The wall sends a Turo pickup as the hour BEFORE it (so the bar ends at pickup) and a
+ * return as the hour AFTER it (so the bar starts at return); both labels must read the real reservation time.
+ */
+export const evAt = (e: WxEvent): string => e.at ?? (e.source === "turo" && e.turo === "pickup" ? e.end : e.start);
+
+/**
+ * Stamp each Turo item with its real time. A home pickup needs no lead-up hour (nobody travels), so it is drawn like a return:
+ * the hour starting at pickup. LAX pickups keep the hour before, the trip over.
+ */
+export function normalizeWxEvents(events: WxEvent[]): WxEvent[] {
+  return events.map((e) => {
+    if (e.source !== "turo") return e;
+    const at = evAt(e);
+    if (e.turo === "pickup" && /^home$/i.test((e.location ?? "").trim())) {
+      return { ...e, at, start: at, end: new Date(new Date(at).getTime() + 36e5).toISOString() };
+    }
+    return { ...e, at };
+  });
 }
 
 export interface Cluster { start: number; end: number; titles: string[]; events: WxEvent[] }
@@ -348,8 +378,8 @@ export function eventsAt(events: WxEvent[], t: number, span = 36e5): WxEvent[] {
 
 export function agendaByDay(events: WxEvent[]): Map<string, WxEvent[]> {
   const m = new Map<string, WxEvent[]>();
-  for (const e of [...events].sort((a, b) => a.start.localeCompare(b.start))) {
-    const k = ptDateKey(e.start);
+  for (const e of [...events].sort((a, b) => new Date(evAt(a)).getTime() - new Date(evAt(b)).getTime())) {
+    const k = ptDateKey(evAt(e));
     m.set(k, [...(m.get(k) ?? []), e]);
   }
   return m;

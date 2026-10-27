@@ -10,18 +10,21 @@
  *   shading, the day's high and low called out, a temperature every few hours, and rain as a soft blue hill whose height AND
  *   opacity grow with the chance (hidden when every hour is under 10%).
  *   Calendar items: each event is an indigo capsule with end dots across its hours and its name under the bar; overlapping events
- *   share ONE capsule with names joined by " · ". Turo Pickup (hour before) and Return (hour after) come from the wall.
+ *   share ONE capsule with names joined by " · ". Turo Pickup (hour before) and Return (hour after) come from the wall; home
+ *   pickups are redrawn as the hour starting at pickup, and every Turo label reads the real reservation time (evAt), never the
+ *   bar's edge (2026-10-27: a 9:00 AM home pickup read "8:00 AM").
+ *   Night shading is labelled: a sunset / sunrise tick with its time where the shade starts and ends.
  *   Next 5 days with each day's events as a compact agenda.
  *
  * No ellipsis, no hard-coded dark (white/black utilities + bento variants), unique SVG ids (useId), Lucide icons only.
  * US units, 12-hour times. Reduced motion jumps instead of gliding.
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSnow, CloudSun, MapPin, Moon, Sun, TriangleAlert, Wind } from "lucide-react";
+import { Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSnow, CloudSun, MapPin, Moon, Sun, Sunrise, Sunset, TriangleAlert, Wind } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Disclosure, LoadError, Pill, cardCls, focusRing, hairline, inset, text } from "@/components/admin/ui";
 import {
-  HOME, TZ, agendaByDay, chips, clusterEvents, dayShort, eventsAt, headline, hour12, loadWxEvents, ptDateKey, rainPeak, stamp, time12, useLive,
+  HOME, TZ, agendaByDay, chips, clusterEvents, dayShort, evAt, eventsAt, headline, hour12, loadWxEvents, normalizeWxEvents, ptDateKey, rainPeak, stamp, time12, useLive,
   type Cluster, type Live, type Wx, type WxAlert, type WxEvent, type WxHour,
 } from "@/lib/commandCenter";
 
@@ -117,7 +120,7 @@ const R_BASE = CH - 2;   // rain baseline
 
 /* ───────── the scrubbable hour timeline ───────── */
 
-function HourScrub({ hours, events }: { hours: WxHour[]; events: WxEvent[] }) {
+function HourScrub({ hours, events, suns }: { hours: WxHour[]; events: WxEvent[]; suns: Wx["suns"] }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const n = hours.length;
   const [pos, setPos] = useState(0);
@@ -216,6 +219,8 @@ function HourScrub({ hours, events }: { hours: WxHour[]; events: WxEvent[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusters, W, t0, tN]);
   const rows = laid.reduce((m, l) => Math.max(m, l.row + 1), 0);
+  /* sunset / sunrise ticks: say what the night shade is, at the edge where it starts or ends */
+  const sunMarks = (suns ?? []).filter((s) => s.t > t0 && s.t < tN);
   const laneH = laid.length ? 22 + rows * 36 : 0;
 
   const fromEvent = (e: React.PointerEvent) => {
@@ -293,7 +298,9 @@ function HourScrub({ hours, events }: { hours: WxHour[]; events: WxEvent[] }) {
             {hereEvents.map((e, i) => (
               <li key={i} className={cn("text-[14px] font-medium leading-snug", e.source === "turo" ? TURO_TEXT : CAL_TEXT)}>
                 {e.title}
-                <span className="font-normal text-white/60"> · <span className="whitespace-nowrap">{time12(e.start)} to {time12(e.end)}</span></span>
+                <span className="font-normal text-white/60"> · <span className="whitespace-nowrap">
+                  {e.source === "turo" ? time12(evAt(e)) : `${time12(e.start)} to ${time12(e.end)}`}
+                </span></span>
               </li>
             ))}
           </ul>
@@ -416,6 +423,24 @@ function HourScrub({ hours, events }: { hours: WxHour[]; events: WxEvent[] }) {
             </span>
           )}
 
+          {/* sunset / sunrise: a feathered hairline at the edge of the night shade and its time along the bottom */}
+          {sunMarks.map((s) => {
+            const f = fx(s.t);
+            const Icon = s.kind === "sunset" ? Sunset : Sunrise;
+            return (
+              <span key={s.t} aria-hidden data-testid="wx-sun">
+                <span className="pointer-events-none absolute inset-y-0 w-px -translate-x-1/2" style={{
+                  left: `${f * 100}%`,
+                  background: "linear-gradient(to bottom, transparent, color-mix(in srgb, var(--wx-ind) 55%, transparent) 35%, color-mix(in srgb, var(--wx-ind) 55%, transparent) 85%, transparent)",
+                }} />
+                <span className={cn(tagCls, "bottom-1 flex items-center gap-1 font-medium text-white/60")} style={{ left: `${clamp(f * 100, 9, 91)}%` }}>
+                  <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {s.kind === "sunset" ? "Sunset" : "Sunrise"}&nbsp;{time12(s.t)}
+                </span>
+              </span>
+            );
+          })}
+
           {/* scrub hairline: feathered at both ends, plus a soft dot on the curve */}
           <span className="pointer-events-none absolute inset-y-0 w-px -translate-x-1/2" style={{
             left: `${(pos / (n - 1)) * 100}%`,
@@ -472,7 +497,7 @@ export function WeatherCard({ wxs }: { wxs: Live<Wx> }) {
     );
   }
 
-  const events = (evs.data?.events ?? []) as WxEvent[];
+  const events = normalizeWxEvents((evs.data?.events ?? []) as WxEvent[]);
   const st = stamp(wx.readAt, 45);
   const evSt = evs.data ? stamp(evs.data.calendar_at ?? evs.data.updated_at, 30) : null;
   const chipList = chips(wx);
@@ -524,7 +549,7 @@ export function WeatherCard({ wxs }: { wxs: Live<Wx> }) {
         )}
 
         {/* hourly */}
-        {hours.length >= 2 ? <HourScrub hours={hours} events={events} /> : <p className={text.detail}>The hourly forecast is not available right now.</p>}
+        {hours.length >= 2 ? <HourScrub hours={hours} events={events} suns={wx.suns} /> : <p className={text.detail}>The hourly forecast is not available right now.</p>}
 
         {evs.error && !evs.data && <p className="text-[13px] text-white/60">Calendar items are not loading right now. The forecast above is unaffected.</p>}
         {evSt?.stale && <p className="text-[12px] text-[#FF9F0A] bento:text-[#C93400]">Calendar items: {evSt.text.toLowerCase()}</p>}
@@ -554,7 +579,7 @@ export function WeatherCard({ wxs }: { wxs: Live<Wx> }) {
                       <ul className="mt-1.5 space-y-1" aria-label="Events that day">
                         {list.map((e, j) => (
                           <li key={j} className={cn("text-[12px] leading-snug", e.source === "turo" ? TURO_TEXT : CAL_TEXT)}>
-                            <span className="whitespace-nowrap tabular-nums text-white/60">{time12(e.start)}</span> {e.title}
+                            <span className="whitespace-nowrap tabular-nums text-white/60">{time12(evAt(e))}</span> {e.title}
                           </li>
                         ))}
                       </ul>
