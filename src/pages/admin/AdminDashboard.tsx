@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { LeadCards } from "@/components/admin/cc/LeadCards";
 import { SkillInboxTile } from "@/components/admin/cc/SkillInboxTile";
 import { WeatherCard } from "@/components/admin/cc/WeatherCard";
+import { StuckSection } from "@/components/admin/cc/StuckCards";
 import { DetailPanels, useWide } from "@/components/admin/cc/Details";
 import { CallNext, HealthDot, NeedsYouShort, QuickRow, loadNeeds, realNeeds } from "@/components/admin/cc/HomeParts";
 import { failingSystems, fetchSystemHealth, healthHeadlineStatus, type SystemHealth } from "@/lib/systemHealth";
@@ -17,7 +18,7 @@ import { focusRing, inset, tint } from "@/components/admin/ui";
 /**
  * Admin home, Command Center v2 (Jared, 2026-10-20). Looks ahead: what is coming and what to get ahead of.
  *
- *   Quick actions, then four answers (Money / Turo / AI team / My day). On a phone each taps open to its detail in a sheet;
+ *   Stuck / Waiting cards on top (render nothing when nobody is stuck), then quick actions, then four answers (Money / Turo / AI team / My day). On a phone each taps open to its detail in a sheet;
  *   from lg up the four details sit on the page under the weather ("In detail") and a tap scrolls to its panel.
  *   The weather with your calendars and Turo drawn on it, Needs you (top three), and who to call next.
  *   One health dot replaces the old status board and lights only when something is genuinely wrong.
@@ -70,6 +71,8 @@ export default function AdminDashboard() {
           </div>
         }
       />
+
+      <StuckSection />
 
       <QuickRow />
 
