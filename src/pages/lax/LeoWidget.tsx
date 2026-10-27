@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Maximize2, MessageCircle, Phone } from "lucide-react";
 import type { TripContext } from "./AskSheet";
 import { installAudioRescue } from "@/lib/audioRescue";
-import { leoOpening } from "./leoOffer";
+import { leoOpening, LEO_NOTICE } from "./leoOffer";
 
 // Before the SDK can load: track its audio contexts so a stuck (silent) one resumes on the next tap. See src/lib/audioRescue.ts.
 installAudioRescue();
@@ -102,6 +102,7 @@ export function LeoBar({ home, onOpen }: { home: boolean; hidden?: boolean; onOp
           {busy && phase.m === "open" ? spin : <Maximize2 className="h-5 w-5" aria-hidden />}
         </button>
       </div>
+      <p className="mt-2 text-center text-[13px] leading-snug" style={{ color: t.subtle }}>{LEO_NOTICE}</p>
     </div>
   );
 }

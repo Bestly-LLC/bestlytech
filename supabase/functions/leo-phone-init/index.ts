@@ -3,7 +3,8 @@
 //   trip_key is a SCOPED phone session minted by leo_phone_caller (matched guest = trip_status/notify_host/file_ticket/reminder_email only,
 //   unknown caller = file_ticket + notify_host only, Jared's own cell = demo trip with every tool). trip-voice enforces the scope.
 // POST ?op=watch: pg_cron checks ElevenLabs still points its call-start webhook here and that Leo has the
-//   toggle on; repairs the webhook if it drifted, raises an alert (owner: Leo) if anything is off.
+//   toggle on; repairs the webhook if it drifted, raises an alert (owner: Leo) if anything is off. Also keeps Leo's
+//   default greeting (AI + calls are recorded) and 90-day recording retention in place.
 // Auth: x-leo-init header must match Vault leo_phone_init_token (checked in SQL, never logged).
 // verify_jwt = false (ElevenLabs and pg_cron call it with the header token, not a Supabase JWT).
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -31,11 +32,13 @@ const DEFAULTS = {
   purpose: "none",
 };
 const LEO_NUMBER = "3106227052";
+const LEO_RETENTION_DAYS = 90;
+const LEO_DEFAULT_FIRST = "Hi, I'm Leo, the AI trip helper for your Tesla rental. Calls are recorded. What can I help with?";
 const last10 = (v: unknown) => String(v ?? "").replace(/\D/g, "").slice(-10);
 /** Opening line for Leo's own outbound early-return call (never the inbound "what can I help with?"). Same words trip-voice sends with the request. */
 function earlyReturnOpener(first: unknown): string {
   const f = String(first ?? "").replace(/\s+/g, " ").trim().slice(0, 40);
-  return `Hi${f ? " " + f : ""}, it's Leo, Jared's trip helper. The car looks parked back at Kings Road. Are you finished with the car? Yes or no?`;
+  return `Hi${f ? " " + f : ""}, it's Leo, the AI trip helper. Calls are recorded. The car looks parked back at Kings Road. Are you finished with the car? Yes or no?`;
 }
 
 function json(obj: unknown, status = 200) {
@@ -104,6 +107,23 @@ async function watch() {
     notes.push(hook ? "repaired call-start webhook" : "registered call-start webhook");
   }
   const agent = await el(`/v1/convai/agents/${LEO_AGENT}`);
+  // Legal disclosures (2026-10-26, Jared; CA Penal Code 632): Leo's default greeting says he is an AI and that calls are recorded, and recordings are kept
+  // 90 days, not forever. Heals both if they drift. The per-call greeting comes from _shared/leo-offer.ts (LEO_INTRO) and this function's openers.
+  try {
+    const first = String(agent?.conversation_config?.agent?.first_message ?? "");
+    if (!/\bAI\b/.test(first) || !/record/i.test(first)) {
+      await el(`/v1/convai/agents/${LEO_AGENT}`, { method: "PATCH", body: JSON.stringify({ conversation_config: { agent: { first_message: LEO_DEFAULT_FIRST } } }) });
+      notes.push("put Leo's greeting back (AI + calls are recorded)");
+    }
+    const priv = agent?.platform_settings?.privacy ?? {};
+    if (priv.retention_days !== LEO_RETENTION_DAYS) {
+      await el(`/v1/convai/agents/${LEO_AGENT}`, { method: "PATCH", body: JSON.stringify({ platform_settings: { privacy: { ...priv, retention_days: LEO_RETENTION_DAYS, apply_to_existing_conversations: false } } }) });
+      notes.push(`set Leo's recordings to delete after ${LEO_RETENTION_DAYS} days`);
+    }
+  } catch (e) {
+    await raise("leo.disclosures", "problem", "Leo: recording notice or retention drifted",
+      "Leo's greeting must say he is an AI and calls are recorded, and recordings must delete after 90 days. Fixing it failed: " + String((e as Error)?.message ?? e));
+  }
   const toggle = agent?.platform_settings?.overrides?.enable_conversation_initiation_client_data_from_webhook === true;
   if (!toggle) {
     await raise("leo.phone-init", "problem", "Leo: phone calls may fail",

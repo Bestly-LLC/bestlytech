@@ -64,7 +64,7 @@ export function LeoScreen({ token, context, home, look, pageOpen = true, onEnd }
     token, greeting,
     variables: () => ({
       pickup_place: home ? "home" : "lax", trip_stage: context?.linkDown ? "link_down" : context?.stage ?? "unknown",
-      guest_first_name: /^Hi (\S+), I'm Leo\./.exec(opening.text)?.[1] ?? "",
+      guest_first_name: /^Hi (\S+), I'm Leo,/.exec(opening.text)?.[1] ?? "",
       minutes_to_pickup: opening.mtp ?? 9999, controls_state: context?.controlsState ?? "unknown", greeting_offer: opening.offer,
     }),
     clientTools: () => ({ show_card: async (p: Any) => showCard(String(p?.card ?? "")), page_action: async (p: Any) => pageAction(p) }),

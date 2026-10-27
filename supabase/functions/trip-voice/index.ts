@@ -872,7 +872,7 @@ function e164Any(v: unknown): string | null {
 }
 function erOpener(first: string): string {
   const f = clip(first, 40);
-  return `Hi${f ? " " + f : ""}, it's Leo, Jared's trip helper. The car looks parked back at Kings Road. Are you finished with the car? Yes or no?`;
+  return `Hi${f ? " " + f : ""}, it's Leo, the AI trip helper. Calls are recorded. The car looks parked back at Kings Road. Are you finished with the car? Yes or no?`;
 }
 /** The exact request ElevenLabs gets for an outbound call (also what the dry run returns). */
 function erCallBody(aid: string, to: string, vars: Any): Any {

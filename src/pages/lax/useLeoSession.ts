@@ -136,7 +136,7 @@ export function useLeoSession(opts: LeoSessionOpts) {
           signedUrl: String(s.signed_url),
           textOnly: !withVoice,
           libsampleratePath: "/maya/libsamplerate.worklet.js",
-          overrides: { agent: { firstMessage: startItems.length > 1 ? "I'm here. Go ahead." : greeting }, conversation: { textOnly: !withVoice } },
+          overrides: { agent: { firstMessage: startItems.length > 1 ? "I'm here. Calls are recorded. Go ahead." : greeting }, conversation: { textOnly: !withVoice } },
           dynamicVariables: { trip_key: String(s.key), call_mode: "page", caller_type: token.startsWith("demo-") ? "test_guest" : "guest", ...o.current.variables() },
           clientTools: o.current.clientTools(api),
           onConnect: () => {

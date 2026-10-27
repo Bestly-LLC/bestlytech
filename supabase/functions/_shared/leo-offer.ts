@@ -37,7 +37,10 @@ export function leoOffer(c: OfferCtx): { offer: LeoOffer; line: string; mtp: num
   if (c.startsAt || c.tab === "return") return c.canAct === false ? r("charging_help", "Need help with charging or anything about the car?") : r("supercharger", "Need a Supercharger or anything for the car?");
   return r("none", "What can I help with?");
 }
+/** Every way Leo opens (page chat, page call, phone) says he is an AI and that calls are recorded (CA Penal Code 632). Keep identical in the shared copy. */
+export const LEO_INTRO = "I'm Leo, the AI trip helper. Calls are recorded.";
+export const LEO_NOTICE = "Leo is an AI. Calls are recorded.";
 export function leoOpening(c: OfferCtx) {
   const o = leoOffer(c), f = cleanFirst(c.first);
-  return { ...o, text: `${f ? `Hi ${f}, I'm Leo, your trip helper.` : "Hi, I'm Leo, your trip helper."} ${o.line}` };
+  return { ...o, text: `${f ? `Hi ${f}, ${LEO_INTRO}` : `Hi, ${LEO_INTRO}`} ${o.line}` };
 }

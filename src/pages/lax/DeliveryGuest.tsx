@@ -32,6 +32,7 @@ import { tv, useLeoSession, type Any, type LeoApi } from "./useLeoSession";
 import { AskChips, LeoHero } from "./DeliveryLeo";
 import { LeoDock } from "./LeoDock";
 import { leoNudgeItems, type NudgeKey, type NudgeSection } from "./leoNudges";
+import { LEO_NOTICE } from "./leoOffer";
 import type { CarAction, HomePub, KeyInfo } from "./HomeGuest";
 import { Lines } from "@/components/Lines";
 
@@ -394,6 +395,7 @@ function Footer() {
       <a href={CALL_HREF} onClick={() => track(undefined, "call_leo")} className="mx-auto mt-3 inline-flex min-h-[48px] items-center gap-2 rounded-full px-5 text-[16px] font-semibold ring-1 ring-[rgba(19,40,42,0.18)]" style={{ color: INK }}>
         <Phone className="h-4 w-4" aria-hidden />Call Leo {nw(CALL)}
       </a>
+      <p className="mt-2 text-[13px] leading-snug" style={{ color: INK }}>{LEO_NOTICE}</p>
       <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.26em]" style={{ color: LABEL }}>Powered by Bestly Agents</p>
     </footer>
   );
@@ -441,7 +443,7 @@ export default function DeliveryGuest({ pub, token, run, demoPage, reload }: { p
   const mtp = trip ? Math.round((+new Date(trip.starts_at) - now) / 60000) : 9999;
   const sess = useLeoSession({
     token,
-    greeting: `Hi${first ? ` ${first}` : ""}, I'm Leo. ${line}`,
+    greeting: `Hi${first ? ` ${first}` : ""}, I'm Leo, the AI trip helper. Calls are recorded. ${line}`,
     variables: () => ({
       pickup_place: "delivery", delivery_name: d.name, delivery_kind: d.kind, delivery_missing: pending.join(","), return_place: d.short,
       trip_stage: stage, guest_first_name: first, minutes_to_pickup: mtp, controls_state: pub.controls_state ?? "unknown",
