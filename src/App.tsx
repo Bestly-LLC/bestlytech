@@ -103,6 +103,7 @@ function LaxPassRedirect() {
 }
 const AdminPlaybook = lazyPage(() => import("./pages/admin/AdminPlaybook"));
 const PartnerPortal = lazyPage(() => import("./pages/partner/PartnerPortal"));
+const PartnerCallWin = lazyPage(() => import("./pages/partner/PartnerCallWin"));
 const PartnerWelcome = lazyPage(() => import("./pages/partner/PartnerPortal").then((m) => ({ default: m.PartnerWelcome })));
 const AdminWaitlist = lazyPage(() => import("./pages/admin/AdminWaitlist"));
 const CloudDealDetail = lazyPage(() => import("./pages/admin/CloudDealDetail"));
@@ -266,6 +267,7 @@ const App = () => {
                 {/* Partner portal (Eli): its own sign-in, sees only what RLS allows a partner */}
                 <Route path="/partner" element={<PartnerPortal />} />
                 <Route path="/partner/welcome" element={<PartnerWelcome />} />
+                <Route path="/partner/callwin" element={<PartnerCallWin />} />
 
                 {/* Admin Routes */}
                 <Route path="/admin/login" element={<AdminLogin />} />
