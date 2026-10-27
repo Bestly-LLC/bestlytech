@@ -10,6 +10,7 @@ import datetime
 import json
 import os
 import re
+import socket
 import subprocess
 import time
 import urllib.error
@@ -17,6 +18,17 @@ import urllib.parse
 import urllib.request
 
 import lib
+
+# The Pi's IPv6 route to Cloudflare black-holes (SYN-SENT for 30 s per request), so try IPv4 addresses first. IPv6 stays as the fallback.
+_gai = socket.getaddrinfo
+
+
+def _gai_v4_first(*a, **kw):
+    res = _gai(*a, **kw)
+    return sorted(res, key=lambda r: 0 if r[0] == socket.AF_INET else 1)
+
+
+socket.getaddrinfo = _gai_v4_first
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36 BestlyComplianceBot/1"
 BROWSER = ["/opt/bestly/turo-watch/.venv/bin/python", "/opt/bestly/cron/compliance_browser.py"]
