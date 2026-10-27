@@ -3337,7 +3337,7 @@
    "name": "FCC robocalls and TCPA enforcement",
    "url": "https://www.fcc.gov/enforcement/areas/robocalls",
    "kind": "page",
-   "browser": false
+   "browser": true
   },
   {
    "id": "fcc-tcpa-news",
@@ -3345,7 +3345,7 @@
    "name": "FCC consumer news: robocalls and robotexts",
    "url": "https://www.fcc.gov/consumers/guides/stop-unwanted-robocalls-and-texts",
    "kind": "page",
-   "browser": false
+   "browser": true
   },
   {
    "id": "cppa-news",
@@ -3377,7 +3377,7 @@
    "name": "CDTFA software and digital products rulemaking",
    "url": "https://www.cdtfa.ca.gov/lawguides/",
    "kind": "page",
-   "browser": false
+   "browser": true
   },
   {
    "id": "ftb-news",
@@ -3385,7 +3385,7 @@
    "name": "FTB newsroom",
    "url": "https://www.ftb.ca.gov/about-ftb/newsroom/index.html",
    "kind": "page",
-   "browser": false
+   "browser": true
   },
   {
    "id": "sos-statements",

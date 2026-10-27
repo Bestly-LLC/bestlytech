@@ -333,10 +333,14 @@ def ev_listing(chk, dry):
     return True, f"{cur['name']} {cur['version']} released {str(cur['released'])[:10]}{extra}"
 
 
+RDAP = {"io": "https://rdap.identitydigital.services/rdap/domain/"}  # rdap.org has no .io; everything else goes through rdap.org
+
+
 def ev_domain(chk):
     p = chk["params"]
     d = chk["target"]
-    j = json.loads(fetch_plain("https://rdap.org/domain/" + d, 40)[1])
+    base = RDAP.get(d.rsplit(".", 1)[-1], "https://rdap.org/domain/")
+    j = json.loads(fetch_plain(base + d, 40)[1])
     exp = next((e.get("eventDate") for e in j.get("events", []) if e.get("eventAction") == "expiration"), None)
     if not exp:
         return None, "RDAP gave no expiration date"
