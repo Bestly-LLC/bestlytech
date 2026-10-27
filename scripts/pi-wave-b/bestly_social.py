@@ -39,6 +39,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import freellm  # noqa: E402
 import lib  # noqa: E402
 import playbook  # noqa: E402  (2026-10-06: content playbook, see playbook.py)
+try:
+    from jobs import house_variety as hv  # noqa: E402  (2026-10-26: rotation, history, duplicate probe; see house_variety.py)
+except Exception:  # noqa: BLE001  a missing module must never stop the daily post
+    hv = None
 
 MANIFEST = "https://bestly.tech/social/MANIFEST.json"
 HEALTH = "https://bestly.tech/cloud"
@@ -134,8 +138,17 @@ DRY = False
 
 
 # ---------------------------------------------------------------- copy checks
-def _problems(cap):
+def _problems(cap, rec=None):
     p = []
+    ask = None
+    if rec and hv:
+        # the recipe's closing question sits after the Bestly paragraph (2026-10-26)
+        paras0, tease, ask = hv.tail_split(cap)
+        if rec.get("question") and not hv.question_ok(ask):
+            p.append("the last line must be ONE short specific question (3 to 18 words, no 'comment below', no 'tag a friend')")
+        if rec.get("next_topic") and not tease:
+            p.append(f"add the line 'Next in {rec['segment']}: {rec['next_topic']}.' as its own paragraph just before the question")
+        cap = "\n\n".join(paras0) if paras0 else cap     # the Bestly-paragraph rules below judge the body, not the tease or the question
     if EMOJI.search(cap):
         p.append("contains an emoji")
     if "#" in cap:
@@ -210,7 +223,9 @@ def _ask_json(system, user, check, deadline, tries=3):
     raise RuntimeError("plan failed the rules 3 times: " + "; ".join(last))
 
 
-def _caption(system, brief, deadline):
+def _caption(system, brief, deadline, rec=None, slug="bestly-cloud", hist=None):
+    if rec and hv:
+        brief = brief + "\n\n" + hv.prompt_block(rec, hist or {}, "Bestly")
     msgs = [{"role": "system", "content": playbook.add(system)}, {"role": "user", "content": brief}]
     last, cap = [], ""
     for _ in range(3):
@@ -218,7 +233,11 @@ def _caption(system, brief, deadline):
         msg, provider = freellm.chat(msgs, None, max_tokens=2500, deadline=deadline)
         cap = (msg.get("content") or "").strip().strip('"').strip()
         cap = re.sub(r"^(caption|here is the caption)\s*:\s*", "", cap, flags=re.I).strip()
-        last = _problems(cap)
+        last = _problems(cap, rec)
+        if not last and hv:
+            ok, why = hv.probe(slug, cap)     # the gate's own duplicate check, before anything is filed
+            if not ok:
+                last = [why]
         if not last:
             return cap, provider
         msgs += [{"role": "assistant", "content": cap},
@@ -377,8 +396,8 @@ def _upload(path, name):
 
 
 # ---------------------------------------------------------------- daily: one fresh card
-def _make_single(hist, deadline):
-    theme, why = _pick_theme(hist, avoid_n=4)
+def _make_single(hist, deadline, cat=None, theme_why=None):
+    theme, why = theme_why or _pick_theme(hist, avoid_n=4)
     def check(p):
         e = _line_problems(p.get("headline"), "headline", 4, 10) + _line_problems(p.get("subline"), "subline", 5, 16)
         if p.get("accent") and p["accent"] not in (p.get("headline") or ""):
@@ -389,11 +408,12 @@ def _make_single(hist, deadline):
     user = (f"Theme: {theme} - {THEMES[theme]}\n\n{_learning_brief(hist)}")
     plan, prov = _ask_json(PLAN_SINGLE_SYS, user, check, deadline)
     last_layouts = [h.get("layout") for h in hist[:1]]
-    layout = random.choice([l for l in "ABC" if l not in last_layouts])
+    layout = (hv.lru("bestly-cloud", "layout", list("ABC"), avoid=last_layouts) if hv
+              else random.choice([l for l in "ABC" if l not in last_layouts]))
     fits = _wide_devices() if layout in "AC" else DEVICES
     devs = [d for d in fits if d not in _last(hist, "device", 4)]
-    dev = random.choice(devs or fits)
-    spec = {"layout": layout, "cat": plan["category"][:24], "h": plan["headline"].strip(),
+    dev = (hv.lru("bestly-cloud", "device", devs or fits)) if hv else random.choice(devs or fits)
+    spec = {"layout": layout, "cat": (cat or plan["category"])[:24], "h": plan["headline"].strip(),
             "accent": (plan.get("accent") or "").strip(), "p": plan["subline"].strip(), "dev": dev}
     out = f"/tmp/bestly-card-{uuid.uuid4().hex[:8]}.png"
     fit = _render(spec, out)
@@ -402,13 +422,20 @@ def _make_single(hist, deadline):
 
 def _daily_fresh(dry, render_only, deadline):
     hist = _history("daily")
-    made = _make_single(hist, deadline)
+    # a topic the last post promised in its "Next in ..." line is made now (a promise is kept), else the usual pick
+    prom = hv.promised("bestly-cloud") if hv else None
+    kept = next((k for k, d in THEMES.items() if d == prom), None)
+    theme_why = (kept, "promised in the last post's Next line") if kept else _pick_theme(hist, avoid_n=4)
+    rec = hv.recipe("bestly-cloud", topics=[d for k, d in THEMES.items() if k != theme_why[0]]) if hv else None
+    vh = hv.hist("bestly-cloud") if hv else None
+    # the corner label is the series name and number (e.g. "Own Your Cloud #4"), so the feed reads as a show
+    made = _make_single(hist, deadline, cat=(f"{rec['segment']} #{rec['series_no']}" if rec else None), theme_why=theme_why)
     p = made["plan"]
     if render_only:
         return f"render-only: {made['file']} [{made['theme']}: {made['why']}] {json.dumps(p)[:400]}"
     name = f"bestly/{'dry/' if dry else ''}daily/{time.strftime('%Y-%m-%d')}-{uuid.uuid4().hex[:6]}.png"
     url = _upload(made["file"], name)
-    cap, cprov = _caption(DAILY_SYS, f"Image headline: {p['headline']}\nImage subline: {p['subline']}\nTheme: {made['theme']} - {THEMES[made['theme']]}", deadline)
+    cap, cprov = _caption(DAILY_SYS, f"Image headline: {p['headline']}\nImage subline: {p['subline']}\nTheme: {made['theme']} - {THEMES[made['theme']]}", deadline, rec=rec, hist=vh)
     details = {"device": made["spec"]["dev"], "accent": made["spec"]["accent"], "subline": p["subline"], "category": p["category"],
                "angle": p.get("angle"), "why": made["why"], "planner": made["planner"], "writer": cprov, "fit": made["fit"], "url": url}
     if dry:
@@ -422,6 +449,8 @@ def _daily_fresh(dry, render_only, deadline):
     fbr = (bool(fb.get("ok")), fb.get("postId"), None if fb.get("ok") else f"FB {fc}: {json.dumps(fb)[:400]}")
     _record("daily", name, made["spec"]["layout"], made["theme"], cap, ig, fbr, headline=p["headline"],
             details=details, media_id=ib.get("remoteId"))
+    if rec and hv:
+        hv.commit("bestly-cloud", rec, layout=made["spec"]["layout"], device=made["spec"]["dev"])
     return _report("daily post", f"'{p['headline']}'", ig, fbr)
 
 
@@ -733,14 +762,20 @@ def _studio_review(cap, cards, deadline):
     return bm._review(cfg, {"caption": cap, "cards": cards}, deadline)
 
 
-def _studio_caption(system, brief, deadline):
+def _studio_caption(system, brief, deadline, rec=None, hist=None):
+    if rec and hv:
+        brief = brief + "\n\n" + hv.prompt_block(rec, hist or {}, "Bestly Studio")
     msgs = [{"role": "system", "content": playbook.add(system)}, {"role": "user", "content": brief}]
     last, cap, prov = [], "", None
     for _ in range(3):
         msg, prov = freellm.chat(msgs, None, max_tokens=2500, deadline=deadline)
         cap = (msg.get("content") or "").strip().strip('"').strip()
         cap = re.sub(r"^(caption|here is the caption)\s*:\s*", "", cap, flags=re.I).strip()
-        last = _problems(cap) + _studio_claims([cap])
+        last = _problems(cap, rec) + _studio_claims([cap])
+        if not last and hv:
+            ok, why = hv.probe("bestly-studio", cap)
+            if not ok:
+                last = [why]
         if not last:
             return cap, prov
         msgs += [{"role": "assistant", "content": cap},
@@ -767,8 +802,11 @@ def _studio_card(plan, plain=False):
         spec = {"layout": "MID", "cat": plan["category"][:24], "kick": "Posting tip", "h": plan["headline"].strip(),
                 "accent": (plan.get("accent") or "").strip(), "p": plan["subline"].strip(), "foot": STUDIO_FOOT}
     else:
-        layout = random.choice("ABC")
-        dev = random.choice(STUDIO_DEVICES["wide" if layout in "AC" else "tall"])
+        layout = hv.lru("bestly-studio", "layout", list("ABC")) if hv else random.choice("ABC")
+        devs = STUDIO_DEVICES["wide" if layout in "AC" else "tall"]
+        dev = hv.lru("bestly-studio", "device", devs) if hv else random.choice(devs)
+        if hv:
+            hv.mark("bestly-studio", layout=layout, device=dev)
         spec = {"layout": layout, "cat": plan["category"][:24], "h": plan["headline"].strip(),
                 "accent": (plan.get("accent") or "").strip(), "p": plan["subline"].strip(), "dev": dev, "foot": STUDIO_FOOT}
     out = f"/tmp/bestly-studio-card-{uuid.uuid4().hex[:8]}.png"
@@ -849,7 +887,10 @@ def _studio_attempt(kind, theme, items, deadline):
         cards = [{"head": plan["headline"], "body": plan["subline"]}]
         brief = f"Image headline: {plan['headline']}\nImage subline: {plan['subline']}\nTheme: {theme} - {THEMES_STUDIO[theme]}"
         system = DAILY_SYS_STUDIO
-    cap, cprov = _studio_caption(system, brief, deadline)
+    rec = hv.recipe("bestly-studio", series=False) if hv else None   # angle + hook style + closing question; no series label on cards
+    cap, cprov = _studio_caption(system, brief, deadline, rec=rec, hist=(hv.hist("bestly-studio") if hv else None))
+    if rec and hv:
+        hv.commit("bestly-studio", rec)
     return plan, prov, title, cards, cap, cprov, _studio_review(cap, cards, deadline)
 
 

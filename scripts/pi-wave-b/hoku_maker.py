@@ -46,6 +46,10 @@ import freellm  # noqa: E402
 import lib  # noqa: E402
 import playbook  # noqa: E402  (2026-10-06: content playbook, see playbook.py)
 from jobs import brand_maker as bm  # noqa: E402  (shared: _json, _stats, _learn, _lessons)
+try:
+    from jobs import house_variety as hv  # noqa: E402  (2026-10-26: rotation, history, duplicate probe; see house_variety.py)
+except Exception:  # noqa: BLE001
+    hv = None
 
 KIT = "/opt/bestly/hoku-kit"
 BUCKET = "social-media"
@@ -111,8 +115,8 @@ Slide 2: "lines" = exactly 3 short beats, each 1 to 4 words ending with a period
   and "lead" (3 to 8 words, the line under them).
 Slide 3 is a fixed product card (you do not write it).
 "caption": 15 to 60 words of prose, 1 or 2 short paragraphs, that tells the moment once in fresh words (do not just
-  repeat the slides). It may say "mist it, let it dry". No hashtags, no emoji, no questions, no "link in bio" (added
-  after), no claims about what it does for skin.
+  repeat the slides). It may say "mist it, let it dry". No hashtags, no emoji, no "link in bio" (added
+  after), no claims about what it does for skin. No questions, except the one closing question if the recipe asks for it.
 "graphic": one icon for slide 1, chosen from: {icons}."""
 
 SINGLE_RULES = {
@@ -128,7 +132,8 @@ SINGLE_RULES = {
 }
 SINGLE_TAIL = """
 "caption": 15 to 70 words: the title (or a close variant) as the first line, then 1 or 2 short paragraphs that say
-  the idea once in plain prose. No hashtags, no emoji, no questions, no "link in bio" (added after).
+  the idea once in plain prose. No hashtags, no emoji, no "link in bio" (added after). No questions, except the one closing
+  question if the recipe asks for it.
 "graphic": one icon chosen from: {icons} (use "" for none).
 This kind of post shows our work: the can, the label, the ingredients, what we will and will not say."""
 
@@ -213,11 +218,13 @@ def _pick(posts):
     else:
         fmt, why = ("single" if last_fmt == "moment" else "moment"), "format alternates"
     recent_themes = [r["dims"].get("ground") for r in posts[:2]]
-    theme = random.choice([t for t in THEMES if t not in recent_themes] or THEMES)
+    # rotation: the theme and layout used longest ago come next (house_variety), never the last two
+    theme = (hv.lru("hoku", "theme", THEMES, avoid=recent_themes) if hv else random.choice([t for t in THEMES if t not in recent_themes] or THEMES))
     layout = "moment"
     if fmt == "single":
         recent_layouts = [r["dims"].get("composition") for r in posts[:3]]
-        layout = random.choice([l for l in SINGLE_LAYOUTS if l not in recent_layouts] or SINGLE_LAYOUTS)
+        layout = (hv.lru("hoku", "layout", SINGLE_LAYOUTS, avoid=recent_layouts) if hv
+                  else random.choice([l for l in SINGLE_LAYOUTS if l not in recent_layouts] or SINGLE_LAYOUTS))
     pool_all = MOMENTS if fmt == "moment" else LESSONS_EDU
     ever = {r["dims"].get("topic") for r in posts}
     recent = [r["dims"].get("topic") for r in posts[:10]]
@@ -231,7 +238,7 @@ def _pick(posts):
 
 
 # ---------------------------------------------------------------- writing + checks
-def _check(fmt, layout, p, past):
+def _check(fmt, layout, p, past, rec=None):
     e = []
     def rng(name, t, lo, hi):
         w = _wc(t)
@@ -255,7 +262,7 @@ def _check(fmt, layout, p, past):
             if difflib.SequenceMatcher(None, beats.lower(), old.lower()).ratio() > 0.55:
                 e.append(f"the 3 beats are too close to an earlier post ('{old}'); find beats that belong to THIS moment only")
                 break
-        rng("caption", cap, 12, 65)
+        rng("caption", cap, 12, 85)
         if p.get("graphic") not in ICONS_MOMENT:
             e.append(f"graphic must be one of {ICONS_MOMENT}")
     else:
@@ -280,7 +287,7 @@ def _check(fmt, layout, p, past):
             rng("bLabel", p.get("bLabel"), 2, 4)
             rng("a", p.get("a"), 4, 18)
             rng("b", p.get("b"), 6, 25)
-        rng("caption", cap, 12, 75)
+        rng("caption", cap, 12, 95)
         if (p.get("graphic") or "") not in ICONS_SINGLE + [""]:
             e.append(f"graphic must be one of {ICONS_SINGLE} or empty")
     if "?" in title:
@@ -288,6 +295,13 @@ def _check(fmt, layout, p, past):
     elif not title.endswith("."):
         e.append("the title must end with a period (house style)")
     paras = [x for x in re.split(r"\n\s*\n", cap) if x.strip()]
+    ask = None
+    if rec and hv and rec.get("question") and paras and paras[-1].rstrip().endswith("?"):
+        ask = paras.pop()
+        if not hv.question_ok(ask):
+            e.append("the closing question must be ONE short specific question (3 to 18 words, no 'comment below' or 'tag a friend')")
+    elif rec and rec.get("question"):
+        e.append("the caption must end with ONE short specific question on its own line")
     if len(paras) > 3:
         e.append("caption has more than 3 paragraphs")
     blob = " ".join(str(v) for k, v in p.items() if k not in ("graphic", "topic")) if isinstance(p, dict) else ""
@@ -297,12 +311,16 @@ def _check(fmt, layout, p, past):
         e.append("no numbers anywhere (write numbers as words only if you must; never statistics or strengths)")
     if re.search(r"link in bio|https?://|www\.|\.com\b", blob, re.I):
         e.append("no links or 'link in bio' (it is added after)")
-    if "?" in cap:
-        e.append("no questions in the caption")
+    if "?" in (cap.replace(ask, "") if ask else cap):
+        e.append("no questions in the caption except the one closing question")
     for old in past:
         if difflib.SequenceMatcher(None, title.lower(), old.lower()).ratio() > 0.62:
             e.append(f"too close to an earlier post ('{old}'); pick a different idea")
             break
+    if hv and not e:
+        ok, why = hv.probe("hoku", cap)
+        if not ok:
+            e.append(why)
     if not e:
         pieces = [("caption", cap), ("title", f"{p.get('kicker') or ''}. {title}. {p.get('body') or ''}")]
         if fmt == "moment":
@@ -367,6 +385,10 @@ def _write(fmt, layout, topic, posts, past, deadline):
                 "duo": '"aLabel": "...", "a": "...", "bLabel": "...", "b": "...", '}.get(layout, '"body": "...", ')
         schema = '{"topic": "<lowercase, 1 to 4 words>", "kicker": "...", "title": "...", ' + keys + '"caption": "...", "graphic": "..."}'
     lessons = bm._lessons("hoku")
+    rec = hist = None
+    if hv:
+        hist = hv.hist("hoku")
+        rec = hv.recipe("hoku", series=False)
     recent = "\n".join(f"- {(r.get('caption') or '').splitlines()[0][:90]} (likes {r.get('likes')}, comments {r.get('comments')})"
                        for r in posts[:14])
     if fmt == "moment":
@@ -374,7 +396,8 @@ def _write(fmt, layout, topic, posts, past, deadline):
     user = (f"Topic: {topic}\n\n"
             + (f"Beats already used (do not reuse their words or rhythm): {' | '.join(_PAST_BEATS[-20:])}\n\n" if fmt == "moment" else "")
             + f"Recent HOKU posts (match the voice; do not repeat their ideas or lines):\n{recent}\n"
-            + ("\nWhat we have learned (observations with sample sizes):\n" + "\n".join(f"- {l}" for l in lessons[:5]) if lessons else ""))
+            + ("\nWhat we have learned (observations with sample sizes):\n" + "\n".join(f"- {l}" for l in lessons[:5]) if lessons else "")
+            + ("\n\n" + hv.prompt_block(rec, hist or {}, "HOKU") if rec else ""))
     msgs = [{"role": "system", "content": playbook.add(SYS.format(about=ABOUT, format_rules=rules, schema=schema))},
             {"role": "user", "content": user}]
     errs, plan, prov, tries, near = [], None, None, [], None
@@ -382,7 +405,7 @@ def _write(fmt, layout, topic, posts, past, deadline):
         msg, prov = freellm.chat(msgs, None, max_tokens=3000, deadline=deadline, json_mode=True)
         try:
             plan = bm._json(msg.get("content"))
-            errs, score = _check(fmt, layout, plan, past), 0.0
+            errs, score = _check(fmt, layout, plan, past, rec), 0.0
             if not errs:
                 errs, score = _review(plan, deadline)
                 # Factually clean and a 7: keep it as the fallback; a 7 in HOKU's quiet voice beats a re-run.
@@ -393,10 +416,14 @@ def _write(fmt, layout, topic, posts, past, deadline):
             plan, errs = None, [f"reply was not the JSON asked for ({e}; {prov})"]
             continue
         if not errs:
+            if hv and rec:
+                plan["_rec"] = rec
             return plan, prov
         msgs += [{"role": "assistant", "content": (msg.get("content") or "")[:4000]},
                  {"role": "user", "content": "Fix these and reply with the JSON only: " + "; ".join(errs)}]
     if near:
+        if hv and rec:
+            near[0]["_rec"] = rec
         return near[0], f"{near[2]} (editor score {near[1]:g})"
     raise RuntimeError(f"[{fmt}/{layout}, {topic}] post failed the rules 4 times: " + " || ".join(tries)[:900])
 
@@ -507,11 +534,17 @@ def _make_one(day, at, posts, past, deadline, dry):
         "post_id": pid, "eyebrow": (plan.get("kicker") or "")[:80], "headline": plan["title"][:200], "layout": layout,
         "subhead": " ".join(l.strip() for l in plan.get("lines") or []) if fmt == "moment" else (plan.get("body") or "")[:300],
         "og_url": urls[0]})
+    if hv and plan.get("_rec"):
+        hv.commit("hoku", plan["_rec"], theme=theme, layout=layout if fmt == "single" else None)
     return f"{day}: queued {label}", plan, {"fmt": fmt, "layout": layout, "theme": theme}
 
 
 def _rerun(day, at, posts, dry):
-    """Fallback: the best-liked post from 4+ weeks ago on a current design (v6, v7 or daily), as a new row."""
+    """Fallback: the best-liked post from 4+ weeks ago on a current design (v6, v7 or daily), as a new row.
+    Off since 2026-10-26: an unchanged re-run is a duplicate by definition (the house gate would reject it), and Jared's
+    rule is no duplicates. A failed day posts nothing and the watchdog (Spark's House Gate) says so after two days."""
+    if hv:
+        return None
     cutoff = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 28 * 86400))
     recent_caps = {(r.get("caption") or "")[:80] for r in posts if (r.get("scheduled_at") or "9") >= cutoff}
     cands = [r for r in posts if r.get("status") == "posted" and (r.get("scheduled_at") or "") < cutoff
@@ -543,6 +576,11 @@ def _make(dry):
         slots = [(day, day + f"T{SLOT_UTC:02d}:00:00Z")]
     if not slots:
         return f"ok nothing to make: today and tomorrow already have posts ({sum(1 for r in posts if r['status'] == 'queued')} queued)"
+    short = hv.need("hoku") if hv else None
+    if short is not None and not dry:
+        if short == 0:
+            return "ok nothing to make: a week of finished HOKU posts already waits ahead (house gate backlog)"
+        slots = slots[:short]
     past = [(r.get("caption") or "").splitlines()[0][:120] for r in posts if r.get("caption")]
     deadline, out = time.time() + 1500, []
     for day, at in slots:

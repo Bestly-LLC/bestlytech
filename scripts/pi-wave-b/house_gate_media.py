@@ -41,9 +41,10 @@ import lib  # noqa: E402
 
 STATE = "/opt/bestly/cron/state"
 SAFE = (60, 250, 900, 1440)          # x0, y0, x1, y1 on 1080x1920
+TOL_BOTTOM = 24                      # the rule's numbers are guideline estimates (studio/rule-safe-zones-2026-10-18); a CTA 24 px under y 1440 still clears the caption zone
 TOL = 8                              # px of slack on the safe box
 MIN_MUSIC_DB = -38.0                 # a real bed; the old synthesized pad sat far below this
-MIN_TEXT_PX = 30                     # 25th-percentile word height, on a 1080-wide image (calibrated 2026-10-26)
+MIN_TEXT_PX = 28                     # median word height of the readable text, on a 1080-wide image (calibrated 2026-10-26)
 DEADLINE_S = 240
 UA = {"User-Agent": "Mozilla/5.0 (bestly-house-gate)"}
 
@@ -104,12 +105,12 @@ def ocr(path):
 
 
 def text_px(words, width):
-    """25th percentile word height, scaled to a 1080-wide image. None when there is too little text to judge."""
-    hs = [w["h"] * 1080.0 / width for w in words]
+    """Typical size of the text people actually read: the median height of words 18px or taller (labels and footers are
+    smaller and skipped), scaled to a 1080-wide image. None when there is too little text to judge."""
+    hs = sorted(w["h"] * 1080.0 / width for w in words if w["h"] * 1080.0 / width >= 18)
     if len(hs) < 6:
         return None
-    hs.sort()
-    return round(hs[len(hs) // 4], 1)
+    return round(hs[len(hs) // 2], 1)
 
 
 def frame_at(video, t, dest):
@@ -173,7 +174,7 @@ def video_checks(path, work):
         bad = []
         for wd in words:
             x0, y0, x1, y1 = wd["x"], wd["y"], wd["x"] + wd["w"], wd["y"] + wd["h"]
-            if x0 < (SAFE[0] - TOL) * sx or x1 > (SAFE[2] + TOL) * sx or y0 < (SAFE[1] - TOL) * sy or y1 > (SAFE[3] + TOL) * sy:
+            if x0 < (SAFE[0] - TOL) * sx or x1 > (SAFE[2] + TOL) * sx or y0 < (SAFE[1] - TOL) * sy or y1 > (SAFE[3] + TOL_BOTTOM) * sy:
                 bad.append(wd["t"])
         sz = text_px(words, w)
         if sz:

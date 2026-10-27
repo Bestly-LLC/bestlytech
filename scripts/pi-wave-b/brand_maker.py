@@ -31,6 +31,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import freellm  # noqa: E402
 import lib  # noqa: E402
 import playbook  # noqa: E402  (2026-10-06: content playbook, see playbook.py)
+try:
+    from jobs import house_variety as hv  # noqa: E402  (2026-10-26: rotation, history, duplicate probe; see house_variety.py)
+except Exception:  # noqa: BLE001  a missing module must never stop the daily post
+    hv = None
 
 KEEP_READY = 2
 
@@ -80,15 +84,17 @@ Write only what is true and verifiable about how the web, browsers, apps, insura
 Card rules:
 - "head": 4 to 12 words, a flat statement (no question). In a head you may wrap 1 to 4 words in *asterisks* to color them.
 - "body": 8 to 30 words, plain and concrete. Not on the closing card.
-- "eyebrow": 1 to 4 lowercase words, a small label above the head (first card always has one).
+- "eyebrow": 1 to 4 lowercase words, a small label above the head (first card always has one). If the recipe names a series, the first card's eyebrow is the series name and number.
 - "big": only on a "word" card: ONE striking word or very short phrase (max 2 words, or a short number like "400 days").
 - The "closing" card has only a head, 5 to 14 words, and it is the only card that names {name}.
 - Only the closing card (and, in a carousel, the card just before it) may name {name}; the others must be useful to someone who never installs anything.
 - Every card says something new: no card repeats another card or the caption word for word.
 Caption rules: first line = the cover head without asterisks. Then 2 to 4 short paragraphs that tell the idea once
-in prose. {name} appears only in the LAST paragraph, once or twice. 35 to 140 words. No emoji, no hashtags (they
-are added separately), no questions to the reader, no "link in bio", no statistics or prices you cannot source.
-American English spelling.
+in prose. {name} appears only in the LAST of those paragraphs, once or twice. 35 to 140 words. No emoji, no hashtags (they
+are added separately), no "link in bio", no statistics or prices you cannot source. If the recipe asks for a "Next" line
+and a closing question, they come AFTER those paragraphs, each on its own line, and do not mention {name}. Otherwise no
+questions to the reader. American English spelling. Write like a person: concrete nouns, no filler, no "in today's world",
+no "it's important to".
 
 Reply with ONE JSON object only:
 {{"title": "<the cover head without asterisks>", "topic": "<the topic, lowercase, 1 to 4 words>",
@@ -137,14 +143,24 @@ def _plain(t):
     return (t or "").replace("*", "")
 
 
-def _check(brand, cfg, kinds, p):
+def _check(brand, cfg, kinds, p, rec=None):
     e, name = [], cfg["name"]
     cards = p.get("cards") or []
     if len(cards) != len(kinds):
         return [f"cards must have exactly {len(kinds)} entries"]
     cap = (p.get("caption") or "").strip()
     paras = [x for x in re.split(r"\n\s*\n", cap) if x.strip()]
-    w = len(cap.split())
+    tease = ask = None
+    if rec and hv:
+        # the recipe's tail (a real "Next" line, one closing question) sits after the content paragraphs
+        paras, tease, ask = hv.tail_split(cap)
+        if rec.get("next_topic") and not (tease and rec["next_topic"].lower() in tease.lower()):
+            e.append(f"caption needs its own line: Next in {rec['segment']}: {rec['next_topic']}.")
+        if rec.get("question") and not hv.question_ok(ask):
+            e.append("the last line of the caption must be ONE short specific question (3 to 18 words, no 'comment below' or 'tag a friend')")
+        if cards and (cards[0].get("eyebrow") or "").strip().lower() != f"{rec['segment']} #{rec['series_no']}".lower():
+            e.append(f"card 1 eyebrow must be exactly '{rec['segment']} #{rec['series_no']}'")
+    w = len(" ".join(paras).split())
     if w < 30 or w > 160:
         e.append(f"caption is {w} words (want 35-140)")
     if len(paras) < 3:
@@ -181,12 +197,16 @@ def _check(brand, cfg, kinds, p):
         if difflib.SequenceMatcher(None, title, old.lower()).ratio() > 0.6:
             e.append(f"too close to an earlier post ('{old}'); pick a different idea")
             break
+    if hv and not e:
+        ok, why = hv.probe(cfg["claim"], cap)
+        if not ok:
+            e.append(why)
     texts = [(c.get("body") or "").strip().lower() for c in cards if (c.get("body") or "").strip()]
     for a in range(len(texts)):
         for b in range(a + 1, len(texts)):
             if difflib.SequenceMatcher(None, texts[a], texts[b]).ratio() > 0.7:
                 e.append(f"cards repeat each other ('{texts[a][:40]}...'); every card must add something new")
-    blob = cap + " " + " ".join(f"{c.get('eyebrow','')} {c.get('head','')} {c.get('body','')} {c.get('big','')}" for c in cards)
+    blob = cap + " " + " ".join(f"{('' if (rec and i == 0) else c.get('eyebrow',''))} {c.get('head','')} {c.get('body','')} {c.get('big','')}" for i, c in enumerate(cards))
     if EMOJI.search(blob) or "#" in blob:
         e.append("no emoji or hashtags anywhere")
     if STATS.search(blob) or PRICE.search(blob):
@@ -230,19 +250,28 @@ def _pick(brand, cfg, recent, bank_open):
             scores.setdefault(t, []).append((r.get("likes") or 0) + 2 * (r.get("comments") or 0))
     pool = [t for t in cfg["topics"] if t not in used_topics] or cfg["topics"]
     proven = [t for t in pool if len(scores.get(t, [])) >= 2]
-    if proven and random.random() > 0.3:
+    promised = hv.promised(cfg["claim"]) if hv else None
+    if promised and promised in cfg["topics"] and promised not in used_topics:
+        topic, why = promised, "promised in the last post's Next line"
+    elif proven and random.random() > 0.3:
         topic = max(proven, key=lambda t: sum(scores[t]) / len(scores[t]))
         why = f"exploit: best average engagement (N={len(scores[topic])})"
     else:
         topic, why = random.choice(pool), "explore"
-    for _ in range(30):
-        comp = random.choice(list(cfg["comps"]))
-        ground = random.choice(cfg["grounds"])
-        pose = random.choice(POSES_IP) if brand == "inventoryproof" else None
-        chk = lib.rpc("social_plan_check", p_brand=brand, p_ground=ground, p_composition=comp, p_topic=topic,
-                      p_pose=pose, p_word=None) or {}
-        if chk.get("ok") and not any(b.get("composition") == comp and b.get("ground") == ground for b in bank_open):
-            return topic, why, comp, ground, pose
+    slug = cfg["claim"]
+    # rotation: the layout, ground and pose used LONGEST AGO come first (a coin flip over 3 layouts and 6 grounds ran out in a month)
+    comps = hv.lru_order(slug, "comp", list(cfg["comps"])) if hv else random.sample(list(cfg["comps"]), len(cfg["comps"]))
+    grounds = hv.lru_order(slug, "ground", cfg["grounds"]) if hv else random.sample(cfg["grounds"], len(cfg["grounds"]))
+    poses = (hv.lru_order(slug, "pose", POSES_IP) if hv else random.sample(POSES_IP, len(POSES_IP))) if brand == "inventoryproof" else [None]
+    tried = 0
+    for comp in comps:
+        for ground in grounds:
+            pose = poses[tried % len(poses)]
+            tried += 1
+            chk = lib.rpc("social_plan_check", p_brand=brand, p_ground=ground, p_composition=comp, p_topic=topic,
+                          p_pose=pose, p_word=None) or {}
+            if chk.get("ok") and not any(b.get("composition") == comp and b.get("ground") == ground for b in bank_open):
+                return topic, why, comp, ground, pose
     raise RuntimeError("no layout combination passes the no-repeat check")
 
 
@@ -254,12 +283,17 @@ def _make_one(brand, cfg, recent, bank_open, deadline, dry):
     for x in ex:
         x.pop("topic", None)
     lessons = _lessons(brand)
+    rec = hist = None
+    if hv:
+        hist = hv.hist(cfg["claim"])
+        rec = hv.recipe(cfg["claim"], topics=[t for t in cfg["topics"] if t != topic])
     recent_titles = "\n".join(f"- {(r.get('caption') or '').splitlines()[0][:90]} (likes {r.get('likes')}, comments {r.get('comments')})"
                               for r in recent[:12])
     user = (f"Topic: {topic}\nCard layout (kinds in order): {kinds}\n\n"
             f"Two earlier posts with this layout, ONLY for voice and length. Do not reuse their ideas, facts or words:\n{json.dumps(ex)[:3500]}\n\n"
             f"Recent posts (do not repeat their ideas):\n{recent_titles}\n"
-            + ("\nWhat we have learned (observations with sample sizes):\n" + "\n".join(f"- {l}" for l in lessons[:5]) if lessons else ""))
+            + ("\nWhat we have learned (observations with sample sizes):\n" + "\n".join(f"- {l}" for l in lessons[:5]) if lessons else "")
+            + ("\n\n" + hv.prompt_block(rec, hist or {}, cfg["name"]) if rec else ""))
     msgs = [{"role": "system", "content": playbook.add(SYS.format(name=cfg["name"], about=cfg["about"], n=len(kinds)))},
             {"role": "user", "content": user}]
     errs, plan, prov = [], None, None
@@ -267,7 +301,7 @@ def _make_one(brand, cfg, recent, bank_open, deadline, dry):
         msg, prov = freellm.chat(msgs, None, max_tokens=3000, deadline=deadline, json_mode=True)
         try:
             plan = _json(msg.get("content"))
-            errs = _check(brand, cfg, kinds, plan)
+            errs = _check(brand, cfg, kinds, plan, rec)
             if not errs:
                 errs = _review(cfg, plan, deadline)
         except (ValueError, TypeError, KeyError, AttributeError) as e:
@@ -280,7 +314,8 @@ def _make_one(brand, cfg, recent, bank_open, deadline, dry):
                  {"role": "user", "content": "Fix these and reply with the JSON only: " + "; ".join(errs)}]
     if not plan or errs:
         raise RuntimeError(f"{brand}: post failed the rules 3 times: " + "; ".join(errs)[:400])
-    accent = random.choice(cfg.get("accents") or [None])
+    accents = cfg.get("accents") or [None]
+    accent = (hv.lru_order(cfg["claim"], "accent", accents)[0] if hv and cfg.get("accents") else random.choice(accents))
     cards = []
     for i, (k, c) in enumerate(zip(kinds, plan["cards"])):
         card = {"kind": k, "ground": ground, "head": c.get("head", "").strip()}
@@ -311,12 +346,17 @@ def _make_one(brand, cfg, recent, bank_open, deadline, dry):
            "approved": True, "approved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "source": "daily-maker"}
     if not dry:
         lib._req("POST", "/rest/v1/social_content_bank", row)
-    return f"{brand}: '{row['title']}' [{comp}/{ground}{'/' + pose if pose else ''}, {topic}: {why}, via {prov}]", row
+        if hv and rec:
+            hv.commit(cfg["claim"], rec, comp=comp, ground=ground, accent=accent, pose=pose, topic=row["topic"])
+    return (f"{brand}: '{row['title']}' [{comp}/{ground}{'/' + pose if pose else ''}, {topic}: {why}"
+            + (f", {rec['segment']} #{rec['series_no']}, {rec['angle']}/{rec['hook']}" if rec else "") + f", via {prov}]"), row
 
 
 def _rerun(brand, dry):
     """Fallback when nothing new passes the bar: re-run the best-performing post from 4+ weeks ago (human-written,
     already checked), as a fresh bank row. Better a proven post than a weak new one or an empty day."""
+    if hv:
+        return None      # off since 2026-10-26: an unchanged re-run is a duplicate; a failed day posts nothing and the House Gate watchdog says so
     old = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 28 * 86400))
     posts = lib.get("social_posts", f"select=id,likes,comments,scheduled_at&brand=eq.{brand}&platform=eq.instagram"
                     f"&status=eq.posted&scheduled_at=lt.{old}&order=scheduled_at.asc&limit=60") or []
@@ -346,6 +386,12 @@ def _make(brands, dry):
         bank_open = lib.get("social_content_bank", f"select=id,topic,composition,ground&brand=eq.{brand}"
                             "&approved=is.true&rejected=is.false&queued_at=is.null") or []
         need = KEEP_READY - len(bank_open)
+        short = hv.need(cfg["claim"]) if hv else None
+        if short is not None and short == 0 and not dry:
+            out.append(f"{brand}: a week of finished posts already waits ahead, nothing to make")
+            continue
+        if short is not None:
+            need = max(need, min(short, 2) - len(bank_open)) if short > 0 else need   # killed posts need replacements
         if need <= 0 and not dry:
             out.append(f"{brand}: {len(bank_open)} ready, nothing to make")
             continue
