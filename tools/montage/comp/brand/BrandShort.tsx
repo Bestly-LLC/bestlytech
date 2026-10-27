@@ -73,6 +73,15 @@ const useFonts = (brand: Brand) => {
 
 const clamp = {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'} as const;
 
+// Safe box (2026-10-26, studio/rule-safe-zones-2026-10-18 + the house gate): on 1080x1920 every word sits inside x 60-900, y 250-1460.
+// Instagram and TikTok draw their own buttons, name and caption over the rest. House gate (house_gate_media.py) rejects any video that breaks it.
+export const SAFE = {left: 60, top: 250, right: 900, bottom: 1460};
+const PAD_L = 96;                                   // text starts here (inside the box with room for the 60 px edge)
+const PAD_R = 1080 - 900 + 24;                      // 204: text ends by x 876
+const PAD_SCENE = `0 ${PAD_R}px 0 ${PAD_L}px`;     // scene text blocks
+const PAD_END = `0 ${PAD_R - 36}px 0 ${PAD_L - 36}px`;  // end-card stacks are centered: the middle of the box is x 480
+const LOGO_TOP = 276;                               // the small corner logo sits in the first safe row, never under the name/follow bar
+
 const rgba = (hex: string, a: number) => {
   const h = hex.replace('#', '');
   const n = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
@@ -375,7 +384,7 @@ const CallCardView: React.FC<{c: CallCard; t: Theme; b: Brand; dur: number}> = (
   const stateColor = missed ? (flip < 0.5 ? t.accent : bad) : good;
   const stateText = missed ? (flip < 0.5 ? 'Incoming call' : 'Missed call') : 'Answered by Maya';
   return (
-    <div style={{width: 900, opacity: Math.min(1, enter) * out, transform: `translateY(${(1 - Math.min(1, enter)) * 70}px) scale(${0.94 + 0.06 * Math.min(1, enter)})`}}>
+    <div style={{width: 780, opacity: Math.min(1, enter) * out, transform: `translateY(${(1 - Math.min(1, enter)) * 70}px) scale(${0.94 + 0.06 * Math.min(1, enter)})`}}>
       <div style={{position: 'relative', borderRadius: 64, padding: '44px 48px',
                    background: `linear-gradient(135deg, ${rgba('#ffffff', 0.12)} 0%, ${rgba('#ffffff', 0.05)} 100%)`,
                    boxShadow: `0 0 120px ${rgba(missed ? (flip > 0.5 ? bad : t.accent) : good, 0.18)}, 0 40px 120px ${rgba('#000000', 0.35)}`}}>
@@ -426,7 +435,8 @@ const CallCardView: React.FC<{c: CallCard; t: Theme; b: Brand; dur: number}> = (
   );
 };
 
-const lineSize = (b: Brand, text: string) => (text.length > 44 ? b.head.sizes[2] : text.length > 28 ? b.head.sizes[1] : b.head.sizes[0]);
+// the text column is 780 px wide inside the safe box (was 888), so headlines are drawn 10% smaller to keep the same line count
+const lineSize = (b: Brand, text: string) => Math.round((text.length > 44 ? b.head.sizes[2] : text.length > 28 ? b.head.sizes[1] : b.head.sizes[0]) * 0.9);
 
 // The pieces every scene template is built from.
 const KickerBlock: React.FC<{s: Scene; b: Brand; t: Theme; dur: number; center?: boolean}> = ({s, b, t, dur, center}) => {
@@ -545,7 +555,7 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
     return (
       <AbsoluteFill>
         {bg}{unitLayer}
-        <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center', alignItems: 'center'}}>
+        <AbsoluteFill style={{padding: PAD_SCENE, justifyContent: 'center', alignItems: 'center'}}>
           <div style={{transform: `translateY(${drift}px)`, marginTop: hasIcon ? -30 : -100, display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
             {emblem ? <div style={{marginBottom: 54}}>{emblem}</div> : null}
             <KickerBlock s={s} b={b} t={t} dur={dur} center />
@@ -561,16 +571,16 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
     return (
       <AbsoluteFill>
         {bg}{unitLayer}
-        <AbsoluteFill style={{padding: '0 96px', justifyContent: 'flex-start'}}>
-          <div style={{transform: `translateY(${drift}px)`, marginTop: 330}}>
+        <AbsoluteFill style={{padding: PAD_SCENE, justifyContent: 'flex-start'}}>
+          <div style={{transform: `translateY(${drift}px)`, marginTop: 400}}>
             <KickerBlock s={s} b={b} t={t} dur={dur} />
             <LineBlock s={s} b={b} t={t} dur={dur} />
             <SubBlock s={s} b={b} t={t} dur={dur} />
           </div>
         </AbsoluteFill>
-        <div style={{position: 'absolute', left: 96, right: 96, top: 1090, height: 2, transform: `scaleX(${hair})`, transformOrigin: 'left center',
+        <div style={{position: 'absolute', left: PAD_L, right: PAD_R, top: 1090, height: 2, transform: `scaleX(${hair})`, transformOrigin: 'left center',
                      background: `linear-gradient(90deg, ${rgba(t.accent, 0.7)}, ${rgba(t.accent, 0)})`}} />
-        <AbsoluteFill style={{justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 250}}>
+        <AbsoluteFill style={{justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 1920 - 1460 + 60}}>
           {emblem || (
             <div style={{width: 460, height: 460, opacity: 0.9,
                          background: `radial-gradient(circle, ${rgba(t.accent, 0.3)} 0%, ${rgba(t.accent, 0.1)} 40%, ${rgba(t.accent, 0)} 68%)`,
@@ -584,7 +594,7 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
     return (
       <AbsoluteFill>
         {bg}{unitLayer}
-        <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center'}}>
+        <AbsoluteFill style={{padding: PAD_SCENE, justifyContent: 'center'}}>
           <div style={{transform: `translateY(${drift}px)`, marginTop: -80}}>
             {hasIcon ? <div style={{marginBottom: 56}}><MiniIcon name={s.icon} t={t} size={150} dur={dur} /></div> : null}
             <KickerBlock s={s} b={b} t={t} dur={dur} />
@@ -601,7 +611,7 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
     return (
       <AbsoluteFill>
         {bg}{unitLayer}
-        <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center'}}>
+        <AbsoluteFill style={{padding: PAD_SCENE, justifyContent: 'center'}}>
           <div style={{transform: `translateY(${drift}px)`, marginTop: -70}}>
             {hasIcon ? <div style={{marginBottom: 50}}><MiniIcon name={s.icon} t={t} size={130} dur={dur} /></div> : null}
             <KickerBlock s={s} b={b} t={t} dur={dur} />
@@ -618,7 +628,7 @@ const SceneView: React.FC<{s: Scene; b: Brand; t: Theme; dur: number}> = ({s, b,
   return (
     <AbsoluteFill>
       {bg}{unitLayer}
-      <AbsoluteFill style={{padding: '0 96px', justifyContent: 'center'}}>
+      <AbsoluteFill style={{padding: PAD_SCENE, justifyContent: 'center'}}>
         <div style={{transform: `translateY(${drift}px)`, marginTop: hasIcon ? -30 : hasCard ? 0 : -100}}>
           {hasCard ? (
             <div style={{display: 'flex', justifyContent: 'center', marginBottom: 56}}>
@@ -648,14 +658,14 @@ const EndPlain: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number; flip?: bo
                  transform: `translateY(${(1 - up) * (flip ? -260 : 260)}px)`, [flip ? 'marginTop' : 'marginBottom']: 70}} />
   ) : null;
   return (
-    <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center', padding: e.tease ? '40px 90px 160px' : '120px 90px 0'}}>
+    <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center', padding: e.tease ? '40px 204px 160px 60px' : '120px 204px 0 60px'}}>
       {flip ? null : picture}
       <Rise delay={8} dur={hold} style={{textAlign: 'center'}}>
         <div style={{fontFamily: (b.end_title || b.head).family, fontWeight: (b.end_title || b.head).weight, fontSize: 112, lineHeight: 1.1, letterSpacing: (b.end_title || b.head).spacing, color: t.head || t.ink, textWrap: 'balance' as any}}>{e.title}</div>
       </Rise>
       {e.sub ? (
         <Rise delay={14} dur={hold} style={{textAlign: 'center', marginTop: 34}}>
-          <div style={{fontFamily: b.label.family, fontSize: 48, lineHeight: 1.3, color: t.dim, maxWidth: 840}}>{e.sub}</div>
+          <div style={{fontFamily: b.label.family, fontSize: 48, lineHeight: 1.3, color: t.dim, maxWidth: 780}}>{e.sub}</div>
         </Rise>
       ) : null}
       {b.end.handle ? (
@@ -680,10 +690,10 @@ const EndFooter: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, 
   const o = Math.min(1, s);
   if (!e.tease && !e.follow) return null;
   return (
-    <div style={{position: 'absolute', left: 0, right: 0, bottom: 210, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+    <div style={{position: 'absolute', left: 0, right: 204, bottom: 1920 - 1460 + 30, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
                  opacity: o, transform: `translateY(${(1 - o) * 30}px)`}}>
       {e.tease ? (
-        <div style={{display: 'flex', alignItems: 'center', gap: 22, padding: '18px 44px', borderRadius: 999, maxWidth: 940,
+        <div style={{display: 'flex', alignItems: 'center', gap: 22, padding: '18px 44px', borderRadius: 999, maxWidth: 800,
                      background: `linear-gradient(90deg, ${rgba(t.accent, 0.2)} 0%, ${rgba(t.accent, 0.07)} 100%)`, boxShadow: `0 0 60px ${rgba(t.accent, 0.12)}`}}>
           <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 30, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.accent}}>Next</div>
           <div style={{fontFamily: b.label.family, fontWeight: b.label.weight, fontSize: 42, lineHeight: 1.15, color: t.ink}}>{e.tease}</div>
@@ -701,7 +711,7 @@ const ChipRow: React.FC<{c: Chip; t: Theme; b: Brand; delay: number; compact?: b
   const draw = spring({frame: f - delay - 4, fps, config: {damping: 200, stiffness: 45}});
   const o = Math.min(1, s);
   return (
-    <div style={{display: 'flex', alignItems: 'center', gap: compact ? 20 : 34, ...(compact ? {height: 96, padding: '0 34px 0 18px'} : {width: 940, height: tight ? 112 : 138, padding: '0 40px 0 30px'}), borderRadius: 69,
+    <div style={{display: 'flex', alignItems: 'center', gap: compact ? 20 : 34, ...(compact ? {height: 96, padding: '0 34px 0 18px'} : {width: 800, height: tight ? 112 : 138, padding: '0 40px 0 30px'}), borderRadius: 69,
                  background: `linear-gradient(90deg, ${rgba(t.accent, 0.2)} 0%, ${rgba(t.accent, 0.08)} 55%, ${rgba(t.accent, 0.02)} 100%)`,
                  boxShadow: `0 0 70px ${rgba(t.accent, 0.14)}`,
                  opacity: o, transform: `translateX(${(1 - s) * -90}px) scale(${0.94 + 0.06 * Math.min(1, s)})`}}>
@@ -728,7 +738,7 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number; compact?: 
   const tz = !!e.tease;                                   // a Next tease sits at the foot: the stack is top-aligned and tighter so nothing touches it
   const sparks = [[170, 430, 34], [905, 360, 26], [110, 1130, 22], [965, 980, 30], [210, 1610, 28], [880, 1590, 24], [560, 270, 20]];
   return (
-    <AbsoluteFill style={{alignItems: 'center', justifyContent: tz ? 'flex-start' : 'center', padding: tz ? (e.unit ? '215px 90px 0' : '250px 90px 0') : '0 90px'}}>
+    <AbsoluteFill style={{alignItems: 'center', justifyContent: tz ? 'flex-start' : 'center', padding: tz ? (e.unit ? '250px 204px 0 60px' : '250px 204px 0 60px') : '0 204px 0 60px'}}>
       <div style={{position: 'absolute', left: 540 - 760, top: 780 - 760, width: 1520, height: 1520,
                    background: `radial-gradient(circle, ${rgba(t.accent, 0.2 + 0.04 * pulse)} 0%, ${rgba(t.accent, 0.07)} 38%, ${rgba(t.accent, 0)} 68%)`,
                    opacity: Math.min(1, logo)}} />
@@ -756,7 +766,7 @@ const EndRich: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number; compact?: 
             <div style={{fontFamily: b.label.family, fontSize: tz ? (compact ? 52 : 44) : compact ? 58 : 50, lineHeight: 1.28, color: compact ? t.ink : t.dim, maxWidth: 860}}>{e.sub}</div>
           </Rise>
         ) : null}
-        <div style={compact ? {display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 20, marginTop: tz ? 40 : 56, maxWidth: 900}
+        <div style={compact ? {display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 20, marginTop: tz ? 40 : 56, maxWidth: 800}
                             : {display: 'flex', flexDirection: 'column', gap: tz ? 14 : 26, marginTop: tz ? 38 : 64, alignItems: 'center'}}>
           {chips.slice(0, 3).map((c, i) => <ChipRow key={i} c={c} t={t} b={b} delay={28 + i * 11} compact={compact} tight={tz && !compact} />)}
         </div>
@@ -783,7 +793,7 @@ const EndQA: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = ({e, b, t
   const r = e.recap as {q: string; a: string};
   const ti = b.end_title || b.head;
   return (
-    <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center', padding: '0 90px'}}>
+    <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center', padding: '0 204px 0 60px'}}>
       <div style={{position: 'absolute', left: 540 - 720, top: 700 - 720, width: 1440, height: 1440, opacity: Math.min(1, logo),
                    background: `radial-gradient(circle, ${rgba(t.accent, 0.17 + 0.04 * pulse)} 0%, ${rgba(t.accent, 0.06)} 40%, ${rgba(t.accent, 0)} 68%)`}} />
       <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: e.tease ? -90 : -20}}>
@@ -821,12 +831,12 @@ const EndView: React.FC<{e: EndCard; b: Brand; t: Theme; dur: number}> = (p) => 
 const Logo: React.FC<{b: Brand; opacity?: number}> = ({b, opacity = 1}) => {
   const l = b.logo;
   if (l.image) {
-    return <Img src={staticFile(l.image)} style={{position: 'absolute', left: 96, top: 120, height: l.height ?? 76, mixBlendMode: (l.blend as any) || 'normal', opacity}} />;
+    return <Img src={staticFile(l.image)} style={{position: 'absolute', left: PAD_L, top: LOGO_TOP, height: l.height ?? 76, mixBlendMode: (l.blend as any) || 'normal', opacity}} />;
   }
   if (l.wordmark) {
     const w = l.wordmark;
     return (
-      <div style={{position: 'absolute', left: 96, top: 128, opacity}}>
+      <div style={{position: 'absolute', left: PAD_L, top: LOGO_TOP + 8, opacity}}>
         <div style={{display: 'flex', fontFamily: w.family, fontWeight: w.weight, fontSize: w.size, letterSpacing: '-0.01em', color: '#FFFFFF', lineHeight: 1}}>
           {w.parts.map((p, i) => (
             <div key={i} style={{color: p.color, fontSize: p.size ?? w.size, marginTop: p.dy ?? 0, whiteSpace: 'pre'}}>{p.text}</div>
@@ -870,7 +880,7 @@ export const BrandShort: React.FC<BrandProps> = (p) => {
       ) : null}
       <Logo b={b} opacity={logoOp} />
       {look.series ? (
-        <div style={{position: 'absolute', right: 96, top: 150, opacity: 0.82 * tagOp * interpolate(f, [4, 20], [0, 1], clamp), fontFamily: b.label.family,
+        <div style={{position: 'absolute', right: 1080 - 900, top: LOGO_TOP + 24, opacity: 0.82 * tagOp * interpolate(f, [4, 20], [0, 1], clamp), fontFamily: b.label.family,
                      fontWeight: b.label.weight, fontSize: 30, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.dim}}>{look.series}</div>
       ) : null}
       {p.audio.narration ? <Audio src={staticFile(p.audio.narration)} /> : null}

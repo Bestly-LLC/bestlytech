@@ -64,6 +64,29 @@ COUNTWORD = re.compile(r"^(?:zero|one|two|three|four|five|six|seven|eight|nine|t
 BAIT_Q = re.compile(r"comment below|tag a friend|let me know in the comments|drop a|smash|link in bio|swipe", re.I)
 
 
+def house_feed(brand):
+    """2026-10-26 (house gate): the same picture the image makers read, from house_gate_history: what is already posted or queued for the brand
+    (images and videos), what got the most response, and why the gate sent recent posts back. {} when the function is missing (old behavior)."""
+    try:
+        h = lib.rpc("house_gate_history", p_slug=brand, p_n=60)
+        return h if isinstance(h, dict) and not h.get("error") else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def house_probe(brand, text):
+    """The gate's own caption/opening duplicate check against the last 60 posts plus everything queued. -> (ok, reason)."""
+    try:
+        r = lib.rpc("house_gate_dup_probe", p_slug=brand, p_caption=text)
+    except Exception:  # noqa: BLE001
+        return True, ""
+    if not isinstance(r, dict) or r.get("ok", True):
+        return True, ""
+    if (r.get("open_best") or 0) >= 0.6:
+        return False, f"opening is {round(100 * r['open_best'])}% the same as {r.get('open_code')} in the house queue"
+    return False, f"script is {round(100 * (r.get('best') or 0))}% the same as {r.get('code')} in the house queue"
+
+
 class VarietyHold(RuntimeError):
     """The script could not be made different enough after 2 re-rolls. The worker holds the job and Spark alerts (montage.variety)."""
 
@@ -309,6 +332,19 @@ def prompt_block(cfg, plan, series, n_scenes=5):
     lines.append('  A "steps" scene also needs "items": a list of 2 or 3 short steps, 1 to 5 words each, no end punctuation; its "line" introduces them.')
     lines.append('- Add the key "question" (top level): ONE easy question viewers can answer in a few words in the comments, 4 to 12 words, ends with "?", '
                  'about their own work or home (never about buying). No "comment below", no "tag a friend".')
+    feed = house_feed(cfg["slug"])
+    seen = [x for x in (feed.get("recent") or []) if x.get("opening")][:20]
+    if seen:
+        lines.append("- Already posted or queued for this brand (images and videos): do not repeat an idea, a first line or a phrase from these:\n  "
+                     + "\n  ".join("* " + x["opening"][:90] for x in seen))
+    top = feed.get("top") or []
+    if top:
+        lines.append("- What got the most response so far (small numbers, a hint and not a law): "
+                     + "; ".join(f"\"{(t.get('opening') or '')[:70]}\" ({t.get('likes') or 0} likes, {t.get('comments') or 0} comments)" for t in top[:3]))
+    rej = feed.get("rejects") or []
+    if rej:
+        lines.append("- Recent posts of this brand were sent back for: " + "; ".join(f"{x.get('k')} x{x.get('n')}" for x in rej[:4])
+                     + ". Keep every line short, inside the middle of the screen, and never put words on a face.")
     if plan["end"] == "qa":
         lines.append('- Add the key "recap" (top level): {"q": "<the question this video answers, 3 to 10 words, ends with ?>", "a": "<the plain answer, '
                      '4 to 12 words, ends with a full stop>"}; they appear together on the closing card.')
@@ -409,6 +445,10 @@ def gate(cfg, job, plan, out, opening_check=True):
         if sim >= OPENING_LIMIT:
             why.append(f"opening is {sim:.0%} the same as {r.get('item_code') or str(r['job_id'])[:8]}'s ('{(r.get('opening') or '')[:60]}')")
             break
+    if opening_check and not why:
+        ok, hw = house_probe(brand, "\n\n".join(x for x in (first.get("line"), first.get("say")) if x))
+        if not ok:
+            why.append(hw)
     return (not why), "; ".join(why), opening, fp
 
 
