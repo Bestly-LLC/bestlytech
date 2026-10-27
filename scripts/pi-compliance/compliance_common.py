@@ -267,7 +267,7 @@ def ev_eleven(chk):
     if not aid and p.get("agent_name"):
         lst = el_get("/v1/convai/agents?page_size=100&search=" + urllib.parse.quote(p["agent_name"]))
         for a in lst.get("agents", []):
-            if (a.get("name") or "").strip().lower().startswith(p["agent_name"].lower()):
+            if p["agent_name"].lower() in (a.get("name") or "").lower():
                 aid = a["agent_id"]
                 break
     if not aid:

@@ -1735,6 +1735,20 @@
    "status_note": null,
    "fix": "After C-03 decision, update each agency once",
    "lawyer": false
+  },
+  {
+   "key": "VX-01",
+   "audit_ref": "vera:2026-10-26",
+   "area": "agents",
+   "title": "The bestlytech GitHub repository is public",
+   "detail": "Vera's first daily run read api.github.com/repos/Bestly-LLC/bestlytech without signing in and got \"private\": false. The repo holds the source, every database migration, CLAUDE.md and the audit notes. Secrets live in Vault, not the repo, but a public repo still shows how the systems fit together.",
+   "law": "Not a statute. Security hygiene; also what a privacy-policy sentence about how we protect data assumes.",
+   "severity": "high",
+   "readiness": "fail",
+   "status": "open",
+   "status_note": "Needs Jared: only he can change the repo visibility (GitHub, Settings, Danger Zone). If it is public on purpose, mark this accepted.",
+   "fix": "Make Bestly-LLC/bestlytech private in GitHub settings, or tell Vera it is public on purpose.",
+   "lawyer": false
   }
  ],
  "checks": [
@@ -2604,7 +2618,7 @@
     ]
    },
    "every": "daily",
-   "finding_key": null
+   "finding_key": "VX-01"
   },
   {
    "id": "el.leo.disclosure",
@@ -2846,7 +2860,7 @@
    "area": "agents",
    "title": "Anonymous-callable database functions do not grow past the baseline",
    "kind": "sql_true",
-   "target": "select count(*) <= 760 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef and has_function_privilege('anon', p.oid, 'execute')",
+   "target": "select count(*) <= 762 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef and has_function_privilege('anon', p.oid, 'execute')",
    "params": {},
    "every": "daily",
    "finding_key": null

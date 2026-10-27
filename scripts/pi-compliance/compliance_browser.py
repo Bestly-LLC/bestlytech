@@ -29,6 +29,20 @@ def open_browser(p):
         return p.chromium.launch(**kw), "headless"
 
 
+def settle_eval(pg, js, default):
+    """A page that redirects client-side destroys the execution context mid-read; wait for it to settle and read again."""
+    for _ in range(4):
+        try:
+            return pg.evaluate(js)
+        except Exception:  # noqa: BLE001
+            time.sleep(2.5)
+            try:
+                pg.wait_for_load_state("domcontentloaded", timeout=10000)
+            except Exception:  # noqa: BLE001
+                pass
+    return default
+
+
 def one(browser, req):
     out = {"url": req["url"], "status": None, "text": "", "hosts": [], "cookies": 0, "local_storage": 0, "error": None}
     ctx = browser.new_context(ignore_https_errors=False, viewport={"width": 1280, "height": 900})
@@ -49,11 +63,8 @@ def one(browser, req):
                 time.sleep(2.5)
             except Exception as e:  # noqa: BLE001
                 out["error"] = f"could not click '{req['click']}': {str(e)[:120]}"
-        out["text"] = pg.evaluate("document.body ? document.body.innerText : ''")
-        try:
-            out["local_storage"] = pg.evaluate("Object.keys(window.localStorage).length")
-        except Exception:  # noqa: BLE001
-            pass
+        out["text"] = settle_eval(pg, "document.body ? document.body.innerText : ''", "")
+        out["local_storage"] = settle_eval(pg, "Object.keys(window.localStorage).length", 0)
         out["cookies"] = len(ctx.cookies())
         out["hosts"] = sorted(h for h in hosts if h)
     except Exception as e:  # noqa: BLE001
