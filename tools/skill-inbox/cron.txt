@@ -1,0 +1,10 @@
+# Skill Inbox cron lines (Radar). NOT installed. Add to the Pi crontab (pi user) at deploy; see DEPLOY.md step 4.
+# Minutes are jittered off :00/:30 so they do not pile onto other jobs. Logs go where the other jobs' logs go.
+# worker: every 2 hours at :17
+17 */2 * * * /opt/bestly/cron/run.sh skill_inbox >> /home/pi/scripts/cron-logs/skill_inbox.log 2>&1
+# 9:00 AM Pacific push gate: runs at minute 0 every hour; only acts when it is 9 AM in Los Angeles, once a day
+0 * * * * /opt/bestly/cron/run.sh skill_inbox_push >> /home/pi/scripts/cron-logs/skill_inbox.log 2>&1
+# watchdog: every 3 hours at :41
+41 */3 * * * /opt/bestly/cron/run.sh skill_inbox_watch >> /home/pi/scripts/cron-logs/skill_inbox_watch.log 2>&1
+# Add to Claude drafting: every 20 minutes at :09, :29, :49. Writes the Claude skill for each Save Jared sent with Add to Claude (free AI only)
+9,29,49 * * * * /opt/bestly/cron/run.sh skill_inbox_claude >> /home/pi/scripts/cron-logs/skill_inbox.log 2>&1

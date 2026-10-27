@@ -1,6 +1,8 @@
 project_id = "rcqfqhguwpmaarseifqg"
 
 [functions]
+  [functions.skill-inbox-mcp]
+    verify_jwt = false
   [functions.client-feed]
     verify_jwt = false
   [functions.ai-generate-pattern]

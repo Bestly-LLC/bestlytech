@@ -1,4 +1,4 @@
-import { Binoculars, Inbox, BadgeDollarSign, Brush, FileWarning, Scissors,
+import { Radar, Binoculars, Inbox, BadgeDollarSign, Brush, FileWarning, Scissors,
   LayoutDashboard,
   Settings,
   BarChart3,
@@ -50,6 +50,7 @@ const workItems = [
   // Moved off the home page by Command Center v2 (2026-10-20): the home answers four questions, these hold the rest.
   { title: "Needs you", url: "/admin/needs-you", icon: Inbox },
   { title: "Scout's day", url: "/admin/scout-day", icon: Binoculars },
+  { title: "Skill Inbox", url: "/admin/skill-inbox", icon: Radar },
   { title: "Overview", url: "/admin/overview", icon: Gauge },
   { title: "Pipeline", url: "/admin/pipeline", icon: Users, countKey: "leads" as CountKeys },
   { title: "Contacts", url: "/admin/contacts", icon: Mail, countKey: "contacts" as CountKeys },

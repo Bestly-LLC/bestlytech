@@ -4,6 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { ActionMenu } from "@/components/admin/ActionMenu";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { LeadCards } from "@/components/admin/cc/LeadCards";
+import { SkillInboxTile } from "@/components/admin/cc/SkillInboxTile";
 import { WeatherCard } from "@/components/admin/cc/WeatherCard";
 import { DetailPanels, useWide } from "@/components/admin/cc/Details";
 import { CallNext, HealthDot, NeedsYouShort, QuickRow, loadNeeds, realNeeds } from "@/components/admin/cc/HomeParts";
@@ -73,6 +74,8 @@ export default function AdminDashboard() {
       <QuickRow />
 
       <LeadCards cc={cc} wx={wxs.data} needs={needsCount} meetings={meetings} wide={wide} />
+
+      <SkillInboxTile />
 
       <div className="grid grid-cols-1 items-start gap-x-6 gap-y-8 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <WeatherCard wxs={wxs} />

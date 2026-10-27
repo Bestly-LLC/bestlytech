@@ -128,6 +128,7 @@ const AgentNew = lazyPage(() => import("./pages/admin/AgentNew"));
 const ClaimsCloser = lazyPage(() => import("./pages/admin/ClaimsCloser"));
 const Settlements = lazyPage(() => import("./pages/admin/Settlements"));
 const CostCutter = lazyPage(() => import("./pages/admin/CostCutter"));
+const SkillInbox = lazyPage(() => import("./pages/admin/SkillInbox"));
 const SkyTouch = lazyPage(() => import("./pages/admin/SkyTouch"));
 const Wall = lazyPage(() => import("./pages/admin/Wall"));
 const Sky = lazyPage(() => import("./pages/admin/Sky"));
@@ -333,6 +334,7 @@ const App = () => {
                   <Route path="claims" element={<ClaimsCloser />} />
                   <Route path="settlements" element={<Settlements />} />
                   <Route path="cost-cutter" element={<CostCutter />} />
+                  <Route path="skill-inbox" element={<SkillInbox />} />
                   <Route path="skytouch" element={<SkyTouch />} />
                   <Route path="turo/lax-pass" element={<LaxPassRedirect />} />
                   <Route path="lax" element={<LaxPassRedirect />} />
