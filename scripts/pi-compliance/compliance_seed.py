@@ -13,9 +13,13 @@ HDR = {"Prefer": "resolution=ignore-duplicates,return=minimal"}
 
 def put(table, rows, conflict):
     n = 0
-    for i in range(0, len(rows), 40):
-        lib._req("POST", f"/rest/v1/{table}?on_conflict={conflict}", rows[i:i + 40], timeout=60, headers=HDR)
-        n += len(rows[i:i + 40])
+    groups = {}
+    for r in rows:  # PostgREST bulk insert needs identical keys in every object, so batch rows by their key set
+        groups.setdefault(tuple(sorted(r)), []).append(r)
+    for grp in groups.values():
+        for i in range(0, len(grp), 40):
+            lib._req("POST", f"/rest/v1/{table}?on_conflict={conflict}", grp[i:i + 40], timeout=60, headers=HDR)
+            n += len(grp[i:i + 40])
     print(f"{table}: sent {n}")
 
 
