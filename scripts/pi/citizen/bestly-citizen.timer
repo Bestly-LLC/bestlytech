@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Citizen local alerts collector every 2 minutes (Sky Sync)
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=120
+RandomizedDelaySec=12
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

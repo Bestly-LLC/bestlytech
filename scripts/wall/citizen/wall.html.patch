@@ -1,0 +1,97 @@
+--- www/wall.html.bak_citizen_20261028	2026-10-26 22:15:26.000000000 -0700
++++ www/wall.html	2026-10-28 14:44:19.667939041 -0700
+@@ -451,6 +451,22 @@
+ #airCar .cr-i svg{display:block;width:100%;height:100%;overflow:visible;}
+ #airCar .cr-tag{position:absolute;left:0;top:70px;transform:translateX(-50%);white-space:nowrap;font:800 38px/1 var(--sf);letter-spacing:-.01em;color:#DCE7F5;background:#13213A;border:.5px solid #5B8FC9;border-radius:999px;padding:9px 24px 11px;box-shadow:0 0 26px 6px rgba(91,143,201,.28);}
+ body.skit #airCar,body.sheep #airCar,body.pf-noyou #airCar,body.mapping #airCar{display:none!important;}
++/* Local alerts on the sky (Sky Sync, Oct 28): soft pulsing dots by severity, every edge feathered, text reads like the Home tag. */
++#airScrP #airCit{position:absolute;left:0;top:0;width:0;height:0;transition:opacity .8s ease;pointer-events:none;}
++#airCit .ct{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;opacity:0;transition:opacity 1.2s ease;pointer-events:none;--r:100,210,255;}
++#airCit .ct[data-lv="moderate"]{--r:255,214,10;} #airCit .ct[data-lv="high"]{--r:255,159,10;} #airCit .ct[data-lv="critical"]{--r:255,69,58;}
++#airCit .ct-h{position:absolute;left:-110px;top:-110px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(var(--r),.62) 0%,rgba(var(--r),.30) 30%,rgba(var(--r),.10) 55%,rgba(var(--r),0) 72%);animation:ctPulse 3.6s ease-in-out infinite;will-change:transform,opacity;}
++#airCit .ct-c{position:absolute;left:-19px;top:-19px;width:38px;height:38px;border-radius:50%;background:radial-gradient(circle,#fff 0%,rgb(var(--r)) 38%,rgba(var(--r),.55) 100%);box-shadow:0 0 26px 10px rgba(var(--r),.5);animation:ctBeat 3.6s ease-in-out infinite;will-change:transform;}
++#airCit .ct.ct-new .ct-h{animation-duration:1.6s;} #airCit .ct.ct-new .ct-c{animation-duration:1.6s;}
++@keyframes ctPulse{0%,100%{transform:scale(.62);opacity:.5}50%{transform:scale(1.08);opacity:1}}
++@keyframes ctBeat{0%,100%{transform:scale(.9)}50%{transform:scale(1.14)}}
++#airCit .ct-l{position:absolute;left:50px;top:-34px;white-space:nowrap;font:800 34px/1.06 var(--sf);letter-spacing:-.01em;color:#EAF2FF;padding:8px 24px 10px 22px;border-radius:999px;background:rgba(12,20,38,.6);box-shadow:0 0 30px 16px rgba(12,20,38,.6);transition:opacity .8s ease;}
++#airCit .ct-l u{display:block;text-decoration:none;font-weight:600;font-size:26px;color:rgba(234,242,255,.74);margin-top:2px;}
++#airCit .ct-l s{display:none;text-decoration:none;font-size:22px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:rgb(var(--r));margin-bottom:3px;}
++#airCit .ct.ct-new .ct-l{font-size:40px;} #airCit .ct.ct-new .ct-l s{display:block;}
++#airCit .ct.ct-nolab .ct-l{opacity:0;}
++#airCit .ct-note{position:absolute;left:0;top:0;transform:translateX(-50%);white-space:nowrap;font:600 24px/1 var(--sf);color:rgba(220,231,245,.62);padding:8px 24px;border-radius:999px;background:rgba(12,20,38,.42);box-shadow:0 0 26px 14px rgba(12,20,38,.42);opacity:0;transition:opacity 1.2s ease;pointer-events:none;}
++body.skit #airCit,body.sheep #airCit,body.pf-noyou #airCit,body.mapping #airCit{display:none!important;}
+ body.scrtr #airCv{visibility:hidden!important;}
+ body.skit #airScrS,body.sheep #airScrS,body.mapping #airScrS{display:none!important;}
+ body.scrlab #airLand text,body.scrlab #airCel text{fill-opacity:0!important;stroke-opacity:0!important;}
+@@ -3599,6 +3615,7 @@
+     land:{own:['airLand'], at:()=>S.skyLandmarks!==false?LAND_AT:undefined},
+     labels:{own:['airScrL']}, home:{own:['airYou']}, planes:{own:['airCv','airSpots','airPlanes','airScrP','airScrTr']}, ui:{own:['airCard','airKey']},
+     car:{own:['airCar'], at:()=>(CAR&&CAR.vis)?CAR_AT:undefined},
++    cit:{own:['airCit'], at:()=>(CIT&&CIT.vis)?CIT_AT:undefined},
+     modes:{own:['sheepSky','thFlock','skitAir']}, dome:{own:['airCel','celStars','airStars']}, terr:{own:['airTerr']}, loc:{own:['airLoc']},
+     retired:{own:['airRoads','airTraffic','airTest','airFade']} };
+   function skyAudit(){
+@@ -4160,6 +4177,63 @@
+         if(bad>=10){ window.__carHeal.reloads++; try{ sessionStorage.setItem('carHealReload',String(Date.now())); }catch(e){} location.reload(); } }
+       else bad=0; }catch(e){ window.__carErr=String((e&&e.message)||e); } },30000); })();
+   window.__car=CAR;   /* test hook: set __car.r to try driving / far away / stale */
++  /* Local alerts (Oct 28, Sky Sync; Jared: Citizen-style incidents within 1 mi of home, private use only). The Hestia collector
++     (bestly-citizen.timer) fills Supabase from Citizen, with NWS + CHP as free backups; server.py serves /api/citizen every 20 s.
++     A soft pulsing dot per incident (blue low, yellow moderate, orange high, red critical), a label for the nearest four, upright
++     like the Home tag. Dots fade between 90 and 120 min old (NWS area alerts stay while active, drawn on a ring 0.3 mi from Home).
++     A NEW incident within 0.25 mi plays the alert chime once, signed Sky Sync, and its label grows for 30 s. Stamps CIT_AT every
++     paint so Sky Sync audits it (SKYLAYERS.cit). Switch: Local alerts (skyAlerts) in admin Wall > Sky details. */
++  var CIT_AT=null, CIT={snap:null,rAt:0,age:null,ping:null,newUntil:{},els:{},root:null,note:null,vis:false,chimeAt:0,how:'',lastN:0};
++  const CIT_HOME=[34.0835,-118.3698];
++  const citT12=(ms)=>{ try{ return new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Los_Angeles'}).replace(/[ \s]+/g,' '); }catch(e){ return ''; } };
++  const citDist=(ft)=>ft<1000?(Math.round(ft/10)*10)+' ft':(ft/5280).toFixed(1)+' mi';
++  function citPull(){ fetch('/api/citizen',{cache:'no-store'}).then(r=>r.json()).then(j=>{
++      const sn=j&&j.snap; if(!sn||!Array.isArray(sn.incidents)) return;
++      CIT.snap=sn; CIT.rAt=Date.now(); CIT.age=(j.age_s!=null&&isFinite(+j.age_s))?+j.age_s:null;
++      const mx=Math.max(0,...sn.incidents.map(i=>+i.ping_id||0));
++      if(CIT.ping==null){ let v=null; try{ v=localStorage.getItem('citPing'); }catch(e){} CIT.ping=(v!=null&&isFinite(+v))?+v:mx; }   /* first look never chimes for what already happened */
++      const fresh=sn.incidents.filter(i=>(+i.ping_id||0)>CIT.ping&&i.pinged_at&&Date.now()-i.pinged_at<300000);
++      if(mx>CIT.ping){ CIT.ping=mx; try{ localStorage.setItem('citPing',String(mx)); }catch(e){} }
++      if(fresh.length&&S.skyAlerts!==false){ fresh.forEach(i=>{ CIT.newUntil[i.key]=Date.now()+30000; }); CIT.chimeAt=Date.now(); CIT.how=play('alert')||''; }
++    }).catch(()=>{}); }
++  function citEl(i){ let e=CIT.els[i.key]; if(e&&e.isConnected) return e;
++    e=document.createElement('div'); e.className='ct'; e.innerHTML='<i class="ct-h"></i><i class="ct-c"></i><div class="ct-l"></div>'; CIT.root.appendChild(e); CIT.els[i.key]=e; void e.offsetWidth; return e; }
++  function citFill(e,i,isNew){ const nws=i.source==='nws', when=citT12(i.first_seen), sub=nws?('Area alert · '+when):(citDist(+i.dist_ft||0)+' · '+when);
++    const sig=[i.short||i.title,sub,i.level,isNew?1:0].join('|'); if(e._sig===sig) return; e._sig=sig;
++    e.setAttribute('data-lv',i.level||'low'); e.classList.toggle('ct-new',!!isNew);
++    e.querySelector('.ct-l').innerHTML='<s>Sky Sync · new</s>'+esc(i.short||i.title||'Incident')+'<u>'+esc(sub)+'</u>'; }
++  function citPaint(){ try{
++    const box=document.getElementById('airScrP'), air=$('#air'); if(!box) return;
++    let root=CIT.root; if(!root||!root.isConnected){ root=document.getElementById('airCit');
++      if(!root){ root=document.createElement('div'); root.id='airCit'; root.setAttribute('aria-hidden','true'); box.appendChild(root); }
++      CIT.root=root; CIT.els={}; CIT.note=null; root.textContent=''; }
++    const sn=CIT.snap, ok=!!(sn&&CIT.age!=null&&CIT.age<180&&Date.now()-CIT.rAt<180000);
++    const on=!!(ok&&air&&air.classList.contains('on')&&!S.mapping&&S.airShow!==false&&S.skyAlerts!==false&&AF.ppn&&airHome);
++    if(!on){ if(CIT.vis||root.style.opacity!=='0'){ CIT.vis=false; root.style.opacity='0'; } return; }
++    root.style.opacity='1';
++    const seen={}, used=[]; let any=false, nws=0, nl=0; const m=CIT.vis?12:40;
++    for(const i of sn.incidents){ if(!i||!isFinite(+i.lat)||!isFinite(+i.lng)) continue;
++      const isN=i.source==='nws', age=(Date.now()-i.first_seen)/60000, op=isN?1:age<90?1:Math.max(0,(120-age)/30); if(op<=0) continue;
++      let la=+i.lat, lo=+i.lng;
++      if(isN){ const th=(nws++*72+20)*Math.PI/180; la=CIT_HOME[0]+0.32/69*Math.cos(th); lo=CIT_HOME[1]+0.32/57.3*Math.sin(th); }
++      const [x,y]=airXY(la,lo), ins=obD(x,y,0)>m&&obD(x,y,1)>m*.6, e=citEl(i), isNew=(CIT.newUntil[i.key]||0)>Date.now();
++      seen[i.key]=1; citFill(e,i,isNew); e.style.opacity=ins?String(op):'0';
++      if(!ins) continue;
++      e.style.transform=skyPt(x,y); any=true;
++      const clash=used.some(u=>Math.hypot(u[0]-x,u[1]-y)<380), lab=isNew||(nl<4&&!clash);
++      if(lab){ nl++; used.push([x,y]); }
++      e.classList.toggle('ct-nolab',!lab); }
++    for(const k of Object.keys(CIT.els)) if(!seen[k]){ const e=CIT.els[k]; if(e&&e.parentNode) e.parentNode.removeChild(e); delete CIT.els[k]; }
++    /* quiet caption while Citizen is down (it is the first choice; NWS + CHP keep the layer alive) */
++    let note=CIT.note; if(!note||!note.isConnected){ note=document.createElement('div'); note.className='ct-note'; root.appendChild(note); CIT.note=note; }
++    const wantNote=!!sn.paused; if(wantNote){ const [nx,ny]=airXY(CIT_HOME[0],CIT_HOME[1]), nin=obD(nx,ny,0)>m&&obD(nx,ny,1)>m*.6;
++      const txt='Local alerts · Citizen paused, using NWS + CHP'; if(note.textContent!==txt) note.textContent=txt;
++      note.style.transform=skyPt(nx,ny)+' translate(-50%,86px)'; note.style.opacity=nin?'1':'0'; if(nin) any=true; } else note.style.opacity='0';
++    CIT.vis=any; CIT.lastN=Object.keys(seen).length;
++    if(any) CIT_AT={hx:AF.hx??AF.cx,hy:AF.hy??AF.my,ppn:AF.ppn,brg:AF.brg,at:Date.now()};
++  }catch(e){ window.__citErr=String((e&&e.message)||e); } }
++  setInterval(citPaint,200); setInterval(citPull,20000); citPull();
++  window.__cit=CIT;   /* test hook: set __cit.snap / __cit.rAt / __cit.age to try incidents, then citPaint runs by itself */
+   // Sky key lives on the sign wall now, left of the flight card (Jared 2026-09-27). It never goes on the ceiling.
+   function renderKey(){ const kEl=$('#wingKey'); if(!kEl) return false; const on=(!!S.airKey||!!(TOUR&&TOUR.key))&&effMode()!=='off'&&S.airShow!==false;
+     const rk='r'+RADMI(); if(on&&kEl.dataset.rk!==rk){ kEl.dataset.rk=rk; const rows=[['airline','jet'],['heli','heli'],['cargo','jet'],['rescue','heli'],['bizjet','biz'],['military','jet'],['small','small'],['unknown','jet']];

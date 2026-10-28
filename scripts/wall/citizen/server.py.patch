@@ -1,0 +1,82 @@
+--- server.py.bak_citizen_20261028	2026-10-27 21:43:16.936740599 -0700
++++ server.py	2026-10-28 14:38:50.639363458 -0700
+@@ -119,6 +119,7 @@
+ DEFAULT_STATE.update({"skyRoads": True})   # OSM roads on the sky map (admin switch; 2026-10-01)
+ DEFAULT_STATE.update({"musicShow": False, "musicLag": 1.5})   # Music Mode (2026-10-10): full-wall show while music plays; beat-sync lag (s)
+ DEFAULT_STATE.update({"skyTraffic": True})   # TomTom traffic colors on the sky map (admin switch; 2026-10-02; was missing here until Oct 5, so the switch never reached the wall)
++DEFAULT_STATE.update({"skyAlerts": True})   # Local alerts layer on the sky (Citizen/NWS/CHP; admin Wall > Sky details; 2026-10-28)
+ DEFAULT_STATE.update({"skyCars": True, "skyCarLabels": True})   # Cars / Car names switches on the sky (admin Wall > Sky details; 2026-10-12)
+ DEFAULT_STATE.update({"skyTerrain": "teal", "skyTiles": False, "skyLocal": "full"})   # sky terrain look off|teal|sand|indigo (admin Wall > Layout "Terrain"), tile loader for roads+terrain anywhere (off until verified), local-street mode full|fade|raster (2026-10-17)
+ DEFAULT_STATE.update({"skyOverscan": False})   # sky fills the whole lit ceiling (admin Wall > Layout "Fill whole ceiling"; 2026-10-17)
+@@ -894,7 +895,7 @@
+             if k in ("mapping", "testSweep", "testScout", "away", "autoKeystone", "skyStars", "skyMoon", "skySun", "skyPlanets", "skyStarLabels", "skyGrid", "presence", "airLabels", "airCard", "airCardHeli", "airplay",
+                      "airLabelsSmall", "airCardPin", "leftDate") and not isinstance(v, bool):
+                 continue
+-            if k in ("issTag", "skyHome", "atc", "skyCars", "skyCarLabels", "skyOverscan", "skyTiles") and not isinstance(v, bool):
++            if k in ("issTag", "skyHome", "atc", "skyCars", "skyCarLabels", "skyAlerts", "skyOverscan", "skyTiles") and not isinstance(v, bool):
+                 continue
+             if k == "skyTerrain" and v not in ("off", "teal", "sand", "indigo"):
+                 continue
+@@ -1217,6 +1218,34 @@
+         time.sleep(wait)
+ 
+ 
++# LOCAL ALERTS (Sky Sync, 2026-10-28): the Hestia collector (bestly-citizen.timer) writes Citizen/NWS/CHP incidents to Supabase;
++# this pulls wall_citizen_snapshot every 20 s for the sky layer ("citizen" in SKYLAYERS) and keeps the last good copy on disk.
++# PRIVATE / INTERNAL: served only to the wall page, never to guests.
++CIT_FILE = os.path.join(ROOT, "citizen_snap.json")
++CIT = {"snap": None, "ok_at": 0.0, "error": None, "fails": 0}
++
++
++def citizen_loop():
++    time.sleep(10)
++    try:
++        d = json.load(open(CIT_FILE))
++        CIT.update(snap=d.get("snap"), ok_at=d.get("ok_at") or 0.0)
++    except Exception:
++        pass
++    while True:
++        wait = 20
++        try:
++            snap = rpc("wall_citizen_snapshot", {}, timeout=10)
++            if isinstance(snap, dict):
++                CIT.update(snap=snap, ok_at=time.time(), error=None, fails=0)
++                with open(CIT_FILE + ".tmp", "w") as f:
++                    json.dump({"snap": snap, "ok_at": CIT["ok_at"]}, f)
++                os.replace(CIT_FILE + ".tmp", CIT_FILE)
++        except Exception as e:
++            CIT["error"], CIT["fails"], wait = str(e)[:160], CIT["fails"] + 1, min(120, 20 * (CIT["fails"] + 1))
++        time.sleep(wait)
++
++
+ _iss = {"at": 0.0, "ok_at": 0.0, "v": {}, "err": None}
+ 
+ 
+@@ -5430,6 +5459,10 @@
+                 return self.send(200, json.dumps(_car_fetch()))
+             except Exception as e:
+                 return self.send(200, json.dumps({"at": 0, "car": None, "error": str(e)[:160]}))
++        if p == "/api/citizen":   # local alerts for the sky layer (Sky Sync); age_s lets the page and Sky Sync judge freshness
++            with lock:
++                return self.send(200, json.dumps({"snap": CIT["snap"], "age_s": round(time.time() - CIT["ok_at"], 1) if CIT["ok_at"] else None,
++                                                  "error": CIT["error"]}))
+         if p == "/api/air":
+             with lock:
+                 return self.send(200, json.dumps({"at": air["at"], "list": air["list"] if time.time() - air["at"] <= 30 else [], "error": air["error"], "home": [HOME_LAT, HOME_LON]}))
+@@ -5568,6 +5601,8 @@
+                               "close": bool(air.get("close_since")), "n": len(air["list"])}
+             hb["news_helis"] = {"n": len(NEWS["map"]), "error": NEWS["error"], "up_h": round((time.time() - NEWS["started"]) / 3600, 2),
+                                 "ok_age_h": round((time.time() - NEWS["ok_at"]) / 3600, 2) if NEWS["ok_at"] else None}   # W1 round 4
++            hb["citizen"] = {"age_s": round(time.time() - CIT["ok_at"], 1) if CIT["ok_at"] else None, "error": CIT["error"],
++                             "n": len((CIT["snap"] or {}).get("incidents") or [])}
+             hb["routes"] = {"known": _rt["known"], "unknown": _rt["unknown"], "cached": len(_rt["cache"]), "err": _rt["err"],
+                             "err_min": round((time.time() - _rt["err_since"]) / 60) if _rt["err_since"] else None}
+             hb["emoji_error"] = EMO["error"]
+@@ -6497,6 +6532,7 @@
+     threading.Thread(target=home_guard_loop, daemon=True).start()
+     threading.Thread(target=air_loop, daemon=True).start()
+     threading.Thread(target=news_loop, daemon=True).start()   # W1 round 4
++    threading.Thread(target=citizen_loop, daemon=True).start()   # local alerts (Sky Sync, 2026-10-28)
+     threading.Thread(target=sky_share_loop, daemon=True).start()   # W4 round 4: planes for bestly.tech/admin/sky
+     threading.Thread(target=live_activity_loop, daemon=True).start()
+     threading.Thread(target=sky_la_loop, daemon=True).start()   # W6 round 4

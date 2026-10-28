@@ -15,13 +15,16 @@
  * this map (saved in this browser), never the projector. Roads and traffic are TomTom tiles through the sky-area edge
  * function (key in Vault); planes away from home and the weather come from sky-area too.
  *
+ * 2026-10-28 (Jared): Local alerts (Citizen-style incidents within 1 mi of home; NWS + CHP backups while Citizen is down; private use only).
+ *   Soft pulsing dots by severity, the nearest four labelled and kept upright, 12-hour times, mi/ft. The Local alerts button below the map's
+ *   Traffic button (and the Wall > Sky details switch) turn them on and off. Data: SQL wall_admin_citizen (filled by the collector on Hestia).
  * 2026-10-11 (Jared): Blue Steel, the Model 3, shows as a top-down car (marker A) when it is inside the map and its reading is
  * under 30 min old. Parked = "Blue Steel"; in D or R = "Blue Steel · 34 mph". Same rule as the wall (wall.html, /api/car).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { Maximize2, Minimize2, Plane, RotateCw, Compass, LocateFixed, Loader2, Route, TrafficCone, Plus, Minus } from "lucide-react";
+import { Maximize2, Minimize2, Plane, RotateCw, Compass, LocateFixed, Loader2, Route, TrafficCone, Siren, Plus, Minus } from "lucide-react";
 
 type Air = {
   hex: string; cs?: string | null; reg?: string | null; t?: string | null; cat?: string | null;
@@ -31,6 +34,11 @@ type Air = {
   from?: string | { iata?: string; city?: string } | null; to?: string | { iata?: string; city?: string } | null;
   news?: { station?: string; call?: string } | null; police?: string | null;
 };
+type CitInc = { key: string; title: string; short: string | null; lat: number; lng: number; address: string | null; level: "low" | "moderate" | "high" | "critical"; source: string; dist_ft: number; first_seen: number; ping_id: number | null; pinged_at: number | null };
+type CitSnap = { at: number; paused: boolean; incidents: CitInc[] };
+const CIT_COL: Record<CitInc["level"], string> = { low: "#64D2FF", moderate: "#FFD60A", high: "#FF9F0A", critical: "#FF453A" };
+const citTime = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }).replace(/[\u202f\s]+/g, "\u00a0");
+const citDist = (ft: number) => (ft < 1000 ? `${Math.round(ft / 10) * 10}\u00a0ft` : `${(ft / 5280).toFixed(1)}\u00a0mi`);
 type Feed = { list: Air[]; at: number; home: [number, number]; radius: number; source: "wall" | "feed"; focus: string | null; error: string | null; fetchedAt: number };
 
 const HOME: [number, number] = [34.0835, -118.3698];
@@ -133,8 +141,8 @@ export default function Sky() {
   const [locErr, setLocErr] = useState<string | null>(null);
   const [cond, setCond] = useState<Cond | null>(null);
   // Roads / Traffic: this map only, remembered in this browser. Missing = on, like the wall.
-  const [layers, setLayers] = useState<{ roads: boolean; traffic: boolean }>(() => {
-    try { return { roads: true, traffic: true, ...JSON.parse(localStorage.getItem(LAYERS_KEY) ?? "{}") }; } catch { return { roads: true, traffic: true }; }
+  const [layers, setLayers] = useState<{ roads: boolean; traffic: boolean; alerts: boolean }>(() => {
+    try { return { roads: true, traffic: true, alerts: true, ...JSON.parse(localStorage.getItem(LAYERS_KEY) ?? "{}") }; } catch { return { roads: true, traffic: true, alerts: true }; }
   });
   useEffect(() => { try { localStorage.setItem(LAYERS_KEY, JSON.stringify(layers)); } catch { /* private mode */ } }, [layers]);
   const radiusRef = useRef(15);
@@ -223,16 +231,30 @@ export default function Sky() {
   // (>= 50 ft between two readings); none yet = nose up. Hidden when the reading is older than 30 min.
   const [car, setCar] = useState<Car | null>(null);
   // Cars + Car names switches live in Wall > Sky details and govern this map too (Jared 2026-10-12).
-  const [carSw, setCarSw] = useState<{ cars: boolean; names: boolean }>({ cars: true, names: true });
+  const [carSw, setCarSw] = useState<{ cars: boolean; names: boolean; alerts: boolean }>({ cars: true, names: true, alerts: true });
+  // Local alerts (Sky Sync): incidents within 1 mi of home, from the Hestia collector via wall_admin_citizen (admin only), every 30 s.
+  const [cit, setCit] = useState<CitSnap | null>(null);
+  useEffect(() => {
+    let dead = false;
+    const get = async () => {
+      try {
+        const { data } = await (supabase.rpc as unknown as (fn: string) => Promise<{ data: CitSnap | null }>)("wall_admin_citizen");
+        if (!dead && data && Array.isArray(data.incidents)) setCit(data);
+      } catch { /* keep the last list; dots age out on their own */ }
+    };
+    void get();
+    const t = window.setInterval(() => void get(), 30_000);
+    return () => { dead = true; window.clearInterval(t); };
+  }, []);
   const carFix = useRef<{ lat: number; lon: number; hd: number | null } | null>(null);
   const carOk = useRef<boolean | null>(null);
   useEffect(() => {
     let dead = false;
     const get = async () => {
       try {
-        const w = await (supabase.rpc as unknown as (fn: string) => Promise<{ data: { state?: { skyCars?: boolean; skyCarLabels?: boolean } } | null }>)("wall_admin_get");
+        const w = await (supabase.rpc as unknown as (fn: string) => Promise<{ data: { state?: { skyCars?: boolean; skyCarLabels?: boolean; skyAlerts?: boolean } } | null }>)("wall_admin_get");
         const st = w?.data?.state;
-        if (!dead && st) setCarSw({ cars: st.skyCars !== false, names: st.skyCarLabels !== false });
+        if (!dead && st) setCarSw({ cars: st.skyCars !== false, names: st.skyCarLabels !== false, alerts: st.skyAlerts !== false });
       } catch { /* keep the last switches */ }
       try {
         const { data } = await supabase.from("turo_vehicle_state" as never)
@@ -529,6 +551,14 @@ export default function Sky() {
             <radialGradient id="sky-you" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#0A84FF" stopOpacity=".45" /><stop offset="100%" stopColor="#0A84FF" stopOpacity="0" /></radialGradient>
             <radialGradient id="sky-home" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#64D2FF" stopOpacity=".35" /><stop offset="100%" stopColor="#64D2FF" stopOpacity="0" /></radialGradient>
             <radialGradient id="sky-car" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#5B8FC9" stopOpacity=".55" /><stop offset="55%" stopColor="#5B8FC9" stopOpacity=".18" /><stop offset="100%" stopColor="#5B8FC9" stopOpacity="0" /></radialGradient>
+            {(Object.keys(CIT_COL) as CitInc["level"][]).map((lv) => (
+              <radialGradient key={lv} id={`cit-${lv}`} cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor={CIT_COL[lv]} stopOpacity=".62" /><stop offset="30%" stopColor={CIT_COL[lv]} stopOpacity=".28" />
+                <stop offset="60%" stopColor={CIT_COL[lv]} stopOpacity=".08" /><stop offset="100%" stopColor={CIT_COL[lv]} stopOpacity="0" />
+              </radialGradient>
+            ))}
+            <filter id="cit-soft" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation={6 * u} /></filter>
+            <style>{`@keyframes citPulse{0%,100%{transform:scale(.6);opacity:.5}50%{transform:scale(1.05);opacity:1}}@keyframes citBeat{0%,100%{transform:scale(.9)}50%{transform:scale(1.14)}}.cit-h{transform-box:fill-box;transform-origin:center;animation:citPulse 3.6s ease-in-out infinite}.cit-c{transform-box:fill-box;transform-origin:center;animation:citBeat 3.6s ease-in-out infinite}@media (prefers-reduced-motion:reduce){.cit-h,.cit-c{animation:none}}`}</style>
           </defs>
           {STARS.map((s, n) => <circle key={n} cx={s.x * 1000} cy={s.y * 1000} r={s.s} fill="#fff" opacity={s.o} />)}
           {rings.map((r) => (
@@ -647,6 +677,55 @@ export default function Sky() {
             );
           })()}
 
+          {/* Local alerts (Sky Sync): soft pulsing dot per incident; the nearest four get a label, counter-rotated so text stays upright */}
+          {cit && layers.alerts && carSw.alerts && (() => {
+            let nwsN = 0;
+            const placed = cit.incidents.flatMap((c) => {
+              const ageMin = (now - c.first_seen) / 60_000;
+              const op = c.source === "nws" ? 1 : ageMin < 90 ? 1 : Math.max(0, (120 - ageMin) / 30);
+              if (op <= 0) return [];
+              let la = c.lat, lo = c.lng;
+              if (c.source === "nws") { const th = ((nwsN++ * 72 + 20) * Math.PI) / 180; la = HOME[0] + (0.32 / 69) * Math.cos(th); lo = HOME[1] + (0.32 / 57.3) * Math.sin(th); }
+              const m = toMi(la, lo, home);
+              if (Math.hypot(m.x, m.y) > radius * 1.04) return [];
+              return [{ c, op, x: X(m.x), y: Y(m.y) }];
+            });
+            const used: { x: number; y: number }[] = [];
+            const labelled = new Set<string>();
+            for (const p of [...placed].sort((a, b) => a.c.dist_ft - b.c.dist_ft)) {
+              if (labelled.size >= 4) break;
+              if (used.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 90 * u)) continue;
+              used.push(p); labelled.add(p.c.key);
+            }
+            const fsz = 12 * u;
+            return (
+              <g aria-label="Local alerts">
+                {placed.map(({ c, op, x, y }) => {
+                  const col = CIT_COL[c.level] ?? CIT_COL.low;
+                  const sub = c.source === "nws" ? `Area alert${NB}·${NB}${citTime(c.first_seen)}` : `${citDist(c.dist_ft)}${NB}·${NB}${citTime(c.first_seen)}`;
+                  const title = c.short || c.title;
+                  const isNew = c.pinged_at != null && now - c.pinged_at < 5 * 60_000;
+                  const tw = Math.max(title.length * fsz * 0.58, sub.length * fsz * 0.5) + fsz * 1.8, th = fsz * (isNew ? 3.9 : 2.9);
+                  return (
+                    <g key={c.key} transform={`translate(${x} ${y})`} opacity={op} style={{ transition: "opacity 1.2s ease" }}>
+                      <circle className="cit-h" r={34 * u} fill={`url(#cit-${c.level})`} />
+                      <circle className="cit-c" r={5.2 * u} fill={col} style={{ filter: `drop-shadow(0 0 ${6 * u}px ${col})` }} />
+                      <circle r={2.1 * u} fill="#fff" fillOpacity={0.9} />
+                      {labelled.has(c.key) && (
+                        <g transform={`rotate(${-mapUp}) translate(${12 * u} 0)`}>
+                          <rect x={0} y={-th / 2} width={tw} height={th} rx={th / 2} fill="#0c1426" fillOpacity={0.62} filter="url(#cit-soft)" />
+                          {isNew && <text x={fsz * 0.9} y={-th / 2 + fsz * 1.15} style={{ fill: col, fontSize: fsz * 0.7, fontWeight: 700, letterSpacing: "0.09em", whiteSpace: "pre" }}>{`SKY SYNC${NB}·${NB}NEW`}</text>}
+                          <text x={fsz * 0.9} y={isNew ? fsz * 0.1 : -fsz * 0.2} style={{ fill: "#EAF2FF", fontSize: fsz, fontWeight: 800, whiteSpace: "pre" }}>{title}</text>
+                          <text x={fsz * 0.9} y={isNew ? fsz * 1.35 : fsz * 1.05} style={{ fill: "#EAF2FF", fillOpacity: 0.74, fontSize: fsz * 0.84, fontWeight: 600, whiteSpace: "pre" }}>{sub}</text>
+                        </g>
+                      )}
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          })()}
+
           {/* planes — all rotated to account for mapUp so aircraft face their true direction of travel */}
           {inView.map(({ a, d, i }) => {
             const x = X(d.x), y = Y(d.y);
@@ -711,6 +790,11 @@ export default function Sky() {
               <span className={cn("mr-1.5 inline-block h-2 w-2 rounded-full align-middle", !feed ? "bg-white/40" : feed.source === "wall" ? "bg-emerald-400" : "bg-amber-400")} aria-hidden />
               {srcText}{ageS != null && ageS > 8 ? ` · ${ageS}${NB}sec ago` : ""} · <span className="whitespace-nowrap">{inView.length} in {radius}{NB}mi</span>
             </div>
+            {cit && layers.alerts && carSw.alerts && (
+              <div className="mt-0.5 text-[13px] leading-snug text-white/60">
+                Local alerts · <span className="whitespace-nowrap">{cit.incidents.length} within 1{NB}mi</span>{cit.paused ? " · Citizen paused, using NWS + CHP" : ""}
+              </div>
+            )}
             {err && <div className="mt-0.5 text-[13px] text-amber-300">{err}</div>}
             {locErr && <div className="mt-0.5 max-w-[260px] text-[13px] text-amber-300" role="alert">{locErr}</div>}
           </div>
@@ -739,8 +823,9 @@ export default function Sky() {
               { key: "loc", label: here ? "Back to home" : locating ? "Finding you" : "Show my location", on: !!here, Icon: locating ? Loader2 : LocateFixed, act: locate },
               { key: "roads", label: layers.roads ? "Hide roads" : "Show roads", on: layers.roads, Icon: Route, act: () => setLayers((l) => ({ ...l, roads: !l.roads })) },
               { key: "traffic", label: layers.traffic ? "Hide traffic" : "Show traffic", on: layers.traffic, Icon: TrafficCone, act: () => setLayers((l) => ({ ...l, traffic: !l.traffic })) },
+              { key: "alerts", label: carSw.alerts ? "Local alerts" : "Local alerts (off in Wall settings)", on: layers.alerts && carSw.alerts, Icon: Siren, act: () => setLayers((l) => ({ ...l, alerts: !l.alerts })) },
             ]).map(({ key, label, on, Icon, act }, n) => (
-              <button key={key} type="button" onClick={act} aria-label={label} title={label} aria-pressed={on} disabled={key === "loc" && locating}
+              <button key={key} type="button" onClick={act} aria-label={label} title={label} aria-pressed={on} disabled={(key === "loc" && locating) || (key === "alerts" && !carSw.alerts)}
                 className={cn("grid h-11 w-11 place-items-center text-white/80 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400",
                   n > 0 && "border-t border-white/10", on && "text-[#0A84FF]")}>
                 <Icon className={cn("h-5 w-5", key === "loc" && locating && "animate-spin")} aria-hidden />
@@ -750,7 +835,7 @@ export default function Sky() {
         </div>
 
         {/* zoom in / out: steps the map radius by 1mi, same corner stack as the wall controls */}
-        <div className="pointer-events-none absolute right-3 top-[216px] sm:right-4 sm:top-[224px]" style={{ top: full ? "calc(max(0.75rem, env(safe-area-inset-top)) + 212px)" : undefined }}>
+        <div className="pointer-events-none absolute right-3 top-[260px] sm:right-4 sm:top-[268px]" style={{ top: full ? "calc(max(0.75rem, env(safe-area-inset-top)) + 256px)" : undefined }}>
           <div className="pointer-events-auto flex flex-col overflow-hidden rounded-2xl bg-black/55 ring-1 ring-white/10 backdrop-blur-md">
             <button type="button" onClick={zoomIn} aria-label="Zoom in" title="Zoom in" disabled={radius <= 2}
               className="grid h-11 w-11 place-items-center text-white/80 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400 disabled:opacity-40">

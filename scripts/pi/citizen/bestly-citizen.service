@@ -1,0 +1,12 @@
+[Unit]
+Description=Bestly Citizen local alerts collector (Sky Sync): Citizen web feed, NWS and CHP backups -> Supabase. Private, internal use only.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+ExecStart=/usr/bin/python3 /opt/bestly/citizen/citizen_collect.py
+Nice=10
+TimeoutStartSec=120
+MemoryMax=200M

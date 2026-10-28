@@ -14,6 +14,10 @@ How (every 5 min, LaunchAgent tech.bestly.skysync, Mac mini, no AI):
   4. When wall.html changes, it runs a real move-home test (home glides away and back in the page only) at the next quiet
      hour (2-5 AM), or right away with --test.
   5. Checks in with Scout (agent_beat wall-sky-sync).
+  6. Local alerts watchdog (Oct 28, 2026): reads citizen_status() every run. Collector silent for 10 min -> restarts bestly-citizen.timer on
+     Hestia over ssh and alerts (wall.citizen_collector). Citizen failing 3x in a row or gone (HTTP 410) -> the collector already switched to
+     the NWS + CHP backups; Sky Sync alerts Scout once (wall.citizen_paused) and clears it when Citizen answers again. Wall page feed
+     older than 3 min -> wall.citizen_wallfeed. Both backups down too -> wall.citizen_backups. Every alert is signed Sky Sync.
 
 Deployed copy: ~/Bestly/skysync/skysync.py (this file is the repo copy). Uses Sweep's config.json and the Keychain key.
 """
@@ -147,14 +151,94 @@ def move_test():
     return (not any(bad)), "after moving: %s, after moving back: %s" % tuple(json.dumps(L) for L in r)
 
 
+def rpc(fn, args):
+    cfg, key = load(CFG, {}), _secret()
+    if not cfg or not key:
+        return None
+    r = _post(cfg["supabase_url"].rstrip("/") + "/rest/v1/rpc/" + fn, dict(args, p_token=key),
+              {"apikey": cfg["publishable"], "Authorization": "Bearer " + cfg["publishable"]})
+    return json.loads(r or b"null")
+
+
+WALL_API = "http://192.168.1.211:8099/api/citizen"
+
+
+def citizen_check(st):
+    """Local alerts watchdog. Returns a short status string for the beat."""
+    try:
+        s = rpc("citizen_status", {})
+    except Exception as e:
+        log("citizen_status failed: %s" % e)
+        return "local alerts: status unreadable"
+    if not s:
+        return "local alerts: no credentials"
+    src = s.get("sources") or {}
+    col, cz = src.get("collector") or {}, src.get("citizen") or {}
+    nws, chp = src.get("nws") or {}, src.get("chp") or {}
+
+    # 1. the collector on Hestia must check in at least every 10 min; it is a systemd timer, so restarting the timer is the fix
+    age = col.get("ok_age_s")
+    if age is None or age > 600:
+        rc, out = run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "hestia",
+                       "sudo systemctl restart bestly-citizen.timer && sudo systemctl start --no-block bestly-citizen.service"], 40)
+        log("collector silent (%s s); restart timer rc=%s %s" % (age, rc, out[:120]))
+        event(st, "wall.citizen_collector", "problem", "urgent", "local alerts collector went quiet",
+              "The Citizen collector on Hestia hasn't checked in for %s. I restarted bestly-citizen.timer over ssh (rc %s). "
+              "If this stays up, check systemctl status bestly-citizen on Hestia." % ("%d min" % (age // 60) if age is not None else "ever", rc), push=True)
+    else:
+        event(st, "wall.citizen_collector", "resolved", "info", "local alerts collector is back", "The collector is checking in again.")
+
+    # 2. Citizen itself (first choice). Failing 3x or HTTP 410 = paused; backups run meanwhile; the collector keeps retrying with backoff.
+    if cz.get("status") == "ok":
+        event(st, "wall.citizen_paused", "resolved", "info", "Citizen is back", "Citizen answers again, so local alerts use it first. The NWS + CHP backups stand down.")
+        mode = "Citizen live"
+        event(st, "wall.citizen_backups", "resolved", "info", "a backup feed is working", "Citizen is live, so no backup is needed.")
+    else:
+        why = cz.get("last_error") or "no answer yet"
+        event(st, "wall.citizen_paused", "problem", "warning", "Citizen paused, local alerts run on NWS + CHP",
+              "Citizen's feed is not usable (%s; %s failures in a row). The wall and /admin Sky map show a quiet 'Citizen paused' note and use the free "
+              "NWS and CHP backups. The collector retries Citizen on its own with backoff (hourly while it answers 410) and clears this when it works." %
+              (why, cz.get("fail_count", 0)))
+        mode = "Citizen paused (%s)" % cz.get("status", "unknown")
+        # 3. with Citizen out, a backup must be alive or the layer is blind
+        dead = [n for n, v in (("NWS", nws), ("CHP", chp)) if v.get("status") != "ok" or (v.get("ok_age_s") or 99999) > 900]
+        if len(dead) == 2:
+            event(st, "wall.citizen_backups", "problem", "warning", "local alerts have no working feed",
+                  "Citizen is paused and both backups (NWS, CHP) are failing, so the sky layer is blind. NWS: %s. CHP: %s." %
+                  (nws.get("last_error") or nws.get("status"), chp.get("last_error") or chp.get("status")))
+        else:
+            event(st, "wall.citizen_backups", "resolved", "info", "a backup feed is working", "NWS or CHP is answering again.")
+
+    # 4. the wall server must be handing the snapshot to the page
+    try:
+        with urllib.request.urlopen(WALL_API, timeout=10) as r:
+            w = json.loads(r.read())
+        wa = w.get("age_s")
+    except Exception as e:
+        wa = None
+        log("wall /api/citizen unreadable: %s" % e)
+    if wa is None or wa > 180:
+        event(st, "wall.citizen_wallfeed", "problem", "warning", "the wall isn't getting local alerts",
+              "The wall server's /api/citizen is %s old (should be under 20 s). The sky layer hides itself when the data is over 3 min old." %
+              ("%d s" % wa if wa is not None else "unreachable"))
+    else:
+        event(st, "wall.citizen_wallfeed", "resolved", "info", "the wall gets local alerts again", "/api/citizen is fresh.")
+    return "local alerts: %s, %s open" % (mode, s.get("open_incidents", 0))
+
+
 def main():
     os.makedirs(DIR, exist_ok=True)
     st = load(STATE, {})
+    try:
+        cit_note = citizen_check(st)
+    except Exception as e:
+        cit_note = "local alerts check crashed: %s" % e
+        log(cit_note)
     a = audit()
     if a is None:
         # the renderer being down belongs to Wall Renderer / Wall Watchdog; Sky Sync only notes it
         log("page unreachable (renderer down?)")
-        beat(True, "wall page not reachable right now; renderer watchdogs own that")
+        beat(True, "wall page not reachable right now; renderer watchdogs own that; " + cit_note)
         save(STATE, st)
         return
     if a.get("missing"):
@@ -166,7 +250,7 @@ def main():
         return
     event(st, "wall.skysync_missing", "resolved", "info", "sync check is back", "wall.html has __skyAudit again.")
     if not a.get("on"):
-        beat(True, "sky is off (mapping, skit or no planes); nothing to check")
+        beat(True, "sky is off (mapping, skit or no planes); nothing to check; " + cit_note)
         save(STATE, st)
         return
 
@@ -224,7 +308,7 @@ def main():
         note.append("move-home test " + ("passed" if ok else "FAILED" if ok is False else "could not run"))
 
     summary = "layers in line (worst %.1f px)" % a.get("worst", 0) if not bad else "OUT of line: %s" % json.dumps(bad)
-    beat(not bad, "; ".join([summary] + note))
+    beat(not bad, "; ".join([summary] + note + [cit_note]))
     save(STATE, st)
 
 
