@@ -874,7 +874,7 @@ export default function Sky() {
             ))}
           </div>
           {alertsOpen && (
-            <div className="pointer-events-auto absolute right-[56px] top-0 flex max-h-[min(72vh,560px)] w-[min(86vw,340px)] flex-col overflow-hidden rounded-2xl bg-[#0b0f1e]/92 ring-1 ring-white/15 backdrop-blur-md" role="dialog" aria-label="Local alerts">
+            <div className="pointer-events-auto absolute right-[56px] top-0 flex max-h-[min(72vh,560px)] w-[min(86vw,340px)] flex-col overflow-hidden rounded-2xl bg-black/55 ring-1 ring-white/10 backdrop-blur-xl" role="dialog" aria-label="Local alerts">
               <div className="flex min-h-[52px] items-center gap-3 border-b border-white/10 px-4 py-2">
                 <Siren className="h-5 w-5 shrink-0 text-[#0A84FF]" aria-hidden />
                 <label htmlFor="sky-alerts-master" className="min-w-0 flex-1 cursor-pointer">

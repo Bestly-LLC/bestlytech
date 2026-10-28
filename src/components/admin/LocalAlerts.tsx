@@ -97,7 +97,11 @@ export function useAlertSwitches() {
     const t = window.setInterval(() => void get(), 15_000);
     return () => { dead = true; window.clearInterval(t); };
   }, []);
-  const write = useCallback((patch: Record<string, unknown>) => { wrote.current = Date.now(); void rpcAny("wall_admin_set", { p_patch: patch }); }, []);
+  // supabase.rpc() is lazy: the request only goes out once something calls .then, so the write must end in one.
+  const write = useCallback((patch: Record<string, unknown>) => {
+    wrote.current = Date.now();
+    void rpcAny("wall_admin_set", { p_patch: patch }).then(({ error }) => { if (error) wrote.current = 0; }, () => { wrote.current = 0; });
+  }, []);
   const setMaster = useCallback((v: boolean) => { setSw((s) => ({ ...s, master: v })); write({ skyAlerts: v }); }, [write]);
   const setCat = useCallback((id: string, v: boolean) => {
     const cats = { ...ref.current.cats, [id]: v };
