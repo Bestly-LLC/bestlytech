@@ -6,5 +6,7 @@
 0 * * * * /opt/bestly/cron/run.sh skill_inbox_push >> /home/pi/scripts/cron-logs/skill_inbox.log 2>&1
 # watchdog: every 3 hours at :41
 41 */3 * * * /opt/bestly/cron/run.sh skill_inbox_watch >> /home/pi/scripts/cron-logs/skill_inbox_watch.log 2>&1
-# Add to Claude drafting: every 20 minutes at :09, :29, :49. Writes the Claude skill for each Save Jared sent with Add to Claude (free AI only)
-9,29,49 * * * * /opt/bestly/cron/run.sh skill_inbox_claude >> /home/pi/scripts/cron-logs/skill_inbox.log 2>&1
+# Install drafting: every 5 minutes. Writes the Claude skill for each Save Jared sent with Install (free AI only)
+*/5 * * * * /opt/bestly/cron/run.sh skill_inbox_claude >> /home/pi/scripts/cron-logs/skill_inbox.log 2>&1
+# Ares review (Send to Ares): every 15 minutes at :03, :18, :33, :48. Free AI plus plain checks; never installs or runs the third-party tool. Heartbeat pi_jobs skill_inbox_ares (45 minute gap)
+3,18,33,48 * * * * /opt/bestly/cron/run.sh skill_inbox_ares >> /home/pi/scripts/cron-logs/skill_inbox.log 2>&1

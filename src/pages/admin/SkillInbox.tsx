@@ -7,14 +7,19 @@
  *   Today's picks  one card each: what it does, where it fits, Ares safety check, cost, Add / Park / Skip / Watch the Reel.
  *                  Deciding collapses the card to a one-line receipt with Undo. All decided -> "That's it for today."
  *   Parked         everything else: saved, searchable, brought back the day it fits current work.
- * Nothing installs from here. "Add" records the choice; an unvetted tool says "Send to Ares first".
- * "Add to Claude" (Ares-cleared saves only): Radar writes the Reel up as a Claude skill (free AI, Pi job), then a Mac installer drops it into
- * ~/.claude/skills. The receipt says it is being written, then shows installed from claude_status. Undo works until it is installed.
+ * Buttons (2026-10-28, every one does something real):
+ *   Cleared card  ONE primary "Install": Radar writes the Reel up as a Claude skill (free AI, Pi job), then BOTH Macs (Mac mini and MacBook Air)
+ *                 drop it into ~/.claude/skills, then the Claude app offers it. The receipt says it is being written, then lists each Mac from
+ *                 skill_inbox_claude_hosts. Undo works until a Mac has installed it.
+ *   Flagged card  ONE primary "Send to Ares": decision 'ares' queues a REAL review (Pi job skill_inbox_ares on Clio, every 15 minutes: source,
+ *                 GitHub facts, permissions, install commands, free AI). Cleared -> installs by itself. Blocked -> hidden. Unsure -> "Needs your call".
+ *   Parked rows   the same Install / Send to Ares action, so parked saves do not have to wait for a daily pick.
+ * Nothing third-party is ever installed or run. The skill text is written from the Reel, never from the tool.
  * Data: skill_inbox_today / skill_inbox_decide / skill_inbox_parked (admin only). Migration 20261027221500_skill_inbox.sql.
  * House rules: 12-hour times, a number never wraps away from its unit, no "..." truncation, 44px targets, dark + light (bento).
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, CircleAlert, ExternalLink, Loader2, Play, Radar, Search, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Check, CircleAlert, Download, ExternalLink, Loader2, Play, Radar, Search, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Lines } from "@/components/Lines";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -23,8 +28,10 @@ import { btnPlain, card, field, label, secondary, tertiary, tint } from "./laxUi
 import { rpc, shortDay, shortTime } from "./settlementsShared";
 
 export type Safe = "cleared" | "needs_look" | "blocked";
-export type Decision = "add" | "park" | "skip" | "claude" | null;
+export type Decision = "add" | "park" | "skip" | "claude" | "ares" | null;
 export type ClaudeStatus = "drafting" | "ready" | "installed" | "failed" | null;
+export type AresStatus = "queued" | "reviewing" | "cleared" | "blocked" | "needs_call" | null;
+export type HostRow = { host: string; status: "installed" | "failed" };
 export type Pick = {
   id: string; reel_url: string; creator_handle: string | null; saved_at: string | null; received_at: string;
   title: string | null; what_it_does: string | null;
@@ -32,6 +39,7 @@ export type Pick = {
   safe_status: Safe | null; safe_why: string | null; cost_label: string | null; cost_why: string | null;
   decision: Decision; surfaced_on: string | null; resurfaced_at: string | null; resurfaced_why: string | null;
   claude_status?: ClaudeStatus;
+  ares_status?: AresStatus; ares_why?: string | null; hosts?: HostRow[];
 };
 export type Today = {
   day: string; picks: Pick[]; left: number; parked_count: number; picks_per_day: number;
@@ -52,7 +60,6 @@ const press = "transition-[transform,background-color,opacity] duration-150 acti
 const btnBase = "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-[12px] px-4 text-[15px] font-semibold disabled:opacity-40 disabled:active:scale-100";
 const btnAdd = cn(btnBase, press, violet, "px-[18px]");
 const btnQuiet = cn(btnBase, press, "bg-[#2C2C2E] text-[#fff] hover:bg-[#3A3A3C] bento:bg-[#7676801f] bento:text-[#000] bento:hover:bg-[#7676802e]");
-const btnClaude = cn(btnBase, press, "bg-[#2A2140] text-[#E9DDFF] hover:bg-[#35294F] bento:bg-[#EDE9FE] bento:text-[#5B21B6] bento:hover:bg-[#DDD6FE]");
 const btnGhost = cn(btnBase, press, "text-[#EBEBF599] hover:bg-[#ffffff0d] bento:text-[#3C3C4399] bento:hover:bg-[#0000000a]");
 const link = "inline-flex min-h-[44px] items-center gap-1.5 text-[14px] font-semibold text-[#A78BFA] hover:opacity-80 active:opacity-60 bento:text-[#6D28D9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78BFA] rounded-md";
 const tile = "flex flex-col gap-1 rounded-[14px] bg-[#2C2C2E] px-3.5 py-3 bento:bg-[#F2F2F7]";
@@ -63,26 +70,56 @@ const SAFE: Record<Safe, { word: string; cls: string; Icon: typeof Check }> = {
   blocked: { word: "Blocked", cls: tint.red, Icon: ShieldAlert },
 };
 
-/** Button text: unvetted tools go to Ares first; app ideas are saved, not "added to" anyone. */
-function addLabel(p: Pick): string {
-  if (p.safe_status === "needs_look") return "Send to Ares first";
-  if (p.fit_kind === "idea") return "Save as app idea";
-  const w = who(p);
-  return w ? `Add to ${w}` : "Add";
+/** The two Macs that install a cleared skill (host names as the installers report them in skill_inbox_claude_hosts). */
+const HOSTS = [{ key: "mac-mini", name: "Mac mini" }, { key: "macbook-air", name: "MacBook Air" }] as const;
+const hostStatus = (p: Pick, key: string) => p.hosts?.find((h) => h.host === key)?.status ?? null;
+const NB = " "; // a number and its unit never split across lines, also inside plain strings
+
+/** Where a save is in its life: 'review' = with Ares, 'install' = being written or installed, null = waiting for a decision. */
+const inFlight = (p: Pick) => p.decision === "ares" || p.decision === "claude";
+
+/** The one primary action. Cleared saves install. Flagged saves go to a real Ares review. Reviewed-and-unsure ones wait for Jared's call. */
+function PrimaryAction({ p, busy, onDecide }: { p: Pick; busy: boolean; onDecide: (d: Decision) => void }) {
+  if (p.safe_status === "blocked" || p.ares_status === "needs_call") return null;
+  if (p.safe_status === "cleared") {
+    return (
+      <button type="button" disabled={busy} onClick={() => onDecide("claude")} className={btnAdd} aria-label={`Install ${p.title ?? "this skill"}`}>
+        <Download className="h-4 w-4" aria-hidden /> <span className="whitespace-nowrap">Install</span>
+      </button>
+    );
+  }
+  return (
+    <button type="button" disabled={busy} onClick={() => onDecide("ares")} className={btnAdd} aria-label={`Send ${p.title ?? "this save"} to Ares`}>
+      <ShieldCheck className="h-4 w-4" aria-hidden /> <span className="whitespace-nowrap">Send to Ares</span>
+    </button>
+  );
 }
-/** The receipt after a choice. Nothing here installs anything, so it never says it will. */
+
+/** One plain line under the buttons: what the primary button will do. */
+function helpLine(p: Pick): string | null {
+  if (p.safe_status === "blocked" || p.ares_status === "needs_call") return null;
+  if (p.safe_status === "cleared") return "Installs it in Claude Code on your Mac mini and MacBook Air, then offers it in the Claude app.";
+  return "Ares checks who makes it and what it asks for. If it is clear, it installs by itself.";
+}
+
+/** The receipt after a choice. It only says what is true right now. */
 function receipt(p: Pick): { text: string; dot: string } {
-  const w = who(p);
   if (p.decision === "claude") {
-    if (p.claude_status === "installed") return { text: "Added to Claude. Radar wrote it as a Claude skill and Ares checked it. Live in Claude Code on your Mac now; one tap to save it in the Claude app next time you open a chat.", dot: "bg-[#30D158]" };
-    if (p.claude_status === "failed") return { text: "Added to Claude, but the skill did not install. Radar flagged it and keeps the Reel safe. Undo and tap again to retry.", dot: "bg-[#FF9F0A]" };
-    return { text: "Added to Claude. Radar is writing it as a Claude skill and Ares already checked it. It lands on your Mac within about 15 minutes.", dot: "bg-[#A78BFA]" };
+    const done = HOSTS.filter((h) => hostStatus(p, h.key) === "installed").map((h) => h.name);
+    const left = HOSTS.filter((h) => hostStatus(p, h.key) !== "installed").map((h) => h.name);
+    const pre = p.ares_status === "cleared" ? "Ares cleared it. " : "";
+    if (done.length === HOSTS.length) return { text: `Installed on ${done.join(" and ")}. Next time you open a Claude chat, it offers to save it in the Claude app.`, dot: "bg-[#30D158]" };
+    if (done.length > 0) return { text: `Installed on ${done.join(" and ")}. ${left.join(" and ")} is next, as soon as it is awake.`, dot: "bg-[#A78BFA]" };
+    if (p.claude_status === "installed") return { text: "Installed in Claude Code. Next time you open a Claude chat, it offers to save it in the Claude app.", dot: "bg-[#30D158]" };
+    if (p.claude_status === "failed") return { text: `${pre}The skill did not install. Radar flagged it and keeps the Reel safe. Undo and tap Install to try again.`, dot: "bg-[#FF9F0A]" };
+    if (p.claude_status === "ready") return { text: `${pre}Installing. It is written and waiting for your Macs, usually under 5${NB}minutes.`, dot: "bg-[#A78BFA]" };
+    return { text: `${pre}Installing. Radar is writing it.`, dot: "bg-[#A78BFA]" };
   }
-  if (p.decision === "add") {
-    if (p.safe_status === "needs_look") return { text: "Sent to Ares. He checks it before anything installs.", dot: "bg-[#FF9F0A]" };
-    if (p.fit_kind === "idea") return { text: "Saved as an app idea.", dot: "bg-[#30D158]" };
-    return { text: `Added to ${w || "the team"}. Ares already checked it, nothing installs by itself.`, dot: "bg-[#30D158]" };
+  if (p.decision === "ares") {
+    if (p.ares_status === "reviewing") return { text: "Ares is checking it now. If it is clear, it installs by itself.", dot: "bg-[#FF9F0A]" };
+    return { text: `Sent to Ares. He checks who makes it and what it asks for within 15${NB}minutes. If it is clear, it installs by itself.`, dot: "bg-[#FF9F0A]" };
   }
+  if (p.decision === "add") return { text: "Noted. Nothing installs by itself.", dot: "bg-[#8E8E93]" };
   if (p.decision === "park") return { text: "Parked. Radar will bring it back when it fits.", dot: "bg-[#A78BFA]" };
   return { text: "Skipped. Radar will not show this one again.", dot: "bg-[#8E8E93]" };
 }
@@ -96,6 +133,7 @@ function savedWhen(p: Pick): string {
 
 function PickCard({ p, busy, onDecide }: { p: Pick; busy: boolean; onDecide: (d: Decision) => void }) {
   const s = SAFE[p.safe_status ?? "needs_look"];
+  const help = helpLine(p);
   return (
     <article className={cn(card, "flex animate-in fade-in flex-col gap-3.5 p-5 duration-300 motion-reduce:animate-none")} data-testid="skill-pick" aria-label={p.title ?? "Saved post"}>
       <div className="flex flex-col gap-1.5">
@@ -107,6 +145,12 @@ function PickCard({ p, busy, onDecide }: { p: Pick; busy: boolean; onDecide: (d:
         {p.resurfaced_why && (
           <p className={cn("flex items-start gap-1.5 text-[13px] font-medium", tint.blue)}>
             <Radar className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /><span>Back today. <Lines>{p.resurfaced_why}</Lines></span>
+          </p>
+        )}
+        {p.ares_status === "needs_call" && (
+          <p className={cn("flex items-start gap-1.5 text-[14px] font-medium", tint.orange)} data-testid="skill-needs-call">
+            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <span>Needs your call. Ares checked it and could not clear it: <Lines>{p.ares_why ?? "he could not decide"}</Lines> Nothing was installed.</span>
           </p>
         )}
       </div>
@@ -129,34 +173,84 @@ function PickCard({ p, busy, onDecide }: { p: Pick; busy: boolean; onDecide: (d:
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" disabled={busy} onClick={() => onDecide("add")} className={btnAdd}>{addLabel(p)}</button>
-        {p.safe_status === "cleared" && (
-          <button type="button" disabled={busy} onClick={() => onDecide("claude")} className={cn(btnClaude, "px-4")}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" /></svg>
-            <span className="whitespace-nowrap">Add to Claude</span>
-          </button>
-        )}
-        <button type="button" disabled={busy} onClick={() => onDecide("park")} className={btnQuiet}>Park</button>
-        <button type="button" disabled={busy} onClick={() => onDecide("skip")} className={btnGhost}>Skip</button>
-        <a href={p.reel_url} target="_blank" rel="noopener noreferrer" className={cn(link, "ml-auto")}>
-          <Play className="h-4 w-4" aria-hidden /> <span className="whitespace-nowrap">Watch the Reel</span><span className="sr-only"> (opens Instagram)</span>
-        </a>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <PrimaryAction p={p} busy={busy} onDecide={onDecide} />
+          <button type="button" disabled={busy} onClick={() => onDecide("park")} className={btnQuiet}>Park</button>
+          <button type="button" disabled={busy} onClick={() => onDecide("skip")} className={btnGhost}>Skip</button>
+          <a href={p.reel_url} target="_blank" rel="noopener noreferrer" className={cn(link, "ml-auto")}>
+            <Play className="h-4 w-4" aria-hidden /> <span className="whitespace-nowrap">Watch the Reel</span><span className="sr-only"> (opens Instagram)</span>
+          </a>
+        </div>
+        {help && <p className={cn("text-[13px] leading-snug", secondary)}>{help}</p>}
       </div>
     </article>
   );
 }
 
-function Receipt({ p, busy, onUndo }: { p: Pick; busy: boolean; onUndo: () => void }) {
-  const r = receipt(p);
+/** Per-Mac install status, shown once the skill is written. Each Mac installs on its own, so each gets its own line. */
+function HostList({ p }: { p: Pick }) {
   return (
-    <div className={cn("flex animate-in fade-in flex-wrap items-center gap-3 rounded-[16px] bg-[#ffffff0a] px-4 py-2 duration-300 motion-reduce:animate-none bento:bg-[#0000000a]")} role="status" data-testid="skill-receipt">
-      <span className={cn("h-2 w-2 shrink-0 rounded-full", r.dot)} aria-hidden />
-      <span className={cn("min-w-[180px] flex-1 text-[15px]", label)}><Lines>{r.text}</Lines></span>
-      {!(p.decision === "claude" && p.claude_status === "installed") && (
-        <button type="button" disabled={busy} onClick={onUndo} className={cn(btnBase, press, "min-h-[44px] bg-transparent px-3.5 text-[14px] text-[#A78BFA] hover:bg-[#ffffff0d] bento:text-[#6D28D9] bento:hover:bg-[#0000000a]")}>Undo</button>
-      )}
+    <ul className="m-0 flex list-none flex-wrap gap-x-5 gap-y-1 p-0 pl-5" aria-label="Install status on each Mac">
+      {HOSTS.map((h) => {
+        const st = hostStatus(p, h.key);
+        const Icon = st === "installed" ? Check : st === "failed" ? CircleAlert : Loader2;
+        const cls = st === "installed" ? tint.green : st === "failed" ? tint.orange : secondary;
+        return (
+          <li key={h.key} className={cn("flex min-h-[28px] items-center gap-1.5 text-[14px]", cls)}>
+            <Icon className={cn("h-4 w-4 shrink-0", !st && "animate-spin motion-reduce:animate-none")} aria-hidden />
+            <span className={cn("font-medium", label)}>{h.name}</span>
+            <span className="whitespace-nowrap">{st === "installed" ? "Installed" : st === "failed" ? "Could not install" : "Waiting"}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function Receipt({ p, busy, onUndo, showTitle }: { p: Pick; busy: boolean; onUndo: () => void; showTitle?: boolean }) {
+  const r = receipt(p);
+  const installed = p.decision === "claude" && (p.claude_status === "installed" || (p.hosts ?? []).some((h) => h.status === "installed"));
+  const checking = p.decision === "ares" && p.ares_status === "reviewing";
+  const hosts = p.decision === "claude" && p.claude_status !== "drafting" && p.claude_status !== null;
+  return (
+    <div className={cn("flex animate-in fade-in flex-col gap-2 rounded-[16px] bg-[#ffffff0a] px-4 py-2 duration-300 motion-reduce:animate-none bento:bg-[#0000000a]")} role="status" data-testid="skill-receipt">
+      {showTitle && <span className={cn("break-words pt-1 text-[15px] font-semibold", label)}>{p.title}</span>}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className={cn("h-2 w-2 shrink-0 rounded-full", r.dot)} aria-hidden />
+        <span className={cn("min-w-[180px] flex-1 text-[15px]", label)}><Lines>{r.text}</Lines></span>
+        {!installed && !checking && (
+          <button type="button" disabled={busy} onClick={onUndo} className={cn(btnBase, press, "min-h-[44px] bg-transparent px-3.5 text-[14px] text-[#A78BFA] hover:bg-[#ffffff0d] bento:text-[#6D28D9] bento:hover:bg-[#0000000a]")}>Undo</button>
+        )}
+      </div>
+      {hosts && <HostList p={p} />}
     </div>
+  );
+}
+
+/** A parked save: the same Install / Send to Ares action as a pick, or its live receipt once it has been sent. */
+function ParkedRow({ p, busy, onDecide }: { p: Pick; busy: boolean; onDecide: (d: Decision) => void }) {
+  if (inFlight(p)) {
+    return <li className="py-1.5"><Receipt p={p} busy={busy} onUndo={() => onDecide(null)} showTitle /></li>;
+  }
+  const help = helpLine(p);
+  return (
+    <li className="flex flex-col gap-1 border-t border-[#ffffff0f] py-2.5 bento:border-[#0000000f]" data-testid="skill-parked-row">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+        <span className={cn("min-w-[180px] flex-1 break-words text-[15px]", label)}>{p.title}</span>
+        <span className={cn("whitespace-nowrap text-[14px]", secondary)}>{p.fit_kind === "idea" ? "New app idea" : p.fit_kind === "none" || !who(p) ? "No fit yet" : `Fits ${who(p)}`}</span>
+      </div>
+      {p.ares_status === "needs_call" && (
+        <p className={cn("flex items-start gap-1.5 text-[13px] font-medium", tint.orange)}>
+          <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /><span>Needs your call. <Lines>{p.ares_why ?? "Ares could not decide."}</Lines></span>
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <PrimaryAction p={p} busy={busy} onDecide={onDecide} />
+        <a href={p.reel_url} target="_blank" rel="noopener noreferrer" className={cn(link, "min-w-[44px] justify-center")} aria-label={`Watch the Reel: ${p.title ?? "saved post"} (opens Instagram)`}><ExternalLink className="h-4 w-4" aria-hidden /></a>
+        {help && <span className={cn("min-w-[200px] flex-1 text-[13px] leading-snug", secondary)}>{help}</span>}
+      </div>
+    </li>
   );
 }
 
@@ -198,14 +292,19 @@ export default function SkillInbox() {
   }, []);
 
   // while a skill is being written or installed, check every 15 seconds so the receipt flips to "installed" on its own
-  const claudePending = !!t?.picks.some((x) => x.decision === "claude" && x.claude_status !== "installed" && x.claude_status !== "failed");
+  const pendingOf = (x: Pick) =>
+    (x.decision === "claude" && x.claude_status !== "installed" && x.claude_status !== "failed" && !(x.hosts ?? []).some((h) => h.status === "installed")) ||
+    (x.decision === "ares" && (x.ares_status === "queued" || x.ares_status === "reviewing"));
+  const claudePending = !!t?.picks.some(pendingOf) || !!parked?.some(pendingOf);
+  const showParkedRef = useRef(showParked);
+  showParkedRef.current = showParked;
   useEffect(() => {
+    const tick = () => { if (document.hidden) return; void load(); if (showParkedRef.current) void loadParked(qRef.current); };
     void load();
-    const iv = setInterval(() => { if (!document.hidden) void load(); }, claudePending ? 15_000 : 60_000);
-    const vis = () => { if (!document.hidden) void load(); };
-    document.addEventListener("visibilitychange", vis);
-    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", vis); };
-  }, [load, claudePending]);
+    const iv = setInterval(tick, claudePending ? 15_000 : 60_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", tick); };
+  }, [load, loadParked, claudePending]);
   useEffect(() => {
     if (!showParked) return;
     const h = setTimeout(() => void loadParked(q), q ? 250 : 0);
@@ -214,12 +313,23 @@ export default function SkillInbox() {
 
   const decide = async (p: Pick, d: Decision) => {
     setBusy(p.id);
-    const before = t;
-    setT((cur) => cur && { ...cur, picks: cur.picks.map((x) => (x.id === p.id ? { ...x, decision: d, claude_status: d === "claude" ? (x.claude_status && x.claude_status !== "failed" ? x.claude_status : "drafting") : x.claude_status } : x)), left: cur.picks.filter((x) => (x.id === p.id ? d : x.decision) === null).length });
+    const before = t, beforeParked = parked;
+    const patch = (x: Pick): Pick => (x.id !== p.id ? x : {
+      ...x, decision: d,
+      claude_status: d === "claude" ? (x.claude_status && x.claude_status !== "failed" ? x.claude_status : "drafting") : x.claude_status,
+      ares_status: d === "ares" ? "queued" : x.ares_status === "queued" ? null : x.ares_status,
+    });
+    setT((cur) => cur && { ...cur, picks: cur.picks.map(patch), left: cur.picks.map(patch).filter((x) => x.decision === null).length });
+    setParked((cur) => cur && cur.map(patch));
     const { error } = await rpc("skill_inbox_decide", { p_id: p.id, p_decision: d });
     setBusy(null);
-    if (error) { setT(before); toast.error("That didn't save. Try again."); return; }
+    if (error) {
+      setT(before); setParked(beforeParked);
+      toast.error(error.message && error.message.length <= 90 ? error.message : "That didn't save. Try again.");
+      return;
+    }
     void load();
+    if (showParked) void loadParked(qRef.current);
   };
 
   if (failed && !t) {
@@ -289,7 +399,7 @@ export default function SkillInbox() {
           <h2 className={cn("text-[17px] font-semibold", label)}>Parked <span className={cn("font-medium", secondary)}>{plural(t.parked_count, "save")}</span></h2>
           <button type="button" aria-expanded={showParked} onClick={() => setShowParked((v) => !v)} className={btnQuiet}>{showParked ? "Hide" : "Show"}</button>
         </div>
-        <p className={cn("text-[14px] leading-relaxed", secondary)}><Lines>Saved and searchable. Radar brings one back the day it fits something you&rsquo;re working on.</Lines></p>
+        <p className={cn("text-[14px] leading-relaxed", secondary)}><Lines>Saved and searchable. Install one or send it to Ares right here, or wait for Radar to bring it back the day it fits something you&rsquo;re working on.</Lines></p>
         {showParked && (
           <div className="space-y-2">
             <label className="relative block">
@@ -302,13 +412,7 @@ export default function SkillInbox() {
             {parked && parked.length === 0 && <p className={cn("py-2 text-[14px]", secondary)}>{q.trim() ? "Nothing parked matches that." : "Nothing parked yet."}</p>}
             {parked && parked.length > 0 && (
               <ul className="m-0 list-none p-0">
-                {parked.map((p) => (
-                  <li key={p.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 border-t border-[#ffffff0f] py-1.5 bento:border-[#0000000f]">
-                    <span className={cn("min-w-[180px] flex-1 break-words text-[15px]", label)}>{p.title}</span>
-                    <span className={cn("whitespace-nowrap text-[14px]", secondary)}>{p.fit_kind === "idea" ? "New app idea" : p.fit_kind === "none" || !who(p) ? "No fit yet" : `Fits ${who(p)}`}</span>
-                    <a href={p.reel_url} target="_blank" rel="noopener noreferrer" className={cn(link, "min-w-[44px] justify-center")} aria-label={`Watch the Reel: ${p.title ?? "saved post"} (opens Instagram)`}><ExternalLink className="h-4 w-4" aria-hidden /></a>
-                  </li>
-                ))}
+                {parked.map((p) => <ParkedRow key={p.id} p={p} busy={busy === p.id} onDecide={(d) => void decide(p, d)} />)}
               </ul>
             )}
           </div>
