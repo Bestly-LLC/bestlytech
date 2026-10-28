@@ -11,7 +11,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsWith } from "../_shared/cors.ts";
 import { llm, llmProbe, LlmUnavailable, scrub, outOfRoomMessage } from "../_shared/free-llm.ts";
-import { buildOutOfRoom, checkRoomMessage, CANDIDATES, type ProviderRow, type TriedLite } from "../_shared/free-llm-status.ts";
+import { buildOutOfRoom, checkRoomMessage, CANDIDATES, cleanHistory, isStatusNote, looksLikeStatusParrot, waitingNote, type ProviderRow, type TriedLite } from "../_shared/free-llm-status.ts";
 
 const secretKeys = (() => {
   const out: string[] = [];
@@ -76,6 +76,16 @@ async function fallbackSelftest() {
   bad.push(...checkRoomMessage(a, { noPaid: false, expectOffline: "freellm" }).map((x) => `made-up data: ${x}`));
   const b = buildOutOfRoom({ rows, tried, now, noPaid: true });
   bad.push(...checkRoomMessage(b, { noPaid: true }).map((x) => `no-paid thread: ${x}`));
+  // 2026-10-28: the parked-run note is what Jared sees when every provider is out. No paid offer, no buttons, never fed back to a model.
+  const sized: TriedLite[] = [...tried.filter((t) => t.provider !== "groq"), { provider: "groq", model: "openai/gpt-oss-120b", outcome: "skipped_size", need: 9400, max: 7000 }];
+  const w = waitingNote(buildOutOfRoom({ rows, tried: sized, now, noPaid: true }), 0);
+  const wFlat = w.replace(/[\u00a0\u202f]/g, " ");
+  if (!wFlat.startsWith("Working: waiting for the free AI")) bad.push("waiting note does not start as an in-place Working note");
+  if (/paid ai|OPTIONS|\.\.\.|\u2026|undefined|NaN/i.test(wFlat)) bad.push("waiting note offers paid AI, has buttons, or has junk");
+  if (!/Groq cannot take this step/.test(wFlat) || !/offline since/.test(wFlat)) bad.push("waiting note lacks the per-provider reasons (size / offline)");
+  if (!isStatusNote(w)) bad.push("waiting note would be fed back to a model");
+  if (cleanHistory([{ role: "assistant", body: "Free AI is out of room until 2:16 PM. Please choose to use paid AI or wait." }, { role: "user", body: "hi" }]).length !== 1) bad.push("status note not dropped from model context");
+  if (!looksLikeStatusParrot("Free AI is out of room until 2:16 PM. Please choose to use paid AI or wait.")) bad.push("a parroted out-of-room reply is not caught");
   try {
     const live = await outOfRoomMessage({ tried: [], noPaid: false });
     bad.push(...checkRoomMessage(live, { noPaid: false }).map((x) => `live data: ${x}`));

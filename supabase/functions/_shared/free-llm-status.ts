@@ -21,7 +21,8 @@ export interface ProviderRow {
   /** Plain-words reason a human wrote for a long outage (llm_providers.outage_note, added by the scout-free-fallback migration). Read, never hard-coded. */
   outage_note?: string | null;
 }
-export interface TriedLite { provider: string; model: string; outcome: string; ms?: number }
+/** need/max: tokens this step needs vs the rung's per-request ceiling (skipped_size). used/cap: requests today vs the daily allowance (skipped_budget). */
+export interface TriedLite { provider: string; model: string; outcome: string; ms?: number; need?: number; max?: number; used?: number; cap?: number }
 /** In-process hints from free-llm.ts (rateLimitHints): model -> epoch ms until which it sits out. */
 export interface Hints { modelSkipUntil?: Record<string, number> }
 
@@ -129,13 +130,21 @@ export function parseLastError(s: string | null | undefined): { at: number; outc
 /* ───────── per-provider reasons ───────── */
 
 const LABEL: Record<string, string> = {
-  freellm: "The Pi's free AI (FreeLLM)", groq: "Groq", cloudflare: "Cloudflare", local: "The Mac mini's local AI",
+  freellm: "FreeLLM (the free AI server)", groq: "Groq", cloudflare: "Cloudflare", local: "The Mac mini's local AI",
   gemini: "Google Gemini", openrouter: "OpenRouter", anthropic: "Paid AI (Claude)",
   ...Object.fromEntries(CANDIDATES.map((c) => [c.name, c.label])),
 };
 export const providerLabel = (n: string) => LABEL[n] ?? n;
 
-export interface Diagnosis { name: string; line: string; backAt?: number; down?: boolean }
+export interface Diagnosis { name: string; line: string; backAt?: number; down?: boolean; tooBig?: boolean; /** not waiting on anything: off, skipped on purpose, no key, or not for live chat */ excluded?: boolean }
+
+const num = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+/** "about 9,400 tokens ... about 7,000" built from the numbers the ladder recorded; plain words when it recorded none. */
+function sizeLine(lbl: string, sized: TriedLite[]): string {
+  const need = Math.max(0, ...sized.map((t) => t.need ?? 0)), max = Math.max(0, ...sized.map((t) => t.max ?? 0));
+  const nums = need && max ? ` It sends about ${num(Math.round(need / 100) * 100)} tokens (the tool list plus the chat so far) and the free plan allows about ${num(Math.round(max / 100) * 100)} per request.` : "";
+  return `${lbl} cannot take this step: it is bigger than the free per-request limit.${nums} Waiting will not fix that, only a provider with a bigger window will.`;
+}
 
 const stripDot = (s: string) => s.trim().replace(/[.\s]+$/, "");
 const FREELLM_UNREACHABLE = /resolve host|dns error|failed to lookup|error sending request|connection (refused|reset)|couldn'?t|could not|timed? ?out|unreachable/i;
@@ -151,9 +160,9 @@ export function diagnoseProvider(row: ProviderRow, tried: TriedLite[], now = Dat
   const has = (o: string) => mine.some((t) => t.outcome === o);
   const err = parseLastError(row.last_error);
   const cooling = !!row.cooldown_until && Date.parse(row.cooldown_until) > now;
-  if (row.enabled === false) return { name, line: `${lbl} is switched off.` };
-  if (row.private_ok === false) return { name, line: `${lbl} is skipped on purpose: it can train on prompts, and Scout's work is private.` };
-  if (has("skipped_nokey")) return { name, line: `${lbl} has no key saved yet.` };
+  if (row.enabled === false) return { name, excluded: true, line: `${lbl} is switched off.` };
+  if (row.private_ok === false) return { name, excluded: true, line: `${lbl} is skipped on purpose: it can train on prompts, and Scout's work is private.` };
+  if (has("skipped_nokey")) return { name, excluded: true, line: `${lbl} has no key saved yet.` };
 
   if (name === "freellm") {
     const note = stripDot(row.outage_note ?? "");
@@ -162,8 +171,8 @@ export function diagnoseProvider(row: ProviderRow, tried: TriedLite[], now = Dat
     if (note || unreachable) {
       const okAt = row.last_ok_at ? Date.parse(row.last_ok_at) : NaN;
       const since = Number.isFinite(okAt) ? ` since ${ptWhen(okAt, now)}` : "";
-      const cause = /resolve host|dns error|failed to lookup/i.test(blob) ? "the cloud cannot find the Pi on the network"
-        : /refused|reset/i.test(blob) ? "the Pi refused the connection"
+      const cause = /resolve host|dns error|failed to lookup/i.test(blob) ? "the cloud cannot find its server on the network"
+        : /refused|reset/i.test(blob) ? "its server refused the connection"
         : /timed? ?out/i.test(blob) || has("timeout") ? "it stopped answering"
         : "the cloud cannot reach it";
       const why = note || (incident ? `${cause} (latest incident note: "${stripDot(incident)}")` : cause);
@@ -178,10 +187,19 @@ export function diagnoseProvider(row: ProviderRow, tried: TriedLite[], now = Dat
       || (!!err && err.at >= dayStart && /daily free allocation|neurons/i.test(err.message));
     if (capped) {
       const reset = nextUtcMidnight(now);
+      const mineCap = mine.find((t) => t.outcome === "skipped_budget" && t.cap);
+      const neuronsOut = /^Daily free cap/i.test(row.cooldown_reason ?? "") || (!!err && err.at >= dayStart && /daily free allocation|neurons/i.test(err.message));
+      if (mineCap && !neuronsOut) {
+        return { name, backAt: reset, line: `${lbl}: the ${num(mineCap.cap!)} requests a day I allow myself on its free plan are used up (${num(mineCap.used ?? mineCap.cap!)} so far); that resets at ${ptWhen(reset, now, true)}.` };
+      }
       return { name, backAt: reset, line: `${lbl}'s daily free limit is used up; it resets at ${ptWhen(reset, now, true)}.` };
     }
   }
 
+  const sized = mine.filter((t) => t.outcome === "skipped_size");
+  if (name === "groq" && !has("rate_limited") && !has("skipped_budget") && sized.length) {
+    return { name, tooBig: true, line: sizeLine(lbl, sized) };
+  }
   if (name === "groq" && (has("rate_limited") || has("skipped_budget"))) {
     const models = [...new Set(mine.filter((t) => t.outcome === "rate_limited" || t.outcome === "skipped_budget").map((t) => t.model))];
     const untils = models.map((m) => hints.modelSkipUntil?.[m] ?? 0).filter((u) => u > now).sort((a, b) => a - b);
@@ -193,17 +211,20 @@ export function diagnoseProvider(row: ProviderRow, tried: TriedLite[], now = Dat
     const line = daily
       ? `${lbl} used up today's free tokens on ${which}${first ? `; the first resets at ${ptWhen(first, now, true)}` : ""}.`
       : `${lbl}: ${which} ${n === 1 ? "is" : "are"} at the per-minute limit${first ? `; the first frees up in ${inWords(Math.max(1, (first - now) / 1000))}` : ", which clears within a few minutes"}.`;
-    return { name, line, backAt: first };
+    return { name, backAt: first, tooBig: sized.length > 0, line: sized.length ? `${line} This step is also over its per-request limit on some models, which waiting will not fix.` : line };
   }
 
-  if (name === "local") return { name, line: `${lbl} is not used for live chat (it cannot call tools)${row.last_ok_at ? `; it last answered ${ptWhen(Date.parse(row.last_ok_at), now)}` : ""}.` };
+  if (name === "local") return { name, excluded: true, line: `${lbl} is not used for live chat (it cannot call tools)${row.last_ok_at ? `; it last answered ${ptWhen(Date.parse(row.last_ok_at), now)}` : ""}.` };
 
   // Anything else, including a newly connected provider.
-  if (has("skipped_budget")) return { name, line: `${lbl}'s free limit for today is used up.` };
+  if (has("skipped_budget")) {
+    const b = mine.find((t) => t.outcome === "skipped_budget" && t.cap);
+    return { name, line: `${lbl}'s free limit for today is used up${b ? ` (${num(b.used ?? b.cap!)} of the ${num(b.cap!)} requests a day I allow myself)` : ""}.` };
+  }
   if (has("rate_limited")) return { name, line: `${lbl} is at its rate limit right now.` };
   if (has("timeout")) return { name, line: `${lbl} timed out.` };
   if (has("error") || has("invalid")) return { name, line: `${lbl} answered with an error${err ? ` (${stripDot(err.message).slice(0, 80)})` : ""}.` };
-  if (has("skipped_size")) return { name, line: `${lbl} was skipped: this request is too big for its free limits.` };
+  if (has("skipped_size")) return { name, tooBig: true, line: sizeLine(lbl, sized) };
   if (cooling) return { name, line: `${lbl} is paused${row.cooldown_reason ? ` (${stripDot(row.cooldown_reason).slice(0, 80)})` : ""}.` };
   return { name, line: `${lbl} did not answer.` };
 }
@@ -241,8 +262,10 @@ export function buildOutOfRoom(i: RoomInput): RoomOut {
     "I tried every free AI provider I have and none can answer right now. Here is exactly why:",
     lines.map((l) => `- ${l.line}`).join("\n"),
   ];
+  const tooBig = lines.some((l) => l.tooBig);
   if (candidate) {
     parts.push(`Best new one to connect: ${candidate.label}${candidate.kind === "trial" ? " (a trial, not a renewing free plan)" : ""}. Why it is safe: ${candidate.why}. What you get: ${candidate.freeTier}. `
+      + `${tooBig ? `It also takes up to ${num(candidate.maxIn)} tokens per request, so it fixes the size problem above. ` : ""}`
       + `Get a key at ${candidate.keyUrl}, save it in Supabase Vault as ${candidate.keyName}, and I switch it on within 10 minutes.`);
   } else {
     parts.push("Every provider on my vetted no-training list is already connected. Say the word and I will research the next one.");
@@ -266,4 +289,77 @@ export function checkRoomMessage(out: RoomOut, opts: { noPaid: boolean; expectOf
   if (!opts.noPaid && !/Use paid AI/.test(out.options)) bad.push("paid option missing");
   if (opts.expectOffline && !out.lines.some((l) => l.name === opts.expectOffline && l.down)) bad.push(`${opts.expectOffline} not reported offline`);
   return bad;
+}
+
+
+/* ───────── 2026-10-28: Scout's own status text must never come back as a model's answer ───────── */
+
+/**
+ * An assistant message that is Scout's own status note (not something the model said and not something Jared needs the model to see):
+ * progress notes, "Worked N steps", the out-of-room / waiting messages, stopped notes. Dropped from the context before ANY model call.
+ * Live case Oct 28, 1:52 PM: FreeLLM answered fine, but the thread's context held "Free AI is out of room until 2:16 PM. Please choose to
+ * use paid AI or wait." and the model copied it back as its reply.
+ */
+const STATUS_NOTE: RegExp[] = [
+  /^\s*(Working:|Worked \d+ steps|Stopped after \d+ steps?:)/i,
+  /^\s*Free AI is out of room/i,
+  /^\s*Waiting for the free AI/i,
+  /I tried every free AI provider I have/i,
+  /^\s*Free AI tried \d+ times and it did not work/i,
+  /^\s*Free AI stopped making progress/i,
+  /^\s*My last step came back as working notes/i,
+];
+export const isStatusNote = (body: unknown): boolean => STATUS_NOTE.some((r) => r.test(String(body ?? "")));
+
+/** The thread rows a model may see: Scout's status notes removed, and (for free models) the OPTIONS button lines too. */
+export function cleanHistory<T extends { role: string; body: string }>(rows: T[], opts: { stripOptions?: boolean } = {}): T[] {
+  const out: T[] = [];
+  for (const m of rows) {
+    if (m.role === "assistant") {
+      if (isStatusNote(m.body)) continue;
+      if (opts.stripOptions) {
+        const body = String(m.body ?? "").replace(/^\s*OPTIONS:.*$/gm, "").replace(/\n{3,}/g, "\n\n").trim();
+        if (!body) continue;
+        out.push({ ...m, body });
+        continue;
+      }
+    }
+    out.push(m);
+  }
+  return out;
+}
+
+/** A model reply that is Scout's out-of-room text or the old "use paid AI or wait" choice. Never an answer: the ladder moves to the next rung. */
+const PARROT: RegExp[] = [
+  /free AI is out of room/i,
+  /tried every free AI provider I have/i,
+  /none can answer right now/i,
+  /^\s*Working:/i,
+  /waiting for the free AI to free up/i,
+  /\bpaid AI\b[^.\n]{0,60}\bor (wait|retry)\b/i,
+  /\b(wait|retry)\b[^.\n]{0,40}\bor (use |choose |switch to )?paid AI\b/i,
+  /\bplease (choose|pick|select)\b[^.\n]{0,60}\bpaid AI\b/i,
+  /^\s*OPTIONS:\s*(Yes, )?use paid AI/im,
+  /wait and retry at/i,
+];
+export const looksLikeStatusParrot = (text: unknown): boolean => PARROT.some((r) => r.test(String(text ?? "")));
+
+/**
+ * The single, short, in-place status for a run that cannot get an answer from any free provider right now. It is the "Working:" note
+ * itself (edited in place), so there is never a dead end and never a button: what each provider is waiting on, the one provider to
+ * connect, and a promise the run picks itself back up. No paid offer (Jared: "he should never tell me no, only switch providers").
+ */
+export function waitingNote(room: RoomOut, steps: number): string {
+  const waits = room.lines.filter((l) => !l.excluded).map((l) => `- ${l.line}`);
+  const parts = [`Working: waiting for the free AI (${steps} ${steps === 1 ? "step" : "steps"}). I try every provider again by myself and carry on the moment one answers.`];
+  if (waits.length) parts.push(waits.join("\n"));
+  const c = room.candidate;
+  if (c) parts.push(`To add room now, connect ${c.label}: get a key at ${c.keyUrl} and save it in Supabase Vault as ${c.keyName}. I switch it on within 10 minutes.`);
+  return keepUnits(parts.join("\n"));
+}
+
+/** How long a parked run sleeps before it tries again: when the first provider is due back, but never under 1 minute or over 5. */
+export function parkDelayMs(room: RoomOut, now = Date.now()): number {
+  const until = room.backAt - now;
+  return Math.min(5 * 60_000, Math.max(60_000, Number.isFinite(until) ? until : 5 * 60_000));
 }

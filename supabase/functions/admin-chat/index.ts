@@ -1,4 +1,6 @@
 import { SECRET_KEY, isServiceRequest } from "../_shared/keys.ts";
+import { hopWaitMs, notBeforeIso } from "../_shared/hop-wait.ts";
+import { cleanHistory, isStatusNote, waitingNote, parkDelayMs } from "../_shared/free-llm-status.ts";
 import { llm, llmChat, llmVision, outOfRoomMessage, LlmUnavailable, thinkingLeak, stripToolSyntax, hasToolSyntax, rescueToolCalls, rawToolJson, narratesStep, type ChatResult } from "../_shared/free-llm.ts"; // v26: free answers run on Groq -> Cloudflare -> Mac mini, $0. v36: llmVision for the free look tool
 // admin-chat — Scout, the assistant inside bestly.tech/admin.
 //
@@ -809,7 +811,7 @@ async function threadDigest(threadId: string): Promise<string> {
     db.from("mac_jobs").select("title").eq("thread_id", threadId).eq("status", "proposed").limit(3),
   ]);
   const lines = ((hist ?? []) as any[]).reverse()
-    .filter((m) => !/^(Working:|Worked \d+ steps)/.test(String(m.body)) && String(m.body) !== STOP_MARK)
+    .filter((m) => !/^(Working:|Worked \d+ steps)/.test(String(m.body)) && String(m.body) !== STOP_MARK && !(m.role === "assistant" && isStatusNote(m.body)))
     .map((m) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body ?? "").replace(/^\s*OPTIONS:.*$/gm, "").replace(/\s+/g, " ").trim().slice(0, m.role === "assistant" ? 320 : 240)}`);
   const waiting = ((pend ?? []) as any[]).map((j) => `A Run card is waiting on his tap: ${String(j.title).slice(0, 80)}`);
   return [...lines, ...waiting].join("\n").slice(-3800);
@@ -1395,8 +1397,10 @@ async function freeTry(threadId: string, text: string, page: unknown): Promise<{
   const { data: first } = await db.from("admin_chat_messages").select("body").eq("thread_id", threadId).eq("role", "user")
     .order("created_at", { ascending: true }).limit(1);
   if (/^take this off my plate/i.test(String((first as any)?.[0]?.body ?? ""))) return { why: FREE_WHY.ACTION };
-  const { data: hist } = await db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId)
+  const { data: histRaw } = await db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId)
     .order("created_at", { ascending: false }).limit(7);
+  // 2026-10-28: Scout's own status notes ("Free AI is out of room ...", "Working: ...", OPTIONS buttons) never reach a model: one was copied back as a reply.
+  const hist = cleanHistory((histRaw ?? []) as { role: string; body: string }[], { stripOptions: true });
   // v28.5: his newest message keeps up to 20,000 characters, so an attached file actually reaches the free model.
   const convo = ((hist ?? []) as any[]).reverse().map((m, i, arr) => `${m.role === "assistant" ? "Scout" : "Jared"}: ${String(m.body).slice(0, i === arr.length - 1 ? 20_000 : 600)}`).join("\n");
   const [{ data: today }, { data: inc }] = await Promise.all([
@@ -1704,6 +1708,8 @@ interface RunState {
   try_log?: TryEntry[];
   pending?: { name: string; args: Record<string, any> };   // v38: a confirmed commit_files that did not have time to be watched; runs first next hop
   pauses?: number;          // v39: hops in a row the free AI was too busy (rate limits) to answer; reset by any hop that works
+  resume_at?: string;       // 2026-10-28: parked (every free provider is out): the sweep (scout_working_note_sweep) resumes the run at this time
+  parked_since?: string;    // when this parking began (the sweep gives up after a full day)
 }
 interface TryEntry { at: string; what: string; why: string }
 const RUN_STATE_CAP = 12_000;       // bytes of JSON kept per thread
@@ -1768,7 +1774,7 @@ async function saveRunState(threadId: string, st: RunState | null) {
 }
 
 async function freeAgent(threadId: string, text: string, page: unknown, opts: { autopilot?: boolean; askFirst?: boolean; since?: string | null; state?: RunState | null; hop?: number; budgetMs?: number } = {}):
-  Promise<{ answer?: string; why: string; tools?: string[]; note?: string; more?: boolean; stopped?: boolean; stalled?: boolean; paused?: boolean; state?: RunState; escalate?: { what: string; log: TryEntry[] } }> {
+  Promise<{ answer?: string; why: string; tools?: string[]; note?: string; more?: boolean; stopped?: boolean; stalled?: boolean; paused?: boolean; parked?: boolean; state?: RunState; escalate?: { what: string; log: TryEntry[] } }> {
   const autopilot = !!opts.autopilot;
   const until = Date.now() + (opts.budgetMs ?? FREE_BUDGET_MS);
   const prior = autopilot ? null : (opts.state ?? null);   // v36: what earlier hops of this run already did
@@ -1788,7 +1794,7 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
   };
 
   const noPaidP = saidNoPaid(threadId);
-  const [{ data: hist }, { data: today }, { data: lessonRows }] = await Promise.all([
+  const [{ data: histRaw }, { data: today }, { data: lessonRows }] = await Promise.all([
     db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(10),
     db.rpc("admin_today"),
     // v44 (audit Oct 10): paid Scout got the top 30 lessons in its prompt; free Scout saw one only after a tool failed.
@@ -1796,6 +1802,7 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
     db.from("scout_lessons").select("scope, title, do_text, wins, losses").eq("active", true)
       .order("wins", { ascending: false }).order("updated_at", { ascending: false }).limit(15),
   ]);
+  const hist = cleanHistory((histRaw ?? []) as { role: string; body: string }[], { stripOptions: true });   // 2026-10-28: no status notes in a model's context
   // 2026-10-17: 30 lessons (4.2K chars) plus a 12-item queue pushed the free prompt past Groq's 7K-token gate, so every
   // Groq rung was skipped as "skipped_size" and the run failed in 400 ms with no provider ever called. 15 + 8 leaves room
   // for the tools and the work. Lessons also come back on a failed tool, so nothing important is lost.
@@ -1937,18 +1944,16 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   const busyPause = async () => {
     const pauses = (prior?.pauses ?? 0) + 1;
     const st: RunState = { ...snapshot(), pauses };
-    // v83 (2026-10-19): a question used to give up on the first busy reply. Questions pause and retry too now; only after
-    // PAUSE_MAX pauses does Scout say the free AI is out of room (and a task carries on by itself while it waits).
-    const out = pauses > PAUSE_MAX;
-    // v41: ONE honest message when the free AI is out of room (no "busy, picking it back up" chatter).
-    // 2026-10-27: it now says why per provider and which new free provider to connect (outOfRoomMessage), not just a time.
-    const room = out ? await outOfRoomMessage({ tried: lastTried, noPaid }) : null;
-    return {
-      answer: room
-        ? `${room.text}${notes.length ? `\n\nLast thing I found: ${oneLine(notes[notes.length - 1])}` : ""}\n\n${room.options}`
-        : "Waiting for the free AI to free up.",
-      why: "", tools: used, more: !out || !isQ, stalled: out, paused: !out, state: st,
-    };
+    // v83 (2026-10-19): questions pause and retry too. Up to PAUSE_MAX short pauses (30 s apart, each a fresh hop that waits in the NEW
+    // invocation, see hop-wait.ts) for a rate limit that clears in a minute.
+    if (pauses <= PAUSE_MAX) return { answer: "Waiting for the free AI to free up.", why: "", tools: used, more: true, stalled: false, paused: true, state: st };
+    // 2026-10-28 (Jared: "he should never tell me no, only switch providers"): no dead end. Every free rung is out, so the run PARKS:
+    // ONE short in-place note (what each provider is waiting on + the one provider to connect), resume_at in run_state, and the sweep
+    // (scout_working_note_sweep, durable: no timer in a dying invocation) resumes it. No paid offer, no buttons; the Paid AI switch, if already on, hands off instead.
+    const room = await outOfRoomMessage({ tried: lastTried, noPaid: true });
+    st.resume_at = new Date(Date.now() + parkDelayMs(room)).toISOString();
+    st.parked_since = prior?.parked_since ?? new Date().toISOString();
+    return { answer: waitingNote(room, st.steps), why: "", tools: used, more: true, stalled: false, paused: true, parked: true, state: st };
   };
   const escalate = () => ({ why: "", tools: used, escalate: { what: goal, log: tryLog }, state: snapshot() });
 
@@ -3082,6 +3087,13 @@ Deno.serve(async (req) => {
   // Nothing that needs a yes can run on autopilot; that is enforced below, not left to the model.
   const autopilot = body.autopilot === true && svcCall;
   autopilotRun = autopilot;
+  // 2026-10-28: a busy-pause hop arrives at once with not_before; the waiting happens here, in a request that has its own lifetime.
+  // Capped (hopWaitMs), and the time-box clocks above keep counting from the real start, so the 150 s platform limit still holds.
+  let hopWaited = 0;   // ms this hop slept for not_before; the free agent's budget shrinks by the same amount (150 s platform limit)
+  if (!autopilot && Number.isInteger(body.auto_continue)) {
+    const waitMs = hopWaitMs(body.not_before);
+    if (waitMs > 0) { await sleep(waitMs); hopWaited = waitMs; }
+  }
   // v43: the run watchdog (scout_run_rescue, every 2 min) re-fires a free run whose hop chain died mid-job (8 times Oct 7-10:
   // the note froze on "Working…" until he typed Keep going). Service key only, an existing thread, a hop number: it acts as
   // the admin exactly like that hop would have, and stops by itself if he has written since (supersededSince).
@@ -3278,7 +3290,10 @@ Deno.serve(async (req) => {
         let runIn: RunState | null = null;
         if (autoHop > 0) {
           const st = await loadRunState(threadId).catch(() => null);
-          if (st && st.chain_from && st.chain_from === String(body.chain_from ?? "")) runIn = st;
+          if (st && st.chain_from && st.chain_from === String(body.chain_from ?? "")) {
+            // 2026-10-28: a parked run (every free provider was out) starts a fresh wall clock when the sweep resumes it
+            runIn = st.resume_at ? { ...st, started_at: new Date().toISOString(), stale_hops: 0, resume_at: undefined } : st;
+          }
         } else if (keepGoing) {
           const st = await loadRunState(threadId).catch(() => null);
           if (st && Date.now() - Date.parse(st.started_at) < RUN_RESUME_MS) {
@@ -3294,7 +3309,7 @@ Deno.serve(async (req) => {
         let free = askFirst || runIn ? { why: "" } as { answer?: string; why: string } : await freeTry(threadId, text, body.page);
         if (free.answer) return await say(free.answer, { free: true });
         // v28: before asking to spend, the free model tries the job itself with tools.
-        const agent = await freeAgent(threadId, text, body.page, { askFirst, since: runSince, state: runIn, hop: autoHop });
+        const agent = await freeAgent(threadId, text, body.page, { askFirst, since: runSince, state: runIn, hop: autoHop, budgetMs: Math.max(30_000, FREE_BUDGET_MS - hopWaited) });
         if (agent.stopped) return stoppedReply();
         // v36: closes out this run's progress note and drops its memory (kept only when the run stalls: "Keep going" resumes it).
         const endRun = async (keep?: RunState) => {
@@ -3341,14 +3356,23 @@ Deno.serve(async (req) => {
           // v36: up to AUTO_HOPS rounds or 20 minutes, and only while each hop finds something new.
           const st = agent.state;
           const withinTime = Date.now() - Date.parse(st.started_at) < RUN_MAX_MS;
-          if (autoHop < AUTO_HOPS && withinTime && !agent.stalled) {
+          // 2026-10-28: Paid AI switch already ON and every free provider is out: paid takes it (the switch is the one gate, v30/v38).
+          if (agent.parked && freeFirst) {
+            await endRun(st);
+            const res = await say("Every free AI provider is out right now and the Paid AI switch is on, so paid AI is taking it from here.", { free: true, handoff: true });
+            if (await interrupted()) return res;
+            await fireHandoff(st.goal || text);
+            return res;
+          }
+          // A paused or parked hop did no work, so it never counts against the hop or time limits (it is bounded by PAUSE_MAX, then parking).
+          if (agent.paused || (autoHop < AUTO_HOPS && withinTime && !agent.stalled)) {
             const chainFrom = String(body.chain_from ?? new Date().toISOString());
             st.chain_from = chainFrom;
             st.hop = autoHop;
             // One progress note, edited in place. created_at moves with it so the window still sees the run alive.
             // v41: honest, short, in place: what it is doing in a few words and the step count. Never the model's own words.
             const lastTool = (agent.tools ?? []).slice(-1)[0] ?? "";
-            const note = agent.paused ? `Working: waiting for the free AI to free up (${st.steps} steps)` : `Working: ${DOING[lastTool] ?? "working through your request"} (${st.steps} steps)`;
+            const note = agent.parked ? agent.answer : agent.paused ? `Working: waiting for the free AI to free up (${st.steps} steps)` : `Working: ${DOING[lastTool] ?? "working through your request"} (${st.steps} steps)`;
             let res: Response;
             if (st.progress_msg_id) {
               if (await interrupted()) return stoppedReply();
@@ -3363,12 +3387,16 @@ Deno.serve(async (req) => {
             }
             if (await interrupted()) return res;   // he wrote while the note went out: his message wins, nothing carries on
             await saveRunState(threadId, st);
-            // v39: a busy pause waits 30 s before the next hop so the rate limits can clear.
-            const hop = new Promise((r) => setTimeout(r, agent.paused ? 30_000 : 0)).then(() => fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/admin-chat`, {
+            if (agent.parked) return res;   // parked: no hop is fired; scout_working_note_sweep resumes the run at st.resume_at
+            // v39: a busy pause lets the rate limits clear for 30 s before the next hop runs.
+            // 2026-10-28: that wait used to be a setTimeout in THIS invocation, which the platform kills right after the reply goes
+            // out, so the next hop never fired and the note froze at "(0 steps)" for two days. The hop is fired NOW and carries
+            // not_before; the new invocation (fresh lifetime) does the waiting. scout_working_note_sweep re-kicks it if even that is lost.
+            const hop = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/admin-chat`, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: req.headers.get("Authorization") ?? "", apikey: req.headers.get("apikey") ?? "" },
-              body: JSON.stringify({ thread_id: threadId, body: "keep going", page: body.page, auto_continue: autoHop + 1, chain_from: chainFrom, ...(resumeCall ? { resume: true } : {}) }),
-            })).then((r) => r.text()).catch(() => null);
+              body: JSON.stringify({ thread_id: threadId, body: "keep going", page: body.page, auto_continue: autoHop + 1, chain_from: chainFrom, ...(agent.paused ? { not_before: notBeforeIso() } : {}), ...(resumeCall ? { resume: true } : {}) }),
+            }).then((r) => r.text()).catch(() => null);
             const er = (globalThis as any).EdgeRuntime;
             if (er?.waitUntil) er.waitUntil(hop); else await hop;
             return res;
@@ -3384,7 +3412,7 @@ Deno.serve(async (req) => {
           }
           // Out of hops or time, or it stopped finding anything new: say what it has and let him decide. Memory stays for "Keep going".
           await endRun(st);
-          return await say(/^\s*OPTIONS:/m.test(agent.answer) ? agent.answer : `${agent.answer}\n\nOPTIONS: Keep going | Use paid AI for this one`, { free: true, tools: agent.tools ?? [] });
+          return await say(/^\s*OPTIONS:/m.test(agent.answer) ? agent.answer : `${agent.answer}\n\nOPTIONS: Keep going`, { free: true, tools: agent.tools ?? [] });
         }
         // v37: a run that ends in a paid ask keeps its memory, so a "No, skip it" then "Keep going" resumes on free AI.
         await endRun(agent.answer ? undefined : (runIn ?? undefined));
@@ -3399,18 +3427,18 @@ Deno.serve(async (req) => {
           await fireHandoff(text);
           return res;
         }
-        // Don't offer a paid run that can't happen: say the real blocker instead.
-        if (await paidOutOfCredit()) {
-          return await say(
-            `${free.why} The paid AI (Claude) is out of credit right now, so I can't do it yet. Your message is saved: top up at console.anthropic.com > Settings > Billing, then send it again.`,
-            { paid_needed: true, out_of_credit: true },
-          );
-        }
-        // 2026-10-27: no dead end. Why per provider, one new provider to connect, paid AI only if he has not said no in this thread.
-        const noPaidHere = await saidNoPaid(threadId);
-        const room = await outOfRoomMessage({ tried: [], noPaid: noPaidHere });
-        if (noPaidHere) return await say(`${room.text}\n\n${room.options}`, { free: true });
-        return await say(`${room.text}\n\n${room.options}`, { paid_needed: true });
+        // 2026-10-28: no dead end. Park the run: ONE in-place note (why per provider + the one provider to connect). No paid offer, no buttons.
+        // scout_working_note_sweep resumes it at resume_at; if the Paid AI switch is on, the handoff above has already taken it.
+        const room = await outOfRoomMessage({ tried: [], noPaid: true });
+        const parked: RunState = {
+          chain_from: String(body.chain_from ?? runSince ?? new Date().toISOString()), goal: text, hop: autoHop, started_at: new Date().toISOString(), steps: 0,
+          stale_hops: 0, progress_msg_id: null, notes: [], calls: [], pauses: PAUSE_MAX + 1,
+          resume_at: new Date(Date.now() + parkDelayMs(room)).toISOString(), parked_since: new Date().toISOString(),
+        };
+        const res = await say(waitingNote(room, 0), { free: true, tools: [], continuing: true });
+        parked.progress_msg_id = sayId;
+        if (!(await interrupted())) await saveRunState(threadId, parked);
+        return res;
       }
     }
   }
@@ -3426,7 +3454,7 @@ Deno.serve(async (req) => {
   const { data: hist } = await db.from("admin_chat_messages").select("role,body").eq("thread_id", threadId)
     .order("created_at", { ascending: false }).limit(30);
   const messages: any[] = [];
-  const rows = ((hist ?? []).reverse() as { role: string; body: string }[]);
+  const rows = cleanHistory((hist ?? []).reverse() as { role: string; body: string }[]);   // 2026-10-28: Scout's own status notes never go back to a model
   // v36: Scout SEES the files in his two newest file messages (within his last 8 messages): pictures, PDF pages and video
   // frames go to Claude as real image / document blocks. Older turns keep the text copy only (token cost); `look` re-opens them.
   const userRows = rows.map((m, i) => (m.role === "user" ? i : -1)).filter((i) => i >= 0);

@@ -16,7 +16,7 @@
 // Off switch: public.llm_providers.enabled (per provider). Cooldowns: llm_providers.cooldown_until.
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
-import { CANDIDATES, buildOutOfRoom, type ProviderRow, type RoomOut } from "./free-llm-status.ts";
+import { CANDIDATES, buildOutOfRoom, looksLikeStatusParrot, type ProviderRow, type RoomOut } from "./free-llm-status.ts";
 
 export type LlmTask = "judge" | "pick" | "extract" | "triage" | "write" | "reflect" | "classify" | "summarize" | "code";
 export type LlmPrivacy = "private" | "public";
@@ -49,7 +49,7 @@ export interface LlmResult {
   model: string;
   provider: Provider;
   cost_usd: number;
-  tried: { provider: string; model: string; outcome: Outcome; ms: number; lastChance?: boolean }[];
+  tried: { provider: string; model: string; outcome: Outcome; ms: number; lastChance?: boolean; need?: number; max?: number; used?: number; cap?: number }[];
 }
 
 export class LlmUnavailable extends Error {
@@ -910,7 +910,7 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
   const rungs = pass === 0 ? ladder : (req.scope === "chat" && !tried.some((x) => x.outcome === "ok") ? cooled : []);
   for (const rung of rungs) {
     const left = deadline - Date.now();
-    const skip = (outcome: Outcome) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0 });
+    const skip = (outcome: Outcome, why: { need?: number; max?: number; used?: number; cap?: number } = {}) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0, ...why });
     if (left < 3000) { skip("timeout"); continue; }
     const p = prov[rung.provider];
     if (rung.provider === "freellm" && flBlocked(fl)) { skip("skipped_off"); continue; }
@@ -919,8 +919,8 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
     if (privacy === "private" && p && !p.private_ok) { skip("skipped_privacy"); continue; }
     if (pass === 0 && p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now()) { cooled.push(rung); skip("rate_limited"); continue; }
     if ((modelSkip.get(rung.model) ?? 0) > Date.now()) { skip("rate_limited"); continue; }
-    if (need > rung.maxIn) { skip("skipped_size"); continue; }
-    if (p?.daily_cap && rung.provider !== "anthropic" && (await usedToday(rung.provider)) >= p.daily_cap) { skip("skipped_budget"); continue; }
+    if (need > rung.maxIn) { skip("skipped_size", { need, max: rung.maxIn }); continue; }
+    if (p?.daily_cap && rung.provider !== "anthropic") { const used = await usedToday(rung.provider); if (used >= p.daily_cap) { skip("skipped_budget", { used, cap: p.daily_cap }); continue; } }
 
     const t0 = Date.now();
     try {
@@ -952,6 +952,12 @@ export async function llm(input: LlmRequest): Promise<LlmResult> {
         await log(req, rung.provider, c.model, "invalid", ms, c, "thinking out loud");
         tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
         if (isFl) await liveFail(rung.model, "thinking out loud");
+        continue;
+      }
+      // 2026-10-28: a model that copies Scout's own status text ("Free AI is out of room ... use paid AI or wait") is a miss, not an answer.
+      if (!req.json && rung.provider !== "anthropic" && looksLikeStatusParrot(c.text)) {
+        await log(req, rung.provider, c.model, "invalid", ms, c, "repeated Scout's own status text");
+        tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
         continue;
       }
       // 2026-10-07: tool syntax written as text is a miss (and a strike), never a reply.
@@ -1134,7 +1140,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
   if (lastChance && (tried.some((x) => x.outcome === "ok") || !held.length)) break;
   for (const rung of (lastChance ? held : chain)) {
     const left = lastChance ? Math.min(deadline - Date.now(), LAST_CHANCE_TIMEOUT_MS) : deadline - Date.now();
-    const skip = (outcome: Outcome) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0 });
+    const skip = (outcome: Outcome, why: { need?: number; max?: number; used?: number; cap?: number } = {}) => tried.push({ provider: rung.provider, model: rung.model, outcome, ms: 0, ...why });
     if (left < 3000) { skip("timeout"); continue; }
     const p = prov[rung.provider];
     const holdIt = () => { if (!String(p?.outage_note ?? "").trim()) held.push(rung); };
@@ -1157,8 +1163,8 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
     const window = rung.provider === "groq" ? 3800 : 24_000;
     const sendMsgs = input.trim ? input.trim(messages, window) : messages;
     const need = estTokens(JSON.stringify(sendMsgs)) + toolTok + maxTokens;
-    if (need > rung.maxIn) { skip("skipped_size"); continue; }
-    if (!lastChance && p?.daily_cap && (await usedToday(rung.provider)) >= p.daily_cap) { holdIt(); skip("skipped_budget"); continue; }
+    if (need > rung.maxIn) { skip("skipped_size", { need, max: rung.maxIn }); continue; }
+    if (!lastChance && p?.daily_cap) { const used = await usedToday(rung.provider); if (used >= p.daily_cap) { holdIt(); skip("skipped_budget", { used, cap: p.daily_cap }); continue; } }
 
     const gptOss = rung.model.includes("gpt-oss");
     const body: Record<string, unknown> = {
@@ -1229,14 +1235,18 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       // on its own it is a miss and the next model answers (logged "invalid" so no provider gets paused).
       const leaked = thinkingLeak(content, toolNames.size > 0);
       if (leaked && toolCalls.length) content = "";
+      // 2026-10-28: a reply that is Scout's own out-of-room / "use paid AI or wait" text (the model copied it from the thread) is a miss.
+      // Not a strike on the model: the cause was the context, which admin-chat now cleans.
+      const parrot = !!content && looksLikeStatusParrot(content);
+      if (parrot) content = "";
       const inT = Number(j.usage?.prompt_tokens ?? 0), outT = Number(j.usage?.completion_tokens ?? 0);
       const c: Call = { text: content, model: String(j.model ?? rung.model), inT, outT, cost: 0 };
       if (rung.provider === "cloudflare") { const [ni, no] = CF_NEURONS[rung.model] ?? [40_000, 80_000]; c.units = Number(j.usage?.neurons) || (inT * ni + outT * no) / 1e6; }
       if ((!content || leaked) && !toolCalls.length) {
         // A blank turn is the model's miss, not the provider's: "invalid" keeps free_llm_watch from pausing a healthy provider.
-        await log(logReq, rung.provider, c.model, "invalid", ms, c, leaked ? "thinking out loud" : `empty reply (finish ${j.choices?.[0]?.finish_reason ?? "?"})`);
+        await log(logReq, rung.provider, c.model, "invalid", ms, c, parrot ? "repeated Scout's own status text" : leaked ? "thinking out loud" : `empty reply (finish ${j.choices?.[0]?.finish_reason ?? "?"})`);
         tried.push({ provider: rung.provider, model: c.model, outcome: "invalid", ms });
-        if (isFl) await liveFail(rung.model, leaked ? "thinking out loud" : "empty reply");
+        if (isFl && !parrot) await liveFail(rung.model, leaked ? "thinking out loud" : "empty reply");
         continue;
       }
       await log(logReq, rung.provider, c.model, "ok", ms, c);

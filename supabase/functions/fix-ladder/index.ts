@@ -279,7 +279,7 @@ async function climb(i: Issue, opts: { scoutOk: boolean; freeAiOk: boolean; forc
     if (!res) { await setStage(i.key, { fix_next_at: later(2) }); return "scout: running"; }
     // 2026-10-17: a busy free AI is not a Scout failure. "Not answering right now" / "out of room" used to count as STUCK and
     // sent the incident to the claude pile, so a five-minute provider squeeze became a permanent needs-a-human ticket.
-    if (/free AI (?:is out of room|isn't answering right now)|waiting for the free AI|tried every free AI provider I have and none can answer/i.test(res.reply) && res.reply.length < 2500) {   // 2026-10-27: the new out-of-room reply (per-provider reasons + one provider to connect) is longer
+    if (/free AI (?:is out of room|isn't answering right now)|waiting for the free AI|tried every free AI provider I have and none can answer|carry on the moment one answers|Every free AI provider is out right now/i.test(res.reply) && res.reply.length < 2500) {   // 2026-10-27: the new out-of-room reply (per-provider reasons + one provider to connect) is longer
       await setStage(i.key, { fix_next_at: later(5) });
       return "scout: free AI busy, retry";
     }
