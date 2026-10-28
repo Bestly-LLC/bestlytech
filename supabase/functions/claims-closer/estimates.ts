@@ -8,6 +8,8 @@
 //   invoice   queue the Turo invoice (claim_turo_actions) with the estimate summary PDF + photos; the Pi reader posts it
 // Free AI only (paid: "never"). Never spends Jared's money; nothing here books or pays a shop.
 import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
+import { composeShopAnswer, parseShopAsk } from "./answers.ts";
+import { canSend, canSendOutside, logSend, queueTuroAction, type Channel } from "./send.ts";
 
 type Row = Record<string, any>;
 export type Ctx = {
@@ -41,8 +43,13 @@ async function signatureGif(ctx: Ctx): Promise<string | null> {
   return data?.b64 ?? null;
 }
 
-export async function sendMail(ctx: Ctx, o: { to: string; subject: string; text: string; key: string; attachments?: { filename: string; content: string }[] }):
-  Promise<{ ok: boolean; id?: string; error?: string }> {
+export type MailOpts = { outside?: boolean; to: string; subject: string; text: string; key: string; attachments?: { filename: string; content: string }[];
+  channel?: Channel; purpose: string; allowedAmounts?: number[]; derivedFromAnswer?: boolean };
+/** The only way Claims Closer sends email. Goes through canSend (hold, return gate, guards, nothing copied from Jared's answers) first; every decision is logged. */
+export async function sendMail(ctx: Ctx, c: Row, o: MailOpts): Promise<{ ok: boolean; id?: string; error?: string; blocked?: boolean }> {
+  const req = { channel: o.channel ?? "shop_email" as Channel, recipient: o.to, purpose: o.purpose, text: `${o.subject}\n\n${o.text}`, key: o.key, allowedAmounts: o.allowedAmounts, derivedFromAnswer: o.derivedFromAnswer };
+  const d = o.outside ? await canSendOutside(ctx, c, req) : await canSend(ctx, c, req);
+  if (!d.ok) return { ok: false, blocked: true, error: `blocked: ${d.reason}` };
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey) return { ok: false, error: "RESEND_API_KEY is not set on this project" };
   const gif = await signatureGif(ctx);
@@ -55,19 +62,26 @@ export async function sendMail(ctx: Ctx, o: { to: string; subject: string; text:
     body: JSON.stringify({ from: MAIL_FROM, to: [o.to], bcc: ["jared@bestly.tech"], reply_to: "jared@bestly.tech", subject: o.subject, text: o.text + SIG_TEXT, html, attachments }),
   }).catch((e) => ({ ok: false, status: 0, json: async () => ({ message: String(e) }) } as any));
   const j = await r.json().catch(() => ({}));
-  return r.ok ? { ok: true, id: j?.id } : { ok: false, error: `Resend ${r.status}: ${JSON.stringify(j).slice(0, 200)}` };
+  const out = r.ok ? { ok: true, id: j?.id } : { ok: false, error: `Resend ${r.status}: ${JSON.stringify(j).slice(0, 200)}` };
+  if (!o.outside) await logSend(ctx, c, req, out.ok ? "sent" : "failed", undefined, out);
+  return out;
 }
 
 // ---------------------------------------------------------------- Ava (personal assistant) phone calls
-async function avaCall(ctx: Ctx, o: { phone: string; name: string; purpose: string; first_line: string }): Promise<{ ok: boolean; call_id?: string; error?: string }> {
+export async function avaCall(ctx: Ctx, c: Row, o: { phone: string; name: string; purpose: string; first_line: string; why?: string; channel?: Channel; allowedAmounts?: number[] }): Promise<{ ok: boolean; call_id?: string; error?: string; blocked?: boolean }> {
+  const ch: Channel = o.channel ?? "ava_call";
+  const d = await canSend(ctx, c, { channel: ch, recipient: o.phone, purpose: o.why ?? "shop_call", text: `${o.first_line}\n${o.purpose}`, allowedAmounts: o.allowedAmounts });
+  if (!d.ok) return { ok: false, blocked: true, error: `blocked: ${d.reason}` };
   const r = await fetch(`${ctx.supabaseUrl}/functions/v1/ava-assistant`, {
     method: "POST", headers: { Authorization: `Bearer ${ctx.serviceKey}`, apikey: ctx.serviceKey, "Content-Type": "application/json" },
     // Jared (2026-10-06): shop calls go out in his voice (still disclosed as his AI assistant); no clone = her own voice
-    body: JSON.stringify({ action: "call", ...o, voice: "jared", voice_fallback: true,
+    body: JSON.stringify({ action: "call", phone: o.phone, name: o.name, purpose: o.purpose, first_line: o.first_line, voice: "jared", voice_fallback: true,
       jared_first_line: o.first_line.replace(/^Hi, it's Ava, Jared Best's AI assistant, on a recorded line\./, "Hi, it's Jared Best's AI assistant, using his voice, on a recorded line.") }),
   }).catch(() => null);
   const j = await r?.json().catch(() => ({}));
-  return r?.ok && j?.ok ? { ok: true, call_id: j.call_id } : { ok: false, error: String(j?.error ?? `ava-assistant ${r?.status ?? "no answer"}`).slice(0, 200) };
+  const out = r?.ok && j?.ok ? { ok: true, call_id: j.call_id } : { ok: false, error: String(j?.error ?? `ava-assistant ${r?.status ?? "no answer"}`).slice(0, 200) };
+  await logSend(ctx, c, { channel: ch, recipient: o.phone, purpose: o.why ?? "shop_call", text: o.purpose }, out.ok ? "sent" : "failed", undefined, out);
+  return out;
 }
 
 // ---------------------------------------------------------------- shops: rank + pick
@@ -83,7 +97,7 @@ async function rankShops(ctx: Ctx, settings: Row, covered: boolean, excludeIds: 
 }
 
 // ---------------------------------------------------------------- photos for the email
-async function photoAttachments(ctx: Ctx, caseId: string): Promise<{ list: { filename: string; content: string }[]; after: number; before: number }> {
+export async function photoAttachments(ctx: Ctx, caseId: string): Promise<{ list: { filename: string; content: string }[]; after: number; before: number }> {
   const { data } = await ctx.db.from("claim_evidence").select("kind, storage_path, bytes, taken_at").eq("case_id", caseId).order("taken_at", { ascending: true });
   const ev = (data ?? []) as Row[];
   const pick = [...ev.filter((e) => e.kind === "after").slice(0, 8), ...ev.filter((e) => e.kind === "before").slice(0, 2)];
@@ -117,7 +131,7 @@ async function damageSentence(ctx: Ctx, c: Row): Promise<string> {
 }
 
 const refCode = () => "CC-" + Array.from(crypto.getRandomValues(new Uint8Array(5))).map((b) => "23456789ABCDEFGHJKMNPQRSTUVWXYZ"[b % 31]).join("");
-const carName = (c: Row) => (c.car ?? "2020 Tesla Model 3").replace(/\s+\(.*\)$/, "").replace(/^Tesla Model 3 2020$/, "2020 Tesla Model 3");
+export const carName = (c: Row) => (c.car ?? "2020 Tesla Model 3").replace(/\s+\(.*\)$/, "").replace(/^Tesla Model 3 2020$/, "2020 Tesla Model 3");
 
 function requestBody(shop: Row, c: Row, damage: string, n: { after: number; before: number }, ref: string) {
   const first = String(shop.name).replace(/\s+\(.*\)$/, "");
@@ -147,6 +161,11 @@ async function requestEstimates(ctx: Ctx, c: Row, settings: Row, notes: string[]
   const asked = ((have ?? []) as Row[]).map((e) => e.shop_id);
   const want = only ? only.length : Math.max(1, Number(settings.shops_per_request ?? 3)) - asked.length;
   if (want <= 0) return;
+  // nothing goes to a shop while the case is held or the return gate is closed (canSend re-checks each send; this just avoids creating rows first)
+  if ((await ctx.db.rpc("claims_send_ok", { p_case: c.id })).data !== true) {
+    await ctx.db.from("claim_cases").update({ next_check_at: new Date(Date.now() + 30 * 60_000).toISOString() }).eq("id", c.id);
+    notes.push("shop requests wait for the return gate or a hold to clear"); return;
+  }
   const covered = !!(c.insurer?.covers_full);
   const ranked = await rankShops(ctx, settings, covered, asked);
   const shops = (only ? ranked.filter((s) => only.includes(s.id)) : ranked).slice(0, want);
@@ -163,8 +182,9 @@ async function requestEstimates(ctx: Ctx, c: Row, settings: Row, notes: string[]
     if (!est) continue;
     if (channel === "email") {
       const subject = `Photo estimate request: ${carName(c)} bumper damage [${ref}]`;
-      const r = await sendMail(ctx, { to: shop.email, subject, text: requestBody(shop, c, damage, photos, ref), key: `claims-est-${est.id}`, attachments: photos.list });
-      if (r.ok) { sent.push(`${shop.name} (email)`); await ctx.event(c, "estimate_request", `Asked ${shop.name} for a photo estimate`, { shop: shop.name, channel: "email", ref, mail_id: r.id }); }
+      const r = await sendMail(ctx, c, { to: shop.email, subject, text: requestBody(shop, c, damage, photos, ref), key: `claims-est-${est.id}`, attachments: photos.list, purpose: "estimate_request" });
+      if (r.blocked) { await ctx.db.from("claim_estimates").delete().eq("id", est.id); notes.push(`email to ${shop.name} held: ${r.error}`); }
+      else if (r.ok) { sent.push(`${shop.name} (email)`); await ctx.event(c, "estimate_request", `Asked ${shop.name} for a photo estimate`, { shop: shop.name, channel: "email", ref, mail_id: r.id }); }
       else {
         await ctx.db.from("claim_estimates").update({ status: "no_reply", notes: `send failed: ${r.error}` }).eq("id", est.id);
         await ctx.event(c, "estimate_request_failed", `Could not email ${shop.name}`, { error: r.error });
@@ -184,8 +204,9 @@ async function requestEstimates(ctx: Ctx, c: Row, settings: Row, notes: string[]
 async function callShop(ctx: Ctx, c: Row, est: Row, shop: Row, notes: string[], sent?: string[]) {
   const tries = Number(est.line_items?.tries ?? 0);
   if (!shop.phone) { await ctx.db.from("claim_estimates").update({ status: "no_reply", notes: "no phone or email on file" }).eq("id", est.id); return; }
-  const r = await avaCall(ctx, { phone: shop.phone, name: shop.name, purpose: AVA_PURPOSE(c),
+  const r = await avaCall(ctx, c, { phone: shop.phone, name: shop.name, purpose: AVA_PURPOSE(c), why: "estimate_call",
     first_line: `Hi, it's Ava, Jared Best's AI assistant, on a recorded line. I'm calling to ask how to send photos for a quick bumper damage estimate.` });
+  if (r.blocked) { notes.push(`call to ${shop.name} held: ${r.error}`); return; }
   if (r.ok) {
     await ctx.db.from("claim_estimates").update({ call_id: r.call_id, call_at: new Date().toISOString(), line_items: { tries: tries + 1 } }).eq("id", est.id);
     await ctx.event(c, "estimate_request", `Ava is calling ${shop.name} to ask how to send photos`, { shop: shop.name, channel: "call", call_id: r.call_id });
@@ -253,15 +274,46 @@ async function parseReply(ctx: Ctx, c: Row, e: Row, shop: Row, notes: string[]) 
   } else if (x?.asks_for) {
     await ctx.db.from("claim_estimates").update({ ...upd, status: "needs_visit" }).eq("id", e.id);
     await ctx.event(c, "estimate", `${shop.name} asked: ${String(x.asks_for).slice(0, 100)}`, { estimate_id: e.id });
-    await ctx.db.rpc("claims_ask", { p_case: c.id, p_question: `${shop.name} replied and needs: ${String(x.asks_for).slice(0, 240)}. How should I answer?`, p_options: [], p_key: `shop-asks-${e.id}`, p_kind: "decision" });
+    // item 1 (2026-10-28): answer from the record before bothering Jared. Only money decisions and booking confirmation go to him.
+    const to = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(String(mail.from_addr ?? "")) ? String(mail.from_addr) : shop.email;
+    await selfAnswerShop(ctx, c, { ...e, line_items: { ...(e.line_items ?? {}) } }, shop, to, String(x.asks_for), String(mail.sent_at ?? ""), notes);
   } else if ((x?.attachment_only || mail.has_attach) && !e.line_items?.asked_total) {
     // the mail bridge doesn't carry attachments: ask once for the total in the body
-    const r = await sendMail(ctx, { to: mail.from_addr, subject: `Re: ${mail.subject ?? "estimate"} [${e.ref}]`, key: `claims-est-total-${e.id}`,
+    const r = await sendMail(ctx, c, { to: mail.from_addr, subject: `Re: ${mail.subject ?? "estimate"} [${e.ref}]`, key: `claims-est-total-${e.id}`, purpose: "ask_total_in_body",
       text: "Thank you. I can't open attachments in the system I use for this. Could you reply with the total and the main line items typed in the email body? A PDF as well is fine.\n\nThanks,\nJared" });
     await ctx.db.from("claim_estimates").update({ ...upd, status: "requested", requested_at: e.requested_at, line_items: { ...(e.line_items ?? {}), asked_total: r.ok } }).eq("id", e.id);
     await ctx.event(c, "estimate", `Asked ${shop.name} to put the total in the email`, {});
   } else {
     await ctx.db.from("claim_estimates").update({ ...upd, status: "requested" }).eq("id", e.id);
+  }
+}
+
+async function vinOf(ctx: Ctx, c: Row): Promise<string | null> {
+  if (c.vin) return String(c.vin);
+  const { data: t } = await ctx.db.from("turo_trips").select("vin").eq("reservation_id", c.reservation_id).maybeSingle();
+  if (t?.vin) return String(t.vin);
+  const { data: v } = await ctx.db.from("turo_vehicle_state").select("vin").not("vin", "is", null).limit(1);
+  return (v ?? [])[0]?.vin ?? null;
+}
+
+/** Answer what a shop asked using only the case record (VIN, the photos already on file, "Found you online"). Whatever it can't answer it leaves alone. */
+export async function selfAnswerShop(ctx: Ctx, c: Row, e: Row, shop: Row, to: string, asksFor: string, stamp: string, notes: string[]) {
+  const ask = parseShopAsk(asksFor);
+  const photos = ask.photos ? await photoAttachments(ctx, c.id) : { list: [] as { filename: string; content: string }[] };
+  const mine = composeShopAnswer(shop.name, ask, { vin: ask.vin ? await vinOf(ctx, c) : null, photoCount: photos.list.length, contactFirst: shop.contact_name ? String(shop.contact_name).split(/\s+/)[0] : null });
+  if (!mine.text) {
+    await ctx.event(c, "estimate", `${shop.name} asked something the case record can't answer (${mine.left.join(", ") || "unclear"}); left it, not a money or booking decision`, { estimate_id: e.id });
+    return;
+  }
+  const r = await sendMail(ctx, c, { to, subject: `Re: Photo estimate request [${e.ref}]`, key: `claims-est-self-${e.id}-${stamp.slice(0, 19)}`, text: mine.text, attachments: mine.attachPhotos ? photos.list : [], purpose: "self_answer" });
+  if (r.ok) {
+    // the clocks keep running: requested_at is NOT reset (it used to be, which restarted the 24 h / 48 h follow-ups)
+    await ctx.db.from("claim_estimates").update({ status: "requested", line_items: { ...(e.line_items ?? {}), self_answered: mine.answered, self_answer_left: mine.left, self_answer_pending: null } }).eq("id", e.id);
+    await ctx.event(c, "estimate", `Answered ${shop.name}'s question from the record (${mine.answered.join(", ")})${mine.left.length ? `; left alone: ${mine.left.join(", ")}` : ""}`, { estimate_id: e.id });
+    notes.push(`${shop.name}: answered ${mine.answered.join(", ")}`);
+  } else if (r.blocked) {
+    await ctx.db.from("claim_estimates").update({ line_items: { ...(e.line_items ?? {}), self_answer_pending: { asks_for: asksFor, to, stamp } } }).eq("id", e.id);
+    notes.push(`${shop.name}: answer waiting for the gate or a hold`);
   }
 }
 
@@ -286,8 +338,9 @@ async function readCall(ctx: Ctx, c: Row, e: Row, shop: Row, notes: string[]) {
     await ctx.db.from("claim_shops").update({ email }).eq("id", shop.id);
     const photos = await photoAttachments(ctx, c.id); const damage = await damageSentence(ctx, c);
     const ref = e.ref ?? refCode();
-    const r = await sendMail(ctx, { to: email, subject: `Photo estimate request: ${carName(c)} bumper damage [${ref}]`, key: `claims-est-${e.id}`, attachments: photos.list,
+    const r = await sendMail(ctx, c, { to: email, subject: `Photo estimate request: ${carName(c)} bumper damage [${ref}]`, key: `claims-est-${e.id}`, attachments: photos.list, purpose: "estimate_request",
       text: `Thanks for the help on the phone. ${requestBody({ ...shop, name: shop.name }, c, damage, photos, ref).replace(/^Hi .*? team,\n\n/, "")}` });
+    if (r.blocked) { notes.push(`${shop.name}: email after the call held: ${r.error}`); return; }
     await ctx.db.from("claim_estimates").update({ channel: "email", ref, requested_at: new Date().toISOString(), status: r.ok ? "requested" : "no_reply", call_id: null, notes: r.ok ? `got ${email} from the call` : r.error }).eq("id", e.id);
     notes.push(`${shop.name}: emailed after the call`);
   } else if (typeof x?.total === "number" && x.total > 0 && text.replace(/,/g, "").includes(String(Math.round(x.total)))) {
@@ -314,7 +367,7 @@ function chooseFrom(received: Row[], shops: Map<string, Row>, covered: boolean) 
 }
 
 // ---------------------------------------------------------------- the estimate summary PDF (transcribed from the shop's reply)
-async function summaryPdf(ctx: Ctx, c: Row, e: Row, shop: Row): Promise<Uint8Array> {
+export async function summaryPdf(ctx: Ctx, c: Row, e: Row, shop: Row): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([612, 792]);
   const f = await pdf.embedFont(StandardFonts.Helvetica), fb = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -358,6 +411,9 @@ export async function estimatePipeline(ctx: Ctx, c: Row, settings: Row, notes: s
 
   // 1. read what came back
   for (const e of ests.filter((x) => x.status === "replied" && x.mail_id)) await parseReply(ctx, c, e, shops.get(e.shop_id)!, notes);
+  for (const e of ests.filter((x) => x.status === "needs_visit" && x.line_items?.self_answer_pending)) {
+    const p = e.line_items.self_answer_pending; await selfAnswerShop(ctx, c, e, shops.get(e.shop_id)!, p.to, p.asks_for, p.stamp ?? "", notes);
+  }
   for (const e of ests.filter((x) => x.channel === "call" && x.status === "requested" && x.call_id)) await readCall(ctx, c, e, shops.get(e.shop_id)!, notes);
   for (const e of ests.filter((x) => x.channel === "call" && x.status === "requested" && !x.call_id && Number(x.line_items?.tries ?? 0) < 2 && now - Date.parse(x.requested_at) > 20 * 60_000))
     await callShop(ctx, c, e, shops.get(e.shop_id)!, notes);
@@ -370,13 +426,13 @@ export async function estimatePipeline(ctx: Ctx, c: Row, settings: Row, notes: s
       for (const e of ests.filter((x) => x.status === "requested" && x.channel === "email")) {
         const age = now - Date.parse(e.requested_at); const shop = shops.get(e.shop_id)!;
         if (age > 24 * HOUR && !e.followup_at && shop.email) {
-          const r = await sendMail(ctx, { to: shop.email, subject: `Re: Photo estimate request: ${carName(c)} bumper damage [${e.ref}]`, key: `claims-est-fu-${e.id}`,
+          const r = await sendMail(ctx, c, { to: shop.email, subject: `Re: Photo estimate request: ${carName(c)} bumper damage [${e.ref}]`, key: `claims-est-fu-${e.id}`, purpose: "shop_followup",
             text: `Hi ${shop.name} team, just checking you got the photos I sent yesterday. Could you send the estimate total when you have a minute? Thanks, Jared` });
           if (r.ok) await ctx.db.from("claim_estimates").update({ followup_at: new Date().toISOString() }).eq("id", e.id);
         } else if (age > 48 * HOUR && !e.call_at && shop.phone) {
-          const r = await avaCall(ctx, { phone: shop.phone, name: shop.name, purpose: `Follow up on an emailed photo estimate request (ref ${e.ref}) for a ${carName(c)} bumper. Ask whether they got the email and when Jared can expect the estimate total. Do not agree to work or share payment details.`,
+          const r = await avaCall(ctx, c, { phone: shop.phone, name: shop.name, why: "shop_followup_call", purpose: `Follow up on an emailed photo estimate request (ref ${e.ref}) for a ${carName(c)} bumper. Ask whether they got the email and when Jared can expect the estimate total. Do not agree to work or share payment details.`,
             first_line: "Hi, it's Ava, Jared Best's AI assistant, on a recorded line. I'm calling about a photo estimate request he emailed you." });
-          await ctx.db.from("claim_estimates").update({ call_at: new Date().toISOString(), call_id: r.ok ? r.call_id : null, notes: r.ok ? "Ava called to follow up" : `follow-up call failed: ${r.error}` }).eq("id", e.id);
+          if (!r.blocked) await ctx.db.from("claim_estimates").update({ call_at: new Date().toISOString(), call_id: r.ok ? r.call_id : null, notes: r.ok ? "Ava called to follow up" : `follow-up call failed: ${r.error}` }).eq("id", e.id);
         }
       }
       // every asked shop is a no-show / declined and nothing is received: ask the next-ranked shops
@@ -460,11 +516,10 @@ export async function estimatePipeline(ctx: Ctx, c: Row, settings: Row, notes: s
         `, for the damage found at check-in.`,
         Number(c.estimate_amount) > amount ? " The photos are attached. If you have personal auto insurance, send me your insurer and policy number and I'll run the full repair through it." : " The photos are attached."].join("");
       const message = msg.length <= 500 ? msg : msg.replace(` from ${shop.name}`, ` from ${shopShort}`).slice(0, 500);
-      await ctx.db.from("claim_turo_actions").insert({ case_id: c.id, kind: "create_invoice",
-        payload: { amount, message, estimate_total: Number(c.estimate_amount), shop: shop.name, doc_path: docPath, evidence_ids: evidenceIds, incident_number: String(c.turo_claim_no ?? "") } });
-      await ctx.db.from("turo_reader_state").update({ poke_at: new Date().toISOString() }).eq("id", 1);
-      await ctx.event(c, "turo_action", `Queued the Turo invoice: ${ctx.money(amount)}`, { amount, shop: shop.name });
-      notes.push(`queued Turo invoice ${ctx.money(amount)}`);
+      const q = await queueTuroAction(ctx, c, "create_invoice", { amount, message, estimate_total: Number(c.estimate_amount), shop: shop.name, doc_path: docPath, evidence_ids: evidenceIds, incident_number: String(c.turo_claim_no ?? "") },
+        [amount, Number(c.estimate_amount)]);
+      if (q.ok) { await ctx.event(c, "turo_action", `Queued the Turo invoice: ${ctx.money(amount)}`, { amount, shop: shop.name }); notes.push(`queued Turo invoice ${ctx.money(amount)}`); }
+      else notes.push(`Turo invoice held: ${q.error}`);
     }
   }
 

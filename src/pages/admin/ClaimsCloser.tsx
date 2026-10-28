@@ -29,7 +29,9 @@ type Case = { id: string; reservation_id: number; guest_first: string | null; gu
 type Evidence = { id: string; uuid: string; kind: string; step: string | null; taken_at: string | null; path: string };
 type Estimate = { id: string; shop_id: string; shop: string; distance_mi: number | null; phone: string | null; channel: string; status: string; requested_at: string;
   replied_at: string | null; amount: number | null; oem: boolean | null; repair_vs_replace: string | null; notes: string | null; chosen: boolean; chosen_reason: string | null };
-type Question = { id: string; question: string; options: { value: string; label: string }[]; answer: string | null; asked_at: string; answered_at: string | null; kind: string };
+type Question = { id: string; key?: string | null; question: string; options: { value: string; label: string }[]; answer: string | null; asked_at: string; answered_at: string | null; kind: string; snoozed_until?: string | null; retired_at?: string | null };
+// A shop asked something: three buttons, because what Jared answers is an instruction to Claims Closer and is never sent to the shop.
+const SHOP_BUTTONS = [{ value: "answer", label: "Answer it for me" }, { value: "drop", label: "Drop this shop" }, { value: "wait", label: "Wait" }];
 type TuroAction = { id: string; kind: string; status: string; payload: { amount?: number; dry_run?: boolean } | null; error: string | null; created_at: string; done_at: string | null };
 type Shop = { id: string; name: string; distance_mi: number | null };
 type Row = { case: Case; drafts: Draft[]; events: Ev[]; evidence: Evidence[]; estimates: Estimate[]; questions: Question[]; turo_actions: TuroAction[] };
@@ -206,27 +208,35 @@ function Booking({ row, reload }: { row: Row; reload: () => void }) {
 
 function Questions({ qs, reload }: { qs: Question[]; reload: () => void }) {
   const [busy, setBusy] = useState(""); const [text, setText] = useState<Record<string, string>>({});
-  const open = qs.filter((q) => !q.answered_at && q.kind !== "fyi");
+  const open = qs.filter((q) => !q.answered_at && !q.retired_at && q.kind !== "fyi" && !(q.snoozed_until && Date.parse(q.snoozed_until) > Date.now()));
   if (!open.length) return null;
-  const answer = async (id: string, a: string) => {
-    setBusy(id); const { error } = await rpc("claims_answer", { p_id: id, p_answer: a }); setBusy("");
-    if (error) { toast.error(error.message); return; }
-    toast.success("Thanks. Claims Closer is on it."); reload();
+  const isShop = (q: Question) => String(q.key ?? "").startsWith("shop-asks-");
+  const shopOpen = open.filter(isShop);
+  const answer = async (ids: string[], a: string) => {
+    setBusy(ids[0]);
+    for (const id of ids) { const { error } = await rpc("claims_answer", { p_id: id, p_answer: a }); if (error) { toast.error(error.message); setBusy(""); return; } }
+    setBusy(""); toast.success("Thanks. Claims Closer is on it. Nothing you typed goes to anyone else."); reload();
   };
   return (
     <div className="mt-4 rounded-2xl border border-[#FF9F0A66] bg-[#FF9F0A14] p-3.5">
       <p className={cn("text-[15px] font-semibold", label)}>Claims Closer needs an answer</p>
-      {open.map((q) => (
-        <div key={q.id} className="mt-2">
-          <p className={cn("text-[15px]", label)}>{q.question}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {(q.options ?? []).map((o) => <button key={o.value} type="button" className={btnTinted} disabled={busy === q.id} onClick={() => answer(q.id, o.value)}>{o.label}</button>)}
-            {!(q.options ?? []).length && (<>
-              <input value={text[q.id] ?? ""} onChange={(e) => setText({ ...text, [q.id]: e.target.value })} placeholder="Your answer" className={cn(field, "w-full sm:w-72")} aria-label="Your answer" />
-              <button type="button" className={btnPrimary} disabled={busy === q.id || !(text[q.id] ?? "").trim()} onClick={() => answer(q.id, text[q.id])}>Send</button></>)}
+      {open.map((q) => {
+        const opts = (q.options ?? []).length ? q.options : isShop(q) ? SHOP_BUTTONS : [];
+        return (
+          <div key={q.id} className="mt-2">
+            <p className={cn("text-[15px]", label)}>{q.question}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {opts.map((o) => <button key={o.value} type="button" className={btnTinted} disabled={busy === q.id} onClick={() => answer([q.id], o.value)}>{o.label}</button>)}
+              {isShop(q) && shopOpen.length > 1 && opts.map((o) => <button key={`all-${o.value}`} type="button" className={btnTinted} disabled={busy === q.id} onClick={() => answer(shopOpen.map((x) => x.id), o.value)}>{o.label} for all {shopOpen.length} shops</button>)}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input value={text[q.id] ?? ""} onChange={(e) => setText({ ...text, [q.id]: e.target.value })} placeholder="Note to Claims Closer" className={cn(field, "w-full sm:w-72")} aria-label="Note to Claims Closer" />
+              <button type="button" className={btnPrimary} disabled={busy === q.id || !(text[q.id] ?? "").trim()} onClick={() => answer([q.id], text[q.id])}>Save note</button>
+            </div>
+            <p className={cn("mt-1 text-[12px]", tertiary)}>A note is an instruction for Claims Closer. It stays here and is never sent to a shop, guest, insurer or Turo.</p>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -366,6 +376,69 @@ function HistoryCard({ c }: { c: Case }) {
   );
 }
 
+// What Claims Closer may do on its own (Jared, 2026-10-28). Each switch writes through claims_autonomy_set (admin-guarded, bounded). Below the switches: the last
+// things it was stopped from sending (a hold, the return gate or a guard), so a held case is never silent.
+type AutonomyState = { insurer_contact_mode: "full" | "draft_only"; booking_mode: "auto" | "confirm"; min_accept_pct: number; auto_complete: boolean; hold_autorelease: boolean; booking_buffer_hours: number;
+  blocked: { at: string; channel: string; purpose: string; code: string; reason: string | null; guest_first: string | null }[] };
+function AutonomyCard() {
+  const [a, setA] = useState<AutonomyState | null>(null);
+  const [pct, setPct] = useState("");
+  const load = useCallback(async () => {
+    const { data, error } = await rpc<AutonomyState>("claims_autonomy_get");
+    if (!error && data) { setA(data); setPct(String(data.min_accept_pct)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  const set = async (key: string, value: string, done: string) => {
+    const { data, error } = await rpc<{ ok: boolean; error?: string }>("claims_autonomy_set", { p_key: key, p_value: value });
+    if (error || data?.ok === false) toast.error(error?.message ?? data?.error ?? "That did not save"); else { toast.success(done); void load(); }
+  };
+  if (!a) return null;
+  const row = "flex flex-wrap items-center justify-between gap-2 py-2";
+  return (
+    <section className={card}>
+      <p className={cn("text-[17px] font-semibold", label)}>What Claims Closer does on its own</p>
+      <div className="mt-1 divide-y divide-white/10">
+        <div className={row}>
+          <p className={cn("text-[13px]", secondary)}>Insurers: {a.insurer_contact_mode === "full" ? "opens claims, emails adjusters from jared@bestly.tech, calls through Ava and chases until paid" : "prepares only, contacts no insurer"}</p>
+          <button type="button" className={btnPlain} onClick={() => set("insurer_contact_mode", a.insurer_contact_mode === "full" ? "draft_only" : "full", a.insurer_contact_mode === "full" ? "Insurer contact is draft only" : "Insurer contact is on")}>{a.insurer_contact_mode === "full" ? "Draft only" : "Let it contact insurers"}</button>
+        </div>
+        <div className={row}>
+          <p className={cn("text-[13px]", secondary)}>Repair booking: {a.booking_mode === "auto" ? `books itself once the money is assured, keeping ${a.booking_buffer_hours} hours clear of any booked Turo trip` : "waits for your Book it tap"}</p>
+          <button type="button" className={btnPlain} onClick={() => set("booking_mode", a.booking_mode === "auto" ? "confirm" : "auto", a.booking_mode === "auto" ? "Booking waits for your tap" : "Booking is automatic")}>{a.booking_mode === "auto" ? "Ask me first" : "Book on its own"}</button>
+        </div>
+        <div className={row}>
+          <p className={cn("text-[13px]", secondary)}>Complete trip: {a.auto_complete ? "taps it for you once the reservation has ended and Blue Steel is parked at home or the LAX garage" : "waits for your tap (a reminder goes out after 24 hours)"}</p>
+          <button type="button" className={btnPlain} onClick={() => set("auto_complete", String(!a.auto_complete), a.auto_complete ? "Complete trip is manual" : "Complete trip is automatic")}>{a.auto_complete ? "Turn off" : "Turn on"}</button>
+        </div>
+        <div className={row}>
+          <p className={cn("text-[13px]", secondary)}>Holds: {a.hold_autorelease ? "a hold for a message that reached the guest during a live trip clears itself once the trip is complete; every other hold stays until you clear it" : "every hold stays until you clear it"}</p>
+          <button type="button" className={btnPlain} onClick={() => set("hold_autorelease", String(!a.hold_autorelease), a.hold_autorelease ? "Holds stay until you clear them" : "Live-trip holds clear themselves")}>{a.hold_autorelease ? "Turn off" : "Turn on"}</button>
+        </div>
+        <div className={row}>
+          <p className={cn("text-[13px]", secondary)}>An insurer offer under this share of the chosen estimate always comes to you. It never counters and never takes part of it.</p>
+          <span className="flex items-center gap-2">
+            <input className={cn(field, "w-20 text-right")} inputMode="numeric" value={pct} onChange={(e) => setPct(e.target.value.replace(/[^0-9]/g, ""))} aria-label="Minimum percent of the estimate it may accept on its own" />
+            <span className={cn("text-[13px]", secondary)}>%</span>
+            <button type="button" className={btnPlain} disabled={!pct || Number(pct) === a.min_accept_pct} onClick={() => set("min_accept_pct", pct, "Saved")}>Save</button>
+          </span>
+        </div>
+      </div>
+      {a.blocked.length > 0 && (
+        <div className="mt-3">
+          <p className={cn("text-[13px] font-medium", label)}>Held back this week (not sent)</p>
+          <ul className="mt-1 space-y-1">
+            {a.blocked.map((b, i) => (
+              <li key={i} className={cn("text-[13px]", secondary)}>
+                <span className="whitespace-nowrap">{when(b.at)}</span> · {b.guest_first ?? "A case"}: {b.purpose.replace(/_/g, " ")} by {b.channel.replace(/_/g, " ")}. {b.reason ?? b.code}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function ClaimsCloser() {
   const [data, setData] = useState<Data | null>(null);
   const load = useCallback(async () => {
@@ -408,6 +481,7 @@ export default function ClaimsCloser() {
               if (error) toast.error(error.message); else { toast.success(next === "full" ? "Hands-off" : "Guest messages will wait for your OK"); void load(); }
             }}>{data.settings?.autonomy === "guest_approval" ? "Go hands-off" : "Ask me first"}</button>
           </div>
+          <AutonomyCard />
           {!open.length && <p className={cn("px-1 text-[15px]", secondary)}>No open claims. A case opens on its own when Turo emails that a claim started.</p>}
           {open.map((r) => <CaseCard key={r.case.id} row={r} reload={load} autonomy={data.settings?.autonomy ?? "full"} shops={data.shops ?? []} />)}
           {won.length > 0 && (
