@@ -6,5 +6,9 @@ import sys
 sys.path.insert(0, "/opt/bestly/cron/jobs")
 import skill_inbox  # noqa: E402
 
+def main(argv):
+    return skill_inbox.main(["claude"] + list(argv))
+
+
 if __name__ == "__main__":
     sys.exit(skill_inbox.main(["claude"] + sys.argv[1:]))
