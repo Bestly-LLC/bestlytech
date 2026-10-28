@@ -142,13 +142,25 @@ def review(row):
     checks["official"] = official
     checks["host"] = host or None
 
+    # Concerns from the post itself always count. Concerns found only in the README count for unknown publishers; for an official
+    # publisher the README's own install steps are expected (this job never runs them), so they are recorded in checks and not held against it.
     concerns = []
-    if si.CRED_ASK.search(post) or README_CRED.search(readme):
+    if si.CRED_ASK.search(post):
         concerns.append("Asks for a login or API key")
-    if BROAD.search(text):
+    if BROAD.search(post):
         concerns.append("Wants wide access to your files, screen or accounts")
-    if HARD_INSTALL.search(text):
+    if HARD_INSTALL.search(post):
         concerns.append("Install runs commands from the internet or needs admin rights")
+    readme_flags = []
+    if README_CRED.search(readme):
+        readme_flags.append("Asks for a login or API key")
+    if BROAD.search(readme):
+        readme_flags.append("Wants wide access to your files, screen or accounts")
+    if HARD_INSTALL.search(readme):
+        readme_flags.append("Install runs commands from the internet or needs admin rights")
+    checks["readme_flags"] = readme_flags
+    if not official:
+        concerns += readme_flags
     checks["soft_install"] = bool(SOFT_INSTALL.search(text))
     if facts and facts.get("found") and facts.get("archived"):
         concerns.append("The GitHub repo is archived")
