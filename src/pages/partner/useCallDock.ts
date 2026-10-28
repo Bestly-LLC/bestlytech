@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { reportToScout } from "@/lib/reportToScout";
 
-const V = "11bd2f83";
+const V = "f1087b3f";
 const NBS = " ";
 type Dock = Record<string, any>;
 const dock = (): Dock | undefined => (window as unknown as { BestlyDock?: Dock }).BestlyDock;
@@ -92,7 +92,9 @@ function initDock() {
     me: () => ({ key: null, name: SC.isJared ? "Jared" : "Eli" }),
     face: () => null,
     getCall: () => SC,
-    fault: (code: string, detail: string) => reportToScout(`call.${String(code).slice(0, 40)}`, String(detail || "dock")),
+    /* the dock now leaves a trace of every Pop out (which build ran, where it got stuck); only real failures go to Scout */
+    fault: (code: string, detail: string) => { if (/^(win_boot|win_phase|win_tonc|pop_open|pop_msg)$/.test(String(code))) return; reportToScout(`call.${String(code).slice(0, 40)}`, String(detail || "dock")); },
+    winFail: { title: "This window isn't connecting.", body: "Opening your call in Nextcloud instead.", back: "Back to the portal", nc: "Open in Nextcloud now" },
     toast: (msg: string) => { toast(msg); },
     backWord: "Back to the portal",
     winKind: "partner",

@@ -1,4 +1,4 @@
-/* Bestly call dock. Copied verbatim from the Studio build 11bd2f83 (index.ca77e1e16b.html lines 17304-18754).
+/* Bestly call dock. Copied verbatim from the Studio build f1087b3f (index.1b454fead2.html, the dock IIFE only).
    To re-sync after a Studio change, copy that block here again. Host wiring lives in src/pages/partner/useCallDock.ts.
    ONE local change (line marked PORTAL): "We do not message Elizabeth" names cfg.waitFor() instead. Re-apply it after a re-sync.
    Loaded once by the partner portal; plain ES2020, appends #bdock to document.body. */
@@ -117,6 +117,7 @@
   const loadSz = () => { try { const j = JSON.parse(localStorage.getItem(KEY2) || "null"); if(j && typeof j === "object"){ if(isFinite(j.cw) && j.cw >= CW_MIN && j.cw <= CW_MAX) D.sz.cw = Math.round(+j.cw); if(isFinite(j.strip) && j.strip >= 0.05 && j.strip <= 0.6) D.sz.strip = +j.strip; } } catch {} };
   const saveSz = () => { try { localStorage.setItem(KEY2, JSON.stringify({ cw: Math.round(D.sz.cw), strip: D.sz.strip == null ? null : Math.round(D.sz.strip * 1000) / 1000 })); } catch {} };
   const fault = (code, detail) => { try { D.cfg && D.cfg.fault && D.cfg.fault(code, detail); } catch {} };
+  const BUILD_LABEL = "r5-2026-10-27";      /* which build ran: the call window shows it tiny ("r5") and logs it (call_win_boot) */
   const phone = () => { try { return matchMedia("(max-width: 640px)").matches; } catch { return innerWidth <= 640; } };
   const isIphone = () => /iPhone|iPod/.test(navigator.userAgent || "");
   const isIOS = () => { try { return /iPhone|iPad|iPod/.test(navigator.userAgent || "") || (navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1); } catch { return false; } };
@@ -264,7 +265,7 @@
 
   /* ── drag, with momentum ─────────────────────────────────────────── */
   const wireDrag = () => {
-    attach(D.el.head); attach(D.el.tile); addEventListener("resize", () => { if(D.st.open){ if(D.st.chatOpen && D.st.joined) applyChrome(); else place(false); } });
+    attach(D.el.head); attach(D.el.tile); attach(D.el.popbar); addEventListener("resize", () => { if(D.st.open){ if(D.st.chatOpen && D.st.joined) applyChrome(); else place(false); } });
     // the keyboard on a phone changes the visual screen, not the page: the window follows it, so the message box is never behind the keys
     if(window.visualViewport){ visualViewport.addEventListener("resize", () => syncVV()); visualViewport.addEventListener("scroll", () => syncVV()); }
     // when the window itself grows or shrinks (the note that Scout is taking notes appears, a warning opens, the chat opens), it
@@ -344,7 +345,7 @@
         <button type="button" class="bd-ib bd-close" aria-label="Close this window">${ICON.close}</button>
         <button type="button" class="bd-pill bd-small" hidden>${ICON.shrink}<span>Make the window small</span></button>
       </div>
-      <div class="bd-popbar" hidden><div class="bd-pbt"><b>Strategy call</b><span><i class="bd-dot"></i><span class="bd-pst">Call in its own window</span></span></div><button type="button" class="bd-pill bd-pshow">${ICON.ext}<span>Show it</span></button><button type="button" class="bd-pill bd-pback"><span>Bring it back</span></button></div>
+      <div class="bd-popbar" hidden tabindex="0" role="group" aria-label="Call in its own window. Drag to move it, or use the arrow keys to jump to another spot."><span class="bd-grip">${ICON.grip}</span><div class="bd-pbt"><i class="bd-dot"></i><span class="bd-pst"><span class="bd-pl on">Call in its own window</span><span class="bd-pl" aria-hidden="true"></span></span></div><button type="button" class="bd-pill bd-pshow">${ICON.ext}<span>Show it</span></button><button type="button" class="bd-pill bd-pback"><span>Bring it back</span></button></div>
       <div class="bd-tile" hidden tabindex="0" role="button" aria-label="Open the call full screen. Drag to move it, or use the arrow keys to jump to another spot."><span class="bd-tav"></span><span class="bd-tt"></span><span class="bd-tscout" hidden title="Scout is taking notes">${BINOS}</span></div>
       <div class="bd-body">
         <section class="bd-pre">
@@ -388,7 +389,7 @@
       pre: q(".bd-pre"), call: q(".bd-call"), frameBox: q(".bd-frame"), wait: q(".bd-wait"), smallLab: q(".bd-small span"), ctl: q(".bd-ctl"), err: q(".bd-err"), warn: q(".bd-warn"), wnc: q(".bd-nc"), wp: q(".bd-wp"), wlogin: q(".bd-nclogin"), wagain: q(".bd-again"), jlab: q(".bd-pre .bd-pjoin span"), pnote: q(".bd-pnote"), pretry: q(".bd-pretry"), wt: q(".bd-wt"), j2lab: q(".bd-join2:not(.bd-tab):not(.bd-tab2):not(.bd-nclogin):not(.bd-again)"),
       video: q(".bd-prev video"), av: q(".bd-av"), ok: q(".bd-ok"), mict: q(".bd-mict"), lvl: r.querySelectorAll(".bd-lvl i"), who: q(".bd-who"),
       cm: q(".bd-cm"), cc: q(".bd-cc"), cs: q(".bd-cs2"), cx: q(".bd-cx"), cv: q(".bd-cv"), badge: q(".bd-bd"),
-      notes: q(".bd-notes"), tscout: q(".bd-tscout"), chat: q(".bd-chat"), cl: q(".bd-cl"), cf: q(".bd-cf"), ci: q(".bd-ci"), cdone: q(".bd-cdone"), cnew: q(".bd-cnew"), cempty: q(".bd-cempty"), hint: q(".bd-hint"), big: q(".bd-big"), min: q(".bd-min"), fs: q(".bd-fs"), close: q(".bd-close"), fill: q(".bd-fill"), small: q(".bd-small"), pop: q(".bd-pop"), popbar: q(".bd-popbar"), pshow: q(".bd-pshow"), pback: q(".bd-pback"), pst: q(".bd-pst"),
+      notes: q(".bd-notes"), tscout: q(".bd-tscout"), chat: q(".bd-chat"), cl: q(".bd-cl"), cf: q(".bd-cf"), ci: q(".bd-ci"), cdone: q(".bd-cdone"), cnew: q(".bd-cnew"), cempty: q(".bd-cempty"), hint: q(".bd-hint"), big: q(".bd-big"), min: q(".bd-min"), fs: q(".bd-fs"), close: q(".bd-close"), fill: q(".bd-fill"), small: q(".bd-small"), pop: q(".bd-pop"), popbar: q(".bd-popbar"), pshow: q(".bd-pshow"), pback: q(".bd-pback"), pst: q(".bd-pst"), pls: r.querySelectorAll(".bd-pl"),
       sz: q(".bd-sz"), divw: q(".bd-divw"), div: q(".bd-div"), grip: q(".bd-grip2"),
       pm: q(".bd-pm"), pc: q(".bd-pc"), join: q(".bd-pre .bd-pjoin"), join2: q(".bd-join2"), dev: q(".bd-dev"), devs: q(".bd-devs"), dc: q(".bd-dc"), dm: q(".bd-dm"), tt: q(".bd-tt"), tav: q(".bd-tav") });
     wireDrag(); wireButtons(); wireSz(); wireDiv();
@@ -590,7 +591,7 @@
     const cw = box.clientWidth, ch = box.clientHeight;
     if(D.root.dataset.mini === "1" && cw && ch && !D.login && !D.signing && D.st.bridge !== "off"){
       /* the tile and the bar show the call itself, live: the page is laid out at a small phone's (or a thumbnail's) size and scaled to cover the box, centred */
-      const lw = D.root.dataset.mode === "bar" ? FIT_W : 360, lh = D.root.dataset.mode === "bar" ? FIT_H : 640, k = Math.max(cw / lw, ch / lh);
+      const bar = D.root.dataset.mode === "bar" || D.root.dataset.hand === "1", lw = bar ? FIT_W : 360, lh = bar ? FIT_H : 640, k = Math.max(cw / lw, ch / lh);
       const tf = `translate(${Math.round((cw - lw * k) / 2)}px,${Math.round((ch - lh * k) / 2)}px) scale(${k.toFixed(4)})`;
       f.style.width = lw + "px"; f.style.height = lh + "px"; f.style.transformOrigin = "0 0"; if(f.style.transform !== tf) f.style.transform = tf;
       box.dataset.fit = "mini"; return;
@@ -629,7 +630,7 @@
     const id = ++w.id; Object.assign(w, { state: "ticket", f: null, loaded: false, alive: false, t0: Date.now() });
     w.p = (async () => {
       let t;
-      try{ t = await D.cfg.ticket(); if(!t || !t.url) throw new Error((t && t.error) || "no_url"); }
+      try{ t = await getTicket(); if(!t || !t.url) throw new Error((t && t.error) || "no_url"); }
       catch(err){ if(w.id === id){ w.state = "failed"; w.p = null; fault("prewarm_ticket", String(err && err.message || err)); if(D.st.open && !D.st.joined){ D.el.call.hidden = true; applyChrome(); paintPre(); startPre(); } } return; }
       if(w.id !== id || (!D.st.open && !D.st.joined)) return;          // closed, or started over, while the ticket was on its way
       D.origin = origin(t.url);
@@ -729,7 +730,7 @@
       /* the way it always was: ticket, then the frame, then the join once the frame has loaded */
       if(w.state !== "idle") unwarm();
       let t;
-      try{ t = await D.cfg.ticket(); if(!t || !t.url) throw new Error((t && t.error) || "no_url"); }
+      try{ t = await getTicket(); if(!t || !t.url) throw new Error((t && t.error) || "no_url"); }
       catch(err){ D.st.joined = false; setMode("prejoin"); showErr("We could not open the call. Please try again in a moment."); fault("ticket", String(err && err.message || err)); return; }
       if(!D.st.joined) return;
       D.origin = origin(t.url);
@@ -799,7 +800,7 @@
     const raw = Array.isArray(d.people) ? d.people : []; /* the bridge says whether the notetaker is on the call (people and count already leave it out); the name filter only guards an older bridge */
     s.scoutSaid = typeof d.notetaker === "boolean" || s.scoutSaid === true; s.scout = typeof d.notetaker === "boolean" ? d.notetaker : raw.some(isScout); s.people = raw.filter(p => !isScout(p));
     if(d.joined === true) D.frameJoined = true; else if(loading) D.frameJoined = false;     // a page that is loading again is not in the call
-    if(D.win && D.frameJoined && !D.winSaid){ D.winSaid = true; winSend({ t: "win", s: "joined", mic: !D.st.muted, cam: !!D.st.camera }); }
+    if(D.win && D.frameJoined && !D.winSaid){ D.winSaid = true; clearTimeout(D.timers.winfail); clearTimeout(D.timers.nc); { const f0 = document.querySelector(".bd-winfail"); if(f0) f0.remove(); } winSend({ t: "win", s: "joined", mic: !D.st.muted, cam: !!D.st.camera }); }
     const was = s.sharing; s.sharing = d.sharing && typeof d.sharing === "object" ? d.sharing : null;
     if(!s.sharing) s.stageOff = false;
     if(d.error){ s.error = String(d.error); fault("frame", s.error); }
@@ -826,9 +827,11 @@
     let mode = s.mode;
     if(s.joined){ mode = stageNow() || D.win || (D.dfull && !ph && !D.bar) ? "stage" : (D.bar ? "bar" : (ph && !D.full ? "tile" : "call")); }
     else mode = D.pop.on && D.pop.joined ? "pop" : "prejoin";      /* "pop": the call is in its own window and this page shows the small card */
+    const hand = !!(s.joined && D.pop.on && !D.pop.joined && !D.win);      /* the window is on its way: the call is still here, small, under the card */
+    if(hand) mode = "pop";
     if(mode !== "stage" && s.mode === "stage"){ /* the share ended: back to the spot it was in */ }
-    s.mode = mode; r.dataset.mode = mode; r.dataset.full = (ph && s.joined && D.full && mode !== "tile" && mode !== "bar") || mode === "prejoin" && ph ? "1" : "0";
-    r.dataset.mini = s.joined && (mode === "tile" || mode === "bar") ? "1" : "0";      /* round 5: the tile and the bar show the live call, never an empty picture */
+    s.mode = mode; r.dataset.mode = mode; r.dataset.full = (ph && s.joined && D.full && mode !== "tile" && mode !== "bar" && mode !== "pop") || mode === "prejoin" && ph ? "1" : "0";
+    r.dataset.hand = hand ? "1" : "0"; r.dataset.mini = s.joined && (mode === "tile" || mode === "bar" || hand) ? "1" : "0";      /* round 5: the tile and the bar show the live call, never an empty picture */
     r.dataset.v5 = mode === "prejoin" && v5on() ? "1" : "0";
     document.documentElement.classList.toggle("bd-stage", mode === "stage" || r.dataset.full === "1");
     const e = D.el;
@@ -842,14 +845,14 @@
     e.close.hidden = s.joined;
     r.dataset.win = D.win ? "1" : "0";
     e.pop.hidden = !(s.joined && !D.pop.on && (mode === "call" || mode === "stage") && popOk());
-    e.popbar.hidden = mode !== "pop";
+    e.popbar.hidden = mode !== "pop"; if(mode === "pop") popPaint();
     if(D.win){ e.small.hidden = true; e.fs.hidden = true; }      /* the call window fills its own window: no sizes, no full screen */
     { const isFull = r.dataset.full === "1";       /* on a phone the call window is either the small tile or the full screen: this one button goes to the other */
       e.fill.setAttribute("aria-label", isFull ? "Make small. The call goes back to its small window." : "Fill the screen"); e.fill.title = isFull ? "Make small" : "Fill the screen";
       e.fill.innerHTML = isFull ? ICON.shrink + "<span>" + esc(innerWidth < 400 ? "Back" : ((D.cfg && D.cfg.backWord) || "Back to the board")) + "</span>" : ICON.big; e.fill.classList.toggle("bd-fillw", isFull); }
     if(e.smallLab) e.smallLab.textContent = ph ? "Make small" : (D.dfull ? "Exit full screen" : "Make the window small");
     e.small.setAttribute("aria-label", ph ? "Make small. The call goes back to its small window." : (D.dfull ? "Exit full screen" : "Make the window small"));
-    e.ctl.hidden = !s.joined || mode === "bar" || mode === "tile" || D.st.bridge === "off" && false;
+    e.ctl.hidden = !s.joined || mode === "bar" || mode === "tile" || mode === "pop" || D.st.bridge === "off" && false;
     /* Messages: beside the video when there is room, under a strip of video when there is not (never over the people) */
     const chatOn = !!(s.chatOpen && s.joined && (mode === "call" || mode === "stage"));
     const plan = chatOn ? chatPlan(mode, r.dataset.full === "1") : null, cpos = plan ? plan.cpos : "0";
@@ -876,7 +879,7 @@
     let kb = false;
     if(on && vv){ r.style.top = Math.round(vv.offsetTop) + "px"; r.style.height = Math.round(vv.height) + "px"; kb = innerHeight - vv.height > 120; }
     else { r.style.removeProperty("height"); if(big) r.style.top = "0"; }
-    if(on && !kb && touchy() && document.activeElement === D.el.ci) kb = true;
+    if(on && !kb && touchy() && !D.win && document.activeElement === D.el.ci) kb = true;      /* a narrow window on a desktop is not a phone with its keys up: only a real keyboard (the visual screen shrinking) hides the controls there */
     r.dataset.kb = kb ? "1" : "0";
   };
   const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
@@ -1279,7 +1282,8 @@
     e.fill.onclick = () => { if(D.root.dataset.full === "1"){ collapse(); say("The call is a small window again."); try{ D.el.tile.focus({ preventScroll: true }); }catch{} } else expand(); };
     e.fs.onclick = async () => { try{ await fsEnter(); }catch(err){ fault("fullscreen", String(err && err.message || err)); say("Full screen did not open. The window stays as it is."); } };
     ["fullscreenchange", "webkitfullscreenchange"].forEach(ev => document.addEventListener(ev, () => { const was = D.dfull; D.dfull = fsEl() === D.root; if(was !== D.dfull && D.st.joined){ applyChrome(); place(true); say(D.dfull ? "The call fills the screen." : "The call is back in its window."); } }));
-    e.pop.onclick = () => popOut(); e.pshow.onclick = () => popFocus(); e.pback.onclick = () => popBack();
+    e.pop.onclick = () => popOut(); e.pshow.onclick = () => { const p = D.pop; if(p.ncOffer && !p.joined){ const u2 = p.ncUrl || plainUrl(); if(u2){ try { window.open(u2, "_blank"); } catch {} } return; } popFocus(); }; e.pback.onclick = () => { if(D.pop.joined) popBack(); else popCancel(); };
+    ["pointerenter", "focus", "touchstart", "pointerdown"].forEach(ev => e.pop.addEventListener(ev, () => { if(!D.pop.on && popOk()){ if(sepOk()) popCode(); else popSpare(); } }, { passive: true }));
     e.small.onclick = () => { if(D.dfull){ fsExit(); return; } D.st.stageOff = true; applyChrome(); paintHead(); place(true); say("The call window is small again."); };
     e.tile.onclick = (ev) => { /* a tap that was not a drag opens the full screen call (the pointer-up does it first; this one is for a browser that gave only the click) */ if(phone() && D.st.mode === "tile" && D.tapOk !== false) expand(); };
     $(".bd-tile", D.root).addEventListener("keydown", (ev) => { if(ev.key === "Enter" || ev.key === " "){ ev.preventDefault(); expand(); } });
@@ -1317,83 +1321,263 @@
      (same address, nothing secret). Closing the window leaves the call. If the window never gets in, the call stays here. */
   const BC = (() => { try { return typeof BroadcastChannel === "function" ? new BroadcastChannel("bestly-call") : null; } catch { return null; } })();
   const WINNAME = "bestly-call";
-  Object.assign(D, { win: false, winSaid: false, winLeft: false, pop: { on: false, w: null, t: 0, beat: 0, joined: false, back: false, mic: true, cam: true } });
-  const winSend = (o) => { try { if(BC) BC.postMessage(Object.assign({ k: String((D.cfg && D.cfg.winKind) || "page") }, o)); } catch {} };
+  Object.assign(D, { win: false, winSaid: false, winLeft: false, winGo: false, winTk: null, winO: null, pop: { on: false, w: null, t: 0, beat: 0, joined: false, back: false, mic: true, cam: true, bt: 0, fail: false, shown: "", tk: null, sep: false, hc: null, busy: false, pk: 0, live: false } });
+  const winSend = (o) => {      /* the other window hears it on the channel, and also straight from the page that opened it (a window of the Dock app has an opener) */
+    const m = Object.assign({ k: String((D.cfg && D.cfg.winKind) || "page"), i: Math.random().toString(36).slice(2) }, o);
+    try { if(BC) BC.postMessage(m); } catch {}
+    try { const w = D.win ? window.opener : (D.pop && D.pop.w); if(w && w !== window && !w.closed) w.postMessage({ bestlyWin: m }, location.origin); } catch {}
+  };
   /* a short line the person can see (the host's toast), and the screen reader hears it too */
   const note = (txt) => { let shown = false; try { if(D.cfg && typeof D.cfg.toast === "function"){ D.cfg.toast(txt); shown = true; } } catch {} if(!shown){ try { hint(txt); } catch {} } say(txt); };
   const popOk = () => { try { return !D.win && !phone() && !isIOS() && !!D.cfg && typeof D.cfg.winUrl === "function" && (typeof D.cfg.winOk !== "function" || !!D.cfg.winOk()); } catch { return false; } };
   const popFocus = () => {
-    let w = null; try { w = D.pop.w && !D.pop.w.closed ? D.pop.w : (D.pop.on ? window.open("", WINNAME) : null); } catch {}
+    let w = null; try { w = D.pop.w && !D.pop.w.closed ? D.pop.w : (D.pop.on && !D.pop.sep ? window.open("", WINNAME) : null); } catch {}
     try { if(w) w.focus(); } catch {}
     winSend({ t: "cmd", c: "focus" });
   };
+  /* What the card says while the new window is on its way (Jared, 2026-10-27): one line at a time, each replacing the one before with a soft 200 ms crossfade.
+     The seconds are counted from the tap (Bring it back: from its own tap). At 90 s the call stays here and the card says so. */
+  const POPSAY = [[0, "Moving the call to its own window"], [3, "Opening the window"], [6, "Still working"], [10, "Connecting the call"], [15, "Almost there"], [22, "Jared swears this works"], [30, "Oh my goodness"], [40, "Oh my god"], [55, "Hang on, still trying"], [75, "Giving it a few more seconds"]];
+  const POPFAIL = "The new window didn't connect. Your call is still here.", POPOWN = "Call in its own window";
+  const pstSay = (txt) => {
+    const ls = D.el.pls, p = D.pop; if(!ls || ls.length < 2 || p.shown === txt) return;
+    p.shown = txt;
+    const on = ls[0].classList.contains("on") ? 0 : (ls[1].classList.contains("on") ? 1 : -1), nx = ls[on === 0 ? 1 : 0];
+    nx.textContent = txt; nx.classList.add("on"); if(on >= 0) ls[on].classList.remove("on");
+  };
+  const popLine = () => {
+    const p = D.pop; if(p.fail) return POPFAIL;
+    if(p.ncOffer && !p.joined) return "Open your call in Nextcloud";
+    if(p.joined && !p.back) return p.nc ? "Your call is in the Nextcloud window" : POPOWN;
+    const secs = (Date.now() - (p.back ? p.bt : p.t)) / 1000; let w = p.sep && !p.back ? "Opening the call in Safari" : POPSAY[0][1];      /* from the Dock app the window opens in Safari */
+    for(const [s, x] of POPSAY) if(secs >= s && !(s === 0 && p.sep && !p.back)) w = x;
+    return p.back && w === POPSAY[0][1] ? "Bringing the call back" : w;
+  };
+  const popPaint = () => {
+    const p = D.pop, e = D.el; if(!e.pst) return;
+    pstSay(popLine());
+    const lab = e.pback.querySelector("span"), t = p.joined ? "Bring it back" : "Keep it here";
+    if(lab && lab.textContent !== t) lab.textContent = t;
+    { const sl = e.pshow.querySelector("span") || e.pshow, st = p.ncOffer && !p.joined ? "Open in Nextcloud" : "Show it"; if(sl.textContent !== st && !sl.querySelector("svg")) sl.textContent = st; }
+    e.pshow.disabled = !!p.fail; e.pback.disabled = !!p.fail || !!p.back;
+  };
+  /* a ticket for the new window, asked for early (a hover, a touch, the tap itself) and handed over on the channel, so the window never has to ask for one.
+     Tickets are short-lived: one older than 30 s is asked for again. */
+  const popSpare = () => {
+    const k = D.pop.tk, now = Date.now();
+    if(k && !k.bad && now - k.t < 30000) return k.p;
+    const n = { t: now, v: null, bad: false, p: null };
+    n.p = Promise.resolve().then(() => D.cfg.ticket()).then((v) => { if(!v || !v.url) throw new Error("no_url"); n.v = v; return v; }).catch(() => { n.bad = true; return null; });
+    D.pop.tk = n; return n.p;
+  };
+  const popTicketSend = async () => {
+    const p = D.pop; if(!p.on || p.joined || p.fail || !p.w) return;
+    const v = await popSpare();
+    if(v && D.pop.on && !D.pop.joined && !D.pop.fail) winSend({ t: "cmd", c: "ticket", tk: v });
+  };
+  const getTicket = () => { const k = D.win && D.winTk; if(k){ D.winTk = null; return Promise.resolve(k); } return D.cfg.ticket(); };      /* the call window uses the ticket it was sent; every other page asks */
   const popEnd = () => {      /* the window is gone (closed, or it left): this page is "not on the call" again */
     const p = D.pop; if(!p.on) return;
     clearInterval(D.timers.pop); clearTimeout(D.timers.popb);
-    Object.assign(p, { on: false, w: null, joined: false, back: false });
+    Object.assign(p, { on: false, w: null, joined: false, back: false, fail: false, shown: "" });
     D.root.hidden = true; D.st.open = false; document.documentElement.classList.remove("bd-stage"); geomPing();
     try { D.cfg.onChange && D.cfg.onChange(false); } catch {}
     say("The call window was closed.");
+  };
+  const popCancel = (why) => {      /* the window never got in (closed, or Keep it here): this page still has the call and shows it again */
+    const p = D.pop; if(!p.on || p.joined) return;
+    clearInterval(D.timers.pop); clearTimeout(D.timers.popf);
+    winSend({ t: "cmd", c: "leave" }); try { p.w && p.w.close(); } catch {}
+    Object.assign(p, { on: false, w: null, fail: false, shown: "" }); applyChrome();
+    note(why || "Your call stayed here.");
+  };
+  const popFail = (why) => {      /* nojoin: the window said it is not connecting (closed, the call stays here, the card says so for a moment). Anything else = 90 s of silence: the card offers the plain Nextcloud page and the call stays here */
+    const p = D.pop; if(!p.on || p.joined) return;
+    if(why !== "nojoin"){
+      fault("pop_timeout", "no word in 90 s|msgs=" + (p.logged ? 1 : 0) + "|via=" + (p.via || "none") + "|n=" + Math.random().toString(36).slice(2, 6));
+      p.ncOffer = true; popPaint(); say("Open your call in Nextcloud.");
+      Promise.resolve().then(() => D.cfg.ticket()).then((tk) => { p.ncUrl = plainOf(tk && tk.url); }).catch(() => {});      /* the link is ready before the tap, so the new window opens on the tap itself */
+      return;
+    }
+    fault("pop_nojoin", "said=nojoin|via=" + (p.via || "none") + "|n=" + Math.random().toString(36).slice(2, 6));
+    clearInterval(D.timers.pop); winSend({ t: "cmd", c: "leave" }); try { p.w && p.w.close(); } catch {}
+    p.fail = true; popPaint(); say(POPFAIL);
+    clearTimeout(D.timers.popf); D.timers.popf = setTimeout(() => { Object.assign(D.pop, { on: false, w: null, fail: false, shown: "" }); applyChrome(); }, 4000);
   };
   const popReturn = () => {      /* Bring it back: the window has left the call, so this page joins again with the same microphone and camera */
     const p = D.pop; if(!p.on) return;
     clearInterval(D.timers.pop); clearTimeout(D.timers.popb);
     try { p.w && p.w.close(); } catch {}
     const mic = p.mic, cam = p.cam;
-    Object.assign(p, { on: false, w: null, joined: false, back: false });
+    Object.assign(p, { on: false, w: null, joined: false, back: false, fail: false, shown: "" });
     window.BestlyDock.open(); D.pre.mic = mic !== false; D.pre.cam = cam !== false; join(!D.pre.cam);
   };
   const popWatch = () => {
     clearInterval(D.timers.pop);
     D.timers.pop = setInterval(() => {
       const p = D.pop; if(!p.on){ clearInterval(D.timers.pop); return; }
-      let gone = false; try { gone = !!(p.w && p.w.closed); } catch {}
-      if(!gone && p.joined && p.beat && Date.now() - p.beat > 15000) gone = true;      /* a window that crashed stops its heartbeat */
-      if(gone){ if(p.back) popReturn(); else popEnd(); return; }
-      if(!p.joined && Date.now() - p.t > 90000){      /* the window never got into the call: the call stays here */
-        clearInterval(D.timers.pop); try { p.w && p.w.close(); } catch {}
-        Object.assign(p, { on: false, w: null }); applyChrome();
-        note("The new window could not start the call. Your call is still here.");
-      }
+      let gone = false; try { gone = !!(p.w && p.w.closed) && (!p.sep || p.beat > 0); } catch {}      /* a window in another browser cannot be seen: only trust "closed" once it has spoken */
+      if(!gone && p.joined && !p.nc && p.beat && Date.now() - p.beat > 15000) gone = true;      /* a window that crashed stops its heartbeat */
+      if(gone){ if(!p.joined) popCancel("The new window was closed. Your call is still here."); else if(p.back) popReturn(); else popEnd(); return; }
+      if(!p.joined && !p.fail && !p.ncOffer && Date.now() - p.t > 90000){ popFail("timeout"); }      /* the window never got into the call: the call stays here */
+      popPaint();
     }, 1000);
+    popPaint();
+  };
+  const sepOk = () => standalone() && !!(D.cfg && typeof D.cfg.handoff === "function");      /* the Dock app: the new window opens in another browser, with none of this page's sign-ins */
+  /* a one-time code (60 s, single use) that signs the other browser's window in; asked for early, like the ticket */
+  const popCode = () => {
+    const k = D.pop.hc, now = Date.now();
+    if(k && !k.bad && now - k.t < 40000) return k.p;
+    const n = { t: now, v: null, bad: false, p: null };
+    n.p = Promise.resolve().then(() => D.cfg.handoff()).then((c) => { if(!c || typeof c !== "string") throw new Error("no_code"); n.v = c; return c; }).catch(() => { n.bad = true; return null; });
+    D.pop.hc = n; return n.p;
   };
   const popOut = () => {
-    if(!D.st.joined || D.pop.on || !popOk()) return;
+    if(!D.st.joined || D.pop.on || D.pop.busy || !popOk()) return;
     let u; try { u = new URL(D.cfg.winUrl(), location.href); } catch { return; }
     u.searchParams.set("m", D.st.muted ? "0" : "1"); u.searchParams.set("c", D.st.camera ? "1" : "0");
-    let w = null; try { w = window.open(u.href, WINNAME, "popup=yes,width=960,height=640"); } catch {}
-    if(!w){ note("Your browser blocked the new window. Allow pop-ups for this site, then tap again."); return; }
-    Object.assign(D.pop, { on: true, w, t: Date.now(), beat: 0, joined: false, back: false });
-    D.el.pback.disabled = false; applyChrome(); popWatch();
-    note("The call is opening in its own window. It stays here until that one is ready.");
+    const open = (sep) => {
+      let w = null; try { w = window.open(u.href, WINNAME, "popup=yes,width=960,height=640,resizable=yes,resize=yes"); } catch {}
+      if(!w && !sep){ note("Your browser blocked the new window. Allow pop-ups for this site, then tap again."); return; }
+      Object.assign(D.pop, { on: true, w, sep, t: Date.now(), beat: 0, joined: false, back: false, bt: 0, fail: false, shown: "", pk: 0, live: false, nc: false, ncOffer: false, ncUrl: "", logged: false, via: "" });
+      try { const lu = new URL(u.href); lu.searchParams.delete("h"); fault("pop_open", lu.pathname + lu.search + "|w=" + (w ? 1 : 0) + "|sep=" + (sep ? 1 : 0) + "|bc=" + (BC ? 1 : 0) + "|st=" + (standalone() ? 1 : 0) + "|n=" + Math.random().toString(36).slice(2, 6)); } catch {}
+      applyChrome(); popWatch(); say(popLine());
+    };
+    if(sepOk()){
+      const k = D.pop.hc, ready = k && k.v && !k.bad && Date.now() - k.t < 40000;
+      const go = (code) => {
+        D.pop.busy = false; D.pop.hc = null; if(D.pop.on || !D.st.joined) return;
+        if(code){ u.searchParams.set("h", code); open(true); } else { popSpare(); open(false); }      /* no code: the old way (it only works if the window shares this page's sign-in) */
+      };
+      if(ready) go(k.v); else { D.pop.busy = true; popCode().then(go); }
+      return;
+    }
+    popSpare();      /* the new window's ticket is asked for now, at the same time as the window itself */
+    open(false);
   };
   const popHandoff = () => {      /* the window is in the call: this page leaves quietly and shows the card */
     D.leaving = true; leave(true); setTimeout(() => { D.leaving = false; }, 2500);
-    note("Your call is now in its own window.");
+    say("Your call is now in its own window.");
   };
   const popBack = () => {
-    const p = D.pop; if(!p.on) return;
-    p.back = true; D.el.pback.disabled = true; winSend({ t: "cmd", c: "leave" });
+    const p = D.pop; if(!p.on || !p.joined) return;
+    if(p.nc){ if(p.sep) note("Close the Nextcloud window to leave the call there."); popReturn(); return; }      /* that window is on the plain Nextcloud page and cannot hear: close it if we can, and rejoin here */
+    p.back = true; p.bt = Date.now(); popPaint(); winSend({ t: "cmd", c: "leave" });
     clearTimeout(D.timers.popb); D.timers.popb = setTimeout(() => { if(D.pop.on && D.pop.back) popReturn(); }, 5000);      /* the window did not answer: take the call back anyway */
+  };
+  /* Pop out round 5 (2026-10-27): the call window leaves a trace (which build ran, where it got stuck) and can never dead-end.
+     20 s after it loaded and not in the call, it hands itself to the plain Nextcloud call page (first-party, so the browser's own sign-in works there). */
+  const pvTag = () => { try { const m = /PREVIEW · ([0-9a-f]{8})/.exec(document.body.textContent || ""); return m ? m[1] : "live"; } catch { return "?"; } };
+  const hostPath = (u) => { try { const x = new URL(u, location.href); return x.host + "/" + (x.pathname.split("/")[1] || ""); } catch { return ""; } };      /* never a token or a room */
+  const plainOf = (u) => { try { if(!u) return ""; const x = new URL(u, location.href); x.searchParams.delete("embed"); x.searchParams.delete("bv"); return x.href; } catch { return ""; } };
+  const plainUrl = () => plainOf(D.callUrl);
+  const tr = { q: [], n: 0, last: 0, rows: 0, snap: "", t0: Date.now(), permT: 0, loginT: 0 };
+  const traceFlush = () => {
+    let ok = false; try { ok = !!(D.cfg && D.cfg.session && D.cfg.session()); } catch {}
+    if(!ok) return;
+    while(tr.q.length){ const x = tr.q.shift(); fault(x[0], x[1]); }
+  };
+  const traceSend = (code, detail) => { tr.q.push([code, String(detail) + "|n=" + (++tr.n) + "|" + Math.round((Date.now() - tr.t0) / 1000) + "s"]); traceFlush(); };
+  const traceSnap = () => {
+    const v = D.v5 || {};
+    return "ph=" + (v.phase || "") + " pm=" + (v.perm || "") + " br=" + D.st.bridge + " jn=" + (D.st.joined ? 1 : 0) + " fj=" + (D.frameJoined ? 1 : 0) + " lg=" + (D.login ? 1 : 0) + (D.signing ? "s" : "") + " w=" + D.warm.state + " fr=" + (D.frame ? 1 : 0) + " tk=" + (D.winTk ? 1 : 0) + " u=" + hostPath(D.callUrl);
+  };
+  const traceTick = () => {
+    const now = Date.now(); traceFlush();
+    if(now - tr.t0 > 120000 && !tr.q.length){ clearInterval(D.timers.trace); return; }
+    if(now - tr.t0 <= 90000 && tr.rows < 12 && now - tr.last >= 1000){
+      const s = traceSnap();
+      if(s !== tr.snap){ tr.snap = s; tr.last = now; tr.rows++; traceSend("win_phase", s); }
+    }
+    if(D.winSaid || D.winLeft || !(D.win || D.winO)) return;
+    const v = D.v5 || {};
+    /* the sign-in card is already up for a report of "signed out" (giveUp login); a window that stays on it for 10 s, or whose camera was refused for 3 s, does not get better by waiting */
+    if(D.login && !D.signing){ if(!tr.loginT) tr.loginT = now; else if(now - tr.loginT > 10000) winFailShow(); } else tr.loginT = 0;
+    if(v.perm === "denied"){ if(!tr.permT) tr.permT = now; else if(now - tr.permT > 3000) winFailShow(); } else tr.permT = 0;
+  };
+  const traceBoot = () => {
+    let pv = "none", ses = 0;
+    try { pv = String((window.BestlyDock.pv() || {}).preview || "none").slice(0, 8); } catch {}
+    try { ses = D.cfg.session && D.cfg.session() ? 1 : 0; } catch {}
+    const ua = ((navigator.userAgent || "").match(/(Chrome|Version|Firefox)\/[\d.]+/) || ["?"])[0];
+    traceSend("win_boot", BUILD_LABEL + "|st=" + (standalone() ? 1 : 0) + "|op=" + (window.opener ? 1 : 0) + "|bc=" + (BC ? 1 : 0) + "|ses=" + ses + "|hand=" + (D.winO && D.winO.hand ? 1 : 0) + "|pv=" + pv + "|ua=" + ua);
+  };
+  const goNextcloud = async () => {
+    clearTimeout(D.timers.nc); if(D.ncGoing || D.winSaid || D.winLeft) return; D.ncGoing = true;
+    let u = "";
+    try { const t = await Promise.race([Promise.resolve(D.cfg.ticket()), new Promise((_, rj) => setTimeout(() => rj(new Error("slow")), 4000))]); u = plainOf(t && t.url); } catch {}      /* a fresh ticket: the one the frame used is spent */
+    if(!u) u = plainUrl();
+    if(!u || D.winSaid || D.winLeft){ D.ncGoing = false; return; }
+    traceSend("win_tonc", "to=" + hostPath(u));
+    winSend({ t: "win", s: "tonc" });
+    D.winLeft = true; D.leaving = true; post("leave");      /* this page leaves quietly: closing it must not tell the other page the call ended */
+    setTimeout(() => { try { location.assign(u); } catch {} }, 900);      /* the trace and the message get out first */
+  };
+  const winFailShow = () => {
+    if(!D.cfg || D.winSaid || D.winLeft || !(D.win || D.winO) || document.querySelector(".bd-winfail")) return;
+    if(D.signing && !D.ncLate){ D.ncLate = true; clearTimeout(D.timers.winfail); D.timers.winfail = setTimeout(winFailShow, 20000); return; }      /* someone is signing in right now: a little longer, once */
+    const v = D.v5 || {};
+    traceSend("win_nojoin", traceSnap() + " rs=" + (D.winTried ? 1 : 0) + " op=" + (window.opener ? 1 : 0) + " pv=" + pvTag());
+    const c = D.cfg.winFail || {}, el = (tag, cls, txt) => { const x = document.createElement(tag); if(cls) x.className = cls; if(txt) x.textContent = txt; return x; };
+    const m = el("div", "bd-winfail"), box = el("div", "bd-wf");
+    m.setAttribute("role", "alertdialog"); m.setAttribute("aria-label", c.title || "This window isn't connecting.");
+    box.appendChild(el("h2", "", c.title || "This window isn't connecting."));
+    box.appendChild(el("p", "", c.body || "Opening your call in Nextcloud instead."));
+    if(v.perm === "denied" || v.perm === "prompt") box.appendChild(el("p", "", "The camera or microphone may need permission in this window."));
+    const row = el("div", "bd-wfb"), b1 = el("button", "bd-wf1", c.back || "Back"), b2 = el("button", "bd-wf2", c.nc || "Open in Nextcloud now");
+    b1.type = "button"; b2.type = "button";
+    b1.onclick = () => {      /* back: this window leaves quietly, the other page still has the call and shows it again */
+      clearTimeout(D.timers.nc); D.winLeft = true; D.leaving = true; winSend({ t: "win", s: "nojoin" }); post("leave");
+      try { if(D.frame) D.frame.src = "about:blank"; } catch {}
+      m.remove(); setTimeout(() => winGone("Your call is still running. You can close this window."), 150);
+    };
+    b2.onclick = () => goNextcloud();
+    row.appendChild(b1); row.appendChild(b2);
+    box.appendChild(row); m.appendChild(box); document.body.appendChild(m);
+    try { b2.focus(); } catch {}
+    say("This window is not connecting. Opening your call in Nextcloud instead.");
+    clearTimeout(D.timers.nc); D.timers.nc = setTimeout(goNextcloud, 2500);
+  };
+  /* the call window, the quick start did not get into the call in time: start again the host's own way (it asks for a new ticket itself), once */
+  const winRestart = (why) => {
+    if(!D.win || D.winSaid || D.winTried || D.winLeft) return; D.winTried = true;
+    fault("win_stall", why + " br=" + D.st.bridge + " w=" + D.warm.state + " fj=" + (D.frameJoined ? 1 : 0) + " lg=" + (D.login ? 1 : 0));
+    post("leave");
+    clearTimeout(D.timers.bridge); clearInterval(D.timers.rejoin); clearTimeout(D.timers.slow); clearInterval(D.timers.clock);
+    unwarm();
+    if(D.frame){ try { D.frame.src = "about:blank"; } catch {} D.frame.remove(); D.frame = null; }
+    D.el.frameBox.querySelectorAll("iframe").forEach(x => x.remove());
+    waitText("Getting your camera ready"); waitOn(true); D.v5 = freshV5(D.legacy ? "legacy" : "pending");
+    D.login = false; D.signing = false; paintLogin(); D.el.warn.hidden = true; D.frameJoined = false; lastConn = null;
+    Object.assign(D.st, { scout: false, joined: false, sharing: null, people: [], bridge: "wait" });
+    D.chat.run = false; D.winTk = null;
+    setTimeout(() => { D.winGo = false; window.BestlyDock.openWin(D.winO || {}); }, 400);
   };
   /* this page IS the call window (opened with Pop out, or by hand) */
   const winEnter = () => {
     D.win = true; document.documentElement.classList.add("bd-win");
+    { let rf = 0; const fit = () => { if(rf) return; rf = requestAnimationFrame(() => { rf = 0; try { syncVV(); fitFrame(); } catch {} }); };      /* a window dragged to a new size: the layout is measured again on the next frame, whatever event the browser sent */
+      addEventListener("resize", fit); addEventListener("orientationchange", fit); try { if(window.ResizeObserver) new ResizeObserver(fit).observe(document.documentElement); } catch {} }
+
     try { document.title = "Strategy call"; } catch {}
     clearInterval(D.timers.beat); D.timers.beat = setInterval(() => { if(D.winSaid && D.st.joined) winSend({ t: "win", s: "beat" }); }, 4000);
     addEventListener("pagehide", () => { if(D.win && D.st.joined && !D.winLeft){ D.winLeft = true; D.leaving = true; post("leave"); winSend({ t: "win", s: "left", mic: !D.st.muted, cam: !!D.st.camera }); } });      /* closing the window leaves the call */
   };
-  const winGone = () => {
+  const winGone = (txt) => {
     try { window.close(); } catch {}
     setTimeout(() => {
       if(document.querySelector(".bd-wingone")) return;
       const m = document.createElement("div"); m.className = "bd-wingone"; m.setAttribute("role", "status");
-      m.textContent = "You left the call. You can close this window."; document.body.appendChild(m);
+      m.textContent = typeof txt === "string" ? txt : "You left the call. You can close this window."; document.body.appendChild(m);
     }, 400);
   };
-  const onWin = (m) => {
+  const onWin = (m, via) => {
     if(!m || (m.t !== "win" && m.t !== "cmd") || m.k !== String((D.cfg && D.cfg.winKind) || "page")) return;
+    if(m.i){ const sn = D.seen || (D.seen = new Set()); if(sn.has(m.i)) return; sn.add(m.i); if(sn.size > 200) sn.clear(); }      /* the same message can come by both ways */
+    if(!D.win && D.pop.on && !D.pop.logged && m.t === "win"){ D.pop.logged = true; D.pop.via = via || "?"; fault("pop_msg", "via=" + D.pop.via + "|s=" + m.s + "|" + Math.round((Date.now() - D.pop.t) / 1000) + "s|n=" + Math.random().toString(36).slice(2, 6)); }      /* the first word from the window, and which way it came */
     const p = D.pop;
+    if(m.t === "cmd" && m.c === "ticket"){ if(!D.win && !D.winGo && D.winO && m.tk && m.tk.url){ D.winTk = m.tk; window.BestlyDock.openWin(D.winO); } return; }      /* the new window: the ticket came, the call starts now */
     if(D.win){      /* this is the call window */
       if(m.t === "cmd" && m.c === "leave" && D.st.joined){ D.leaving = true; leave(); }
       else if(m.t === "cmd" && m.c === "focus"){ try { window.focus(); } catch {} }
@@ -1401,6 +1585,7 @@
       return;
     }
     if(m.t !== "win") return;
+    if(m.s === "need"){ popTicketSend(); return; }      /* the window we opened asks for its ticket */
     if(m.s === "joined"){
       p.beat = Date.now();
       if(p.on && !p.joined){ p.joined = true; p.mic = m.mic !== false; p.cam = m.cam !== false; popHandoff(); }
@@ -1410,17 +1595,20 @@
         try { D.cfg.onChange && D.cfg.onChange(true); } catch {}
       }
     } else if(m.s === "beat"){ if(p.on) p.beat = Date.now(); }
-    else if(m.s === "left"){ if(p.on){ p.mic = m.mic !== false; p.cam = m.cam !== false; if(p.back) popReturn(); else popEnd(); } }
+    else if(m.s === "left"){ if(p.on){ p.mic = m.mic !== false; p.cam = m.cam !== false; if(!p.joined) popCancel("The new window left before it was in the call. Your call is still here."); else if(p.back) popReturn(); else popEnd(); } }
+    else if(m.s === "tonc"){ if(p.on){ p.nc = true; p.beat = Date.now(); if(!p.joined){ p.joined = true; popHandoff(); } popPaint(); } }      /* the window hands itself to the plain Nextcloud page: this page leaves, so the same person is not in the call twice */
+    else if(m.s === "nojoin"){ if(p.on && !p.joined) popFail("nojoin"); }      /* the window says it is not connecting: the call stays here and says so */
   };
 
   /* ── public ──────────────────────────────────────────────────────── */
   window.BestlyDock = {
     init(cfg){
-      if(D.cfg) return; D.cfg = cfg; load(); loadSz();
+      if(D.cfg) return; D.cfg = cfg; try { window.BestlyDock.pv(); } catch {} load(); loadSz();
       try { if(!localStorage.getItem(KEY) && cfg.defaultSpot) D.pos.spot = cfg.defaultSpot; } catch { if(cfg.defaultSpot) D.pos.spot = cfg.defaultSpot; }
       build();
       addEventListener("message", onMsg); armNav();
-      if(BC){ BC.onmessage = (ev) => { try { onWin(ev.data); } catch {} }; winSend({ t: "win", s: "who" }); }
+      addEventListener("message", (ev) => { try { if(ev.origin === location.origin && ev.data && ev.data.bestlyWin) onWin(ev.data.bestlyWin, "op"); } catch {} });
+      if(BC){ BC.onmessage = (ev) => { try { onWin(ev.data, "bc"); } catch {} }; winSend({ t: "win", s: "who" }); }
       D.mq = (() => { try { return matchMedia("(max-width: 640px)"); } catch { return null; } })();
       if(D.mq && D.mq.addEventListener) D.mq.addEventListener("change", () => { D.full = false; applyChrome(); });
       this.ready = true;
@@ -1441,7 +1629,32 @@
     show(){ if(!D.cfg) return; if(D.pop.on && D.pop.joined){ D.root.hidden = false; D.st.open = true; applyChrome(); place(true); popFocus(); return; } if(!D.st.joined) return; D.root.hidden = false; D.bar = false; D.full = phone(); applyChrome(); place(true); },
     leave(){ if(D.pop.on && !D.st.joined){ winSend({ t: "cmd", c: "leave" }); popEnd(); return; } leave(); },
     /* the call window (/callwin): opens the call full window and joins at once with the microphone and camera the other page had */
-    openWin(o){ if(!D.cfg || D.win) return; o = o || {}; winEnter(); this.open(); D.pre.mic = o.mic !== false; D.pre.cam = o.cam !== false; join(!D.pre.cam); },
+    openWin(o){ if(!D.cfg || D.winGo) return; this.winWatch(); D.winGo = true; clearInterval(D.timers.need); o = o || {}; if(!D.win) winEnter(); if(!D.winTried){ clearTimeout(D.timers.winwd); D.timers.winwd = setTimeout(() => winRestart("12 s"), 12000); } this.open(); D.pre.mic = o.mic !== false; D.pre.cam = o.cam !== false; join(!D.pre.cam); },
+    /* the call window, the quick way: ask the page that opened it for the ticket and start the call the moment it arrives, without waiting for the app around it.
+       The host's own (slower) start is still there as the way when nobody answers. */
+    /* a window that is not in the call 30 s after it loaded says so (and the page that opened it hears it) */
+    winWatch(o){
+      if(!D.cfg) return; if(o && !D.winO) D.winO = o;
+      if(D.timers.winfail) return;
+      D.timers.winfail = setTimeout(winFailShow, 20000);
+      try { if(!document.querySelector(".bd-buildtag")){ const b = document.createElement("div"); b.className = "bd-buildtag"; b.textContent = "r5"; b.title = BUILD_LABEL; document.body.appendChild(b); } } catch {}
+      traceBoot(); D.timers.trace = setInterval(traceTick, 500);
+    },
+    /* the preview id (and flags) this page was opened with: the address can lose them, so they are kept for the window Pop out opens */
+    pv(){
+      const q = new URLSearchParams(location.search), o = {}; ["preview", "callui", "prewarm"].forEach(n => { if(q.get(n)) o[n] = q.get(n); });
+      try { if(o.preview){ sessionStorage.setItem("bestly.pv", JSON.stringify(o)); return o; }
+        const st = JSON.parse(sessionStorage.getItem("bestly.pv") || "{}"), m = /PREVIEW · ([0-9a-f]{8})/.exec(document.body.textContent || "");
+        if(m && st.preview && st.preview.indexOf(m[1]) === 0) return st; } catch {}
+      return o;
+    },
+    winFast(o){
+      this.winWatch(o);
+      if(!D.cfg || D.win || D.winGo || !BC) return; D.winO = o || {};
+      const ask = () => { if(D.winGo){ clearInterval(D.timers.need); return; } winSend({ t: "win", s: "need" }); };
+      clearInterval(D.timers.need); D.timers.need = setInterval(ask, 300); ask();
+      setTimeout(() => clearInterval(D.timers.need), 20000);
+    },
     sync(o){ if(D.pop.on) return; if(o && o.live === false && D.st.open && !D.st.joined){ paintPre(); } if(D.st.open && !D.st.joined) paintPre(); },
     state(){ return JSON.parse(JSON.stringify({ st: D.st, pos: D.pos, cur: D.cur || null, sz: { cw: D.sz.cw, eff: D.sz.eff, max: D.sz.max, strip: D.sz.strip, side: D.side }, warm: { state: D.warm.state, alive: D.warm.alive, loaded: D.warm.loaded }, connecting: connecting() })); },
     isScout, minShort, minLong, _spots: SPOTS, _T: T, _linkify: linkify,
