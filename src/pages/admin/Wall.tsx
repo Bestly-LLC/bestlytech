@@ -37,6 +37,7 @@ import { HeyScoutRow, VoiceCard, type Voice } from "@/components/admin/WallVoice
 import { RadioNowPlaying } from "@/components/admin/WallRadio";
 import { now as NOW_MANIFEST, panes as PANES_MANIFEST } from "@/config/wall-controls.json";
 import { Switch } from "@/components/ui/switch";
+import { AlertCategoryRows, useCitizen } from "@/components/admin/LocalAlerts";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Moon, MoonStar, Focus, Maximize2, Minimize2, PenLine, RotateCw, Plane, Nfc, Sparkles, Copy, UserRound, Volume2, EyeOff, Eye, Projector, RotateCcw, Sun, Trash2, Triangle, WifiOff, PartyPopper, Square, Presentation, VolumeX, Airplay, Clapperboard, Ghost, Skull, Power, ChevronDown, Car, CalendarClock, Leaf, Undo2, Redo2, Lock, Check, Minus, Plus, RadioTower, ChevronLeft, ChevronRight, LayoutDashboard, AlarmClock, Bell, Lightbulb, FlaskConical, Settings } from "lucide-react";
@@ -68,7 +69,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; skyCars?: boolean; skyCarLabels?: boolean; skyAlerts?: boolean; skyOverscan?: boolean; airLabels?: boolean; airLabelsSmall?: boolean; airCard?: boolean; airCardHeli?: boolean; airCardPin?: boolean; leftDate?: boolean; radio?: WallRadio; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; skyCars?: boolean; alertCats?: Record<string, boolean>; skyCarLabels?: boolean; skyAlerts?: boolean; skyOverscan?: boolean; airLabels?: boolean; airLabelsSmall?: boolean; airCard?: boolean; airCardHeli?: boolean; airCardPin?: boolean; leftDate?: boolean; radio?: WallRadio; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
   alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
   heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; tripDismiss?: { id: string; at: number } | null; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   /** W1 round 3 (sky): Space Station name tag, home marker, sky radius in miles (2-25), live LAX tower audio. */
@@ -389,6 +390,7 @@ export default function Wall() {
   const liveT = useRef<{ last: number; timer: number | null; next: Partial<WallState> | null }>({ last: 0, timer: null, next: null });
   const saveT = useRef<{ last: number; timer: number | null; next: Partial<WallState>; inflight: number }>({ last: 0, timer: null, next: {}, inflight: 0 });
   const geoBusy = useRef(false);
+  const { snap: citSnap } = useCitizen();   // Local alerts registry: the per-category switches under Sky details come from it
 
   const loadGeo = useCallback(async () => {
     const { data, error } = await rpc("wall_geometry_history_list");
@@ -1070,10 +1072,14 @@ export default function Wall() {
                     <Switch className={swHit} id="wall-sky-car-labels" disabled={s.skyCars === false} checked={s.skyCarLabels !== false}
                       onCheckedChange={(v) => change({ skyCarLabels: v })} />
                   </Row>
-                  <Row label="Local alerts" detail="Incidents within 1 mi of home as soft pulsing dots (Citizen when it works, otherwise NWS and CHP). A new one within 0.25 mi chimes and pings, signed Sky Sync. Private use only." htmlFor="wall-sky-alerts">
+                  <Row label="Local alerts" detail="Fire and medical, police, sheriff and city, quakes, wildfire and smoke, power, closures and events, Metro, weather and traffic near home, as icon dots. The same switches are on the /admin Sky map. A new one close to home chimes and pings, signed Sky Sync. Private use only." htmlFor="wall-sky-alerts">
                     <Switch className={swHit} id="wall-sky-alerts" checked={s.skyAlerts !== false}
                       onCheckedChange={(v) => act({ skyAlerts: v }, v ? "Local alerts on the sky map." : "Local alerts hidden from the sky map.")} />
                   </Row>
+                  <div className="border-b border-white/[0.07] bg-white/[0.02]">
+                    <AlertCategoryRows snap={citSnap} sw={{ master: s.skyAlerts !== false, cats: s.alertCats ?? {} }}
+                      onCat={(id, v) => act({ alertCats: { ...(s.alertCats ?? {}), [id]: v } }, v ? "Category on, on the wall and the Sky map." : "Category off, on the wall and the Sky map.")} idPrefix="wall-cat" />
+                  </div>
                   <Row label="Landmarks" detail="City labels, the downtown skyline, and the LAX runways on the sky map." htmlFor="wall-sky-landmarks">
                     <Switch className={swHit} id="wall-sky-landmarks" checked={s.skyLandmarks !== false} onCheckedChange={(v) => change({ skyLandmarks: v })} />
                   </Row>

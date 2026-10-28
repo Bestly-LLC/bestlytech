@@ -15,16 +15,20 @@
  * this map (saved in this browser), never the projector. Roads and traffic are TomTom tiles through the sky-area edge
  * function (key in Vault); planes away from home and the weather come from sky-area too.
  *
- * 2026-10-28 (Jared): Local alerts (Citizen-style incidents within 1 mi of home; NWS + CHP backups while Citizen is down; private use only).
- *   Soft pulsing dots by severity, the nearest four labelled and kept upright, 12-hour times, mi/ft. The Local alerts button below the map's
- *   Traffic button (and the Wall > Sky details switch) turn them on and off. Data: SQL wall_admin_citizen (filled by the collector on Hestia).
+ * 2026-10-28 (Jared): Local alerts v2, in parity with the projector wall (his words: "Make sure that the sky and wall are in parity, both admin and
+ *   projector"). One category registry + incident snapshot (SQL citizen_snapshot_json via wall_admin_citizen) is drawn the same way here and in
+ *   wall.html: icon dot per incident in its category color, labels for the nearest four and new ones, a notes stack under Home, a legend of what is
+ *   showing. The Local alerts button opens the SAME per-category switches as Wall > Sky details, saved in the wall's state, so they change the
+ *   projector too. Only Roads/Traffic and Current location are phone-map-only. Components: components/admin/LocalAlerts.tsx.
  * 2026-10-11 (Jared): Blue Steel, the Model 3, shows as a top-down car (marker A) when it is inside the map and its reading is
  * under 30 min old. Parked = "Blue Steel"; in D or R = "Blue Steel · 34 mph". Same rule as the wall (wall.html, /api/car).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { Maximize2, Minimize2, Plane, RotateCw, Compass, LocateFixed, Loader2, Route, TrafficCone, Siren, Plus, Minus } from "lucide-react";
+import { Maximize2, Minimize2, Plane, RotateCw, Compass, LocateFixed, Loader2, Route, TrafficCone, Siren, Plus, Minus, X as CloseX } from "lucide-react";
+import { AlertCategoryRows, LEVEL_SCALE, catIsOn, catRGB, citOpacity, countShowing, iconMarkup, pausedOn, useAlertSwitches, useCitizen, type CitCat, type CitInc } from "@/components/admin/LocalAlerts";
+import { Switch } from "@/components/ui/switch";
 
 type Air = {
   hex: string; cs?: string | null; reg?: string | null; t?: string | null; cat?: string | null;
@@ -34,11 +38,6 @@ type Air = {
   from?: string | { iata?: string; city?: string } | null; to?: string | { iata?: string; city?: string } | null;
   news?: { station?: string; call?: string } | null; police?: string | null;
 };
-type CitInc = { key: string; title: string; short: string | null; lat: number; lng: number; address: string | null; level: "low" | "moderate" | "high" | "critical"; source: string; dist_ft: number; first_seen: number; ping_id: number | null; pinged_at: number | null };
-type CitSnap = { at: number; paused: boolean; incidents: CitInc[] };
-const CIT_COL: Record<CitInc["level"], string> = { low: "#64D2FF", moderate: "#FFD60A", high: "#FF9F0A", critical: "#FF453A" };
-const citTime = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }).replace(/[\u202f\s]+/g, "\u00a0");
-const citDist = (ft: number) => (ft < 1000 ? `${Math.round(ft / 10) * 10}\u00a0ft` : `${(ft / 5280).toFixed(1)}\u00a0mi`);
 type Feed = { list: Air[]; at: number; home: [number, number]; radius: number; source: "wall" | "feed"; focus: string | null; error: string | null; fetchedAt: number };
 
 const HOME: [number, number] = [34.0835, -118.3698];
@@ -141,8 +140,8 @@ export default function Sky() {
   const [locErr, setLocErr] = useState<string | null>(null);
   const [cond, setCond] = useState<Cond | null>(null);
   // Roads / Traffic: this map only, remembered in this browser. Missing = on, like the wall.
-  const [layers, setLayers] = useState<{ roads: boolean; traffic: boolean; alerts: boolean }>(() => {
-    try { return { roads: true, traffic: true, alerts: true, ...JSON.parse(localStorage.getItem(LAYERS_KEY) ?? "{}") }; } catch { return { roads: true, traffic: true, alerts: true }; }
+  const [layers, setLayers] = useState<{ roads: boolean; traffic: boolean }>(() => {
+    try { return { roads: true, traffic: true, ...JSON.parse(localStorage.getItem(LAYERS_KEY) ?? "{}") }; } catch { return { roads: true, traffic: true }; }
   });
   useEffect(() => { try { localStorage.setItem(LAYERS_KEY, JSON.stringify(layers)); } catch { /* private mode */ } }, [layers]);
   const radiusRef = useRef(15);
@@ -231,21 +230,11 @@ export default function Sky() {
   // (>= 50 ft between two readings); none yet = nose up. Hidden when the reading is older than 30 min.
   const [car, setCar] = useState<Car | null>(null);
   // Cars + Car names switches live in Wall > Sky details and govern this map too (Jared 2026-10-12).
-  const [carSw, setCarSw] = useState<{ cars: boolean; names: boolean; alerts: boolean }>({ cars: true, names: true, alerts: true });
-  // Local alerts (Sky Sync): incidents within 1 mi of home, from the Hestia collector via wall_admin_citizen (admin only), every 30 s.
-  const [cit, setCit] = useState<CitSnap | null>(null);
-  useEffect(() => {
-    let dead = false;
-    const get = async () => {
-      try {
-        const { data } = await (supabase.rpc as unknown as (fn: string) => Promise<{ data: CitSnap | null }>)("wall_admin_citizen");
-        if (!dead && data && Array.isArray(data.incidents)) setCit(data);
-      } catch { /* keep the last list; dots age out on their own */ }
-    };
-    void get();
-    const t = window.setInterval(() => void get(), 30_000);
-    return () => { dead = true; window.clearInterval(t); };
-  }, []);
+  const [carSw, setCarSw] = useState<{ cars: boolean; names: boolean }>({ cars: true, names: true });
+  // Local alerts v2: one shared snapshot + the wall's own switches (components/admin/LocalAlerts.tsx).
+  const { snap: cit, fresh: citFresh } = useCitizen();
+  const { sw: alertSw, setMaster: setAlertMaster, setCat: setAlertCat } = useAlertSwitches();
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const carFix = useRef<{ lat: number; lon: number; hd: number | null } | null>(null);
   const carOk = useRef<boolean | null>(null);
   useEffect(() => {
@@ -254,7 +243,7 @@ export default function Sky() {
       try {
         const w = await (supabase.rpc as unknown as (fn: string) => Promise<{ data: { state?: { skyCars?: boolean; skyCarLabels?: boolean; skyAlerts?: boolean } } | null }>)("wall_admin_get");
         const st = w?.data?.state;
-        if (!dead && st) setCarSw({ cars: st.skyCars !== false, names: st.skyCarLabels !== false, alerts: st.skyAlerts !== false });
+        if (!dead && st) setCarSw({ cars: st.skyCars !== false, names: st.skyCarLabels !== false });
       } catch { /* keep the last switches */ }
       try {
         const { data } = await supabase.from("turo_vehicle_state" as never)
@@ -551,14 +540,20 @@ export default function Sky() {
             <radialGradient id="sky-you" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#0A84FF" stopOpacity=".45" /><stop offset="100%" stopColor="#0A84FF" stopOpacity="0" /></radialGradient>
             <radialGradient id="sky-home" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#64D2FF" stopOpacity=".35" /><stop offset="100%" stopColor="#64D2FF" stopOpacity="0" /></radialGradient>
             <radialGradient id="sky-car" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#5B8FC9" stopOpacity=".55" /><stop offset="55%" stopColor="#5B8FC9" stopOpacity=".18" /><stop offset="100%" stopColor="#5B8FC9" stopOpacity="0" /></radialGradient>
-            {(Object.keys(CIT_COL) as CitInc["level"][]).map((lv) => (
-              <radialGradient key={lv} id={`cit-${lv}`} cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor={CIT_COL[lv]} stopOpacity=".62" /><stop offset="30%" stopColor={CIT_COL[lv]} stopOpacity=".28" />
-                <stop offset="60%" stopColor={CIT_COL[lv]} stopOpacity=".08" /><stop offset="100%" stopColor={CIT_COL[lv]} stopOpacity="0" />
-              </radialGradient>
+            {(cit?.cats ?? []).map((c) => (
+              <Fragment key={c.id}>
+                <radialGradient id={`cit-${c.id}`} cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor={c.color} stopOpacity=".62" /><stop offset="30%" stopColor={c.color} stopOpacity=".30" />
+                  <stop offset="55%" stopColor={c.color} stopOpacity=".10" /><stop offset="72%" stopColor={c.color} stopOpacity="0" />
+                </radialGradient>
+                <radialGradient id={`citc-${c.id}`} cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#0a1222" stopOpacity=".92" /><stop offset="52%" stopColor="#0a1222" stopOpacity=".88" />
+                  <stop offset="82%" stopColor={c.color} stopOpacity=".5" /><stop offset="100%" stopColor={c.color} stopOpacity="0" />
+                </radialGradient>
+              </Fragment>
             ))}
             <filter id="cit-soft" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation={6 * u} /></filter>
-            <style>{`@keyframes citPulse{0%,100%{transform:scale(.6);opacity:.5}50%{transform:scale(1.05);opacity:1}}@keyframes citBeat{0%,100%{transform:scale(.9)}50%{transform:scale(1.14)}}.cit-h{transform-box:fill-box;transform-origin:center;animation:citPulse 3.6s ease-in-out infinite}.cit-c{transform-box:fill-box;transform-origin:center;animation:citBeat 3.6s ease-in-out infinite}@media (prefers-reduced-motion:reduce){.cit-h,.cit-c{animation:none}}`}</style>
+            <style>{`@keyframes citPulse{0%,100%{transform:scale(.62);opacity:.5}50%{transform:scale(1.08);opacity:1}}@keyframes citBeat{0%,100%{transform:scale(.92)}50%{transform:scale(1.12)}}.cit-h{transform-box:fill-box;transform-origin:center;animation:citPulse 3.6s ease-in-out infinite}.cit-c{transform-box:fill-box;transform-origin:center;animation:citBeat 3.6s ease-in-out infinite}@media (prefers-reduced-motion:reduce){.cit-h,.cit-c{animation:none}}`}</style>
           </defs>
           {STARS.map((s, n) => <circle key={n} cx={s.x * 1000} cy={s.y * 1000} r={s.s} fill="#fff" opacity={s.o} />)}
           {rings.map((r) => (
@@ -677,44 +672,60 @@ export default function Sky() {
             );
           })()}
 
-          {/* Local alerts (Sky Sync): soft pulsing dot per incident; the nearest four get a label, counter-rotated so text stays upright */}
-          {cit && layers.alerts && carSw.alerts && (() => {
-            let nwsN = 0;
-            const placed = cit.incidents.flatMap((c) => {
-              const ageMin = (now - c.first_seen) / 60_000;
-              const op = c.source === "nws" ? 1 : ageMin < 90 ? 1 : Math.max(0, (120 - ageMin) / 30);
-              if (op <= 0) return [];
+          {/* Local alerts v2 (Sky Sync): same snapshot, registry and rules as the wall (wall.html citPaint). An icon dot per incident in its
+              category color, labels for the nearest four and anything new (kept upright), then a calm notes stack under Home for area alerts,
+              far items and anything off the map, plus a legend of the categories showing. */}
+          {cit && citFresh && alertSw.master && (() => {
+            const reg = new Map(cit.cats.map((c) => [c.id, c] as const));
+            const dotFt = cit.dot_ft ?? 6600, nmax = cit.notes_max ?? 3;
+            let ring = 0;
+            const dots: { c: CitInc; cat: CitCat; op: number; x: number; y: number }[] = [];
+            const notes: CitInc[] = [];
+            const vis = new Set<string>();
+            for (const c of cit.incidents) {
+              const cat = reg.get(c.cat);
+              if (!cat || !catIsOn(alertSw, cat)) continue;
+              const op = citOpacity(c, now);
+              if (op <= 0) continue;
+              vis.add(c.cat);
+              if (c.place === "note") { notes.push(c); continue; }
               let la = c.lat, lo = c.lng;
-              if (c.source === "nws") { const th = ((nwsN++ * 72 + 20) * Math.PI) / 180; la = HOME[0] + (0.32 / 69) * Math.cos(th); lo = HOME[1] + (0.32 / 57.3) * Math.sin(th); }
+              if (c.place === "ring") { const th = ((ring++ * 72 + 20) * Math.PI) / 180; la = HOME[0] + (0.32 / 69) * Math.cos(th); lo = HOME[1] + (0.32 / 57.3) * Math.sin(th); }
+              else if (c.dist_ft > dotFt) { notes.push(c); continue; }
               const m = toMi(la, lo, home);
-              if (Math.hypot(m.x, m.y) > radius * 1.04) return [];
-              return [{ c, op, x: X(m.x), y: Y(m.y) }];
-            });
+              if (!Number.isFinite(m.x) || !Number.isFinite(m.y) || Math.hypot(m.x, m.y) > radius * 1.04) { notes.push(c); continue; }
+              dots.push({ c, cat, op, x: X(m.x), y: Y(m.y) });
+            }
             const used: { x: number; y: number }[] = [];
             const labelled = new Set<string>();
-            for (const p of [...placed].sort((a, b) => a.c.dist_ft - b.c.dist_ft)) {
-              if (labelled.size >= 4) break;
-              if (used.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 90 * u)) continue;
-              used.push(p); labelled.add(p.c.key);
+            const isNewInc = (c: CitInc) => c.pinged_at != null && now - c.pinged_at < 5 * 60_000;
+            for (const p of dots) {
+              const clash = used.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 90 * u);
+              if (isNewInc(p.c) || (labelled.size < 4 && !clash)) { used.push(p); labelled.add(p.c.key); }
             }
             const fsz = 12 * u;
+            const chips = [...cit.cats].sort((a, b) => a.ord - b.ord).filter((c) => vis.has(c.id));
+            const W = Math.min(459 * u, 940);
+            const pill = (bgA: number): CSSProperties => ({ borderRadius: 999, background: `rgba(12,20,38,${bgA})`, boxShadow: `0 0 ${9 * u}px ${5 * u}px rgba(12,20,38,${bgA})` });
             return (
               <g aria-label="Local alerts">
-                {placed.map(({ c, op, x, y }) => {
-                  const col = CIT_COL[c.level] ?? CIT_COL.low;
-                  const sub = c.source === "nws" ? `Area alert${NB}·${NB}${citTime(c.first_seen)}` : `${citDist(c.dist_ft)}${NB}·${NB}${citTime(c.first_seen)}`;
+                {dots.map(({ c, cat, op, x, y }) => {
+                  const sub = c.sub ?? "";
                   const title = c.short || c.title;
-                  const isNew = c.pinged_at != null && now - c.pinged_at < 5 * 60_000;
+                  const isNew = isNewInc(c);
                   const tw = Math.max(title.length * fsz * 0.58, sub.length * fsz * 0.5) + fsz * 1.8, th = fsz * (isNew ? 3.9 : 2.9);
                   return (
                     <g key={c.key} transform={`translate(${x} ${y})`} opacity={op} style={{ transition: "opacity 1.2s ease" }}>
-                      <circle className="cit-h" r={34 * u} fill={`url(#cit-${c.level})`} />
-                      <circle className="cit-c" r={5.2 * u} fill={col} style={{ filter: `drop-shadow(0 0 ${6 * u}px ${col})` }} />
-                      <circle r={2.1 * u} fill="#fff" fillOpacity={0.9} />
+                      <g transform={`scale(${LEVEL_SCALE[c.level] ?? 1})`}>
+                        <circle className="cit-h" r={34 * u} fill={`url(#cit-${cat.id})`} />
+                        <circle className="cit-c" r={9.2 * u} fill={`url(#citc-${cat.id})`} style={{ filter: `drop-shadow(0 0 ${9 * u}px rgba(${catRGB(cat.color)},.42))` }} />
+                        <g transform={`translate(${-5.2 * u} ${-5.2 * u}) scale(${(10.4 * u) / 24})`} fill="none" stroke={cat.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+                          dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />
+                      </g>
                       {labelled.has(c.key) && (
-                        <g transform={`rotate(${-mapUp}) translate(${12 * u} 0)`}>
+                        <g transform={`rotate(${-mapUp}) translate(${17 * u} 0)`}>
                           <rect x={0} y={-th / 2} width={tw} height={th} rx={th / 2} fill="#0c1426" fillOpacity={0.62} filter="url(#cit-soft)" />
-                          {isNew && <text x={fsz * 0.9} y={-th / 2 + fsz * 1.15} style={{ fill: col, fontSize: fsz * 0.7, fontWeight: 700, letterSpacing: "0.09em", whiteSpace: "pre" }}>{`SKY SYNC${NB}·${NB}NEW`}</text>}
+                          {isNew && <text x={fsz * 0.9} y={-th / 2 + fsz * 1.15} style={{ fill: cat.color, fontSize: fsz * 0.7, fontWeight: 700, letterSpacing: "0.09em", whiteSpace: "pre" }}>{`SKY SYNC${NB}·${NB}NEW`}</text>}
                           <text x={fsz * 0.9} y={isNew ? fsz * 0.1 : -fsz * 0.2} style={{ fill: "#EAF2FF", fontSize: fsz, fontWeight: 800, whiteSpace: "pre" }}>{title}</text>
                           <text x={fsz * 0.9} y={isNew ? fsz * 1.35 : fsz * 1.05} style={{ fill: "#EAF2FF", fillOpacity: 0.74, fontSize: fsz * 0.84, fontWeight: 600, whiteSpace: "pre" }}>{sub}</text>
                         </g>
@@ -722,6 +733,36 @@ export default function Sky() {
                     </g>
                   );
                 })}
+                {(notes.length > 0 || chips.length > 0) && (
+                  <g transform={`translate(500 500) rotate(${-mapUp}) translate(0 ${42 * u})`}>
+                    <foreignObject x={-W / 2} y={0} width={W} height={160 * u} style={{ overflow: "visible", pointerEvents: "none" }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3.5 * u }}>
+                        {notes.slice(0, nmax).map((c) => {
+                          const cat = reg.get(c.cat);
+                          return (
+                            <div key={c.key} style={{ ...pill(0.52), display: "flex", alignItems: "center", gap: 4.2 * u, whiteSpace: "nowrap", fontSize: 9.5 * u, fontWeight: 600, lineHeight: 1.1, color: "rgba(234,242,255,.9)", padding: `${2.8 * u}px ${9 * u}px ${3 * u}px ${6.2 * u}px` }}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke={cat?.color ?? "#64D2FF"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ width: 10.5 * u, height: 10.5 * u, flex: "none", overflow: "visible" }} dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />
+                              <span>{`${c.short || c.title || "Alert"}${c.sub ? ` · ${c.sub}` : ""}`}</span>
+                            </div>
+                          );
+                        })}
+                        {notes.length > nmax && (
+                          <div style={{ ...pill(0.52), whiteSpace: "nowrap", fontSize: 9.5 * u, fontWeight: 600, lineHeight: 1.1, color: "rgba(234,242,255,.6)", padding: `${2.8 * u}px ${9 * u}px` }}>+{notes.length - nmax}{NB}more</div>
+                        )}
+                        {chips.length > 0 && (
+                          <div style={{ ...pill(0.4), display: "flex", flexWrap: "wrap", justifyContent: "center", gap: `${4.2 * u}px ${9 * u}px`, marginTop: 3.5 * u, padding: `${2.8 * u}px ${9 * u}px` }}>
+                            {chips.map((c) => (
+                              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 2.8 * u, whiteSpace: "nowrap", fontSize: 8.6 * u, fontWeight: 600, lineHeight: 1.1, color: "rgba(234,242,255,.78)" }}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke={c.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ width: 9.5 * u, height: 9.5 * u, flex: "none", overflow: "visible" }} dangerouslySetInnerHTML={{ __html: iconMarkup(c) }} />
+                                <span>{c.label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </foreignObject>
+                  </g>
+                )}
               </g>
             );
           })()}
@@ -790,9 +831,9 @@ export default function Sky() {
               <span className={cn("mr-1.5 inline-block h-2 w-2 rounded-full align-middle", !feed ? "bg-white/40" : feed.source === "wall" ? "bg-emerald-400" : "bg-amber-400")} aria-hidden />
               {srcText}{ageS != null && ageS > 8 ? ` · ${ageS}${NB}sec ago` : ""} · <span className="whitespace-nowrap">{inView.length} in {radius}{NB}mi</span>
             </div>
-            {cit && layers.alerts && carSw.alerts && (
+            {cit && citFresh && alertSw.master && (
               <div className="mt-0.5 text-[13px] leading-snug text-white/60">
-                Local alerts · <span className="whitespace-nowrap">{cit.incidents.length} within 1{NB}mi</span>{cit.paused ? " · Citizen paused, using NWS + CHP" : ""}
+                Local alerts · <span className="whitespace-nowrap">{countShowing(cit, alertSw, now)}{NB}showing</span>{pausedOn(cit, alertSw) > 0 ? <> · <span className="whitespace-nowrap">{pausedOn(cit, alertSw)}{NB}paused</span></> : null}
               </div>
             )}
             {err && <div className="mt-0.5 text-[13px] text-amber-300">{err}</div>}
@@ -823,15 +864,29 @@ export default function Sky() {
               { key: "loc", label: here ? "Back to home" : locating ? "Finding you" : "Show my location", on: !!here, Icon: locating ? Loader2 : LocateFixed, act: locate },
               { key: "roads", label: layers.roads ? "Hide roads" : "Show roads", on: layers.roads, Icon: Route, act: () => setLayers((l) => ({ ...l, roads: !l.roads })) },
               { key: "traffic", label: layers.traffic ? "Hide traffic" : "Show traffic", on: layers.traffic, Icon: TrafficCone, act: () => setLayers((l) => ({ ...l, traffic: !l.traffic })) },
-              { key: "alerts", label: carSw.alerts ? "Local alerts" : "Local alerts (off in Wall settings)", on: layers.alerts && carSw.alerts, Icon: Siren, act: () => setLayers((l) => ({ ...l, alerts: !l.alerts })) },
+              { key: "alerts", label: alertsOpen ? "Close local alerts" : "Local alerts", on: alertSw.master || alertsOpen, Icon: Siren, act: () => setAlertsOpen((o) => !o) },
             ]).map(({ key, label, on, Icon, act }, n) => (
-              <button key={key} type="button" onClick={act} aria-label={label} title={label} aria-pressed={on} disabled={(key === "loc" && locating) || (key === "alerts" && !carSw.alerts)}
+              <button key={key} type="button" onClick={act} aria-label={label} title={label} aria-pressed={on} aria-expanded={key === "alerts" ? alertsOpen : undefined} disabled={key === "loc" && locating}
                 className={cn("grid h-11 w-11 place-items-center text-white/80 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400",
                   n > 0 && "border-t border-white/10", on && "text-[#0A84FF]")}>
                 <Icon className={cn("h-5 w-5", key === "loc" && locating && "animate-spin")} aria-hidden />
               </button>
             ))}
           </div>
+          {alertsOpen && (
+            <div className="pointer-events-auto absolute right-[56px] top-0 flex max-h-[min(72vh,560px)] w-[min(86vw,340px)] flex-col overflow-hidden rounded-2xl bg-[#0b0f1e]/92 ring-1 ring-white/15 backdrop-blur-md" role="dialog" aria-label="Local alerts">
+              <div className="flex min-h-[52px] items-center gap-3 border-b border-white/10 px-4 py-2">
+                <Siren className="h-5 w-5 shrink-0 text-[#0A84FF]" aria-hidden />
+                <label htmlFor="sky-alerts-master" className="min-w-0 flex-1 cursor-pointer">
+                  <span className="block text-[16px] font-semibold leading-tight text-white">Local alerts</span>
+                  <span className="block text-[13px] leading-snug text-white/50">Same switches as the projector</span>
+                </label>
+                <Switch id="sky-alerts-master" className="h-7 w-12" checked={alertSw.master} onCheckedChange={setAlertMaster} />
+                <button type="button" onClick={() => setAlertsOpen(false)} aria-label="Close" className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-white/70 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"><CloseX className="h-5 w-5" aria-hidden /></button>
+              </div>
+              <div className="overflow-y-auto"><AlertCategoryRows snap={cit} sw={alertSw} onCat={setAlertCat} idPrefix="sky-cat" /></div>
+            </div>
+          )}
         </div>
 
         {/* zoom in / out: steps the map radius by 1mi, same corner stack as the wall controls */}

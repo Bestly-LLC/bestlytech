@@ -1,0 +1,73 @@
+/* Local alerts v2 (Oct 28, Sky Sync; Jared: sky and wall in parity, admin and projector). The collectors (bestly-citizen.timer on Clio and the
+     police feeds) fill Supabase; server.py serves /api/citizen every 20 s. The category registry (id, label, color, icon, order, default) and the
+     incidents come from ONE snapshot, and this page only draws what it says: an icon dot in the category color near Home (halo size by
+     severity), a label for the nearest four and for anything new, a calm notes stack under Home for area alerts / far items / anything outside the
+     frame (3 lines then "+N more"), and a legend of the categories showing. Per-category switches: S.alertCats[id] (missing = registry default),
+     master S.skyAlerts. A NEW pinged incident plays the alert chime once, signed Sky Sync. Stamps CIT_AT every paint so Sky Sync audits it
+     (SKYLAYERS.cit). Rules shared with the admin Sky map (same snapshot fields): dots within snap.dot_ft, notes_max lines. */
+  var CIT_AT=null, CIT={snap:null,rAt:0,age:null,ping:null,newUntil:{},els:{},root:null,nb:null,nbSig:'',vis:false,chimeAt:0,how:'',lastN:0,reg:{},hash:null,rev:null};
+  const CIT_HOME=[34.0835,-118.3698];
+  const citRGB=(h)=>{ const m=/^#?([0-9a-f]{6})$/i.exec(h||''); if(!m) return '100,210,255'; const n=parseInt(m[1],16); return [(n>>16)&255,(n>>8)&255,n&255].join(','); };
+  const citSvg=(c)=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+((c&&/^(?:<(?:path|circle|rect|line|polyline|polygon|ellipse)[^<>]*\/>)+$/.test(c.icon||''))?c.icon:'<circle cx="12" cy="12" r="4"/>')+'</svg>';
+  const citCatOn=(id)=>{ const c=CIT.reg[id]; if(!c||S.skyAlerts===false) return false; const v=(S.alertCats||{})[id]; return v===undefined?c.default_on!==false:v!==false; };
+  const citOp=(i,now)=>(i.fade1==null||now<=i.fade0)?1:Math.max(0,(i.fade1-now)/Math.max(1,i.fade1-i.fade0));
+  function citPull(){ fetch('/api/citizen',{cache:'no-store'}).then(r=>r.json()).then(j=>{
+      const sn=j&&j.snap; if(!sn||!Array.isArray(sn.incidents)||!Array.isArray(sn.cats)) return;
+      CIT.snap=sn; CIT.rAt=Date.now(); CIT.age=(j.age_s!=null&&isFinite(+j.age_s))?+j.age_s:null; CIT.hash=sn.hash||null; CIT.rev=sn.rev||null;
+      const reg={}; sn.cats.forEach(c=>{ if(c&&c.id) reg[c.id]=c; }); CIT.reg=reg;
+      const mx=Math.max(0,+sn.ping_max||0,...sn.incidents.map(i=>+i.ping_id||0));
+      if(CIT.ping==null){ let v=null; try{ v=localStorage.getItem('citPing'); }catch(e){} CIT.ping=(v!=null&&isFinite(+v))?+v:mx; }   /* first look never chimes for what already happened */
+      const fresh=sn.incidents.filter(i=>(+i.ping_id||0)>CIT.ping&&i.pinged_at&&Date.now()-i.pinged_at<300000&&citCatOn(i.cat));
+      if(mx>CIT.ping){ CIT.ping=mx; try{ localStorage.setItem('citPing',String(mx)); }catch(e){} }
+      if(fresh.length){ fresh.forEach(i=>{ CIT.newUntil[i.key]=Date.now()+30000; }); CIT.chimeAt=Date.now(); CIT.how=play('alert')||''; }
+    }).catch(()=>{}); }
+  function citEl(i,c){ let e=CIT.els[i.key]; if(e&&e.isConnected) return e;
+    e=document.createElement('div'); e.className='ct'; e.innerHTML='<div class="ct-s"><i class="ct-h"></i><i class="ct-c">'+citSvg(c)+'</i></div><div class="ct-l"></div>'; CIT.root.appendChild(e); CIT.els[i.key]=e; void e.offsetWidth; return e; }
+  function citFill(e,i,c,isNew){ const sig=[i.short||i.title,i.sub,i.level,isNew?1:0,c&&c.color,c&&c.icon].join('|'); if(e._sig===sig) return; e._sig=sig;
+    e.setAttribute('data-lv',i.level||'low'); e.style.setProperty('--r',citRGB(c&&c.color)); e.classList.toggle('ct-new',!!isNew);
+    const ic=e.querySelector('.ct-c'); if(ic) ic.innerHTML=citSvg(c);
+    e.querySelector('.ct-l').innerHTML='<s>Sky Sync · new</s>'+esc(i.short||i.title||'Incident')+'<u>'+esc(i.sub||'')+'</u>'; }
+  function citNotes(notes,vis,max){
+    const rows=notes.slice(0,max).map(i=>{ const c=CIT.reg[i.cat]; return '<div class="ct-nr" style="--r:'+citRGB(c&&c.color)+'">'+citSvg(c)+'<span>'+esc((i.short||i.title||'Alert')+(i.sub?' · '+i.sub:''))+'</span></div>'; });
+    if(notes.length>max) rows.push('<div class="ct-nr more"><span>+'+(notes.length-max)+'&nbsp;more</span></div>');
+    const chips=Object.values(CIT.reg).filter(c=>vis[c.id]).sort((a,b)=>a.ord-b.ord).map(c=>'<div class="ct-lc" style="--r:'+citRGB(c.color)+'">'+citSvg(c)+'<span>'+esc(c.label)+'</span></div>');
+    if(chips.length) rows.push('<div class="ct-lg">'+chips.join('')+'</div>');
+    return rows.join(''); }
+  function citPaint(){ try{
+    const box=document.getElementById('airScrP'), air=$('#air'); if(!box) return;
+    let root=CIT.root; if(!root||!root.isConnected){ root=document.getElementById('airCit');
+      if(!root){ root=document.createElement('div'); root.id='airCit'; root.setAttribute('aria-hidden','true'); box.appendChild(root); }
+      CIT.root=root; CIT.els={}; CIT.nb=null; CIT.nbSig=''; root.textContent=''; }
+    const sn=CIT.snap, ok=!!(sn&&CIT.age!=null&&CIT.age<180&&Date.now()-CIT.rAt<180000);
+    const on=!!(ok&&air&&air.classList.contains('on')&&!S.mapping&&S.airShow!==false&&S.skyAlerts!==false&&AF.ppn&&airHome);
+    if(!on){ if(CIT.vis||root.style.opacity!=='0'){ CIT.vis=false; root.style.opacity='0'; } return; }
+    root.style.opacity='1';
+    const now=Date.now(), seen={}, used=[], notes=[], vis={}; let any=false, nl=0, ring=0; const m=CIT.vis?12:40, dotFt=+sn.dot_ft||6600, nmax=+sn.notes_max||3;
+    for(const i of sn.incidents){ if(!i||!citCatOn(i.cat)) continue;
+      const c=CIT.reg[i.cat], op=citOp(i,now); if(op<=0) continue;
+      vis[i.cat]=1; const place=i.place||'point';
+      if(place==='note'){ notes.push(i); continue; }
+      let la=+i.lat, lo=+i.lng;
+      if(place==='ring'){ const th=(ring++*72+20)*Math.PI/180; la=CIT_HOME[0]+0.32/69*Math.cos(th); lo=CIT_HOME[1]+0.32/57.3*Math.sin(th); }
+      else if((+i.dist_ft||0)>dotFt){ notes.push(i); continue; }
+      if(!isFinite(la)||!isFinite(lo)){ notes.push(i); continue; }
+      const [x,y]=airXY(la,lo), ins=obD(x,y,0)>m&&obD(x,y,1)>m*.6;
+      if(!ins){ notes.push(i); continue; }
+      const e=citEl(i,c), isNew=!!(i.pinged_at&&now-i.pinged_at<300000);   /* pinged in the last 5 min: label grows (same rule on the admin map) */
+      seen[i.key]=1; citFill(e,i,c,isNew); e.style.opacity=String(op); e.style.transform=skyPt(x,y); any=true;
+      const clash=used.some(u=>Math.hypot(u[0]-x,u[1]-y)<380), lab=isNew||(nl<4&&!clash);
+      if(lab){ nl++; used.push([x,y]); }
+      e.classList.toggle('ct-nolab',!lab); }
+    for(const k of Object.keys(CIT.els)) if(!seen[k]){ const e=CIT.els[k]; if(e&&e.parentNode) e.parentNode.removeChild(e); delete CIT.els[k]; }
+    let nb=CIT.nb; if(!nb||!nb.isConnected){ nb=document.createElement('div'); nb.className='ct-nb'; root.appendChild(nb); CIT.nb=nb; CIT.nbSig=''; }
+    const html=(notes.length||Object.keys(vis).length)?citNotes(notes,vis,nmax):'';
+    if(html!==CIT.nbSig){ CIT.nbSig=html; nb.innerHTML=html; }
+    if(html){ const [nx,ny]=airXY(CIT_HOME[0],CIT_HOME[1]), nin=obD(nx,ny,0)>m&&obD(nx,ny,1)>m*.6;
+      nb.style.transform=skyPt(nx,ny)+' translate(0,120px)'; nb.style.opacity=nin?'1':'0'; if(nin) any=true; } else nb.style.opacity='0';
+    CIT.vis=any; CIT.lastN=Object.keys(seen).length+notes.length;
+    if(any) CIT_AT={hx:AF.hx??AF.cx,hy:AF.hy??AF.my,ppn:AF.ppn,brg:AF.brg,at:Date.now()};
+  }catch(e){ window.__citErr=String((e&&e.message)||e); } }
+  setInterval(citPaint,200); setInterval(citPull,20000); citPull();
+  window.__cit=CIT;   /* test hook: set __cit.snap / __cit.reg / __cit.rAt / __cit.age to try incidents, then citPaint runs by itself */
+  window.__citView=()=>{ const sn=CIT.snap; if(!sn) return null; return {hash:CIT.hash,rev:CIT.rev,cats:(sn.cats||[]).map(c=>c.id+'|'+c.label+'|'+c.color),
+    inc:(sn.incidents||[]).map(i=>i.key+'|'+i.cat).sort(),on:Object.keys(CIT.reg).filter(citCatOn),dots:Object.keys(CIT.els).length}; };

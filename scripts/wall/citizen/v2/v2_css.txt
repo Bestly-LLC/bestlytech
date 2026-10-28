@@ -1,0 +1,27 @@
+/* Local alerts on the sky (Sky Sync, v2 Oct 28): one icon dot per incident, colored and drawn from the shared category registry
+   (same icon, color and label on the admin Sky map). Every glow is a feathered radial gradient; text stays upright like the Home tag. */
+#airScrP #airCit{position:absolute;left:0;top:0;width:0;height:0;transition:opacity .8s ease;pointer-events:none;}
+#airCit .ct{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;opacity:0;transition:opacity 1.2s ease;pointer-events:none;--r:100,210,255;--sc:1;}
+#airCit .ct[data-lv="low"]{--sc:.82;} #airCit .ct[data-lv="high"]{--sc:1.12;} #airCit .ct[data-lv="critical"]{--sc:1.26;}
+#airCit .ct-s{position:absolute;left:0;top:0;width:0;height:0;transform:scale(var(--sc));}
+#airCit .ct-h{position:absolute;left:-110px;top:-110px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(var(--r),.62) 0%,rgba(var(--r),.30) 30%,rgba(var(--r),.10) 55%,rgba(var(--r),0) 72%);animation:ctPulse 3.6s ease-in-out infinite;will-change:transform,opacity;}
+#airCit .ct-c{position:absolute;left:-30px;top:-30px;width:60px;height:60px;border-radius:50%;background:radial-gradient(circle,rgba(10,18,34,.92) 0%,rgba(10,18,34,.88) 52%,rgba(var(--r),.5) 82%,rgba(var(--r),0) 100%);box-shadow:0 0 26px 10px rgba(var(--r),.42);animation:ctBeat 3.6s ease-in-out infinite;will-change:transform;}
+#airCit .ct-c svg,#airCit .ct-nr svg,#airCit .ct-lc svg{fill:none;stroke:rgb(var(--r));stroke-width:2;stroke-linecap:round;stroke-linejoin:round;overflow:visible;}
+#airCit .ct-c svg{position:absolute;left:13px;top:13px;width:34px;height:34px;}
+#airCit .ct.ct-new .ct-h,#airCit .ct.ct-new .ct-c{animation-duration:1.6s;}
+@keyframes ctPulse{0%,100%{transform:scale(.62);opacity:.5}50%{transform:scale(1.08);opacity:1}}
+@keyframes ctBeat{0%,100%{transform:scale(.92)}50%{transform:scale(1.12)}}
+#airCit .ct-l{position:absolute;left:54px;top:-34px;white-space:nowrap;font:800 34px/1.06 var(--sf);letter-spacing:-.01em;color:#EAF2FF;padding:8px 24px 10px 22px;border-radius:999px;background:rgba(12,20,38,.6);box-shadow:0 0 30px 16px rgba(12,20,38,.6);transition:opacity .8s ease;}
+#airCit .ct-l u{display:block;text-decoration:none;font-weight:600;font-size:26px;color:rgba(234,242,255,.74);margin-top:2px;}
+#airCit .ct-l s{display:none;text-decoration:none;font-size:22px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:rgb(var(--r));margin-bottom:3px;}
+#airCit .ct.ct-new .ct-l{font-size:40px;} #airCit .ct.ct-new .ct-l s{display:block;}
+#airCit .ct.ct-nolab .ct-l{opacity:0;}
+/* notes under Home: area alerts, far items and anything outside the frame; then the legend for what is showing */
+#airCit .ct-nb{position:absolute;left:0;top:0;width:1300px;margin-left:-650px;display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0;transition:opacity 1.2s ease;pointer-events:none;}
+#airCit .ct-nr{display:flex;align-items:center;gap:12px;white-space:nowrap;font:600 30px/1.1 var(--sf);color:rgba(234,242,255,.9);padding:8px 26px 9px 18px;border-radius:999px;background:rgba(12,20,38,.52);box-shadow:0 0 26px 14px rgba(12,20,38,.52);--r:100,210,255;}
+#airCit .ct-nr svg{width:34px;height:34px;flex:none;}
+#airCit .ct-nr.more{color:rgba(234,242,255,.6);padding-left:26px;}
+#airCit .ct-lg{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 26px;margin-top:10px;padding:8px 26px;border-radius:999px;background:rgba(12,20,38,.4);box-shadow:0 0 26px 14px rgba(12,20,38,.4);}
+#airCit .ct-lc{display:flex;align-items:center;gap:8px;white-space:nowrap;font:600 27px/1.1 var(--sf);color:rgba(234,242,255,.78);--r:100,210,255;}
+#airCit .ct-lc svg{width:30px;height:30px;flex:none;}
+body.skit #airCit,body.sheep #airCit,body.pf-noyou #airCit,body.mapping #airCit{display:none!important;}

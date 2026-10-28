@@ -14,10 +14,16 @@ How (every 5 min, LaunchAgent tech.bestly.skysync, Mac mini, no AI):
   4. When wall.html changes, it runs a real move-home test (home glides away and back in the page only) at the next quiet
      hour (2-5 AM), or right away with --test.
   5. Checks in with Scout (agent_beat wall-sky-sync).
-  6. Local alerts watchdog (Oct 28, 2026): reads citizen_status() every run. Collector silent for 10 min -> restarts bestly-citizen.timer on
-     Hestia over ssh and alerts (wall.citizen_collector). Citizen failing 3x in a row or gone (HTTP 410) -> the collector already switched to
-     the NWS + CHP backups; Sky Sync alerts Scout once (wall.citizen_paused) and clears it when Citizen answers again. Wall page feed
-     older than 3 min -> wall.citizen_wallfeed. Both backups down too -> wall.citizen_backups. Every alert is signed Sky Sync.
+  6. Local alerts v2 watchdog (Oct 28, 2026), every run:
+     - collector silent for 10 min -> restarts bestly-citizen.timer on Hestia over ssh and alerts (wall.citizen_collector);
+     - FRESHNESS per source: every active source in citizen_sources must have answered within its own stale_s. A failing source goes quiet
+       ('paused' on its switch, both on Wall > Sky details and the /admin Sky panel), Scout is told once, signed Sky Sync (wall.src_<source>),
+       the collector retries with backoff and the alert clears itself. Sources that need a one-time setup stay quiet ('setup');
+     - wall server /api/citizen older than 3 min -> wall.citizen_wallfeed;
+     - PARITY (Jared 3:08 PM: the sky and wall must match, admin and projector): compares the category registry (id, label, color, icon,
+       order, default) and the incident keys + categories of the wall server's snapshot, the admin path (citizen_parity_view) and the live
+       projector page (window.__citView). Drift that lasts 2 runs alerts Scout (wall.citizen_parity) and a stale page is reloaded;
+       it clears when they agree again. Every alert is signed Sky Sync.
 
 Deployed copy: ~/Bestly/skysync/skysync.py (this file is the repo copy). Uses Sweep's config.json and the Keychain key.
 """
@@ -161,10 +167,89 @@ def rpc(fn, args):
 
 
 WALL_API = "http://192.168.1.211:8099/api/citizen"
+PARITY_YOUNG_S = 150        # an incident first seen within this long may not have reached the other side yet
+PARITY_RUNS = 2             # drift must show on this many runs in a row (5 min apart) before anyone is told
+
+
+def _view(sn):
+    """What a screen would draw from one snapshot: the category registry and the incident keys with their categories."""
+    cats = sorted((c.get("id"), c.get("label"), c.get("color"), hashlib.md5((c.get("icon") or "").encode()).hexdigest()[:8], c.get("ord"), bool(c.get("default_on")))
+                  for c in (sn.get("cats") or []))
+    inc = {"%s|%s" % (i.get("key"), i.get("cat")): i for i in (sn.get("incidents") or [])}
+    return cats, inc
+
+
+def _diff(a, b, now_ms):
+    """a, b = snapshots (wall server, admin path). Returns (registry_differs, only_in_a, only_in_b), ignoring incidents too young to have synced."""
+    ca, ia = _view(a)
+    cb, ib = _view(b)
+    young = PARITY_YOUNG_S * 1000
+    oa = sorted(k for k, v in ia.items() if k not in ib and now_ms - (v.get("first_seen") or 0) > young)
+    ob = sorted(k for k, v in ib.items() if k not in ia and now_ms - (v.get("first_seen") or 0) > young)
+    return ca != cb or a.get("hash") != b.get("hash"), oa, ob
+
+
+def parity_check(st):
+    """Sky and wall in parity (Jared 2026-10-28 3:08 PM). Three views of the same registry + incidents must agree: the wall server's /api/citizen
+    (what the projector gets), the admin path (citizen_parity_view = wall_admin_citizen's payload, what /admin/sky gets) and the live projector
+    page itself (window.__citView). Drift must persist PARITY_RUNS runs; a stale page is reloaded, anything else is told to Scout. Clears itself."""
+    p = st.setdefault("parity", {"srv": 0, "pg": 0})
+    now_ms = int(time.time() * 1000)
+    try:
+        with urllib.request.urlopen(WALL_API, timeout=10) as r:
+            w = json.loads(r.read())
+        wsn, adm = w.get("snap"), rpc("citizen_parity_view", {})
+    except Exception as e:
+        log("parity: could not read a side: %s" % e)
+        return "parity: unreadable"
+    if not isinstance(wsn, dict) or not isinstance(adm, dict):
+        return "parity: no snapshot yet"
+    notes = []
+    # 1. wall server vs admin path
+    reg_bad, only_w, only_a = _diff(wsn, adm, now_ms)
+    if reg_bad or only_w or only_a:
+        p["srv"] = p.get("srv", 0) + 1
+        log("parity (server vs admin) run %d: registry %s, only on wall %s, only on admin %s" % (p["srv"], reg_bad, only_w[:5], only_a[:5]))
+        if p["srv"] >= PARITY_RUNS:
+            event(st, "wall.citizen_parity", "problem", "urgent", "wall and admin Sky map are out of parity",
+                  "The projector's local alerts and /admin/sky are not showing the same thing. Registry (icons, colors, labels, switches) differs: %s. "
+                  "Only on the wall: %s. Only on admin: %s. The wall server may be serving an old copy (its feed age is %s s)." %
+                  (reg_bad, ", ".join(only_w[:6]) or "none", ", ".join(only_a[:6]) or "none", w.get("age_s")), push=True)
+        notes.append("DRIFT server/admin")
+    else:
+        p["srv"] = 0
+    # 2. the live projector page vs the wall server (the page pulls every 20 s)
+    v = page("JSON.stringify(window.__citView?__citView():null)", 30)
+    if isinstance(v, dict):
+        pcats = sorted(v.get("cats") or [])
+        scats = sorted("%s|%s|%s" % (c.get("id"), c.get("label"), c.get("color")) for c in (wsn.get("cats") or []))
+        pinc = set(v.get("inc") or [])
+        sinc = {"%s|%s" % (i.get("key"), i.get("cat")): i for i in (wsn.get("incidents") or [])}
+        young = PARITY_YOUNG_S * 1000
+        miss = sorted(k for k, i in sinc.items() if k not in pinc and now_ms - (i.get("first_seen") or 0) > young)
+        extra = sorted(k for k in pinc if k not in sinc)
+        if pcats != scats or v.get("hash") != wsn.get("hash") or miss or extra:
+            p["pg"] = p.get("pg", 0) + 1
+            log("parity (page vs server) run %d: registry %s, missing on page %s, extra on page %s" % (p["pg"], pcats != scats, miss[:5], extra[:5]))
+            if p["pg"] >= PARITY_RUNS:
+                run([NODE, RELOAD], 30)
+                notes.append("reloaded the wall page for parity")
+                if p["pg"] >= PARITY_RUNS + 1:
+                    event(st, "wall.citizen_parity_page", "problem", "warning", "the projector page keeps showing old local alerts",
+                          "After a reload the wall page still differs from the wall server's snapshot (registry %s, missing %s, extra %s)." %
+                          (pcats != scats, ", ".join(miss[:5]) or "none", ", ".join(extra[:5]) or "none"))
+            notes.append("DRIFT page/server")
+        else:
+            p["pg"] = 0
+            event(st, "wall.citizen_parity_page", "resolved", "info", "the projector page matches again", "Registry and incidents agree with the wall server.")
+    if not (reg_bad or only_w or only_a) and p.get("srv", 0) == 0:
+        event(st, "wall.citizen_parity", "resolved", "info", "wall and admin Sky map are in parity again", "Same categories, icons, colors and incidents on both.")
+    _, inc = _view(wsn)
+    return "parity %s (%d categories, %d incidents)" % ("OK" if not notes else "; ".join(notes), len(wsn.get("cats") or []), len(inc))
 
 
 def citizen_check(st):
-    """Local alerts watchdog. Returns a short status string for the beat."""
+    """Local alerts watchdog (v2). Collector alive, every active source fresh, wall fed, wall and admin in parity. Returns a short status for the beat."""
     try:
         s = rpc("citizen_status", {})
     except Exception as e:
@@ -173,8 +258,7 @@ def citizen_check(st):
     if not s:
         return "local alerts: no credentials"
     src = s.get("sources") or {}
-    col, cz = src.get("collector") or {}, src.get("citizen") or {}
-    nws, chp = src.get("nws") or {}, src.get("chp") or {}
+    col = src.get("collector") or {}
 
     # 1. the collector on Hestia must check in at least every 10 min; it is a systemd timer, so restarting the timer is the fix
     age = col.get("ok_age_s")
@@ -183,33 +267,39 @@ def citizen_check(st):
                        "sudo systemctl restart bestly-citizen.timer && sudo systemctl start --no-block bestly-citizen.service"], 40)
         log("collector silent (%s s); restart timer rc=%s %s" % (age, rc, out[:120]))
         event(st, "wall.citizen_collector", "problem", "urgent", "local alerts collector went quiet",
-              "The Citizen collector on Hestia hasn't checked in for %s. I restarted bestly-citizen.timer over ssh (rc %s). "
+              "The local alerts collector on Hestia hasn't checked in for %s. I restarted bestly-citizen.timer over ssh (rc %s). "
               "If this stays up, check systemctl status bestly-citizen on Hestia." % ("%d min" % (age // 60) if age is not None else "ever", rc), push=True)
     else:
         event(st, "wall.citizen_collector", "resolved", "info", "local alerts collector is back", "The collector is checking in again.")
 
-    # 2. Citizen itself (first choice). Failing 3x or HTTP 410 = paused; backups run meanwhile; the collector keeps retrying with backoff.
-    if cz.get("status") == "ok":
-        event(st, "wall.citizen_paused", "resolved", "info", "Citizen is back", "Citizen answers again, so local alerts use it first. The NWS + CHP backups stand down.")
-        mode = "Citizen live"
-        event(st, "wall.citizen_backups", "resolved", "info", "a backup feed is working", "Citizen is live, so no backup is needed.")
-    else:
-        why = cz.get("last_error") or "no answer yet"
-        event(st, "wall.citizen_paused", "problem", "warning", "Citizen paused, local alerts run on NWS + CHP",
-              "Citizen's feed is not usable (%s; %s failures in a row). The wall and /admin Sky map show a quiet 'Citizen paused' note and use the free "
-              "NWS and CHP backups. The collector retries Citizen on its own with backoff (hourly while it answers 410) and clears this when it works." %
-              (why, cz.get("fail_count", 0)))
-        mode = "Citizen paused (%s)" % cz.get("status", "unknown")
-        # 3. with Citizen out, a backup must be alive or the layer is blind
-        dead = [n for n, v in (("NWS", nws), ("CHP", chp)) if v.get("status") != "ok" or (v.get("ok_age_s") or 99999) > 900]
-        if len(dead) == 2:
-            event(st, "wall.citizen_backups", "problem", "warning", "local alerts have no working feed",
-                  "Citizen is paused and both backups (NWS, CHP) are failing, so the sky layer is blind. NWS: %s. CHP: %s." %
-                  (nws.get("last_error") or nws.get("status"), chp.get("last_error") or chp.get("status")))
+    # 2. every active source has its own freshness check. A source that stops answering goes quiet ("paused" on its switch in both the
+    #    Wall > Sky details list and the Sky map panel), Scout hears once, the collector keeps retrying with backoff and it clears itself.
+    ok_n, paused, setup = 0, [], []
+    for c in s.get("configured") or []:
+        name = c.get("source")
+        if not c.get("active"):
+            continue
+        f = src.get(name)
+        if not f:
+            continue                       # never reported: not running yet (e.g. a feed another owner hasn't started); nothing to judge
+        key = "wall.src_" + name
+        if f.get("status") == "setup":
+            setup.append(name)
+            continue
+        age = f.get("ok_age_s")
+        if f.get("status") == "ok" and age is not None and age <= (c.get("stale_s") or 900):
+            ok_n += 1
+            event(st, key, "resolved", "info", "%s is answering again" % c.get("label"), "Its local alerts are back on the wall and the Sky map.")
         else:
-            event(st, "wall.citizen_backups", "resolved", "info", "a backup feed is working", "NWS or CHP is answering again.")
+            paused.append(name)
+            event(st, key, "problem", "warning", "%s paused" % c.get("label"),
+                  "%s has not answered for %s (status %s, %s failures in a row%s). Its category goes quiet ('paused') on the wall and the Sky map; "
+                  "the collector keeps retrying with backoff and this clears on its own." %
+                  (c.get("label"), ("%d min" % (age // 60)) if age is not None else "a while", f.get("status"), f.get("fail_count", 0),
+                   ("; " + str(f.get("last_error"))[:120]) if f.get("last_error") else ""))
+    mode = "%d source(s) fresh" % ok_n + ((", PAUSED: " + ", ".join(paused)) if paused else "") + ((", need setup: " + ", ".join(setup)) if setup else "")
 
-    # 4. the wall server must be handing the snapshot to the page
+    # 3. the wall server must be handing the snapshot to the page
     try:
         with urllib.request.urlopen(WALL_API, timeout=10) as r:
             w = json.loads(r.read())
@@ -223,7 +313,14 @@ def citizen_check(st):
               ("%d s" % wa if wa is not None else "unreachable"))
     else:
         event(st, "wall.citizen_wallfeed", "resolved", "info", "the wall gets local alerts again", "/api/citizen is fresh.")
-    return "local alerts: %s, %s open" % (mode, s.get("open_incidents", 0))
+
+    # 4. parity between the projector and /admin/sky
+    try:
+        par = parity_check(st)
+    except Exception as e:
+        par = "parity check crashed: %s" % e
+        log(par)
+    return "local alerts: %s, %s open; %s" % (mode, s.get("open_incidents", 0), par)
 
 
 def main():

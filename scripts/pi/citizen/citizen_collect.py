@@ -1,94 +1,55 @@
 #!/usr/bin/env python3
-"""Citizen local alerts collector (Sky Sync). Runs on Hestia every ~2 min via systemd timer bestly-citizen.timer.
+"""Local alerts collector (Sky Sync). Runs on the Hestia role (Clio right now) every ~2 min via systemd timer bestly-citizen.timer.
 
 No AI, no paid services, standard library only. PRIVATE / INTERNAL USE ONLY: it feeds Jared's home projector wall and his
-/admin Sky map. Never client-facing, never sold (Citizen's terms very likely forbid automated access; see bestly_memory
-house/compliance/citizen-feed-internal-only).
+/admin Sky map. Never client-facing, never sold (see bestly_memory house/compliance/citizen-feed-internal-only).
 
-Order of preference:
-  1. Citizen web feed (one request per run, normal browser User-Agent, exponential backoff on 403/429/errors, 410 = "gone").
-  2. Free backups, polled ONLY while Citizen is failing (3 failures in a row, or 410): NWS alerts (api.weather.gov) and
-     California Highway Patrol CAD incidents (media.chp.ca.gov/sa_xml/sa.xml).
-Stored per incident: title, location text, severity, times, dispatcher/update text. No usernames, no videos, no photos.
-Every run reports to Supabase through citizen_ingest() (token = home-hub agent key from /opt/bestly/wall/.report.json).
+v2 (Oct 28 2026): one adapter per source, each with its own health, backoff and auto-retry; every item carries a `category`
+(fire_medical, police, sheriff_city, earthquake, wildfire, power, closures, transit, weather, traffic). Sources live in the
+citizen_sources table (poll interval, stale limit, max distance); this file only fetches. Agent B writes heli/scanner through citizen_ingest.
+Adapters: citizen (gone, hourly probe), chp, nws, usgs, calfire, aqi, sce, lafd, nixle, closures (Caltrans), metro (needs a key).
+Reports to Supabase through citizen_ingest() (token = home-hub agent key from /opt/bestly/wall/.report.json).
 """
 import json, math, os, re, sys, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from citizen_common import *
+import citizen_adapters as AD
 
-HOME_LAT, HOME_LON = 34.0835, -118.3698            # 733 N Kings Rd, West Hollywood (same as wall server.py)
-RADIUS_MI = 1.2                                    # fetch a little wider than the 1 mi the wall shows
-DIR = "/opt/bestly/citizen"
 STATE = os.path.join(DIR, "state.json")
-REPORT = "/opt/bestly/wall/.report.json"           # {supabase_url, agent_key}
-PUBLISHABLE = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"
-BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
-              "Chrome/130.0.0.0 Safari/537.36")
-NWS_UA = "BestlyHome/1.0 (jared@bestly.tech)"
-PT = ZoneInfo("America/Los_Angeles")
-DRY = "--dry" in sys.argv
 ONLY = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--only=")), None)
-
+RADIUS_MI = 1.2                                    # CHP/Citizen fetch radius (a little wider than the 1 mi the wall shows)
 DLAT = RADIUS_MI / 69.0
 DLON = RADIUS_MI / (69.172 * math.cos(math.radians(HOME_LAT)))
 BBOX = (HOME_LAT - DLAT, HOME_LON - DLON, HOME_LAT + DLAT, HOME_LON + DLON)   # lowLat, lowLon, upLat, upLon
 
 
-def log(msg):
-    print(time.strftime("%Y-%m-%d %I:%M:%S %p ") + msg, flush=True)
-
-
 def load_state():
-    try:
-        with open(STATE) as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    return load_json(STATE, {})
 
 
 def save_state(st):
-    os.makedirs(DIR, exist_ok=True)
-    with open(STATE + ".tmp", "w") as f:
-        json.dump(st, f)
-    os.replace(STATE + ".tmp", STATE)
-
-
-def hav_ft(lat, lon):
-    r = 3958.8 * 5280
-    p1, p2 = math.radians(HOME_LAT), math.radians(lat)
-    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon - HOME_LON) / 2) ** 2
-    return 2 * r * math.asin(min(1, math.sqrt(a)))
-
-
-def short_text(s, n=28):
-    """Shorten by dropping words (never '...'). Keeps whole words."""
-    s = re.sub(r"\s+", " ", (s or "").strip())
-    if len(s) <= n:
-        return s
-    if "," in s and len(s.split(",")[0]) >= 8:
-        s = s.split(",")[0]
-        if len(s) <= n:
-            return s
-    cut = s[:n].rsplit(" ", 1)[0]
-    return re.sub(r"[\s,;:/&-]+(and|of|at|on|in|to|the|a|no|w/|with)?$", "", cut).strip() or s[:n]
-
-
-def http_get(url, ua, headers=None, timeout=20, want_headers=False):
-    req = urllib.request.Request(url, headers=dict({"User-Agent": ua, "Accept": "*/*", "Accept-Language": "en-US,en;q=0.9"}, **(headers or {})))
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        body = r.read()
-        return (r.status, body, dict(r.headers)) if want_headers else (r.status, body)
+    save_json(STATE, st)
 
 
 # ---------------------------------------------------------------- Citizen (web feed; field names INFERRED from open source)
+def cit_cat(title):
+    t = title.lower()
+    if re.search(r"fire|smoke|medical|rescue|ambulance|paramedic|crash|collision|hazmat", t):
+        return "fire_medical"
+    if re.search(r"shoot|stab|robber|burglar|assault|suspect|police|gunfire|theft|homicide|arrest|vandal", t):
+        return "police"
+    return "sheriff_city"
+
+
 def fetch_citizen():
     q = ("lowerLatitude=%.5f&lowerLongitude=%.5f&upperLatitude=%.5f&upperLongitude=%.5f&fullResponse=true&limit=200" %
          (BBOX[0], BBOX[1], BBOX[2], BBOX[3]))
     url = "https://citizen.com/api/incident/trending?" + q
     try:
         _, body = http_get(url, BROWSER_UA, {"Accept": "application/json", "Referer": "https://citizen.com/explore"})
-    except urllib.error.HTTPError as e:
+    except HttpFail as e:
         if e.code == 410:
             raise RuntimeError("gone: Citizen removed this endpoint (HTTP 410)")
         raise RuntimeError("http %d" % e.code)
@@ -119,7 +80,7 @@ def fetch_citizen():
             lvl = "critical" if lvl == "high" else lvl
         out.append({"key": str(r.get("key") or r.get("id") or ""), "title": title, "short": short_text(title),
                     "lat": lat, "lng": lon, "address": str(r.get("address") or "")[:120], "level": lvl,
-                    "occurred_ms": int(ts) if isinstance(ts, (int, float)) else None, "updates": ups[-12:], "ping": True})
+                    "occurred_ms": int(ts) if isinstance(ts, (int, float)) else None, "updates": ups[-12:], "ping": True, "category": cit_cat(title)})
     return out
 
 
@@ -192,7 +153,7 @@ def fetch_chp():
         desc = g("LocationDesc")
         out.append({"key": log_el.get("ID") or "", "title": words, "short": short_text(words),
                     "lat": lat, "lng": lon, "address": (loc + (" · " + desc if desc and desc.lower() not in loc.lower() else ""))[:120],
-                    "level": lvl, "occurred_ms": chp_time(g("LogTime")), "updates": ups[-12:], "ping": True})
+                    "level": lvl, "occurred_ms": chp_time(g("LogTime")), "updates": ups[-12:], "ping": True, "category": "traffic"})
     return out
 
 
@@ -221,25 +182,26 @@ def fetch_nws():
         head = re.sub(r"\s+", " ", p.get("headline") or ev)
         out.append({"key": re.sub(r"[^A-Za-z0-9]", "", (p.get("id") or f.get("id") or ev))[-60:], "title": ev, "short": short_text(ev, 30),
                     "lat": HOME_LAT, "lng": HOME_LON, "address": re.sub(r"\s+", " ", p.get("areaDesc") or "")[:120], "level": lvl,
-                    "occurred_ms": sent, "updates": [{"t": sent, "text": head[:160]}], "area": True, "ping": sev in ("Severe", "Extreme")})
+                    "occurred_ms": sent, "updates": [{"t": sent, "text": head[:160]}], "area": True, "place": "ring", "category": "weather", "persistent": True, "ping": sev in ("Severe", "Extreme")})
     return out
 
 
 # ---------------------------------------------------------------- Supabase
 def ingest(source, ok, err=None, items=None, next_try=None):
     if DRY:
-        log("[dry] ingest %s ok=%s err=%s items=%s" % (source, ok, err, json.dumps(items)[:600] if items else 0))
+        log("[dry] ingest %s ok=%s err=%s items=%s" % (source, ok, err, json.dumps(items)[:1500] if items else 0))
         return None
-    cfg = json.load(open(REPORT))
-    body = {"p_token": cfg["agent_key"], "p_source": source, "p_ok": ok, "p_error": err, "p_items": items or [],
+    c = cfg()
+    body = {"p_token": c["agent_key"], "p_source": source, "p_ok": ok, "p_error": err, "p_items": items or [],
             "p_next_try": (datetime.fromtimestamp(next_try, timezone.utc).isoformat() if next_try else None)}
-    req = urllib.request.Request(cfg["supabase_url"].rstrip("/") + "/rest/v1/rpc/citizen_ingest", data=json.dumps(body).encode(),
+    req = urllib.request.Request(c["supabase_url"].rstrip("/") + "/rest/v1/rpc/citizen_ingest", data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json", "apikey": PUBLISHABLE, "Authorization": "Bearer " + PUBLISHABLE})
     with urllib.request.urlopen(req, timeout=25) as r:
         return json.loads(r.read() or b"null")
 
 
-def run_source(st, name, fn, every_s, max_backoff_s):
+def run_source(st, name, fn, every_s, max_backoff_s, takes_state=False):
+    """One adapter: poll when due, report to Supabase, back off on failures (403/429 wait at least 30 min), recover on its own."""
     s = st.setdefault(name, {"fails": 0, "next": 0, "last_ok": 0})
     now = time.time()
     if ONLY and ONLY != name:
@@ -250,15 +212,25 @@ def run_source(st, name, fn, every_s, max_backoff_s):
     if now - s.get("last_ok", 0) < every_s - 10:
         return
     try:
-        items = fn()
+        items = fn(s) if takes_state else fn()
         s.update(fails=0, next=0, last_ok=now, err=None)
         r = ingest(name, True, None, items, None)
-        log("%s: ok, %d item(s) near home; %s" % (name, len(items), json.dumps(r)[:200] if r else "dry"))
+        log("%s: ok, %d item(s); %s" % (name, len(items), json.dumps(r)[:200] if r else "dry"))
+    except SetupNeeded as e:
+        msg = str(e)[:180]
+        s.update(next=now + 3600, err=msg)
+        try:
+            ingest(name, False, msg, None, now + 3600)
+        except Exception as e2:
+            log("%s: could not record setup state: %s" % (name, e2))
+        log("%s: needs setup (%s)" % (name, msg))
     except Exception as e:
         msg = str(e)[:180] or e.__class__.__name__
         s["fails"] = s.get("fails", 0) + 1
         gone = msg.startswith("gone")
         delay = 3600 if gone else min(max_backoff_s, 120 * (2 ** min(s["fails"], 10)))
+        if getattr(e, "code", None) in (403, 429):
+            delay = max(delay, 1800)
         s.update(next=now + delay, err=msg)
         try:
             ingest(name, False, msg, None, now + delay)
@@ -269,12 +241,18 @@ def run_source(st, name, fn, every_s, max_backoff_s):
 
 def main():
     st = load_state()
-    run_source(st, "citizen", fetch_citizen, 120, 7200)
-    cz = st.get("citizen", {})
-    citizen_down = cz.get("fails", 0) >= 3 or (cz.get("err") or "").startswith("gone")
-    if citizen_down or ONLY in ("chp", "nws"):
-        run_source(st, "chp", fetch_chp, 120, 1800)
-        run_source(st, "nws", fetch_nws, 290, 1800)
+    # (name, fetch, poll seconds, longest backoff seconds, fetch wants its state dict)
+    run_source(st, "citizen", fetch_citizen, 3600, 7200)            # gone since Oct 28 2026 (HTTP 410): probed hourly, takes over if it returns
+    run_source(st, "chp", fetch_chp, 120, 1800)
+    run_source(st, "nws", fetch_nws, 290, 1800)
+    run_source(st, "usgs", AD.fetch_usgs, 290, 1800)
+    run_source(st, "calfire", AD.fetch_calfire, 590, 3600)
+    run_source(st, "aqi", AD.fetch_aqi, 590, 3600)
+    run_source(st, "sce", AD.fetch_sce, 290, 1800)
+    run_source(st, "lafd", AD.fetch_lafd, 290, 3600)
+    run_source(st, "nixle", AD.fetch_nixle, 590, 3600, True)
+    run_source(st, "closures", AD.fetch_closures, 590, 3600, True)
+    run_source(st, "metro", AD.fetch_metro, 290, 3600, True)
     st["last_run"] = time.time()
     save_state(st)
     if not DRY:
