@@ -2,7 +2,7 @@
 
 Written 2026-10-28 (Wed, after 1:48 PM PT) on branch `claims-closer-autonomy-2026-10-28`. This is the state machine of one damage case from the first Turo email to the day it is closed, and the rules that hold in every state. If code and this page disagree, the code is wrong or this page is out of date: fix one of them the same day.
 
-Team slug `claims-closer`. Code: `supabase/functions/claims-closer/` (edge function), migrations `20261028150000_claims_autonomy_core.sql` and `20261028150100_claims_autonomy_functions.sql`, Claims page `/admin/claims`.
+Team slug `claims-closer`. Code: `supabase/functions/claims-closer/` (edge function), migrations `20261028151000_claims_autonomy_core.sql` and `20261028151100_claims_autonomy_functions.sql`, Claims page `/admin/claims`.
 
 ## The rules that hold in every state
 

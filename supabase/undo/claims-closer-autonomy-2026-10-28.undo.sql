@@ -1,4 +1,4 @@
--- UNDO for migrations 20261028150000_claims_autonomy_core.sql and 20261028150100_claims_autonomy_functions.sql
+-- UNDO for migrations 20261028151000_claims_autonomy_core.sql and 20261028151100_claims_autonomy_functions.sql
 -- (Claims Closer autonomy build, branch claims-closer-autonomy-2026-10-28).
 -- Saved BEFORE any change: the exact definitions that were live in production on 2026-10-28 ~1:50 PM PT (pg_get_functiondef).
 -- Run this whole file to put the five replaced functions back and drop everything the build added.
