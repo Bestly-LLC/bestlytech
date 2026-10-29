@@ -116,6 +116,8 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
   const lockLogged = useRef(false);
   const [text, setText] = useState("");
   const conv = useRef<Conv | null>(null);
+  // How loud Maya is right now (0 to 1), read by her orb every frame so the mouth follows her real voice.
+  const outLevel = useCallback(() => conv.current?.getOutputVolume?.() ?? 0, []);
   const starting = useRef<Promise<Conv | null> | null>(null);
   const lastSent = useRef("");
   const list = useRef<HTMLDivElement>(null);
@@ -305,7 +307,7 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
     return createPortal(
       <button type="button" onClick={() => setMini(false)} aria-label="Open Maya"
         className="maya-pill fixed z-[60] flex items-center gap-2.5 rounded-full py-2 pl-2 pr-4 text-[15px] font-semibold text-white motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2">
-        <MayaOrb size={30} live={voice && speaking} />
+        <MayaOrb size={30} live={voice && speaking} level={outLevel} />
         <span className="whitespace-nowrap">Maya</span>
         <span className="whitespace-nowrap font-medium text-[#C7CBEA]">
           {phase === "live" && voice ? status : showing ? `On ${showing.page}` : "Tap to talk"}
@@ -321,7 +323,7 @@ export function MayaScreen({ onClose, startWith = "voice" }: { onClose: () => vo
         style={{ background: "radial-gradient(80% 100% at 50% 0%, #8E9BFF38, #E59CFF14 45%, transparent 75%)" }} />
 
       <header className="relative flex items-center gap-3 px-4 pb-2 pt-4">
-        <MayaOrb size={44} live={voice && speaking} />
+        <MayaOrb size={44} live={voice && speaking} level={outLevel} />
         <div className="min-w-0 flex-1">
           <h2 className="text-[19px] font-semibold leading-tight tracking-[-0.01em]">Maya</h2>
           <p className="text-[14px] leading-snug text-[#C7CBEA]" aria-live="polite">{status}</p>
@@ -461,8 +463,8 @@ export function MayaScreenLauncher({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-function MayaOrb({ size = 40, live = false }: { size?: number; live?: boolean }) {
-  return <AgentOrb tint="maya" size={size} talking={live} />;
+function MayaOrb({ size = 40, live = false, level }: { size?: number; live?: boolean; level?: () => number }) {
+  return <AgentOrb tint="maya" size={size} talking={live} level={level} />;
 }
 
 function IconBtn({ label, onClick, pressed, children }: { label: string; onClick: () => void; pressed?: boolean; children: ReactNode }) {

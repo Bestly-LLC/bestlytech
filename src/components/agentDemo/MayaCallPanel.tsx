@@ -27,6 +27,7 @@ export function MayaCallPanel({
   playing,
   buffering,
   ended,
+  level,
   onNext,
   onTalk,
   nextLabel,
@@ -39,6 +40,8 @@ export function MayaCallPanel({
   playing: boolean;
   buffering: boolean;
   ended: boolean;
+  /** Loudness of the call audio (0 to 1), or null when it cannot be read. */
+  level: () => number | null;
   onNext: () => void;
   onTalk: () => void;
   nextLabel: string;
@@ -86,7 +89,7 @@ export function MayaCallPanel({
   return (
     <section className="ad-maya" aria-label={`Maya on a call with ${scenario.caller.name}`}>
       <header className="ad-maya-head">
-        <AgentOrb tint="maya" size={44} talking={who === "agent"} className="ad-orb" />
+        <AgentOrb tint="maya" size={44} talking={who === "agent"} level={level} className="ad-orb" />
         <div className="ad-maya-id">
           <b>
             Maya <span className="ad-badge">AI agent</span>

@@ -47,6 +47,8 @@ export type DemoClock = {
   setSoundOn: (on: boolean) => void;
   /** Warm the audio for this call (chip chosen) without playing it. */
   prime: () => void;
+  /** Loudness of the call audio right now, 0 to 1; null when it cannot be read (sound off, failed, no analyser). */
+  level: () => number | null;
 };
 
 export function useDemoClock(scenario: Scenario): DemoClock {
@@ -172,6 +174,44 @@ export function useDemoClock(scenario: Scenario): DemoClock {
     [reportFailure, setTime],
   );
 
+  // Loudness for the speaking orb. One AnalyserNode on the <audio> element, built on the first press of Play (it needs a
+  // user gesture, and an element can only be wrapped once). The mp3 is same-origin, so the analyser is not silenced by CORS.
+  const analyser = useRef<{ ctx: AudioContext; node: AnalyserNode; buf: Float32Array<ArrayBuffer> } | null>(null);
+  const analyserTried = useRef(false);
+  const ensureAnalyser = useCallback(() => {
+    const el = audio.current;
+    if (analyser.current || analyserTried.current || !el) return;
+    // Wrapping routes the sound through the context; a context made outside a gesture starts suspended and would mute it.
+    const ua = (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation;
+    if (ua && !ua.isActive) return;
+    analyserTried.current = true;
+    try {
+      const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return;
+      const ctx = new AC();
+      const node = ctx.createAnalyser();
+      node.fftSize = 1024;
+      ctx.createMediaElementSource(el).connect(node);
+      node.connect(ctx.destination);
+      void ctx.resume();
+      analyser.current = { ctx, node, buf: new Float32Array(node.fftSize) };
+    } catch {
+      /* no Web Audio: the orb falls back to its own syllable rhythm */
+    }
+  }, []);
+
+  const level = useCallback((): number | null => {
+    const g = analyser.current;
+    const a = audio.current;
+    if (!g || !a || a.paused || !soundRef.current || failedRef.current) return null;
+    if (g.ctx.state === "suspended") void g.ctx.resume();
+    if (g.ctx.state !== "running") return null;
+    g.node.getFloatTimeDomainData(g.buf);
+    let sum = 0;
+    for (let i = 0; i < g.buf.length; i++) sum += g.buf[i] * g.buf[i];
+    return Math.min(1, Math.sqrt(sum / g.buf.length) * 2.2);
+  }, []);
+
   const wantsAudio = () => soundRef.current && !failedRef.current && !!audio.current;
 
   const loadAudio = useCallback(() => {
@@ -252,6 +292,7 @@ export function useDemoClock(scenario: Scenario): DemoClock {
     waitSince.current = 0;
     if (wantsAudio()) {
       loadAudio();
+      ensureAnalyser();
       const a = audio.current as HTMLAudioElement;
       try {
         a.currentTime = tRef.current;
@@ -263,7 +304,7 @@ export function useDemoClock(scenario: Scenario): DemoClock {
       a.play().catch((e: unknown) => playFailed(e, forId));
     }
     startLoop();
-  }, [loadAudio, playFailed, setTime, startLoop]);
+  }, [loadAudio, ensureAnalyser, playFailed, setTime, startLoop]);
 
   const pause = useCallback(() => {
     playingRef.current = false;
@@ -332,6 +373,7 @@ export function useDemoClock(scenario: Scenario): DemoClock {
       if (playingRef.current && !failedRef.current) {
         audioSeen.current = { t: -1, at: performance.now() };
         loadAudio();
+        ensureAnalyser();
         try {
           a.currentTime = tRef.current;
         } catch {
@@ -341,7 +383,7 @@ export function useDemoClock(scenario: Scenario): DemoClock {
         a.play().catch((e: unknown) => playFailed(e, forId));
       }
     },
-    [loadAudio, playFailed],
+    [loadAudio, ensureAnalyser, playFailed],
   );
 
   const prime = useCallback(() => {
@@ -370,7 +412,8 @@ export function useDemoClock(scenario: Scenario): DemoClock {
       seek,
       setSoundOn,
       prime,
+      level,
     }),
-    [wireAudio, timeline, t, playing, started, ended, soundOn, audioFailed, buffering, play, pause, toggle, replay, seek, setSoundOn, prime],
+    [wireAudio, timeline, t, playing, started, ended, soundOn, audioFailed, buffering, play, pause, toggle, replay, seek, setSoundOn, prime, level],
   );
 }

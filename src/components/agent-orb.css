@@ -1,6 +1,7 @@
 .agent-orb { display: inline-block; flex-shrink: 0; line-height: 0; }
 .agent-orb svg { display: block; overflow: visible; }
-.agent-orb .ao-face, .agent-orb .ao-eyes, .agent-orb .ao-smile, .agent-orb .ao-spec {
+.agent-orb { --m: 0; --b: 0; }
+.agent-orb .ao-face, .agent-orb .ao-eyes, .agent-orb .ao-smile, .agent-orb .ao-spec, .agent-orb .ao-lids, .agent-orb .ao-mouth {
   transform-box: fill-box; transform-origin: center;
 }
 .agent-orb .ao-ring { filter: drop-shadow(0 0 2.5px rgba(var(--orb-glow), .9)); }
@@ -36,14 +37,21 @@
   76%, 100% { transform: translateX(0); }
 }
 
-/* Live call: the ring breathes and the smile moves a little while she talks. */
+/* Live call: the ring breathes; the mouth, blinks and head bob follow --m / --b, written by AgentOrb's rAF loop. */
 .agent-orb.is-talking .ao-ring  { animation: ao-ring 1.4s ease-in-out infinite; }
-.agent-orb.is-talking .ao-smile { animation: ao-talk .5s ease-in-out infinite alternate; }
 @keyframes ao-ring { 50% { filter: drop-shadow(0 0 5px rgba(var(--orb-glow), 1)); } }
-@keyframes ao-talk { from { transform: scale(1.14, 1.45); } to { transform: scale(1.05, 1.9); } }
+/* Open mouth hangs from the upper lip: it grows downward, a touch wider as it opens. The smile fades into it. */
+.agent-orb .ao-mouth { transform-origin: 50% 0%; opacity: calc((var(--m) - .03) * 25); transform: scale(calc(.8 + .2 * var(--m)), var(--m)); }
+.agent-orb .ao-smile { opacity: calc(1 - (var(--m) - .04) * 25); }
+.agent-orb .ao-lids  { transform: scaleY(calc(1 - .9 * var(--b))); }
+.agent-orb .ao-bob   { transform: translateY(calc(var(--m) * .6px)); }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-orb .ao-face, .agent-orb .ao-spec, .agent-orb .ao-ring { animation: none !important; }
+  .agent-orb .ao-face, .agent-orb .ao-spec { animation: none !important; }
+  /* the ring pulse stays: it is the only talking cue left */
+  .agent-orb .ao-mouth { display: none; }
+  .agent-orb .ao-smile { opacity: 1; }
+  .agent-orb .ao-lids, .agent-orb .ao-bob { transform: none; }
   .agent-orb .ao-eyes  { animation: none !important; transform: translate(0, -.5px) scale(1.06, 1.14); }
   .agent-orb .ao-smile { animation: none !important; transform: scale(1.14, 1.45); }
 }

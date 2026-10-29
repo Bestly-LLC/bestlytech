@@ -266,6 +266,7 @@ export const DemoStage = forwardRef<DemoStageHandle, { onTalk: () => void }>(fun
               playing={clock.playing}
               buffering={clock.buffering}
               ended={clock.ended}
+              level={clock.level}
               onNext={() => choose((idx + 1) % SCENARIOS.length, true)}
               onTalk={onTalk}
               nextLabel={`Play ${next.chip.toLowerCase()} call`}
