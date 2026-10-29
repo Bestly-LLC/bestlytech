@@ -246,6 +246,29 @@ class Walker:
         except Exception:
             pass
 
+    def handle_verify(self):
+        """Progressive's 'Verify your identity' pop-up (it texts Jared a code to resume an unfinished claim) shows up a moment
+        after a screen loads. Never type the code: press 'Start over instead'. True when it restarted the form. (fix 2026-10-29)"""
+        try:
+            body = self.page.evaluate("() => document.body.innerText") or ""
+        except Exception:
+            return False
+        if not re.search(r"verify your identity|digit code texted", body, re.I):
+            return False
+        if self.restarts >= 1:
+            self.shot("verify-code")
+            raise Stop("blocked", "Progressive wants a code texted to your phone, even after starting over. I do not type codes from your phone.")
+        self.restarts += 1
+        self.shot("start-over")
+        self.log("unfinished claim found for this phone: pressing Start over (never typing the texted code)")
+        self.page.get_by_role("button", name=re.compile(r"start over", re.I)).first.click(timeout=10000)
+        time.sleep(3)
+        try:
+            self.page.wait_for_function(VISIBLE_QUESTION_JS, timeout=60000)
+        except Exception:
+            pass
+        return True
+
     def click_btn(self, sel):
         """Click a form button. If something of the form's own (a calendar pop-up) is over it, close that and try again."""
         for attempt in range(3):
@@ -253,6 +276,8 @@ class Walker:
                 self.page.locator(sel).click(timeout=8000)
                 return
             except Exception:
+                if self.handle_verify():
+                    return              # the form restarted from screen 1; the walk loop picks it up from there
                 if attempt == 2:
                     raise
                 self.close_popovers()
@@ -290,22 +315,7 @@ class Walker:
                 if s.get("captcha_frame") or bot:
                     self.shot("bot-check")
                     raise Stop("blocked", "The site put up a bot check (CAPTCHA). I do not get around those.")
-                # Progressive remembers an unfinished claim for this phone and offers "Verify your identity" (texts Jared a code)
-                # or "Start over instead". We never read or type codes from Jared's phone: start a fresh claim. (fix 2026-10-29)
-                if re.search(r"verify your identity|verification code", s.get("body") or "", re.I):
-                    so = [b for b in s["buttons"] if re.search(r"^\s*start over", b["label"], re.I) and not b["disabled"]]
-                    if not so or self.restarts >= 2:
-                        self.shot("verify-code")
-                        raise Stop("blocked", "The site wants a code texted to your phone. I do not type codes from your phone.")
-                    self.restarts += 1
-                    self.shot("start-over")
-                    self.log("unfinished claim found for this phone: starting over (never typing the texted code)")
-                    self.click_btn('[data-ins-b="%d"]' % so[0]["i"])
-                    time.sleep(3)
-                    try:
-                        self.page.wait_for_function(VISIBLE_QUESTION_JS, timeout=60000)
-                    except Exception:
-                        pass
+                if self.handle_verify():      # the 'Verify your identity' pop-up: start over, never type the code
                     last_sig, same = None, 0
                     continue
                 sg = self.sig(s)

@@ -46,6 +46,8 @@ def rules_tests():
     print("rules")
     check("yes/no", rules.yes_no("No") == "No" and rules.yes_no("yes, both") == "Yes" and rules.yes_no("Not sure") is None and rules.yes_no("None known") is None)
     check("phone", rules.phone_fmt("414 364 4998") == "(414) 364-4998" and rules.phone_fmt("1-816-500-7236") == "(816) 500-7236")
+    check("filing for yourself -> Myself", rules.choose("Are you filing on behalf of yourself, or someone else?", ["Myself", "Someone else"], VALUES)[0] == "Myself")
+    check("best way to reach -> Email", rules.choose("What is the best way for us to get in touch with you?", ["Text", "Email", "Phone call"], VALUES)[0] == "Email")
     check("safe means nobody hurt", rules.choose("Is everyone currently safe?", ["Yes", "No"], VALUES)[0] == "Yes")
     check("safe is unknown when injuries unknown", rules.choose("Is everyone currently safe?", ["Yes", "No"], {})[0] is None)
     check("injured question", rules.choose("Was anyone injured?", ["Yes", "No"], VALUES)[0] == "No")

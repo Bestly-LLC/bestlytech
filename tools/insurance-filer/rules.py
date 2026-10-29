@@ -195,6 +195,18 @@ def choose(question, options, values):
         return yn("Yes", "reporter.role", "Owner of the car (Turo host)")
     if re.search(r"were you (driving|in the (car|vehicle)|present|a passenger)|were you there", q):
         return yn("No", "reporter.role", "The renter was driving; the owner was not in the car")
+    # "Are you filing on behalf of yourself, or someone else?" Jared files for his OWN car (he owns it), so: Myself. (fix 2026-10-29)
+    if re.search(r"on behalf of (yourself|you)\b|yourself,? or someone else|for yourself or", q):
+        pick = [l for l in labels if re.search(r"\b(myself|yourself)\b", norm(l))]
+        if len(pick) == 1:
+            return pick[0], "reporter.role", "He is filing for his own car (the owner), not for someone else"
+        return None, None, "Could not find 'Myself' in: " + ", ".join(labels)[:120]
+    # "What is the best way for us to get in touch with you?" -> Email (jared@bestly.tech; Claims Closer reads insurer mail there)
+    if re.search(r"best way .*(get in touch|contact|reach)|(preferred|best) (contact|method of contact|way to contact)|how (should|would you like) (we|us to) (contact|reach)", q):
+        pick = [l for l in labels if re.search(r"\be-?mail\b", norm(l))]
+        if len(pick) == 1:
+            return pick[0], "reporter.contact_pref", "Email, so Claims Closer sees every reply"
+        return None, None, "No Email choice in: " + ", ".join(labels)[:120]
     if re.search(r"(relationship|who are you|your role|are you (a|the)|you are|filing as|on behalf)", q):
         pick = [l for l in labels if re.search(r"(third|claimant|other party|owner of|vehicle owner|not (the )?insured|someone else|property owner)", norm(l))]
         if len(pick) == 1:
