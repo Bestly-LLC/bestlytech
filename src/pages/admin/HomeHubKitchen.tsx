@@ -22,6 +22,7 @@ import { Segmented, TAP } from "@/components/admin/kitchen/Segmented";
 import { RecipeSheet } from "@/components/admin/kitchen/RecipeSheet";
 import { Lines } from "@/components/Lines";
 import RecipesTab from "@/components/admin/recipes/RecipesTab";
+import FamilyInviteCard from "@/components/admin/kitchen/FamilyInviteCard";
 import { HandoffWatcher } from "@/components/admin/recipes/Overlays";
 import {
   Apple, ChefHat, ChevronRight, Clock, CookingPot, Loader2, Mic, MousePointerClick, Package, Plus, Receipt, RefreshCw,
@@ -113,6 +114,7 @@ export default function HomeHubKitchen() {
         />
       )}
       {tab === "recipes" ? <RecipesTab /> : <PantryView />}
+      {tab === "recipes" && !inRecipe && <FamilyInviteCard />}
       <HandoffWatcher />
     </div>
   );

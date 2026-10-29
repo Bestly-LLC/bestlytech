@@ -11,6 +11,8 @@ export interface CookEntry { id: string; cooked_at: string; factor: number | nul
 export interface RecipeRow {
   id: number; slug: string; name: string; doc: RecipeDoc; photo_path: string | null; source: string | null; source_url: string | null;
   created_at: string; favorite: boolean; pantry: PantryMap; notes: string; cooks: CookEntry[];
+  /** Family Cookbook rows live in the same table: who added it (mom, jared, mariah) and whether a card is still being checked. */
+  family_by?: "mom" | "jared" | "mariah" | null; family_status?: string | null;
 }
 export interface FermentRow {
   id: string; recipe_id: number; started_at: string; state: "fermenting" | "bottled" | "done"; tasted_on: string | null;
@@ -87,10 +89,10 @@ export const CATS: Record<string, { icon: string; h: number }> = {
   "Sauces & Pasta": { icon: "bowl", h: 34 }, "Ferments & Drinks": { icon: "jar", h: 78 }, Bread: { icon: "loaf", h: 26 },
   "Sauces & Dressings": { icon: "bowl", h: 140 }, Drinks: { icon: "glass", h: 262 }, Baking: { icon: "cookie", h: 14 },
   Mains: { icon: "bowl", h: 8 }, Sides: { icon: "leaf", h: 110 }, Breakfast: { icon: "cookie", h: 44 }, Snacks: { icon: "leaf", h: 96 },
-  Soups: { icon: "bowl", h: 20 }, Desserts: { icon: "cookie", h: 330 },
+  Soups: { icon: "bowl", h: 20 }, Desserts: { icon: "cookie", h: 330 }, Family: { icon: "cookie", h: 40 },
 };
 export const catOf = (c?: string | null) => (c && CATS[c]) || { icon: "leaf", h: 150 };
-export const CATEGORY_NAMES = Object.keys(CATS);
+export const CATEGORY_NAMES = Object.keys(CATS).filter((c) => c !== "Family"); // "Family" is set by the cookbook, never picked
 
 /* ---------- small hooks ---------- */
 
