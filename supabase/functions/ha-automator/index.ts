@@ -59,6 +59,10 @@ const DENY = ["!secret", "shell_command", "command_line", "rest_command", "pytho
 const MAX_YAML = 40_000;
 const MIN_AGENT = "1.6.1";
 const CATALOG_FRESH_MS = 30 * 60_000;
+/** Keep system + user + reserved output under 7,000 tokens (~3.5 chars each) so Groq and the PC's local model can take it. */
+const PROMPT_LINES_CHARS = 7_500;
+const PROMPT_SERVICES_CHARS = 2_200;
+const DRAFT_MAX_TOKENS = 3_000;
 const CATALOG_WARM_MS = 6 * 3_600_000;   // the watch asks the Pi for a fresh device list when ours is older than this
 const WAIT_QUICK_TRIES = 6;              // 4 minutes apart, about 30 minutes, then Scout's out-of-room path
 const WAIT_MAX_TRIES = 24;               // after that, 15 minutes apart, until about 5 hours in
@@ -253,14 +257,28 @@ function prefilter(cat: Catalog, text: string) {
     if (picked.length >= 300) break;
     if (!seen.has(e[0])) { seen.add(e[0]); picked.push(e); }
   }
-  const lines = picked.map((e) => `${e[0]}|${(e[1] ?? "").slice(0, 40)}|${(e[3] ?? "").slice(0, 24)}|${(e[2] ?? "").slice(0, 16)}`).join("\n");
+  // Size budget (2026-10-29): Groq and the PC's local model take 7,000 tokens in + out. Matches come first, so a full
+  // budget only drops filler (unrelated lights / players), never what Jared named.
+  const kept: string[] = [];
+  let used = 0;
+  for (const e of picked) {
+    const l = `${e[0]}|${(e[1] ?? "").slice(0, 32)}|${(e[3] ?? "").slice(0, 18)}|${(e[2] ?? "").slice(0, 12)}`;
+    if (used + l.length + 1 > PROMPT_LINES_CHARS) break;
+    kept.push(l); used += l.length + 1;
+  }
+  const lines = kept.join("\n");
+  picked.length = kept.length;
   // services: the domains in play, plus the ones almost every automation touches
   const doms = new Set<string>(["notify", "script", "scene", "homeassistant", "input_boolean", "persistent_notification"]);
   for (const e of picked) doms.add(e[0].split(".")[0]);
   const svc: string[] = [];
+  let svcUsed = 0;
   for (const d of doms) {
     const list = cat.services[d];
-    if (Array.isArray(list) && list.length) svc.push(`${d}: ${list.slice(0, d === "notify" ? 80 : 40).join(", ")}`);
+    if (!Array.isArray(list) || !list.length) continue;
+    const l = `${d}: ${list.slice(0, d === "notify" ? 30 : 25).join(", ")}`;
+    if (svcUsed + l.length + 1 > PROMPT_SERVICES_CHARS) continue;
+    svc.push(l); svcUsed += l.length + 1;
   }
   return { ids: picked.map((e) => e[0]), lines, services: svc.join("\n") };
 }
@@ -465,7 +483,15 @@ Hard limits: never use !secret, shell_command, command_line, rest_command, pytho
 
 ${HOUSE_RULES}`;
 
+/** ~13,800 chars in = ~3,950 tokens, + DRAFT_MAX_TOKENS out, stays under the 7,000-token rungs. */
+const PROMPT_TOTAL_CHARS = 13_800;
+
 function userPrompt(request: string, lines: string, services: string, extra: string) {
+  const room = PROMPT_TOTAL_CHARS - SYSTEM.length - request.length - services.length - extra.length - 220;
+  if (lines.length > room) {
+    const cut = lines.lastIndexOf("\n", Math.max(1_500, room));
+    lines = cut > 0 ? lines.slice(0, cut) : lines.slice(0, Math.max(1_500, room));
+  }
   return `What Jared wants: ${request}\n\nHis devices, one per line as entity_id|name|area|state:\n${lines}\n\nServices you may call (domain: services):\n${services}\n${extra}\nReturn the JSON now.`;
 }
 
@@ -580,7 +606,7 @@ async function runDraft(row: Row, feedback: string | null) {
       let res;
       try {
         res = await llm({
-          task: "code", system: SYSTEM, user, json: true, maxTokens: 4000, paid: "never", privacy: "private",
+          task: "code", system: SYSTEM, user, json: true, maxTokens: DRAFT_MAX_TOKENS, paid: "never", privacy: "private",
           job: "ha-automator", fn: "ha-automator", ref: row.id, deadlineMs: Math.min(60_000, left - 4000),
           validate: (j: Json) => (isObj(j) && ["automation", "package", "cannot"].includes(j.kind) ? null : "kind must be automation, package or cannot"),
         });
