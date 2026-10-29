@@ -216,7 +216,7 @@ begin
     return jsonb_build_object('via', 'pi', 'job', v_key);
   end if;
   for j in
-    select s.x from (select a.pulse->>'job' as x union all select jsonb_array_elements_text(coalesce(a.pulse->'also', '[]'::jsonb))) s
+    select s.x from (select a.pulse->>'job' as x union all select jsonb_array_elements_text(case jsonb_typeof(a.pulse->'also') when 'array' then a.pulse->'also' when 'string' then jsonb_build_array(a.pulse->'also') else '[]'::jsonb end)) s
      where s.x is not null
   loop
     select cj.command into c from cron.job cj where cj.jobname = j and cj.active;
