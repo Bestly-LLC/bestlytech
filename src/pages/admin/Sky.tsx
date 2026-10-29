@@ -563,7 +563,7 @@ export default function Sky() {
             <filter id="cit-soft" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation={6 * u} /></filter>
             <style>{`@keyframes citPulse{0%,100%{transform:scale(.62);opacity:.5}50%{transform:scale(1.08);opacity:1}}@keyframes citRing{0%{transform:scale(.7);opacity:.95}100%{transform:scale(1.55);opacity:0}}.cit-h{transform-box:fill-box;transform-origin:center;animation:citPulse 3.6s ease-in-out infinite}.cit-ring{transform-box:fill-box;transform-origin:center;animation:citRing 4s ease-out forwards}@media (prefers-reduced-motion:reduce){.cit-h{animation:none}.cit-ring{animation:none;opacity:.9}}`}</style>
           </defs>
-          {!wall && STARS.map((s, n) => <circle key={n} cx={s.x * 1000} cy={s.y * 1000} r={s.s} fill="#fff" opacity={s.o} />)}
+          {STARS.map((s, n) => <circle key={n} cx={s.x * 1000} cy={s.y * 1000} r={s.s} fill="#fff" opacity={s.o} />)}
           <g style={wall ? { mixBlendMode: "screen" } : undefined}>
           {rings.map((r) => (
             <g key={r}>
