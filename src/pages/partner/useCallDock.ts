@@ -2,7 +2,7 @@
  * The Bestly call window inside the partner portal (2026-10-27).
  *
  * BestlyDock is the same plain-JS call window Studio uses (public/partner/bestly-dock.js, copied verbatim from
- * Studio build 11bd2f83; re-copy that block to re-sync). It appends #bdock to <body>, so it sits beside React
+ * Studio build 1808ea1d; re-copy that block to re-sync). It appends #bdock to <body>, so it sits beside React
  * and survives every tab change. This file is the host wiring Studio has (scPoll / scPaint / scJoin / init):
  *   - tickets, call state and Messages come from the partner-call edge function (the partner's own session; the
  *     room is the one in his partners.call_url, never taken from the page),
@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { reportToScout } from "@/lib/reportToScout";
 
-const V = "f1087b3f";
+const V = "1808ea1d";
 const NBS = " ";
 type Dock = Record<string, any>;
 const dock = (): Dock | undefined => (window as unknown as { BestlyDock?: Dock }).BestlyDock;
@@ -93,8 +93,8 @@ function initDock() {
     face: () => null,
     getCall: () => SC,
     /* the dock now leaves a trace of every Pop out (which build ran, where it got stuck); only real failures go to Scout */
-    fault: (code: string, detail: string) => { if (/^(win_boot|win_phase|win_tonc|pop_open|pop_msg)$/.test(String(code))) return; reportToScout(`call.${String(code).slice(0, 40)}`, String(detail || "dock")); },
-    winFail: { title: "This window isn't connecting.", body: "Opening your call in Nextcloud instead.", back: "Back to the portal", nc: "Open in Nextcloud now" },
+    fault: (code: string, detail: string) => { if (/^(win_boot|win_phase|win_tonc|win_gate|win_vis|win_start_tap|pop_open|pop_msg|pop_leave|pop_nav|pop_joined|pop_rejoin)$/.test(String(code))) return; reportToScout(`call.${String(code).slice(0, 40)}`, String(detail || "dock")); },
+    winFail: { title: "This window isn't connecting.", body: "Opening your call in Bestly Cloud instead.", back: "Back to the portal", nc: "Open in Bestly Cloud now" },
     toast: (msg: string) => { toast(msg); },
     backWord: "Back to the portal",
     winKind: "partner",
@@ -201,13 +201,15 @@ export function openCallWindow(o: { isJared: boolean; callUrl: string | null | u
   return loadDock().then((ok) => {
     if (!ok) return false;
     initDock();
+    const o2 = { mic: q.get("m") !== "0", cam: q.get("c") !== "0" };
+    try { dock()?.winFast?.(o2); } catch { /* the slower start below still runs */ }      // asks the opener for the ticket at once; the poll below is the way when nobody answers
     const t0 = Date.now();
     const t = setInterval(() => {
       const D = dock();
       if (Date.now() - t0 > 600000) { clearInterval(t); return; }
       if (D && D.ready) {
         clearInterval(t);
-        D.openWin({ mic: q.get("m") !== "0", cam: q.get("c") !== "0" });
+        D.openWin(o2);      // r10: the page that opened this window has already left the call (one seat at a time)
         try { document.title = o.isJared ? "Call with Eli" : "Call with Jared"; } catch { /* none */ }
       }
     }, 300);

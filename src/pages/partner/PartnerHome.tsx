@@ -525,7 +525,7 @@ function HomeTab(props: {
         </div>
         {docked && (
           <p className="mt-2 px-1 text-sm text-white/60 bento:text-black/60">
-            Having trouble? <a href={joinUrl} target="_blank" rel="noreferrer" className="font-medium underline underline-offset-2">Open the call in Nextcloud</a>
+            Having trouble? <a href={joinUrl} target="_blank" rel="noreferrer" className="font-medium underline underline-offset-2">Open the call in Bestly Cloud</a>
           </p>
         )}
         <div className="relative mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">

@@ -1,4 +1,4 @@
-/* Bestly call dock. Copied verbatim from the Studio build f1087b3f (index.1b454fead2.html, the dock IIFE only).
+/* Bestly call dock. Copied verbatim from the Studio build 1808ea1d (index.e160b385f9.html, the dock IIFE only; r11: one seat at a time).
    To re-sync after a Studio change, copy that block here again. Host wiring lives in src/pages/partner/useCallDock.ts.
    ONE local change (line marked PORTAL): "We do not message Elizabeth" names cfg.waitFor() instead. Re-apply it after a re-sync.
    Loaded once by the partner portal; plain ES2020, appends #bdock to document.body. */
@@ -6,25 +6,25 @@
 /* ══ Bestly call dock ═══════════════════════════════════════════════════════
    One floating call window, shared by her board and Studio. Mounted once at
    the page root and never re-rendered: tab changes, repaints and screen changes
-   cannot touch it, so a call survives them. The call itself is the Nextcloud
+   cannot touch it, so a call survives them. The call itself is the Bestly Cloud
    Talk page in an iframe; this file draws everything around it and drives it
    over the bridge:
      parent -> frame  { type:"bestly-call", cmd:"mute|unmute|camera-on|camera-off|share-start|share-stop|leave|join" }
      frame -> parent  { type:"bestly-call-state", joined, muted, camera, sharing:null|{by,me}, people:[{name,speaking}], error? }
    The frame's FIRST message may be a hello, { joined:false, loading:true, hello:true } with no muted and no camera:
    it only says "alive, still loading" (round 3). muted and camera are read only from a message that says joined:true.
-   A cold join takes 16 to 33 s (Nextcloud on a Pi), so the dock waits long (see T below), says "Joining your call" with
+   A cold join takes 16 to 33 s (Bestly Cloud on a Pi), so the dock waits long (see T below), says "Joining your call" with
    a soft pulsing dot, and shows a dark "Joining your call" placeholder over the frame until the frame says anything.
    Pre-warm (cfg.prewarm, on unless it says false): when the pre-join check opens, the ticket is fetched and the call
    frame loads behind the pre-join card; the Join tap reuses that frame and sends join at once. Closing the pre-join
    check tears the frame down; if the frame fails first, the tap does what it always did (ticket, frame, join).
    cfg.onChange(joined) is called when she joins or leaves; cfg.onConnect(connecting) when the call starts or restarts
    for her, so the host's own pill or button can say "Joining your call" too (no minutes, not "In the call" yet).
-   cfg.onFail(failed) (round 3, N9): true when the dock has given up on the join (not signed in to Nextcloud, a frame that stays silent,
+   cfg.onFail(failed) (round 3, N9): true when the dock has given up on the join (not signed in to Bestly Cloud, a frame that stays silent,
    a join the frame ignores), false again when the call starts after all, she taps Try again, or she leaves. The host's pill or button
    must then stop saying she is in the call: it says "Join the call" while a call is live, and nothing while none is.
-   Sign-in (round 3, N12): "Sign in to Nextcloud" moves the call frame itself to Nextcloud's sign-in page (redirect_url = the call page), never a new tab (a Safari
-   web app sends other sites to Safari). Nextcloud sends the frame back into the call, and the frame's first message restarts the join; "I have signed in" reloads the call page by hand.
+   Sign-in (round 3, N12): "Sign in to Bestly Cloud" moves the call frame itself to Bestly Cloud's sign-in page (redirect_url = the call page), never a new tab (a Safari
+   web app sends other sites to Safari). Bestly Cloud sends the frame back into the call, and the frame's first message restarts the join; "I have signed in" reloads the call page by hand.
    Fallbacks: a silent bridge shows Talk's own buttons inside the frame; a frame that
    will not load shows "Open the call in its own tab" with a fresh ticket. Every fault
    goes to cfg.fault (Studio Watch). Position and size are remembered per viewer.
@@ -117,7 +117,9 @@
   const loadSz = () => { try { const j = JSON.parse(localStorage.getItem(KEY2) || "null"); if(j && typeof j === "object"){ if(isFinite(j.cw) && j.cw >= CW_MIN && j.cw <= CW_MAX) D.sz.cw = Math.round(+j.cw); if(isFinite(j.strip) && j.strip >= 0.05 && j.strip <= 0.6) D.sz.strip = +j.strip; } } catch {} };
   const saveSz = () => { try { localStorage.setItem(KEY2, JSON.stringify({ cw: Math.round(D.sz.cw), strip: D.sz.strip == null ? null : Math.round(D.sz.strip * 1000) / 1000 })); } catch {} };
   const fault = (code, detail) => { try { D.cfg && D.cfg.fault && D.cfg.fault(code, detail); } catch {} };
-  const BUILD_LABEL = "r5-2026-10-27";      /* which build ran: the call window shows it tiny ("r5") and logs it (call_win_boot) */
+  const phaseIn = (ph) => /^(alone|connected|reconnecting|stage|call)$/.test(String(ph || ""));      /* the call page's phases that mean "in the call" (alone included); "lobby" and "preview" do not */
+  const inCall = () => (!!D.frameJoined || (D.v5.mode === "v5" && phaseIn(D.v5.phase))) && !(D.v5.mode === "v5" && D.v5.perm === "prompt");      /* the frame says joined AND is not still asking for the camera: a call page can say joined in its lobby */
+  const BUILD_LABEL = "r11-2026-10-29";      /* which build ran: the call window shows it tiny ("r5") and logs it (call_win_boot) */
   const phone = () => { try { return matchMedia("(max-width: 640px)").matches; } catch { return innerWidth <= 640; } };
   const isIphone = () => /iPhone|iPod/.test(navigator.userAgent || "");
   const isIOS = () => { try { return /iPhone|iPad|iPod/.test(navigator.userAgent || "") || (navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1); } catch { return false; } };
@@ -363,7 +365,7 @@
         <section class="bd-call" hidden>
           <div class="bd-frame"><div class="bd-wait" aria-hidden="true"><i></i><span class="bd-wt">In the lobby</span></div></div>
           <div class="bd-err" hidden><p></p><div class="bd-row"><button type="button" class="bd-join bd-retry">Try again</button><button type="button" class="bd-join2 bd-tab">${ICON.ext}<span>Open the call in its own tab</span></button></div></div>
-          <div class="bd-warn" hidden><p class="bd-wp">If the call is not showing here, or its buttons do not answer, you can open it in its own tab.</p><p class="bd-nc" hidden>If you see a Nextcloud sign-in, or the box stays empty, sign in to Nextcloud once in this window. It remembers you after that.</p><div class="bd-wbtns"><button type="button" class="bd-join2 bd-nclogin" hidden><span>Sign in to Nextcloud</span></button><button type="button" class="bd-join2 bd-again" hidden><span>Try again</span></button><button type="button" class="bd-join2 bd-tab2">${ICON.ext}<span>Open the call in its own tab</span></button></div></div>
+          <div class="bd-warn" hidden><p class="bd-wp">If the call is not showing here, or its buttons do not answer, you can open it in its own tab.</p><p class="bd-nc" hidden>If you see a Bestly Cloud sign-in, or the box stays empty, sign in to Bestly Cloud once in this window. It remembers you after that.</p><div class="bd-wbtns"><button type="button" class="bd-join2 bd-nclogin" hidden><span>Sign in to Bestly Cloud</span></button><button type="button" class="bd-join2 bd-again" hidden><span>Try again</span></button><button type="button" class="bd-join2 bd-tab2">${ICON.ext}<span>Open the call in its own tab</span></button></div></div>
         </section>
       </div>
       <div class="bd-ctl" hidden>
@@ -444,13 +446,15 @@
     const names = D.cfg && D.cfg.names ? D.cfg.names() : "";
     /* your own face (or your letter) in the camera box while your camera is off */
     if(D.cfg && D.cfg.me){ const me = D.cfg.me() || {}; putFace(e.av, me.key || null, me.name || "?"); }
-    const starting = !!(D.cfg && D.cfg.canStart && !call.live);
+    const wo = D.win && D.winOp && D.winOp.live ? D.winOp : null;      /* the other page is in the call: this window says so, it never says nobody has started it */
+    const starting = !!(D.cfg && D.cfg.canStart && !call.live && !wo);
     if(starting){
       e.stat.textContent = "Nobody has started it yet";
       e.who.textContent = "You will be the first one in, so joining starts the call. We do not message " + /*PORTAL*/ ((D.cfg && typeof D.cfg.waitFor === "function" && D.cfg.waitFor()) || "them") + ".";
     } else {
       e.who.textContent = names ? `${names} ${/ and /.test(names) ? "are" : "is"} in the call` : "Nobody else is in the call yet";
     }
+    if(wo && wo.text) e.stat.textContent = wo.text;
     e.title.textContent = (D.cfg && D.cfg.title) || "Strategy call";      /* always the name; "Nobody has started it yet" and the Start button say the rest */
     const five = v5on(), bad = five && D.v5.perm === "denied";
     if(e.jlab) e.jlab.textContent = starting ? "Start the call" : (five ? "Join now" : "Join the call");
@@ -485,12 +489,12 @@
   const post = (cmd, extra) => { try { if(D.frame && D.frame.contentWindow){ const m = { type: "bestly-call", cmd }; if(extra) Object.assign(m, extra); D.frame.contentWindow.postMessage(m, D.origin || "*"); } } catch(e) { fault("post", String(e && e.message || e)); } };
   /* round 5: a join carries the devices she chose, so the frame (which already has them open from the self view) opens nothing new */
   const joinOpts = () => D.v5.mode === "v5" ? { mic: !D.st.muted, camera: !!D.st.camera } : null;
-  /* the frame is silent: say so calmly. A seat that uses its own Nextcloud session (Jared) may just need to sign in once. */
+  /* the frame is silent: say so calmly. A seat that uses its own Bestly Cloud session (Jared) may just need to sign in once. */
   const cloudLogin = () => { try { const c = D.cfg && D.cfg.cloudLogin; return typeof c === "function" ? c() : (c || ""); } catch { return ""; } };
-  const LOGIN_OWN = "You're not signed in to Nextcloud in this browser. Sign in once, then tap Try again.";
+  const LOGIN_OWN = "You're not signed in to Bestly Cloud in this browser. Sign in once, then tap Try again.";
   const LOGIN_GUEST = "The call could not sign you in. Please tap Try again. If it still does not work, open the call in its own tab.";
-  const NC_HELP = "If you see a Nextcloud sign-in, or the box stays empty, sign in to Nextcloud once in this window. It remembers you after that.";
-  const LOGIN_SIGNING = "Sign in to Nextcloud in the window above. You come back to the call by yourself. If you do not, tap I have signed in.";
+  const NC_HELP = "If you see a Bestly Cloud sign-in, or the box stays empty, sign in to Bestly Cloud once in this window. It remembers you after that.";
+  const LOGIN_SIGNING = "Sign in to Bestly Cloud in the window above. You come back to the call by yourself. If you do not, tap I have signed in.";
   const showWarn = () => {
     const e = D.el, own = !!cloudLogin(), lg = D.login, sg = !!(D.signing && own), was = !e.warn.hidden;
     e.warn.hidden = false; e.warn.classList.toggle("bd-wguest", !own); e.warn.classList.toggle("bd-wsign", sg);
@@ -517,7 +521,7 @@
     if(r.dataset.mode === "stage" || r.dataset.full === "1") return;
     place(false);
   };
-  /* "Sign in to Nextcloud": the CALL FRAME goes to Nextcloud's sign-in page (redirect_url = the call page, so Nextcloud sends it back into the call afterwards).
+  /* "Sign in to Bestly Cloud": the CALL FRAME goes to Bestly Cloud's sign-in page (redirect_url = the call page, so Bestly Cloud sends it back into the call afterwards).
      Nothing opens in a new tab: a Safari web app sends other sites to Safari, and she would never come back. */
   const loginURL = () => {
     try {
@@ -567,7 +571,7 @@
       D.layoutSent = null;      /* a page that loaded again has forgotten its layout */
       if(!D.st.joined){ if(D.st.open) askPreview(true); return; }
       D.frameJoined = false;
-      if(D.signing || D.login){                        /* the sign-in page, a signed-out page that loaded again, or the page Nextcloud sends her on to: no pings, no giving up. */
+      if(D.signing || D.login){                        /* the sign-in page, a signed-out page that loaded again, or the page Bestly Cloud sends her on to: no pings, no giving up. */
         if(D.signing) D.signLoads++;                   /* The page's first word starts the join (see onMsg); one quiet join, for a bridge that has no hello, tells a call page from a form */
         clearTimeout(D.timers.probe); D.timers.probe = setTimeout(() => { if(D.frame === f && D.st.joined && (D.login || D.signing)) post("join"); }, 700);
         return;
@@ -654,14 +658,14 @@
   const frameLive = () => !!(D.frame && D.frame.contentWindow && (D.warm.alive || D.warm.loaded || D.st.bridge === "ok"));
   /* ask the call page to open its own self view: its permission question shows at once. Asked again every 1.5 s until it says it is up (twice is safe). */
   const askPreview = (now) => {
-    if(!v5on() || D.st.joined || !D.st.open) return;
+    if(!v5on() || D.st.joined || !D.st.open || D.winHold) return;
     if(D.timers.askp){ if(now && D.askTick) D.askTick(); return; }      /* already asking: only the call page's first sign of life asks once more at once */
     const t0 = Date.now();
     const tick = D.askTick = () => {
       const v = D.v5;
       const coming = D.warm.state === "ticket" || D.warm.state === "loading";      // the call page is still on its way
       if(!v5on() || D.st.joined || !D.st.open || (!D.frame && !coming) || v.preview || v.perm === "denied" || v.perm === "none" || Date.now() - t0 > 60000){ clearInterval(D.timers.askp); D.timers.askp = 0; return; }
-      if(frameLive()){ post("preview", { mic: !!D.pre.mic, camera: !!D.pre.cam }); if(!v.asked){ v.asked = true; paintV5(); } }
+      if(frameLive() && !D.winHold){ post("preview", { mic: !!D.pre.mic, camera: !!D.pre.cam }); if(!v.asked){ v.asked = true; paintV5(); } }
     };
     D.timers.askp = setInterval(tick, 1500); tick();
   };
@@ -701,9 +705,11 @@
       paintV5(); paintPre();
     }
     else if(d.cmd === "join" && d.ok === false && d.error === "join-timeout") fault("join_timeout", D.origin);      /* the pings go on until T.give */
+    else if(d.cmd === "leave" && D.leaveW){ try { D.leaveW(); } catch {} }
   };
 
   const join = async (soundOnly) => {
+    if(!D.win && D.pop.on && D.pop.joined){ fault("join_blocked", "the call is in its own window"); return; }      /* one seat at a time */
     const e = D.el, w = D.warm;
     D.login = false; D.signing = false; paintLogin(); D.st.camera = !(soundOnly || !D.pre.cam); D.st.muted = !D.pre.mic; D.want = { mute: !D.pre.mic, cam: D.st.camera };
     stopPre();
@@ -742,9 +748,12 @@
     chatStart(); paintCtl(); paintHead(); place(true);
     try{ D.cfg.onChange && D.cfg.onChange(true); }catch{}
   };
-  const leave = (keep) => {
-    if(D.win && !D.winLeft){ D.winLeft = true; winSend({ t: "win", s: "left", mic: !D.st.muted, cam: !!D.st.camera }); }
-    post("leave");
+  const waitLeft = (res) => { let f = false; const fin = () => { if(f) return; f = true; clearTimeout(tm); if(D.leaveW === fin) D.leaveW = null; res(); }; const tm = setTimeout(fin, 3000); D.leaveW = fin; };      /* the call page says it has left (3 s at most) */
+  const leave = (keep, sent, wait) => {
+    const lm = D.win && !D.winLeft ? { mic: !D.st.muted, cam: !!D.st.camera } : null; if(lm) D.winLeft = true;
+    const lw = wait ? new Promise((res) => waitLeft(res)) : null;      /* wait: the window tells the other page it has left only after the call page has */
+    if(!sent) post("leave");
+    if(lm){ if(lw) lw.then(() => winSend({ t: "win", s: "left", mic: lm.mic, cam: lm.cam })); else winSend({ t: "win", s: "left", mic: lm.mic, cam: lm.cam }); }
     const done = () => {
       D.dfull = false; fsExit();
       clearTimeout(D.timers.bridge); clearInterval(D.timers.clock); clearInterval(D.timers.rejoin); clearTimeout(D.timers.slow); clearInterval(D.timers.askp); D.timers.askp = 0;
@@ -755,13 +764,13 @@
       D.chat.run = false; D.el.chat.hidden = true; D.root.dataset.chat = "0"; D.root.dataset.cpos = "0"; D.root.dataset.kb = "0";
       cancelSz();
       D.root.style.removeProperty("height");
-      if(keep){ D.root.hidden = false; D.st.open = true; applyChrome(); place(false); geomPing(); say("Your call is in its own window."); return; }      /* Pop out: this page leaves, the other window has the call */
+      if(keep){ D.root.hidden = false; D.st.open = true; applyChrome(); place(false); geomPing(); say("Moving the call to its own window."); return; }      /* Pop out: this page has left, the other window takes the call */
       D.root.hidden = true; D.st.open = false; document.documentElement.classList.remove("bd-stage"); geomPing();
       try{ D.cfg.onChange && D.cfg.onChange(false); }catch{}
       say("You left the call.");
       if(D.win){ D.winSaid = false; winGone(); }
     };
-    setTimeout(done, D.frame ? 350 : 0);
+    if(lw) lw.then(() => setTimeout(done, 0)); else setTimeout(done, D.frame ? 350 : 0);
   };
   const onMsg = (ev) => {
     const d = ev.data; if(!d || (d.type !== "bestly-call-state" && d.type !== "bestly-call-ack")) return;
@@ -769,7 +778,8 @@
     if(D.origin && ev.origin !== D.origin) return;
     if(d.type === "bestly-call-ack"){ onAck(d); return; }
     const s = D.st, w = D.warm, loading = d.loading === true;
-    /* N9: signed out of Nextcloud. The frame is a guest page that can never join, so stop asking it to and say so now (not after the 54 s of pings run out).
+    if(D.leaveW && d.joined === false && !loading){ try { D.leaveW(); } catch {} }      /* the call page says it has left */
+    /* N9: signed out of Bestly Cloud. The frame is a guest page that can never join, so stop asking it to and say so now (not after the 54 s of pings run out).
        Joined: the panel under the call says it. Not joined (the pre-warmed frame): it is dropped quietly, and Join makes a fresh one and says so then. */
     if(d.loggedOut === true || d.error === "login"){
       /* while the frame shows the sign-in page, the sign-out cards that were on it a moment ago may still be talking: only a card that comes after the sign-in page counts */
@@ -799,8 +809,8 @@
     if(d.joined === true){ s.muted = !!d.muted; s.camera = d.camera !== false; }
     const raw = Array.isArray(d.people) ? d.people : []; /* the bridge says whether the notetaker is on the call (people and count already leave it out); the name filter only guards an older bridge */
     s.scoutSaid = typeof d.notetaker === "boolean" || s.scoutSaid === true; s.scout = typeof d.notetaker === "boolean" ? d.notetaker : raw.some(isScout); s.people = raw.filter(p => !isScout(p));
-    if(d.joined === true) D.frameJoined = true; else if(loading) D.frameJoined = false;     // a page that is loading again is not in the call
-    if(D.win && D.frameJoined && !D.winSaid){ D.winSaid = true; clearTimeout(D.timers.winfail); clearTimeout(D.timers.nc); { const f0 = document.querySelector(".bd-winfail"); if(f0) f0.remove(); } winSend({ t: "win", s: "joined", mic: !D.st.muted, cam: !!D.st.camera }); }
+    if(d.joined === true || (typeof d.bv === "number" && d.bv >= 5 && d.joined !== false && phaseIn(d.phase) && !loading)) D.frameJoined = true; else if(loading) D.frameJoined = false;     // a page that is loading again is not in the call
+    winAnnounce(); try { if(D.win) traceTick(); } catch {}      /* the trace also runs on the call page's own messages: a window behind others has its timers slowed */
     const was = s.sharing; s.sharing = d.sharing && typeof d.sharing === "object" ? d.sharing : null;
     if(!s.sharing) s.stageOff = false;
     if(d.error){ s.error = String(d.error); fault("frame", s.error); }
@@ -826,7 +836,7 @@
     r.dataset.phone = ph ? "1" : "0"; r.dataset.size = D.pos.size;
     let mode = s.mode;
     if(s.joined){ mode = stageNow() || D.win || (D.dfull && !ph && !D.bar) ? "stage" : (D.bar ? "bar" : (ph && !D.full ? "tile" : "call")); }
-    else mode = D.pop.on && D.pop.joined ? "pop" : "prejoin";      /* "pop": the call is in its own window and this page shows the small card */
+    else mode = D.pop.on ? "pop" : "prejoin";      /* "pop": the call is in its own window and this page shows the small card */
     const hand = !!(s.joined && D.pop.on && !D.pop.joined && !D.win);      /* the window is on its way: the call is still here, small, under the card */
     if(hand) mode = "pop";
     if(mode !== "stage" && s.mode === "stage"){ /* the share ended: back to the spot it was in */ }
@@ -911,7 +921,7 @@
     const others = five ? v.others : names().length, alone = !conn && !out && !s.sharing && others === 0, recon = !conn && !out && five && v.phase === "reconnecting";
     const lobbyW = slow ? ["Still connecting. Check your Wi-Fi.", "Still connecting"] : (five && v.lobbyText ? [v.lobbyText, "In the lobby"] : ["In the lobby"]);
     if(conn) fitStat(lobbyW);          /* no minutes yet: the call has not started for her */
-    else if(out) fitStat(cloudLogin() ? ["Not signed in to Nextcloud", "Not signed in"] : ["Could not sign you in", "Not signed in"]);
+    else if(out) fitStat(cloudLogin() ? ["Not signed in to Bestly Cloud", "Not signed in"] : ["Could not sign you in", "Not signed in"]);
     else if(recon) fitStat([v.lobbyText || "Reconnecting", "Reconnecting"]);
     else if(s.sharing){ const who = s.sharing.me ? "You are" : `${firstName(s.sharing.by) || "Someone"} is`; fitStat([`${who} showing a screen, ${m}`, `${who} sharing, ${m}`, `Sharing, ${m}`]); }
     else if(alone) fitStat(five && v.lobbyText ? [v.lobbyText, waitWords()] : [waitWords(), "Waiting"]);
@@ -1227,8 +1237,8 @@
     const e = D.el;
     e.pm.onclick = () => { D.pre.mic = !D.pre.mic; if(D.pre.stream) D.pre.stream.getAudioTracks().forEach(t => t.enabled = D.pre.mic); if(D.v5.mode === "v5") post(D.pre.mic ? "unmute" : "mute"); paintPre(); };
     e.pc.onclick = () => { D.pre.cam = !D.pre.cam; if(D.pre.stream) D.pre.stream.getVideoTracks().forEach(t => t.enabled = D.pre.cam); if(D.v5.mode === "v5") post(D.pre.cam ? "camera-on" : "camera-off"); D.root.classList.toggle("bd-nocam", !D.pre.cam || isIOS()); paintPre(); };
-    e.join.onclick = () => join(false);
-    e.join2.onclick = () => join(true);
+    e.join.onclick = () => { winTapped(); join(false); };
+    e.join2.onclick = () => { winTapped(); join(true); };
     /* round 5: the camera was refused. Try again builds a fresh call page (the browser's setting may have changed), which asks again. */
     e.pretry.onclick = () => { if(!D.st.open || D.st.joined) return; unwarm(); D.v5 = freshV5(D.legacy ? "legacy" : "pending"); D.el.call.hidden = !v5on(); paintPre(); waitOn(true); warm(); say("Trying again."); };
     $(".bd-retry", D.root).onclick = () => { D.el.err.hidden = true; D.el.frameBox.hidden = false; D.el.call.hidden = true; D.el.pre.hidden = false; setMode("prejoin"); startPre(); paintPre(); warm(); };
@@ -1282,7 +1292,7 @@
     e.fill.onclick = () => { if(D.root.dataset.full === "1"){ collapse(); say("The call is a small window again."); try{ D.el.tile.focus({ preventScroll: true }); }catch{} } else expand(); };
     e.fs.onclick = async () => { try{ await fsEnter(); }catch(err){ fault("fullscreen", String(err && err.message || err)); say("Full screen did not open. The window stays as it is."); } };
     ["fullscreenchange", "webkitfullscreenchange"].forEach(ev => document.addEventListener(ev, () => { const was = D.dfull; D.dfull = fsEl() === D.root; if(was !== D.dfull && D.st.joined){ applyChrome(); place(true); say(D.dfull ? "The call fills the screen." : "The call is back in its window."); } }));
-    e.pop.onclick = () => popOut(); e.pshow.onclick = () => { const p = D.pop; if(p.ncOffer && !p.joined){ const u2 = p.ncUrl || plainUrl(); if(u2){ try { window.open(u2, "_blank"); } catch {} } return; } popFocus(); }; e.pback.onclick = () => { if(D.pop.joined) popBack(); else popCancel(); };
+    e.pop.onclick = () => popOut(); e.pshow.onclick = () => { const p = D.pop; if(p.ncOffer && !p.joined){ const u2 = p.ncUrl || plainUrl(); if(u2){ try { window.open(u2, "_blank"); } catch {} } return; } popFocus(); }; e.pback.onclick = () => { if(D.pop.joined) popBack(); else popCancel("Your call is back here."); };
     ["pointerenter", "focus", "touchstart", "pointerdown"].forEach(ev => e.pop.addEventListener(ev, () => { if(!D.pop.on && popOk()){ if(sepOk()) popCode(); else popSpare(); } }, { passive: true }));
     e.small.onclick = () => { if(D.dfull){ fsExit(); return; } D.st.stageOff = true; applyChrome(); paintHead(); place(true); say("The call window is small again."); };
     e.tile.onclick = (ev) => { /* a tap that was not a drag opens the full screen call (the pointer-up does it first; this one is for a browser that gave only the click) */ if(phone() && D.st.mode === "tile" && D.tapOk !== false) expand(); };
@@ -1338,7 +1348,7 @@
   /* What the card says while the new window is on its way (Jared, 2026-10-27): one line at a time, each replacing the one before with a soft 200 ms crossfade.
      The seconds are counted from the tap (Bring it back: from its own tap). At 90 s the call stays here and the card says so. */
   const POPSAY = [[0, "Moving the call to its own window"], [3, "Opening the window"], [6, "Still working"], [10, "Connecting the call"], [15, "Almost there"], [22, "Jared swears this works"], [30, "Oh my goodness"], [40, "Oh my god"], [55, "Hang on, still trying"], [75, "Giving it a few more seconds"]];
-  const POPFAIL = "The new window didn't connect. Your call is still here.", POPOWN = "Call in its own window";
+  const POPFAIL = "The new window didn't connect. Your call is back here.", POPOWN = "Call in its own window";
   const pstSay = (txt) => {
     const ls = D.el.pls, p = D.pop; if(!ls || ls.length < 2 || p.shown === txt) return;
     p.shown = txt;
@@ -1347,8 +1357,10 @@
   };
   const popLine = () => {
     const p = D.pop; if(p.fail) return POPFAIL;
-    if(p.ncOffer && !p.joined) return "Open your call in Nextcloud";
-    if(p.joined && !p.back) return p.nc ? "Your call is in the Nextcloud window" : POPOWN;
+    if(p.ncOffer && !p.joined) return "Open your call in Bestly Cloud";
+    if(p.ncg && !p.joined && !p.back) return "Opening your call in Bestly Cloud";
+    if(p.tap && !p.joined && !p.back) return "Tap Start the call in the new window";
+    if(p.joined && !p.back) return p.nc ? "Your call is in the Bestly Cloud window" : POPOWN;
     const secs = (Date.now() - (p.back ? p.bt : p.t)) / 1000; let w = p.sep && !p.back ? "Opening the call in Safari" : POPSAY[0][1];      /* from the Dock app the window opens in Safari */
     for(const [s, x] of POPSAY) if(secs >= s && !(s === 0 && p.sep && !p.back)) w = x;
     return p.back && w === POPSAY[0][1] ? "Bringing the call back" : w;
@@ -1358,11 +1370,15 @@
     pstSay(popLine());
     const lab = e.pback.querySelector("span"), t = p.joined ? "Bring it back" : "Keep it here";
     if(lab && lab.textContent !== t) lab.textContent = t;
-    { const sl = e.pshow.querySelector("span") || e.pshow, st = p.ncOffer && !p.joined ? "Open in Nextcloud" : "Show it"; if(sl.textContent !== st && !sl.querySelector("svg")) sl.textContent = st; }
-    e.pshow.disabled = !!p.fail; e.pback.disabled = !!p.fail || !!p.back;
+    { const sl = e.pshow.querySelector("span") || e.pshow, st = p.ncOffer && !p.joined ? "Open in Bestly Cloud" : "Show it"; if(sl.textContent !== st && !sl.querySelector("svg")) sl.textContent = st; }
+    e.pshow.disabled = !!p.fail; e.pback.disabled = !!p.fail || !!p.back || !!p.lv;
   };
   /* a ticket for the new window, asked for early (a hover, a touch, the tap itself) and handed over on the channel, so the window never has to ask for one.
      Tickets are short-lived: one older than 30 s is asked for again. */
+  const stateText = () => { try {
+    const me = ((D.cfg && D.cfg.me && D.cfg.me()) || {}).name || "", oth = D.cfg && D.cfg.names ? String(D.cfg.names() || "") : "", who = [firstName(me), oth].filter(Boolean).join(" and ");
+    return who ? `${who} ${/ and /.test(who) ? "are" : "is"} in the call` : "In the call";
+  } catch { return ""; } };
   const popSpare = () => {
     const k = D.pop.tk, now = Date.now();
     if(k && !k.bad && now - k.t < 30000) return k.p;
@@ -1384,42 +1400,42 @@
     try { D.cfg.onChange && D.cfg.onChange(false); } catch {}
     say("The call window was closed.");
   };
-  const popCancel = (why) => {      /* the window never got in (closed, or Keep it here): this page still has the call and shows it again */
-    const p = D.pop; if(!p.on || p.joined) return;
-    clearInterval(D.timers.pop); clearTimeout(D.timers.popf);
-    winSend({ t: "cmd", c: "leave" }); try { p.w && p.w.close(); } catch {}
-    Object.assign(p, { on: false, w: null, fail: false, shown: "" }); applyChrome();
-    note(why || "Your call stayed here.");
-  };
-  const popFail = (why) => {      /* nojoin: the window said it is not connecting (closed, the call stays here, the card says so for a moment). Anything else = 90 s of silence: the card offers the plain Nextcloud page and the call stays here */
-    const p = D.pop; if(!p.on || p.joined) return;
-    if(why !== "nojoin"){
-      fault("pop_timeout", "no word in 90 s|msgs=" + (p.logged ? 1 : 0) + "|via=" + (p.via || "none") + "|n=" + Math.random().toString(36).slice(2, 6));
-      p.ncOffer = true; popPaint(); say("Open your call in Nextcloud.");
-      Promise.resolve().then(() => D.cfg.ticket()).then((tk) => { p.ncUrl = plainOf(tk && tk.url); }).catch(() => {});      /* the link is ready before the tap, so the new window opens on the tap itself */
-      return;
-    }
-    fault("pop_nojoin", "said=nojoin|via=" + (p.via || "none") + "|n=" + Math.random().toString(36).slice(2, 6));
-    clearInterval(D.timers.pop); winSend({ t: "cmd", c: "leave" }); try { p.w && p.w.close(); } catch {}
-    p.fail = true; popPaint(); say(POPFAIL);
-    clearTimeout(D.timers.popf); D.timers.popf = setTimeout(() => { Object.assign(D.pop, { on: false, w: null, fail: false, shown: "" }); applyChrome(); }, 4000);
-  };
-  const popReturn = () => {      /* Bring it back: the window has left the call, so this page joins again with the same microphone and camera */
+  const popReturn = () => {      /* this page joins the call again, with the same microphone and camera: after Bring it back, or when the new window did not connect. The window has already left (or been told to). */
     const p = D.pop; if(!p.on) return;
-    clearInterval(D.timers.pop); clearTimeout(D.timers.popb);
+    clearInterval(D.timers.pop); clearTimeout(D.timers.popb); clearTimeout(D.timers.popf);
     try { p.w && p.w.close(); } catch {}
     const mic = p.mic, cam = p.cam;
-    Object.assign(p, { on: false, w: null, joined: false, back: false, fail: false, shown: "" });
+    Object.assign(p, { on: false, w: null, joined: false, back: false, fail: false, shown: "", rj: false, rjw: null, lv: false, nav: 0 });
+    fault("pop_rejoin", "mic=" + (mic !== false ? 1 : 0) + "|cam=" + (cam !== false ? 1 : 0) + "|n=" + Math.random().toString(36).slice(2, 6));
     window.BestlyDock.open(); D.pre.mic = mic !== false; D.pre.cam = cam !== false; join(!D.pre.cam);
+  };
+  const popCancel = (why, fail) => {      /* the window never got into the call (it failed, closed, or Keep it here): it is told to leave and given a moment to finish, then THIS page joins again. One seat at a time. */
+    const p = D.pop; if(!p.on || p.joined || p.rj) return; p.rj = true;
+    clearInterval(D.timers.pop);
+    if(fail){ p.fail = true; popPaint(); say(POPFAIL); }
+    winSend({ t: "cmd", c: "leave" });
+    const go = () => { clearTimeout(D.timers.popf); p.rjw = null; if(!D.pop.on) return; note(why || POPFAIL); popReturn(); };
+    p.rjw = go; clearTimeout(D.timers.popf); D.timers.popf = setTimeout(go, 3500);
+  };
+  const popFail = (why) => {      /* nojoin: the window says it is not connecting. Anything else = 20 s with no Talk-level join: either way this page takes the call back */
+    const p = D.pop; if(!p.on || p.joined || p.rj) return;
+    if(why !== "nojoin") fault("pop_timeout", "no join 20 s after the window loaded|msgs=" + (p.logged ? 1 : 0) + "|via=" + (p.via || "none") + "|n=" + Math.random().toString(36).slice(2, 6));
+    else fault("pop_nojoin", "said=nojoin|via=" + (p.via || "none") + "|n=" + Math.random().toString(36).slice(2, 6));
+    popCancel(POPFAIL, true);
   };
   const popWatch = () => {
     clearInterval(D.timers.pop);
     D.timers.pop = setInterval(() => {
       const p = D.pop; if(!p.on){ clearInterval(D.timers.pop); return; }
+      if(p.rj) return;
       let gone = false; try { gone = !!(p.w && p.w.closed) && (!p.sep || p.beat > 0); } catch {}      /* a window in another browser cannot be seen: only trust "closed" once it has spoken */
       if(!gone && p.joined && !p.nc && p.beat && Date.now() - p.beat > 15000) gone = true;      /* a window that crashed stops its heartbeat */
-      if(gone){ if(!p.joined) popCancel("The new window was closed. Your call is still here."); else if(p.back) popReturn(); else popEnd(); return; }
-      if(!p.joined && !p.fail && !p.ncOffer && Date.now() - p.t > 90000){ popFail("timeout"); }      /* the window never got into the call: the call stays here */
+      if(gone){
+        if(!p.joined){ p.rj = true; clearInterval(D.timers.pop); setTimeout(() => { if(D.pop.on){ note("The new window was closed. Your call is back here."); popReturn(); } }, 1500); }      /* a moment for a closing window to finish its leave */
+        else if(p.back) popReturn(); else popEnd();
+        return;
+      }
+      if(!p.joined && !p.fail && p.nav && Date.now() - p.nav > 20000){ popFail("timeout"); return; }      /* the window loaded the call page and did not get in */
       popPaint();
     }, 1000);
     popPaint();
@@ -1433,41 +1449,55 @@
     n.p = Promise.resolve().then(() => D.cfg.handoff()).then((c) => { if(!c || typeof c !== "string") throw new Error("no_code"); n.v = c; return c; }).catch(() => { n.bad = true; return null; });
     D.pop.hc = n; return n.p;
   };
+  /* waits for the call page to say it has left (the same words the leave button ends with), 3 s at most */
+  const popLeaveOpener = () => new Promise((res) => {
+    const t0 = Date.now(); D.leaving = true;
+    waitLeft(() => {
+      fault("pop_leave", "ms=" + (Date.now() - t0) + "|n=" + Math.random().toString(36).slice(2, 6));
+      leave(true, true); setTimeout(() => { D.leaving = false; }, 2500);
+      setTimeout(res, 400);      /* the frame is torn down before the window loads the call page */
+    });
+    post("leave");
+  });
   const popOut = () => {
     if(!D.st.joined || D.pop.on || D.pop.busy || !popOk()) return;
     let u; try { u = new URL(D.cfg.winUrl(), location.href); } catch { return; }
     u.searchParams.set("m", D.st.muted ? "0" : "1"); u.searchParams.set("c", D.st.camera ? "1" : "0");
-    const open = (sep) => {
-      let w = null; try { w = window.open(u.href, WINNAME, "popup=yes,width=960,height=640,resizable=yes,resize=yes"); } catch {}
-      if(!w && !sep){ note("Your browser blocked the new window. Allow pop-ups for this site, then tap again."); return; }
-      Object.assign(D.pop, { on: true, w, sep, t: Date.now(), beat: 0, joined: false, back: false, bt: 0, fail: false, shown: "", pk: 0, live: false, nc: false, ncOffer: false, ncUrl: "", logged: false, via: "" });
-      try { const lu = new URL(u.href); lu.searchParams.delete("h"); fault("pop_open", lu.pathname + lu.search + "|w=" + (w ? 1 : 0) + "|sep=" + (sep ? 1 : 0) + "|bc=" + (BC ? 1 : 0) + "|st=" + (standalone() ? 1 : 0) + "|n=" + Math.random().toString(36).slice(2, 6)); } catch {}
-      applyChrome(); popWatch(); say(popLine());
-    };
-    if(sepOk()){
-      const k = D.pop.hc, ready = k && k.v && !k.bad && Date.now() - k.t < 40000;
-      const go = (code) => {
-        D.pop.busy = false; D.pop.hc = null; if(D.pop.on || !D.st.joined) return;
-        if(code){ u.searchParams.set("h", code); open(true); } else { popSpare(); open(false); }      /* no code: the old way (it only works if the window shares this page's sign-in) */
-      };
-      if(ready) go(k.v); else { D.pop.busy = true; popCode().then(go); }
-      return;
+    const sep = sepOk();
+    let w = null;
+    if(!sep){      /* the window is opened empty, inside the tap (so the pop-up blocker lets it through); it loads the call page only after this page has left */
+      try { w = window.open("", WINNAME, "popup=yes,width=960,height=640"); } catch {}
+      if(!w){ note("Your browser blocked the new window. Allow pop-ups for this site, then tap again."); return; }
+      try { w.document.title = "Strategy call"; w.document.body.style.cssText = "margin:0;background:#1F1D1B"; w.focus(); } catch {}
     }
-    popSpare();      /* the new window's ticket is asked for now, at the same time as the window itself */
-    open(false);
-  };
-  const popHandoff = () => {      /* the window is in the call: this page leaves quietly and shows the card */
-    D.leaving = true; leave(true); setTimeout(() => { D.leaving = false; }, 2500);
-    say("Your call is now in its own window.");
+    D.stText = stateText();
+    Object.assign(D.pop, { on: true, w, sep, t: Date.now(), nav: 0, beat: 0, joined: false, back: false, bt: 0, fail: false, shown: "", pk: 0, live: false, nc: false, ncOffer: false, ncUrl: "", logged: false, via: "", ncg: false, tap: false, rj: false, rjw: null, lv: true });
+    try { const lu = new URL(u.href); lu.searchParams.delete("h"); fault("pop_open", lu.pathname + lu.search + "|w=" + (w ? 1 : 0) + "|sep=" + (sep ? 1 : 0) + "|bc=" + (BC ? 1 : 0) + "|st=" + (standalone() ? 1 : 0) + "|order=leave-first|n=" + Math.random().toString(36).slice(2, 6)); } catch {}
+    applyChrome(); popWatch(); say(popLine());      /* the card is up at once */
+    popSpare();      /* the new window's ticket is asked for now */
+    const codeP = sep ? popCode() : Promise.resolve(null);
+    Promise.all([popLeaveOpener(), codeP]).then(([, code]) => {
+      const p = D.pop; p.lv = false; if(!p.on || p.rj) return;
+      if(sep){
+        if(code) u.searchParams.set("h", code);
+        let w2 = null; try { w2 = window.open(u.href, WINNAME, "popup=yes,width=960,height=640"); } catch {}
+        p.w = w2;
+      } else {
+        if(!p.w || p.w.closed) return;      /* popWatch takes it from here: this page joins again */
+        try { p.w.location.replace(u.href); } catch { try { p.w.location.href = u.href; } catch {} }
+      }
+      p.nav = Date.now(); fault("pop_nav", "after=" + Math.round((p.nav - p.t) / 100) / 10 + "s|n=" + Math.random().toString(36).slice(2, 6));
+      popPaint();
+    });
   };
   const popBack = () => {
     const p = D.pop; if(!p.on || !p.joined) return;
-    if(p.nc){ if(p.sep) note("Close the Nextcloud window to leave the call there."); popReturn(); return; }      /* that window is on the plain Nextcloud page and cannot hear: close it if we can, and rejoin here */
+    if(p.nc){ if(p.sep) note("Close the Bestly Cloud window to leave the call there."); popReturn(); return; }      /* that window is on the plain Bestly Cloud page and cannot hear: close it if we can, and rejoin here */
     p.back = true; p.bt = Date.now(); popPaint(); winSend({ t: "cmd", c: "leave" });
     clearTimeout(D.timers.popb); D.timers.popb = setTimeout(() => { if(D.pop.on && D.pop.back) popReturn(); }, 5000);      /* the window did not answer: take the call back anyway */
   };
   /* Pop out round 5 (2026-10-27): the call window leaves a trace (which build ran, where it got stuck) and can never dead-end.
-     20 s after it loaded and not in the call, it hands itself to the plain Nextcloud call page (first-party, so the browser's own sign-in works there). */
+     20 s after it loaded and not in the call, it hands itself to the plain Bestly Cloud call page (first-party, so the browser's own sign-in works there). */
   const pvTag = () => { try { const m = /PREVIEW · ([0-9a-f]{8})/.exec(document.body.textContent || ""); return m ? m[1] : "live"; } catch { return "?"; } };
   const hostPath = (u) => { try { const x = new URL(u, location.href); return x.host + "/" + (x.pathname.split("/")[1] || ""); } catch { return ""; } };      /* never a token or a room */
   const plainOf = (u) => { try { if(!u) return ""; const x = new URL(u, location.href); x.searchParams.delete("embed"); x.searchParams.delete("bv"); return x.href; } catch { return ""; } };
@@ -1481,10 +1511,10 @@
   const traceSend = (code, detail) => { tr.q.push([code, String(detail) + "|n=" + (++tr.n) + "|" + Math.round((Date.now() - tr.t0) / 1000) + "s"]); traceFlush(); };
   const traceSnap = () => {
     const v = D.v5 || {};
-    return "ph=" + (v.phase || "") + " pm=" + (v.perm || "") + " br=" + D.st.bridge + " jn=" + (D.st.joined ? 1 : 0) + " fj=" + (D.frameJoined ? 1 : 0) + " lg=" + (D.login ? 1 : 0) + (D.signing ? "s" : "") + " w=" + D.warm.state + " fr=" + (D.frame ? 1 : 0) + " tk=" + (D.winTk ? 1 : 0) + " u=" + hostPath(D.callUrl);
+    return "ph=" + (v.phase || "") + " pm=" + (v.perm || "") + " br=" + D.st.bridge + " jn=" + (D.st.joined ? 1 : 0) + " fj=" + (D.frameJoined ? 1 : 0) + " lg=" + (D.login ? 1 : 0) + (D.signing ? "s" : "") + " w=" + D.warm.state + " fr=" + (D.frame ? 1 : 0) + " tk=" + (D.winTk ? 1 : 0) + " vs=" + (document.hidden ? "h" : "v") + " oth=" + (v.others || 0) + " u=" + hostPath(D.callUrl);
   };
   const traceTick = () => {
-    const now = Date.now(); traceFlush();
+    const now = Date.now(); traceFlush(); winAnnounce();      /* a camera question answered without a new message from the call page */
     if(now - tr.t0 > 120000 && !tr.q.length){ clearInterval(D.timers.trace); return; }
     if(now - tr.t0 <= 90000 && tr.rows < 12 && now - tr.last >= 1000){
       const s = traceSnap();
@@ -1493,8 +1523,8 @@
     if(D.winSaid || D.winLeft || !(D.win || D.winO)) return;
     const v = D.v5 || {};
     /* the sign-in card is already up for a report of "signed out" (giveUp login); a window that stays on it for 10 s, or whose camera was refused for 3 s, does not get better by waiting */
-    if(D.login && !D.signing){ if(!tr.loginT) tr.loginT = now; else if(now - tr.loginT > 10000) winFailShow(); } else tr.loginT = 0;
-    if(v.perm === "denied"){ if(!tr.permT) tr.permT = now; else if(now - tr.permT > 3000) winFailShow(); } else tr.permT = 0;
+    if(D.login && !D.signing){ if(!tr.loginT) tr.loginT = now; else if(now - tr.loginT > 10000) winFailShow(true); } else tr.loginT = 0;
+    if(v.perm === "denied"){ if(!tr.permT) tr.permT = now; else if(now - tr.permT > 3000) winFailShow(true); } else tr.permT = 0;
   };
   const traceBoot = () => {
     let pv = "none", ses = 0;
@@ -1503,29 +1533,114 @@
     const ua = ((navigator.userAgent || "").match(/(Chrome|Version|Firefox)\/[\d.]+/) || ["?"])[0];
     traceSend("win_boot", BUILD_LABEL + "|st=" + (standalone() ? 1 : 0) + "|op=" + (window.opener ? 1 : 0) + "|bc=" + (BC ? 1 : 0) + "|ses=" + ses + "|hand=" + (D.winO && D.winO.hand ? 1 : 0) + "|pv=" + pv + "|ua=" + ua);
   };
+
+  /* Safari (and every iPhone and iPad browser, which are Safari underneath) shows the camera question only for a tap INSIDE the page that asks, and the call page is
+     a frame from another site: a tap on a button of this page never counts for it. So such a window never starts the call in the frame unless the camera and
+     microphone are already allowed; it goes to the plain Bestly Cloud call page, which is the site's own page with Talk's own Join button and the real question.
+     Chrome and the Dock app ask without a tap, so they keep the quick start. */
+  const webkitLike = () => {
+    try {
+      const ua = navigator.userAgent || "", ios = /iP(hone|ad|od)/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      return ios || (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\/|OPR\/|Android|Firefox\//.test(ua));
+    } catch { return false; }
+  };
+  const gateHdr = () => {      /* the window's own copy of the header while the line is up: the same words the other page shows */
+    const g = document.querySelector(".bd-wingate"); if(!g) return;
+    const b = g.querySelector(".bd-gh b"), s = g.querySelector(".bd-gh span");
+    const t = (D.cfg && D.cfg.title) || "Strategy call", st = D.winOp && D.winOp.live && D.winOp.text ? D.winOp.text : "";
+    if(b.textContent !== t) b.textContent = t; if(s.textContent !== st) s.textContent = st; s.hidden = !st;
+  };
+  const gateLine = (txt) => {      /* the one line: the old words fade out, the new ones fade in (nothing moves) */
+    let g = document.querySelector(".bd-wingate");
+    if(!g){
+      g = document.createElement("div"); g.className = "bd-wingate"; g.setAttribute("role", "status"); g.setAttribute("aria-live", "polite");
+      g.innerHTML = '<div class="bd-gh"><b></b><span hidden></span></div><div class="bd-gm"><i class="bd-gd" aria-hidden="true"></i><p class="bd-gt"></p></div>';
+      document.body.appendChild(g);
+    }
+    g.removeAttribute("data-off"); gateHdr();
+    const p = g.querySelector(".bd-gt");
+    if(p.textContent === txt) return;
+    if(!p.textContent){ p.textContent = txt; return; }
+    p.dataset.sw = "1"; setTimeout(() => { p.textContent = txt; delete p.dataset.sw; }, 190);
+  };
+  const gateOff = () => {
+    const g = document.querySelector(".bd-wingate"); if(!g || g.dataset.off === "1") return;
+    g.dataset.off = "1"; setTimeout(() => { try { g.remove(); } catch {} }, 320);
+  };
+  const gateWatch = () => {      /* the line stays until the window is past the pre-join card (joined, or showing the call), never longer than 15 s */
+    const t0 = Date.now(); clearInterval(D.timers.gate);
+    D.timers.gate = setInterval(() => {
+      if(D.ncGoing || D.winNc){ return; }
+      if(D.winLeft || D.winSaid || (D.root && D.root.dataset.mode !== "prejoin") || Date.now() - t0 > 15000){ clearInterval(D.timers.gate); gateOff(); }
+    }, 200);
+  };
+  const winStartShow = () => {      /* WebKit, the camera not allowed yet: one big button; the tap is the person's own gesture in this window, then the call starts */
+    D.winTried = true; D.winHold = true; clearTimeout(D.timers.winwd); clearTimeout(D.timers.winfail);      /* no camera question reaches the call page before the tap */
+    gateLine("Tap Start the call to turn on your camera and microphone");
+    const g = document.querySelector(".bd-wingate"); if(!g) return;
+    const d0 = g.querySelector(".bd-gd"); if(d0) d0.hidden = true;
+    let b = g.querySelector(".bd-gb");
+    if(!b){
+      b = document.createElement("button"); b.type = "button"; b.className = "bd-gb"; b.textContent = "Start the call"; g.querySelector(".bd-gm").appendChild(b);
+      b.onclick = () => {
+        D.winHold = false; b.remove(); const d1 = g.querySelector(".bd-gd"); if(d1) d1.hidden = false;
+        gateLine("Starting your call"); winSend({ t: "win", s: "tapped" }); traceSend("win_start_tap", traceSnap());
+        gateWatch(); join(!D.pre.cam);
+        clearTimeout(D.timers.winfail); D.timers.winfail = setTimeout(winFailShow, 26000);
+      };
+    }
+    try { window.focus(); b.focus({ preventScroll: true }); } catch {}
+    winSend({ t: "win", s: "tap" }); say("Tap Start the call.");
+  };
+  const winGate = async (o) => {
+    const want = o.cam !== false; let q = "none", ok = false;
+    gateLine("Starting your call");
+    try {
+      if(navigator.permissions && navigator.permissions.query){
+        const m = await navigator.permissions.query({ name: "microphone" }), c = want ? await navigator.permissions.query({ name: "camera" }) : { state: "granted" };
+        q = m.state + "/" + c.state; ok = m.state === "granted" && c.state === "granted";
+      }
+    } catch (err) { q = "err"; }
+    if(!D.winGo || D.st.joined || D.winLeft) return;
+    const wk = webkitLike(), auto = ok || !wk;
+    traceSend("win_gate", "q=" + q + " pm=" + (D.v5.perm || "") + " wk=" + (wk ? 1 : 0) + " auto=" + (auto ? 1 : 0));
+    if(auto){ gateWatch(); join(!D.pre.cam); return; }
+    winStartShow();
+  };
+  const winTapped = () => {      /* a tap on Join in the pre-join card (never shown in this window now, kept for a window opened by hand) */
+    if(!D.win) return;
+    clearTimeout(D.timers.winfail); D.timers.winfail = setTimeout(winFailShow, 26000);
+    traceSend("win_tapped", traceSnap());
+    try { askPreview(true); } catch {}
+  };
+  const winAnnounce = () => {      /* the window tells the other page it is in the call: the frame has joined and is not waiting on its camera question */
+    if(!D.win || D.winSaid || !inCall()) return; D.winSaid = true;
+    clearTimeout(D.timers.winfail); clearTimeout(D.timers.nc); { const f0 = document.querySelector(".bd-winfail"); if(f0) f0.remove(); }
+    winSend({ t: "win", s: "joined", mic: !D.st.muted, cam: !!D.st.camera });
+  };
   const goNextcloud = async () => {
     clearTimeout(D.timers.nc); if(D.ncGoing || D.winSaid || D.winLeft) return; D.ncGoing = true;
     let u = "";
-    try { const t = await Promise.race([Promise.resolve(D.cfg.ticket()), new Promise((_, rj) => setTimeout(() => rj(new Error("slow")), 4000))]); u = plainOf(t && t.url); } catch {}      /* a fresh ticket: the one the frame used is spent */
+    try { const t = await Promise.race([Promise.resolve(D.ncTkP || D.cfg.ticket()), new Promise((_, rj) => setTimeout(() => rj(new Error("slow")), 4000))]); u = plainOf(t && t.url); } catch {}      /* a fresh ticket: the one the frame used is spent */
     if(!u) u = plainUrl();
     if(!u || D.winSaid || D.winLeft){ D.ncGoing = false; return; }
     traceSend("win_tonc", "to=" + hostPath(u));
     winSend({ t: "win", s: "tonc" });
     D.winLeft = true; D.leaving = true; post("leave");      /* this page leaves quietly: closing it must not tell the other page the call ended */
-    setTimeout(() => { try { location.assign(u); } catch {} }, 900);      /* the trace and the message get out first */
+    setTimeout(() => { try { location.assign(u); } catch {} }, D.winNc ? 300 : 900);      /* the trace and the message get out first */
   };
-  const winFailShow = () => {
-    if(!D.cfg || D.winSaid || D.winLeft || !(D.win || D.winO) || document.querySelector(".bd-winfail")) return;
-    if(D.signing && !D.ncLate){ D.ncLate = true; clearTimeout(D.timers.winfail); D.timers.winfail = setTimeout(winFailShow, 20000); return; }      /* someone is signing in right now: a little longer, once */
+  const winFailShow = (force) => {
+    if(!D.cfg || D.winSaid || D.winLeft || !(D.win || D.winO) || document.querySelector(".bd-winfail") || inCall()) return;      /* a window that is in the call never gets the card */
+    if(D.signing && !D.ncLate){ D.ncLate = true; clearTimeout(D.timers.winfail); D.timers.winfail = setTimeout(winFailShow, 26000); return; }      /* someone is signing in right now: a little longer, once */
     const v = D.v5 || {};
     traceSend("win_nojoin", traceSnap() + " rs=" + (D.winTried ? 1 : 0) + " op=" + (window.opener ? 1 : 0) + " pv=" + pvTag());
     const c = D.cfg.winFail || {}, el = (tag, cls, txt) => { const x = document.createElement(tag); if(cls) x.className = cls; if(txt) x.textContent = txt; return x; };
     const m = el("div", "bd-winfail"), box = el("div", "bd-wf");
     m.setAttribute("role", "alertdialog"); m.setAttribute("aria-label", c.title || "This window isn't connecting.");
     box.appendChild(el("h2", "", c.title || "This window isn't connecting."));
-    box.appendChild(el("p", "", c.body || "Opening your call in Nextcloud instead."));
+    box.appendChild(el("p", "", c.body || "Opening your call in Bestly Cloud instead."));
     if(v.perm === "denied" || v.perm === "prompt") box.appendChild(el("p", "", "The camera or microphone may need permission in this window."));
-    const row = el("div", "bd-wfb"), b1 = el("button", "bd-wf1", c.back || "Back"), b2 = el("button", "bd-wf2", c.nc || "Open in Nextcloud now");
+    const row = el("div", "bd-wfb"), b1 = el("button", "bd-wf1", c.back || "Back"), b2 = el("button", "bd-wf2", c.nc || "Open in Bestly Cloud now");
     b1.type = "button"; b2.type = "button";
     b1.onclick = () => {      /* back: this window leaves quietly, the other page still has the call and shows it again */
       clearTimeout(D.timers.nc); D.winLeft = true; D.leaving = true; winSend({ t: "win", s: "nojoin" }); post("leave");
@@ -1536,12 +1651,12 @@
     row.appendChild(b1); row.appendChild(b2);
     box.appendChild(row); m.appendChild(box); document.body.appendChild(m);
     try { b2.focus(); } catch {}
-    say("This window is not connecting. Opening your call in Nextcloud instead.");
+    say("This window is not connecting. Opening your call in Bestly Cloud instead.");
     clearTimeout(D.timers.nc); D.timers.nc = setTimeout(goNextcloud, 2500);
   };
   /* the call window, the quick start did not get into the call in time: start again the host's own way (it asks for a new ticket itself), once */
   const winRestart = (why) => {
-    if(!D.win || D.winSaid || D.winTried || D.winLeft) return; D.winTried = true;
+    if(!D.win || D.winSaid || D.winTried || D.winLeft || D.winNc) return; D.winTried = true;
     fault("win_stall", why + " br=" + D.st.bridge + " w=" + D.warm.state + " fj=" + (D.frameJoined ? 1 : 0) + " lg=" + (D.login ? 1 : 0));
     post("leave");
     clearTimeout(D.timers.bridge); clearInterval(D.timers.rejoin); clearTimeout(D.timers.slow); clearInterval(D.timers.clock);
@@ -1561,6 +1676,7 @@
       addEventListener("resize", fit); addEventListener("orientationchange", fit); try { if(window.ResizeObserver) new ResizeObserver(fit).observe(document.documentElement); } catch {} }
 
     try { document.title = "Strategy call"; } catch {}
+    document.addEventListener("visibilitychange", () => { try { traceSend("win_vis", document.visibilityState + " " + traceSnap()); winAnnounce(); } catch {} });
     clearInterval(D.timers.beat); D.timers.beat = setInterval(() => { if(D.winSaid && D.st.joined) winSend({ t: "win", s: "beat" }); }, 4000);
     addEventListener("pagehide", () => { if(D.win && D.st.joined && !D.winLeft){ D.winLeft = true; D.leaving = true; post("leave"); winSend({ t: "win", s: "left", mic: !D.st.muted, cam: !!D.st.camera }); } });      /* closing the window leaves the call */
   };
@@ -1578,25 +1694,33 @@
     if(!D.win && D.pop.on && !D.pop.logged && m.t === "win"){ D.pop.logged = true; D.pop.via = via || "?"; fault("pop_msg", "via=" + D.pop.via + "|s=" + m.s + "|" + Math.round((Date.now() - D.pop.t) / 1000) + "s|n=" + Math.random().toString(36).slice(2, 6)); }      /* the first word from the window, and which way it came */
     const p = D.pop;
     if(m.t === "cmd" && m.c === "ticket"){ if(!D.win && !D.winGo && D.winO && m.tk && m.tk.url){ D.winTk = m.tk; window.BestlyDock.openWin(D.winO); } return; }      /* the new window: the ticket came, the call starts now */
+    if(m.t === "win" && m.s === "state"){ D.winOp = { live: !!m.live, text: String(m.text || "").slice(0, 120) }; if(D.win && D.st.open && !D.st.joined){ try { paintPre(); } catch {} } try { gateHdr(); } catch {} return; }      /* the page that opened this window says who is in the call (it can arrive before the window knows it is one) */
     if(D.win){      /* this is the call window */
-      if(m.t === "cmd" && m.c === "leave" && D.st.joined){ D.leaving = true; leave(); }
+      if(m.t === "cmd" && m.c === "leave"){ if(D.st.joined){ D.leaving = true; leave(false, false, true); } else if(!D.winLeft){ D.winLeft = true; D.leaving = true; winSend({ t: "win", s: "left", mic: !D.st.muted, cam: !!D.st.camera }); } }      /* it leaves, and tells the other page only when the call page has left */
       else if(m.t === "cmd" && m.c === "focus"){ try { window.focus(); } catch {} }
       else if(m.t === "win" && m.s === "who" && D.winSaid && D.st.joined) winSend({ t: "win", s: "joined", mic: !D.st.muted, cam: !!D.st.camera });
       return;
     }
     if(m.t !== "win") return;
+    if((m.s === "need" || m.s === "who") && (D.st.joined || p.on) && Date.now() - (D.stSentAt || 0) > 1500){      /* the window being opened asks: say who is in the call, so its header matches this one (this page has left by then, so it remembers the words) */
+      D.stSentAt = Date.now();
+      try { const tx = D.st.joined ? (D.stText = stateText()) : (D.stText || ""); winSend({ t: "win", s: "state", live: true, text: tx }); } catch {}
+    }
     if(m.s === "need"){ popTicketSend(); return; }      /* the window we opened asks for its ticket */
     if(m.s === "joined"){
       p.beat = Date.now();
-      if(p.on && !p.joined){ p.joined = true; p.mic = m.mic !== false; p.cam = m.cam !== false; popHandoff(); }
+      if(p.on && !p.joined && !p.rj){ p.joined = true; p.tap = false; p.mic = m.mic !== false; p.cam = m.cam !== false; fault("pop_joined", Math.round((Date.now() - (p.nav || p.t)) / 100) / 10 + "s|n=" + Math.random().toString(36).slice(2, 6)); applyChrome(); popPaint(); say("Your call is now in its own window."); }      /* this page left before the window loaded: nothing else to do */
       else if(!p.on && !D.st.joined && D.cfg){      /* a window opened before this page was loaded: this page shows the card for it */
         Object.assign(p, { on: true, w: null, t: Date.now(), beat: Date.now(), joined: true, back: false, mic: m.mic !== false, cam: m.cam !== false });
         D.st.open = true; D.root.hidden = false; applyChrome(); place(false); popWatch();
         try { D.cfg.onChange && D.cfg.onChange(true); } catch {}
       }
     } else if(m.s === "beat"){ if(p.on) p.beat = Date.now(); }
-    else if(m.s === "left"){ if(p.on){ p.mic = m.mic !== false; p.cam = m.cam !== false; if(!p.joined) popCancel("The new window left before it was in the call. Your call is still here."); else if(p.back) popReturn(); else popEnd(); } }
-    else if(m.s === "tonc"){ if(p.on){ p.nc = true; p.beat = Date.now(); if(!p.joined){ p.joined = true; popHandoff(); } popPaint(); } }      /* the window hands itself to the plain Nextcloud page: this page leaves, so the same person is not in the call twice */
+    else if(m.s === "left"){ if(p.on){ p.mic = m.mic !== false; p.cam = m.cam !== false; if(p.rjw){ p.rjw(); } else if(!p.joined){ p.rj = true; note("The new window left before it was in the call. Your call is back here."); popReturn(); } else if(p.back) popReturn(); else popEnd(); } }
+    else if(m.s === "tap"){ if(p.on && !p.joined){ p.tap = true; popPaint(); } }      /* the new window waits for a tap on Start the call */
+    else if(m.s === "tapped"){ if(p.on){ p.tap = false; popPaint(); } }
+    else if(m.s === "ncgate"){ if(p.on && !p.joined){ p.ncg = true; popPaint(); } }      /* the new window is about to open the plain Bestly Cloud page */
+    else if(m.s === "tonc"){ if(p.on){ p.nc = true; p.beat = Date.now(); if(!p.joined){ p.joined = true; p.tap = false; applyChrome(); } popPaint(); } }      /* the window hands itself to the plain Bestly Cloud page: this page leaves, so the same person is not in the call twice */
     else if(m.s === "nojoin"){ if(p.on && !p.joined) popFail("nojoin"); }      /* the window says it is not connecting: the call stays here and says so */
   };
 
@@ -1629,15 +1753,15 @@
     show(){ if(!D.cfg) return; if(D.pop.on && D.pop.joined){ D.root.hidden = false; D.st.open = true; applyChrome(); place(true); popFocus(); return; } if(!D.st.joined) return; D.root.hidden = false; D.bar = false; D.full = phone(); applyChrome(); place(true); },
     leave(){ if(D.pop.on && !D.st.joined){ winSend({ t: "cmd", c: "leave" }); popEnd(); return; } leave(); },
     /* the call window (/callwin): opens the call full window and joins at once with the microphone and camera the other page had */
-    openWin(o){ if(!D.cfg || D.winGo) return; this.winWatch(); D.winGo = true; clearInterval(D.timers.need); o = o || {}; if(!D.win) winEnter(); if(!D.winTried){ clearTimeout(D.timers.winwd); D.timers.winwd = setTimeout(() => winRestart("12 s"), 12000); } this.open(); D.pre.mic = o.mic !== false; D.pre.cam = o.cam !== false; join(!D.pre.cam); },
+    openWin(o){ if(!D.cfg || D.winGo) return; this.winWatch(); D.winGo = true; clearInterval(D.timers.need); o = o || {}; if(!D.win) winEnter(); if(!D.winTried){ clearTimeout(D.timers.winwd); D.timers.winwd = setTimeout(() => winRestart("12 s"), 12000); } this.open(); D.pre.mic = o.mic !== false; D.pre.cam = o.cam !== false; winGate(o); },
     /* the call window, the quick way: ask the page that opened it for the ticket and start the call the moment it arrives, without waiting for the app around it.
        The host's own (slower) start is still there as the way when nobody answers. */
     /* a window that is not in the call 30 s after it loaded says so (and the page that opened it hears it) */
     winWatch(o){
       if(!D.cfg) return; if(o && !D.winO) D.winO = o;
       if(D.timers.winfail) return;
-      D.timers.winfail = setTimeout(winFailShow, 20000);
-      try { if(!document.querySelector(".bd-buildtag")){ const b = document.createElement("div"); b.className = "bd-buildtag"; b.textContent = "r5"; b.title = BUILD_LABEL; document.body.appendChild(b); } } catch {}
+      D.timers.winfail = setTimeout(winFailShow, 26000);
+      try { if(!document.querySelector(".bd-buildtag")){ const b = document.createElement("div"); b.className = "bd-buildtag"; b.textContent = "r11"; b.title = BUILD_LABEL; document.body.appendChild(b); } } catch {}
       traceBoot(); D.timers.trace = setInterval(traceTick, 500);
     },
     /* the preview id (and flags) this page was opened with: the address can lose them, so they are kept for the window Pop out opens */
