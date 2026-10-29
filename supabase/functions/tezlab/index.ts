@@ -10,6 +10,10 @@
 //   POST {op:"job", id}          (from the DB trigger) → runs one queued guest command
 // If TezLab fails, the job goes back to the queue for the Mac mini worker (Tesla Fleet API) and Scout is told.
 //
+// v16 (2026-10-29): a sleeping car is waited out. When TezLab answers "vehicle is asleep" to a command, the
+//      same command is retried up to 4 times, 18 s apart, with a log line per retry. The retry budget is per
+//      job, not per command, so a two-step climate job cannot spend 4 × 18 s twice and blow past the
+//      2-minute re-queue window. Only "asleep" is retried; refusals, outages and busy stay as they were.
 // v15 (2026-09-27): a car REFUSAL (TezLab says "car could not execute command: <reason>", e.g. low_power_mode_low_soc)
 //      is the car's answer, not a TezLab failure: fail the job in plain words instead of falling back to the Tesla
 //      worker (which gets the same refusal 20 s later). Climate jobs also confirm the car really changed
@@ -73,6 +77,10 @@ const REFUSALS: Record<string, string> = {
 const refusalOf = (e: unknown) => /car could not execute command:\s*([a-z0-9_]+)/i.exec(String(e))?.[1]?.toLowerCase() ?? null;
 const refusalText = (r: string) => REFUSALS[r] ?? `The car said no (${r.replace(/_/g, " ")}). Try again in a minute.`;
 const DOWN_MSG = (what: string) => `TezLab's servers are down (${what}). That's on TezLab's side, nothing to reconnect; the Tesla backup covers until they're back.`;
+/** The car answered, it just wasn't listening yet. Worth waiting out; nothing to reconnect and no refusal. */
+const isAsleep = (e: unknown) => /asleep/i.test(String(e));
+const ASLEEP_RETRIES = 4;      // 4 retries × 18 s = 72 s of waiting, inside the 2-minute re-queue window
+const ASLEEP_WAIT_MS = 18e3;
 
 async function isAdmin(req: Request) {
   const auth = req.headers.get("authorization") ?? "";
@@ -244,12 +252,30 @@ function planFor(job: any) {
   return PLAN[job.action];
 }
 
+/**
+ * Run one TezLab command, riding out a sleeping car. Only "asleep" is retried, up to 4 times, 18 s apart.
+ * `budget` is shared by every command in the job: two 4 × 18 s ladders would go past the re-queue window.
+ */
+async function retryAsleep<T>(what: string, budget: { left: number }, send: () => Promise<T>): Promise<T> {
+  for (;;) {
+    try { return await send(); }
+    catch (e) {
+      if (!isAsleep(e) || budget.left <= 0) throw e;
+      budget.left -= 1;
+      const n = ASLEEP_RETRIES - budget.left;
+      console.log(`tezlab ${what}: car is asleep, retry ${n}/${ASLEEP_RETRIES} in ${ASLEEP_WAIT_MS / 1000}s`);
+      await sleep(ASLEEP_WAIT_MS);
+    }
+  }
+}
+
 async function runJob(id: number) {
   const { data: job } = await sb.rpc("tezlab_job_get", { p_id: id });
   if (!job || job.via !== "tezlab" || job.status !== "running") return { skipped: true };
   const { data: mine } = await sb.rpc("tezlab_job_claim", { p_id: id });
   if (!mine) return { skipped: "already running" };
   const vin = job.vin as string;
+  const asleep = { left: ASLEEP_RETRIES }; // one retry budget for the whole job, see retryAsleep
   try {
     if (job.action === "charges") {
       const a = (job.args ?? {}) as { start?: string; end?: string };
@@ -334,7 +360,8 @@ async function runJob(id: number) {
       await sb.rpc("tezlab_job_stage", { p_id: id, p_stage: "Waking up the car" });
       await tool("send_vehicle_command", { vin, command: "wake_up" }).catch((e) => { if (isDown(e)) throw e; });
       await sb.rpc("tezlab_job_stage", { p_id: id, p_stage: "Sending to the car" });
-      const r = await tool("send_vehicle_command", { vin, command, ...((job.args?.params ?? {}) as Record<string, unknown>) });
+      const r = await retryAsleep(`job ${id} cmd ${command}`, asleep,
+        () => tool("send_vehicle_command", { vin, command, ...((job.args?.params ?? {}) as Record<string, unknown>) }));
       const v = await tool("get_vehicle_status", { vin }).catch(() => null);
       if (v) await sb.rpc("car_raw_store", { p_raw: v });
       await sb.rpc("tesla_job_done", { p_id: id, p_ok: true, p_result: { ok: true, via: "tezlab", command, reply: r }, p_state: toState(v) });
@@ -356,8 +383,9 @@ async function runJob(id: number) {
     for (const s of steps) {
       let last: unknown = null;
       for (let a = 0; a < 3; a++) {
-        try { await tool("send_vehicle_command", { vin, command: s.cmd, ...(s.args ?? {}) }); last = null; break; }
-        catch (e) { last = e; if (isDown(e)) break; const r = refusalOf(e); if (r && r !== "vehicle_busy") { last = new CarRefused(r); break; } await sleep(4000); }
+        try { await retryAsleep(`job ${id} ${job.action} ${s.cmd}`, asleep,
+                                 () => tool("send_vehicle_command", { vin, command: s.cmd, ...(s.args ?? {}) })); last = null; break; }
+        catch (e) { last = e; if (isDown(e) || isAsleep(e)) break; const r = refusalOf(e); if (r && r !== "vehicle_busy") { last = new CarRefused(r); break; } await sleep(4000); }
       }
       if (last) throw last;
     }
