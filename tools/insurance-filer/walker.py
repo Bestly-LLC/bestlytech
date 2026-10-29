@@ -125,6 +125,7 @@ class Walker:
         self.photos_uploaded = 0
         self._photo_files = None
         self.n = 0
+        self.restarts = 0
 
     # ------------------------------------------------------------------ helpers
     def snap(self):
@@ -289,6 +290,24 @@ class Walker:
                 if s.get("captcha_frame") or bot:
                     self.shot("bot-check")
                     raise Stop("blocked", "The site put up a bot check (CAPTCHA). I do not get around those.")
+                # Progressive remembers an unfinished claim for this phone and offers "Verify your identity" (texts Jared a code)
+                # or "Start over instead". We never read or type codes from Jared's phone: start a fresh claim. (fix 2026-10-29)
+                if re.search(r"verify your identity|verification code", s.get("body") or "", re.I):
+                    so = [b for b in s["buttons"] if re.search(r"^\s*start over", b["label"], re.I) and not b["disabled"]]
+                    if not so or self.restarts >= 2:
+                        self.shot("verify-code")
+                        raise Stop("blocked", "The site wants a code texted to your phone. I do not type codes from your phone.")
+                    self.restarts += 1
+                    self.shot("start-over")
+                    self.log("unfinished claim found for this phone: starting over (never typing the texted code)")
+                    self.click_btn('[data-ins-b="%d"]' % so[0]["i"])
+                    time.sleep(3)
+                    try:
+                        self.page.wait_for_function(VISIBLE_QUESTION_JS, timeout=60000)
+                    except Exception:
+                        pass
+                    last_sig, same = None, 0
+                    continue
                 sg = self.sig(s)
                 same = same + 1 if sg == last_sig else 0
                 last_sig = sg
