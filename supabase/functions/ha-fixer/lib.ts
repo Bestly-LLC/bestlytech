@@ -109,7 +109,7 @@ const STOP = new Set(["the", "and", "when", "then", "turn", "that", "this", "wit
   "set", "any", "all", "every", "should", "would", "could", "after", "before", "while", "once", "again", "also", "only", "just", "than", "them", "they", "its",
   "his", "her", "our", "out", "not", "but", "can", "will", "per", "who", "what", "which", "where", "there", "here", "up", "down", "over", "under", "about",
   "came", "come", "came", "went", "slowly", "walked", "walk", "into", "ramped", "dimmed", "normal", "doesn", "don", "want", "wrong", "happened", "morning",
-  "night", "yesterday", "today", "like", "did", "didn", "does", "keeps", "keep", "why", "how", "now", "ago", "then", "still", "went", "start", "started"]);
+  "night", "yesterday", "today", "like", "read", "test", "smoke", "earlier", "understand", "changed", "change", "brightness", "level", "sometimes", "did", "didn", "does", "keeps", "keep", "why", "how", "now", "ago", "then", "still", "went", "start", "started"]);
 const GENERIC = new Set(["light", "lamp", "bulb", "switch", "plug", "fan", "lock", "cover", "bright", "dim", "brighter", "dimmer", "room"]);
 const CONTROLLABLE = new Set(["light", "switch", "cover", "fan", "climate", "media_player", "lock", "scene", "vacuum", "humidifier", "input_boolean", "water_heater", "siren"]);
 
