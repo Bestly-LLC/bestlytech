@@ -1,0 +1,477 @@
+/* Bestly call dock styles. Copied verbatim from Studio build 1808ea1d (index.e160b385f9.html, from the Faces rule to .bd-wingone). */
+/* ── Faces: one rule for every picture of a person (see faces.js) ───────────────────────────
+   The box around it sets the size and is round; the picture fills it and is never stretched. */
+img.face{display:block;width:100%;height:100%;aspect-ratio:1 / 1;border-radius:50%;object-fit:cover;object-position:center;
+  background:transparent;pointer-events:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+.has-face{overflow:hidden}
+
+/* ══ Bestly call dock ═══ own palette so the same window looks the same on her board and in Studio ══ */
+#bdock{--bd-bg:#1F1D1B;--bd-bg2:#2C2926;--bd-bg3:#3A3733;--bd-ink:#F4F1EC;--bd-ink2:#D2CCC3;--bd-go:#86D9A6;--bd-join:#3E34BC;--bd-leave:#B3261E;--bd-line:#4A463F;--bd-w:380px;--bd-cw:340px;--bd-pg:12px;
+  position:fixed;left:0;top:0;z-index:2100;width:var(--bd-w);max-width:calc(100vw - 32px);background:var(--bd-bg);color:var(--bd-ink);border-radius:26px;
+  box-shadow:0 2px 6px rgba(0,0,0,.25),0 34px 70px -18px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.06);font:500 16px/1.4 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;will-change:transform;touch-action:none}
+#bdock[hidden]{display:none}
+#bdock *{box-sizing:border-box}
+#bdock button{font-family:inherit}
+#bdock.dragging{cursor:grabbing;box-shadow:0 2px 6px rgba(0,0,0,.3),0 46px 90px -14px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.1)}
+#bdock[data-size="big"]{--bd-w:640px}
+.bd-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.bd-head{display:flex;align-items:center;gap:10px;padding:12px 12px 10px 8px;cursor:grab;min-height:64px;touch-action:none;user-select:none;-webkit-user-select:none}
+.bd-head:focus-visible{outline:3px solid #B3AEFF;outline-offset:-3px;border-radius:22px}
+.bd-grip{width:24px;height:24px;color:var(--bd-ink2);flex:none}.bd-grip svg{width:24px;height:24px}
+.bd-ht{flex:1;min-width:0}
+.bd-title{display:block;font:700 18px/1.25 Inter,system-ui,sans-serif;color:var(--bd-ink)}
+.bd-sub{display:flex;align-items:center;gap:8px;font-size:16px;line-height:1.3;color:var(--bd-ink2)}
+.bd-dot{width:10px;height:10px;border-radius:50%;background:#9A948A;flex:none}
+.bd-dot.on{background:var(--bd-go);box-shadow:0 0 0 4px rgba(134,217,166,.22)}
+.bd-ib{width:56px;height:56px;border-radius:50%;border:0;background:transparent;color:var(--bd-ink);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.bd-ib:hover{background:var(--bd-bg2)}.bd-ib svg{width:24px;height:24px}
+.bd-ib[hidden],.bd-pill[hidden]{display:none}
+.bd-pill{display:inline-flex;align-items:center;gap:10px;min-height:56px;padding:0 20px;border-radius:16px;border:0;background:var(--bd-bg2);color:var(--bd-ink);font:700 17px/1.2 Inter,system-ui,sans-serif;cursor:pointer;flex:none}
+.bd-pill svg{width:22px;height:22px}
+.bd-body{display:flex;flex-direction:column;min-height:0;flex:1}
+.bd-pre{padding:4px 14px 18px;display:flex;flex-direction:column;gap:12px}
+.bd-pre[hidden],.bd-call[hidden]{display:none}
+.bd-prev{position:relative;aspect-ratio:4/3;border-radius:18px;background:#3A332D;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.bd-prev video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.bd-nocam .bd-prev video{display:none}
+.bd-av{position:relative;width:84px;height:84px;border-radius:50%;background:#EDE4D8;color:#2A2420;font:500 38px Newsreader,Georgia,serif;display:none;align-items:center;justify-content:center}
+.bd-nocam .bd-av{display:flex}
+.bd-lab{position:absolute;left:10px;bottom:10px;background:rgba(20,18,16,.8);color:var(--bd-ink);border-radius:999px;padding:6px 14px;font-size:16px;font-weight:600}
+.bd-ok{position:absolute;right:10px;top:10px;display:inline-flex;align-items:center;gap:6px;background:rgba(20,18,16,.85);color:var(--bd-go);border-radius:999px;padding:6px 14px;font-size:16px;font-weight:600}
+.bd-ok svg{width:18px;height:18px}.bd-ok[hidden]{display:none}
+.bd-mic{display:flex;align-items:center;gap:12px;color:var(--bd-ink2);font-size:16px;min-height:40px}
+.bd-micl svg{width:22px;height:22px;display:block}.bd-mict{flex:1;min-width:0}
+.bd-lvl{display:flex;gap:4px;align-items:center}.bd-lvl i{width:8px;height:20px;border-radius:4px;background:#4A463F}.bd-lvl i.on{background:var(--bd-go)}
+.bd-tg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bd-t{display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px;border-radius:16px;border:0;background:var(--bd-bg3);color:var(--bd-ink);font:600 16px/1.2 Inter,system-ui,sans-serif;cursor:pointer;padding:0 8px;white-space:nowrap}
+.bd-t svg{width:22px;height:22px;flex:none}.bd-t[aria-pressed="false"]{background:#4A2A27;color:#FFD9D4}
+.bd-join,.bd-join2{display:flex;align-items:center;justify-content:center;gap:10px;min-height:60px;border-radius:18px;font:700 19px/1.2 Inter,system-ui,sans-serif;cursor:pointer;width:100%;padding:0 16px;text-align:center}
+.bd-join{background:var(--bd-join);color:#fff;border:0;box-shadow:0 12px 26px -14px rgba(62,52,188,.9)}
+.bd-join svg{width:24px;height:24px}
+.bd-join2{background:transparent;color:var(--bd-ink);border:2px solid #6B665E;font-size:18px;font-weight:600}
+.bd-who{margin:2px 0 0;font-size:16px;color:var(--bd-ink2)}
+.bd-link{align-self:flex-start;min-height:56px;background:none;border:0;color:#D3D0FF;font:600 17px/1.2 Inter,system-ui,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:0 4px}
+.bd-devs{display:grid;gap:10px}.bd-devs[hidden]{display:none}
+.bd-devs label{display:grid;gap:4px;font-size:16px;color:var(--bd-ink2)}
+.bd-devs select{min-height:56px;border-radius:14px;border:2px solid #6B665E;background:var(--bd-bg2);color:var(--bd-ink);font-size:17px;padding:0 12px}
+.bd-call{position:relative;display:flex;flex-direction:column;min-height:0;flex:1}
+.bd-frame{position:relative;height:300px;margin:0 12px;border-radius:18px;overflow:hidden;background:#000}
+#bdock[data-size="big"] .bd-frame{height:380px}
+.bd-frame iframe{width:100%;height:100%;border:0;display:block;background:#000}
+.bd-frame[hidden]{display:none}
+.bd-notes{display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:3px 10px 3px 8px;border-radius:999px;background:var(--bd-bg2);color:var(--bd-ink2);font-size:15px;font-weight:600;line-height:1.3}
+.bd-notes[hidden]{display:none}
+.bd-notes svg{width:18px;height:18px;flex:none;color:#F4BE7E}
+.bd-tscout{position:absolute;right:8px;top:8px;width:28px;height:28px;border-radius:50%;background:rgba(20,18,16,.7);color:#F4BE7E;display:flex;align-items:center;justify-content:center}
+.bd-tscout[hidden]{display:none}.bd-tscout svg{width:18px;height:18px}
+.bd-err{padding:8px 16px 18px;display:grid;gap:14px}.bd-err[hidden]{display:none}.bd-err p{margin:0;font-size:18px;line-height:1.5}
+.bd-row{display:grid;gap:10px}
+.bd-warn{margin:10px 12px 0;padding:12px 16px;border-radius:16px;background:#3B2C16;color:#F7E3C3;font-size:16px;line-height:1.45}.bd-warn[hidden]{display:none}.bd-warn p{margin:0 0 4px}
+.bd-warn .bd-join2{margin-top:8px;color:#F7E3C3;border-color:#F4BE7E}
+/* one equal column for each control that is showing: five with Share, four without it (an iPhone, an iPad, a browser that cannot share a screen), so the row is always full and even */
+.bd-ctl{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:0 4px;padding:12px 8px 16px;align-items:start}
+.bd-ctl[hidden]{display:none}
+#bdock[data-bridge="off"] .bd-cm,#bdock[data-bridge="off"] .bd-cc,#bdock[data-bridge="off"] .bd-cs2{display:none}
+/* (with the bridge off only Messages and Leave show: two equal columns, as the rule above gives) */
+/* every control is the same round 56 px button with ONE short word under it, all on one baseline. The word never wraps:
+   it is one word, and if a narrow screen ever makes it wider than its column it spills into the gap, never onto a second line. */
+.bd-c{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:8px;background:none;border:0;color:var(--bd-ink);cursor:pointer;padding:0;min-width:0;font-size:15px;line-height:20px;font-weight:600;text-align:center;-webkit-tap-highlight-color:transparent}
+.bd-ci2{position:relative;flex:none;width:56px;height:56px;border-radius:50%;background:var(--bd-bg3);display:flex;align-items:center;justify-content:center;transition:transform .12s ease}
+.bd-ci2 svg{width:26px;height:26px;display:block}
+.bd-cl2{display:block;width:100%;height:20px;line-height:20px;white-space:nowrap;overflow:visible;text-align:center}
+.bd-c:active .bd-ci2{transform:scale(.94)}
+@media (prefers-reduced-motion:reduce){.bd-ci2{transition:none}.bd-c:active .bd-ci2{transform:none}}
+.bd-c[aria-pressed="true"] .bd-ci2{background:#fff;color:#141414}
+.bd-cx[aria-pressed="true"] .bd-ci2{background:#D3D0FF;color:#14123A}
+.bd-cv .bd-ci2{background:var(--bd-leave);color:#fff}
+.bd-cv .bd-ci2 svg{width:34px;height:34px}
+.bd-bd{position:absolute;top:-4px;right:-4px;min-width:24px;height:24px;border-radius:12px;background:#B3261E;color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;padding:0 6px}
+.bd-bd[hidden]{display:none}
+.bd-c:focus-visible,.bd-ib:focus-visible,.bd-t:focus-visible,.bd-join:focus-visible,.bd-join2:focus-visible,.bd-link:focus-visible,.bd-pill:focus-visible,.bd-cs:focus-visible,.bd-cdone:focus-visible,.bd-cnew:focus-visible{outline:3px solid #B3AEFF;outline-offset:3px;border-radius:14px}
+/* shrunk to a bar */
+#bdock[data-mode="bar"]{width:min(420px,calc(100vw - 32px))}
+#bdock[data-mode="bar"] .bd-ctl{display:none}
+/* round 5 (P3): the bar keeps the call on screen, live, as a small picture at its left end (the call page is never display:none, hidden or 0 by 0 while a call is live) */
+#bdock[data-mode="bar"] .bd-body{display:block;position:absolute;left:12px;top:9px;width:68px;height:46px;min-height:0;flex:none;overflow:hidden;border-radius:12px;pointer-events:none;z-index:2}
+#bdock[data-mode="bar"] .bd-pre,#bdock[data-mode="bar"] :is(.bd-warn,.bd-err){display:none}
+#bdock[data-mode="bar"] .bd-call{position:absolute;inset:0;display:block}
+#bdock[data-mode="bar"] .bd-frame{position:absolute;inset:0;width:auto;height:auto;margin:0;border-radius:12px}
+#bdock[data-mode="bar"] .bd-frame iframe{pointer-events:none}
+#bdock[data-mode="bar"] .bd-head{padding:12px 12px 12px 92px}
+#bdock[data-mode="bar"] .bd-grip{display:none}
+/* stage: someone else is showing a screen, so the call fills the screen */
+#bdock[data-mode="stage"],#bdock[data-full="1"]{left:0;top:0;width:100vw;max-width:none;height:100dvh;border-radius:0;transform:none!important;z-index:2105}
+#bdock[data-mode="stage"] .bd-head{padding:14px 20px}
+#bdock[data-mode="stage"] .bd-head .bd-grip,#bdock[data-mode="stage"] .bd-big,#bdock[data-mode="stage"] .bd-min{display:none}
+#bdock[data-mode="stage"] .bd-pill{margin-left:auto}
+#bdock[data-mode="stage"] .bd-frame,#bdock[data-full="1"] .bd-frame{flex:1;height:auto;margin:0 20px;border-radius:20px;min-height:0}
+#bdock[data-mode="stage"] .bd-body,#bdock[data-full="1"] .bd-body{min-height:0}
+#bdock[data-mode="stage"] .bd-ctl,#bdock[data-full="1"] .bd-ctl{max-width:640px;width:100%;margin:0 auto;padding:12px 8px calc(16px + env(safe-area-inset-bottom))}
+/* phone: a floating tile, or the whole screen */
+#bdock[data-phone="1"]{max-width:none}
+#bdock[data-phone="1"][data-mode="tile"]{width:148px;height:196px;border-radius:22px}
+#bdock[data-phone="1"][data-mode="tile"] .bd-ctl{display:none!important}
+/* round 5 (P3): the call page is IN the tile, on screen and live (parked off screen it stopped rendering on an iPhone, and the other side saw "Connection lost"); the tile itself is a clear layer on top that takes the taps */
+#bdock[data-phone="1"][data-mode="tile"] .bd-body{display:block!important;position:absolute;inset:0;height:auto;overflow:hidden;pointer-events:none;z-index:0;border-radius:inherit}
+#bdock[data-phone="1"][data-mode="tile"] .bd-pre,#bdock[data-phone="1"][data-mode="tile"] :is(.bd-warn,.bd-err){display:none}
+#bdock[data-phone="1"][data-mode="tile"] .bd-call{position:absolute;inset:0;display:block!important}
+#bdock[data-phone="1"][data-mode="tile"] .bd-frame{position:absolute;inset:0;width:auto;height:auto;margin:0;border-radius:0}
+#bdock[data-phone="1"][data-mode="tile"] .bd-frame iframe{pointer-events:none}
+#bdock[data-phone="1"][data-mode="tile"] .bd-wait{padding:12px;font-size:15px;line-height:1.35}
+.bd-tile{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:grab;touch-action:none;min-height:196px;background:#3A332D;border:0;color:var(--bd-ink)}
+.bd-tile.live{background:transparent}
+.bd-tile.live .bd-tav{display:none}
+.bd-tile.live::after{content:"";position:absolute;left:0;right:0;bottom:0;height:72px;background:linear-gradient(to top,rgba(10,9,8,.62),rgba(10,9,8,0));pointer-events:none}
+.bd-tile.live .bd-tt{position:absolute;left:8px;right:8px;bottom:8px;z-index:1;padding:6px 10px;border-radius:14px;background:rgba(20,18,16,.68);font-size:16px;line-height:1.2;text-align:center;white-space:normal}
+.bd-tile.live .bd-tscout{z-index:1}
+.bd-tile[hidden]{display:none}
+#bdock[data-mode="tile"] .bd-head{display:none}
+.bd-tav{width:64px;height:64px;border-radius:50%;background:#EDE4D8;color:#2A2420;font:500 30px Newsreader,Georgia,serif;display:flex;align-items:center;justify-content:center}
+.bd-tt{font-size:17px;font-weight:700}
+#bdock.bd-speak .bd-tav{box-shadow:0 0 0 4px var(--bd-go)}
+/* faces (round 3): a person's picture where a letter was; the rule for the picture itself is in faces.css */
+.bd-av.has-face,.bd-tav.has-face{background:transparent;overflow:hidden}
+.bd-m b.bd-hasfa{align-items:center}
+.bd-fa{width:26px;height:26px;flex:0 0 26px;border-radius:50%;display:block}
+#bdock[data-phone="1"][data-full="1"] .bd-frame{margin:0 12px}
+html.bd-stage{overflow:hidden}
+@media (prefers-reduced-motion:reduce){#bdock{transition:none!important}}
+@media (max-width:640px){
+  #bdock .bd-title{font-size:19px}
+  #bdock[data-full="1"] .bd-pre{padding:4px 18px calc(24px + env(safe-area-inset-bottom));overflow:auto;flex:1}
+  /* a short phone (320 by 568): nothing in the check-in card is squeezed or drawn over another thing. Only the camera picture gives up height,
+     down to a floor; after that the card scrolls. (Rows with their own minimum height were squeezed below their words and the words spilled over their neighbours.) */
+  #bdock[data-full="1"] .bd-pre > *{flex-shrink:0}
+  #bdock[data-full="1"] .bd-pre > .bd-prev{flex-shrink:1;min-height:152px}
+}
+@media (max-width:640px) and (max-height:640px){
+  #bdock[data-full="1"] .bd-av{width:64px;height:64px;font-size:30px}
+}
+/* a narrow phone (320): "Microphone on" and "Camera on" side by side were wider than the card and the second one ran out to the edge of the screen */
+@media (max-width:359px){
+  #bdock[data-full="1"] .bd-tg{gap:8px}
+  #bdock[data-full="1"] .bd-t{gap:6px;padding:0 6px;font-size:15px}
+}
+
+/* the "call is not showing" note: compact, with its buttons side by side */
+.bd-join2 svg,.bd-join svg{width:22px;height:22px;flex:none}
+.bd-warn .bd-wp,.bd-warn .bd-nc{margin:0 0 8px}
+.bd-warn .bd-wp[hidden],.bd-warn .bd-nc[hidden]{display:none}
+.bd-wbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bd-wbtns .bd-join2{margin-top:0;min-height:52px;font-size:17px;padding:0 10px}
+.bd-wbtns .bd-tab2{grid-column:1/-1}
+.bd-wbtns .bd-join2[hidden]{display:none}
+.bd-wbtns .bd-tab2:only-child,.bd-wbtns .bd-tab2:nth-child(1){grid-column:1/-1}
+#bdock[data-bridge="off"] .bd-frame{height:190px}
+
+/* ══ round 3, item 9: a call that takes a while to start ═══════════════════════════════════════════════ */
+/* the status line is ONE line, never cut with dots: dock.js picks the longest wording that fits */
+#bdock:not([data-mode="prejoin"]) .bd-sub{min-width:0}
+#bdock:not([data-mode="prejoin"]) .bd-stat{min-width:0;flex:0 1 auto;overflow:hidden;white-space:nowrap}
+/* "Joining your call": a soft pulsing dot (still when "reduce motion" is on) */
+/* round 5 (P5): it moves by opacity and scale only, so the phone's graphics chip does it and the page is never repainted for it (the old ring grew by box-shadow, a repaint every frame while she waited) */
+.bd-dot.pulse{background:var(--bd-go);position:relative;animation:bdpulse 1.8s ease-in-out infinite}
+.bd-dot.pulse::after{content:"";position:absolute;inset:0;border-radius:50%;background:rgba(134,217,166,.22);pointer-events:none;animation:bdring 1.8s ease-in-out infinite}
+@keyframes bdpulse{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes bdring{0%,100%{transform:scale(1);opacity:0}50%{transform:scale(2);opacity:1}}
+@media (prefers-reduced-motion:reduce){.bd-dot.pulse{animation:none;opacity:1;box-shadow:0 0 0 4px rgba(134,217,166,.22)}.bd-dot.pulse::after{display:none}}
+/* the placeholder over the frame until the frame says anything: the same dark, soft-edged cover Talk's own page draws first */
+.bd-wait{position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:56px 24px 24px;text-align:center;color:#eef0f6;pointer-events:none;
+  background:radial-gradient(60% 50% at 50% 46%,rgba(120,130,255,.22),rgba(120,130,255,0) 100%),#0b0d12;
+  font:500 18px/1.5 Inter,-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased;transition:opacity .2s ease}
+.bd-wait.off{opacity:0;visibility:hidden}
+.bd-wait.off i{animation:none}      /* round 5 (P5): the cover is gone, so its glow stops breathing (it kept running unseen) */
+/* round 5 (P5): while a sheet with its dimmed, blurred backdrop is open, the waiting dot stands still: the blur is redrawn whenever anything moves above it, and a pulse that never stops kept the whole page at a third of its speed */
+html:has(.scrim.up,.upg.up,.rcx.up) #bdock .bd-dot.pulse,html:has(.scrim.up,.upg.up,.rcx.up) #bdock .bd-dot.pulse::after{animation-play-state:paused}
+.bd-wait i{position:absolute;left:50%;top:calc(50% - 44px);width:14px;height:14px;margin-left:-7px;border-radius:50%;background:#aab1ff;
+  box-shadow:0 0 28px 10px rgba(170,177,255,.38);animation:bdbreathe 1.8s ease-in-out infinite}
+@keyframes bdbreathe{0%,100%{opacity:.55;transform:scale(.9)}50%{opacity:1;transform:scale(1.08)}}
+@media (prefers-reduced-motion:reduce){.bd-wait{transition:none}.bd-wait i{animation:none;opacity:1}}
+/* the controls that talk to the call are quiet until it has started */
+.bd-c[aria-disabled="true"]{opacity:.5;cursor:default}
+.bd-c[aria-disabled="true"]:active .bd-ci2{transform:none}
+/* pre-warm: the call frame loads behind the pre-join card, at the size it will have, and nobody can reach it */
+.bd-body{position:relative}
+#bdock[data-warm="1"] .bd-call{position:absolute;left:0;right:0;top:0;z-index:0;pointer-events:none}
+#bdock[data-warm="1"] .bd-pre{position:relative;z-index:1;background:var(--bd-bg)}
+#bdock[data-warm="1"][data-phone="1"] .bd-frame{position:fixed;left:-10000px;top:0;width:360px;height:640px;margin:0}
+/* on a phone, while someone shows a screen: the title and "Make small" share a row, and the status has the next row to itself */
+#bdock[data-phone="1"][data-mode="stage"] .bd-head{flex-wrap:wrap;row-gap:6px;padding:12px 16px 10px;align-items:center}
+#bdock[data-phone="1"][data-mode="stage"] .bd-ht{display:contents}
+#bdock[data-phone="1"][data-mode="stage"] .bd-title{order:1;flex:1 1 0;min-width:0}
+#bdock[data-phone="1"][data-mode="stage"] .bd-pill{order:2;margin-left:0}
+#bdock[data-phone="1"][data-mode="stage"] .bd-sub{order:3;flex:0 0 100%}
+#bdock[data-phone="1"][data-mode="stage"] .bd-notes{order:4}
+
+/* ══ round 3, N8: Messages sits BESIDE the video, never over it ═══════════════════════════════════════════════════
+   #bdock[data-chat="1"] while Messages shows; data-cpos says how:  r  a panel on the right of the video,  l  on its left,  b  under a strip of video.
+   The window itself grows (the video keeps its size and, at a magnet spot, its place); the list fades at its top and bottom instead of being cut. */
+/* a host page's own rule for <section> must not reach into the call window (Studio gives every section a 24 px bottom margin, which left a gap under the video) */
+#bdock section{margin:0}
+.bd-chat{position:relative;min-height:0;background:#191715;color:var(--bd-ink);z-index:1}
+.bd-chat[hidden]{display:none}
+/* the panel has no height of its own: the window's height comes from the video column, never from how many messages there are */
+.bd-cin{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;border-radius:inherit;overflow:hidden}
+.bd-ch{flex:none;display:flex;align-items:center;gap:12px;min-height:64px;padding:0 12px 0 20px}
+.bd-cht{flex:1;min-width:0;font:700 18px/1.25 Inter,system-ui,sans-serif;color:var(--bd-ink)}
+.bd-cdone{flex:none;min-height:48px;padding:0 20px;border-radius:24px;border:0;background:var(--bd-bg3);color:var(--bd-ink);font:600 17px/1 Inter,system-ui,sans-serif;cursor:pointer}
+.bd-cdone:hover{background:#4A463F}
+.bd-clw{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+.bd-cl{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:20px 14px;display:flex;flex-direction:column;gap:10px;overscroll-behavior:contain;touch-action:pan-y;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 18px,#000 calc(100% - 18px),transparent 100%)}
+.bd-cl::before{content:"";margin-top:auto}      /* a short conversation sits at the bottom, next to the message box */
+.bd-cempty{margin:auto 0;padding:0 10px;text-align:center;color:var(--bd-ink2);font-size:16px;line-height:1.5}
+.bd-cempty[hidden]{display:none}
+.bd-day{flex:none;align-self:stretch;margin:8px 0 -2px;text-align:center;font-size:14px;line-height:1.3;font-weight:600;color:var(--bd-ink2);text-wrap:balance}
+.bd-day:first-child{margin-top:0}
+.bd-m{flex:none;max-width:min(90%,520px);align-self:flex-start;background:var(--bd-bg2);border-radius:18px;padding:10px 14px 12px}
+.bd-m.me{align-self:flex-end;background:#2C2A63}
+.bd-m b{display:flex;flex-wrap:wrap;gap:0 8px;align-items:baseline;font-size:16px;line-height:1.3;color:var(--bd-ink);overflow-wrap:anywhere}
+.bd-m small{font-size:15px;font-weight:500;color:var(--bd-ink2);white-space:nowrap}
+.bd-m p{margin:3px 0 0;font-size:17px;line-height:1.45;overflow-wrap:anywhere;white-space:pre-wrap;color:var(--bd-ink)}
+/* a web address in a message: a real link (new tab), shown in full, wrapping at its slashes */
+.bd-m a{color:#D3D0FF;text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px;text-decoration-color:rgba(211,208,255,.55);border-radius:3px}
+.bd-m a:hover{text-decoration-color:#D3D0FF}
+.bd-m a:focus-visible{outline:3px solid #B3AEFF;outline-offset:2px}
+.bd-m .bd-file{display:inline-block;margin-top:6px;font-size:16px;font-weight:600;overflow-wrap:anywhere}
+.bd-cnew{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);min-height:44px;padding:0 18px;border-radius:22px;border:0;background:#D3D0FF;color:#14123A;font:600 16px/1 Inter,system-ui,sans-serif;white-space:nowrap;cursor:pointer;box-shadow:0 8px 22px -8px rgba(0,0,0,.7)}
+.bd-cnew[hidden]{display:none}
+.bd-cf{flex:none;display:flex;align-items:center;gap:8px;padding:10px 12px 14px}
+.bd-ci{flex:1;min-width:0;min-height:56px;border-radius:18px;border:2px solid #6B665E;background:var(--bd-bg2);color:var(--bd-ink);font:500 18px/1.2 Inter,system-ui,sans-serif;padding:0 16px}
+.bd-ci::placeholder{color:var(--bd-ink2)}
+.bd-ci:focus-visible{outline:none;border-color:#B3AEFF;box-shadow:0 0 0 4px rgba(179,174,255,.22)}
+.bd-cs{flex:none;width:56px;min-height:56px;border-radius:18px;border:0;background:var(--bd-join);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}.bd-cs svg{width:24px;height:24px}
+/* a quiet line over the controls (Share, before the call has started) */
+.bd-hint{position:absolute;left:12px;right:12px;bottom:calc(100% - 2px);z-index:4;padding:11px 16px;border-radius:16px;background:#2C2926;box-shadow:0 10px 28px -10px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.08);color:var(--bd-ink);font-size:16px;line-height:1.4;text-align:center;pointer-events:none}
+.bd-hint[hidden]{display:none}
+.bd-hint.on{animation:bdhint .2s ease-out}
+@keyframes bdhint{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ══ round 3, N10: Messages as tall as the screen, and resizable ═══════════════════════════════════════════════════
+   Beside the call window (data-cpos r or l): the panel is the window's child but stands OUTSIDE its box, 12 px away, from the screen's top inset to its bottom inset.
+   The window keeps its size and its spot (nothing grows). dock.js sets --bd-pt (the panel's top, relative to the window), --bd-ph (its height) and --bd-cw (its width). */
+#bdock[data-chat="1"]:is([data-cpos="r"],[data-cpos="l"]):not([data-mode="stage"]){overflow:visible}
+#bdock[data-chat="1"]:is([data-cpos="r"],[data-cpos="l"]):not([data-mode="stage"]) > .bd-chat{position:absolute;top:var(--bd-pt,0px);height:var(--bd-ph,640px);width:var(--bd-cw);min-height:0;border-radius:26px;
+  box-shadow:0 2px 6px rgba(0,0,0,.25),0 34px 70px -18px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.06)}
+#bdock[data-chat="1"][data-cpos="r"]:not([data-mode="stage"]) > .bd-chat{left:calc(100% + var(--bd-pg))}
+#bdock[data-chat="1"][data-cpos="l"]:not([data-mode="stage"]) > .bd-chat{right:calc(100% + var(--bd-pg))}
+/* someone is sharing a screen: the stage is the whole screen, Messages is a panel on its right edge at the full height of the screen, and the shared screen fits in the rest */
+#bdock[data-mode="stage"][data-chat="1"][data-cpos="r"]{display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr) var(--bd-cw);width:100vw}
+#bdock[data-mode="stage"][data-chat="1"][data-cpos="r"] > .bd-head{grid-row:1;grid-column:1}
+#bdock[data-mode="stage"][data-chat="1"][data-cpos="r"] > .bd-body{grid-row:2;grid-column:1}
+#bdock[data-mode="stage"][data-chat="1"][data-cpos="r"] > .bd-ctl{grid-row:3;grid-column:1}
+#bdock[data-mode="stage"][data-chat="1"][data-cpos="r"] > .bd-chat{grid-column:2;grid-row:1 / 4;box-shadow:inset 18px 0 22px -20px rgba(0,0,0,.75)}
+
+/* under a strip of video (b): a narrow screen, or a phone. The people stay in view, 150 px or more tall. */
+#bdock[data-chat="1"][data-cpos="b"]{--bd-strip:clamp(150px,26vh,210px);--bd-chat-h:clamp(230px,34vh,360px);max-height:calc(100dvh - var(--bd-vpad,32px))}
+#bdock[data-chat="1"][data-cpos="b"][data-size="big"]{--bd-strip:clamp(190px,32vh,300px)}
+#bdock[data-chat="1"][data-cpos="b"] > .bd-head{order:1}
+#bdock[data-chat="1"][data-cpos="b"] > .bd-body{order:2;flex:0 0 auto}
+#bdock[data-chat="1"][data-cpos="b"] > .bd-chat{order:3;flex:1 1 var(--bd-chat-h);box-shadow:inset 0 18px 22px -20px rgba(0,0,0,.75)}
+#bdock[data-chat="1"][data-cpos="b"] > .bd-ctl{order:4}
+#bdock[data-chat="1"][data-cpos="b"] .bd-frame{height:var(--bd-strip)}
+/* the whole screen (a phone, or a narrow stage): the video is about 38% of the height, Messages fills the rest above the controls */
+#bdock[data-chat="1"][data-cpos="b"]:is([data-full="1"],[data-mode="stage"]){--bd-strip:clamp(150px,38%,380px);max-height:none}
+#bdock[data-chat="1"][data-cpos="b"]:is([data-full="1"],[data-mode="stage"]) > .bd-body{flex:0 0 var(--bd-strip)}
+#bdock[data-chat="1"][data-cpos="b"]:is([data-full="1"],[data-mode="stage"]) .bd-frame{height:auto}
+#bdock[data-chat="1"][data-cpos="b"]:is([data-full="1"],[data-mode="stage"]) > .bd-chat{flex:1 1 0}
+#bdock[data-chat="1"][data-cpos="b"]:is([data-full="1"],[data-mode="stage"]) > .bd-ctl{padding:8px 8px calc(12px + env(safe-area-inset-bottom))}
+#bdock[data-chat="1"][data-cpos="b"][data-bridge="off"]:is([data-full="1"],[data-mode="stage"]) > .bd-body{overflow:auto}
+/* N10: the video strip she chose (dock.js sets data-us and --bd-us): 120 px at the least, half the screen at the most */
+#bdock[data-chat="1"][data-cpos="b"][data-us="1"]{--bd-strip:clamp(120px,var(--bd-us),50vh)}
+#bdock[data-chat="1"][data-cpos="b"][data-us="1"]:is([data-full="1"],[data-mode="stage"]){--bd-strip:clamp(120px,var(--bd-us),50%)}
+/* the keyboard is up: the controls and the status lines step aside, and the video gives up a little height (never below 120 px) so the newest message stays in view */
+#bdock[data-chat="1"][data-cpos="b"][data-kb="1"]:is([data-full="1"],[data-mode="stage"]){--bd-strip:clamp(120px,36%,150px)}
+#bdock[data-chat="1"][data-cpos="b"][data-kb="1"] > .bd-ctl{display:none}
+#bdock[data-chat="1"][data-cpos="b"][data-kb="1"] :is(.bd-sub,.bd-notes,.bd-head .bd-ib){display:none}
+#bdock[data-chat="1"][data-cpos="b"][data-kb="1"] > .bd-head{min-height:44px;padding-top:6px;padding-bottom:4px}
+#bdock[data-chat="1"][data-cpos="b"][data-kb="1"] .bd-ch{min-height:44px}
+#bdock[data-chat="1"][data-cpos="b"][data-kb="1"] .bd-cf{padding:6px 10px 8px}
+@media (max-height:700px){#bdock[data-chat="1"][data-cpos="b"]:is([data-full="1"],[data-mode="stage"]){--bd-strip:clamp(150px,28%,380px)}}
+@media (max-width:640px){
+  #bdock .bd-ch{min-height:52px;padding:0 10px 0 18px}
+  #bdock .bd-cdone{min-height:44px;padding:0 18px}
+  #bdock .bd-cl{padding:16px 12px}
+  #bdock .bd-cf{padding:8px 10px 10px}
+  #bdock .bd-ci{min-height:48px;border-radius:16px}
+  #bdock .bd-cs{width:48px;min-height:48px;border-radius:16px}
+}
+/* the panel arrives from the edge it grows out of (and only fades when "reduce motion" is on) */
+@keyframes bdchatr{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+@keyframes bdchatl{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}
+@keyframes bdchatb{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes bdchatf{from{opacity:0}to{opacity:1}}
+#bdock[data-cpos="r"] > .bd-chat{animation:bdchatr .24s cubic-bezier(.2,.8,.2,1) both}
+#bdock[data-cpos="l"] > .bd-chat{animation:bdchatl .24s cubic-bezier(.2,.8,.2,1) both}
+#bdock[data-cpos="b"] > .bd-chat{animation:bdchatb .24s cubic-bezier(.2,.8,.2,1) both}
+@media (prefers-reduced-motion:reduce){#bdock[data-cpos] > .bd-chat{animation:bdchatf .15s linear both}.bd-hint.on{animation:none}}
+/* N9: signed out of Bestly Cloud. A seat with no sign-in tab (her board, Eli) has only Try again and the tab button: Try again takes the whole row */
+.bd-warn.bd-wguest .bd-again{grid-column:1/-1}
+/* N10: the width handle, on the panel's free edge (the one facing the board; on the stage the left edge). A 16 px strip (44 px for a finger) with a soft grabber
+   in the middle that brightens on hover, on focus and while it is dragged, and a hairline that fades out at both ends. */
+.bd-sz{display:none;position:absolute;top:0;bottom:0;width:16px;z-index:6;cursor:col-resize;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+#bdock[data-chat="1"]:is([data-cpos="r"],[data-cpos="l"]) .bd-sz{display:block}
+.bd-sz[data-edge="r"]{right:-8px}
+.bd-sz[data-edge="l"]{left:-8px}
+.bd-sz::before{content:"";position:absolute;top:8%;bottom:8%;left:50%;width:2px;margin-left:-1px;border-radius:1px;opacity:0;transition:opacity .18s ease;
+  background:linear-gradient(to bottom,rgba(211,208,255,0),rgba(211,208,255,.85) 22%,rgba(211,208,255,.85) 78%,rgba(211,208,255,0))}
+.bd-sz i{position:absolute;top:50%;left:50%;width:5px;height:48px;margin:-24px 0 0 -2.5px;border-radius:3px;background:rgba(244,241,236,.34);box-shadow:0 0 0 1px rgba(0,0,0,.28),0 0 12px rgba(0,0,0,.35);transition:background .16s ease,height .16s ease,margin .16s ease}
+.bd-sz:hover::before,.bd-sz.on::before,.bd-sz:focus-visible::before{opacity:1}
+.bd-sz:hover i,.bd-sz.on i,.bd-sz:focus-visible i{background:#D3D0FF;height:64px;margin-top:-32px}
+.bd-sz:focus-visible{outline:none}
+.bd-sz:focus-visible i{box-shadow:0 0 0 3px #B3AEFF}
+@media (pointer:coarse){.bd-sz{width:44px}.bd-sz[data-edge="r"]{right:-32px}.bd-sz[data-edge="l"]{left:-32px}}
+/* N10: the divider between the video strip and the chat (a phone, or any window with the chat under the video): drag it, double-tap it, or tap the grip ("Bigger chat") */
+.bd-divw{display:none;position:absolute;left:0;right:0;top:-18px;height:46px;z-index:5}
+#bdock[data-chat="1"][data-cpos="b"] .bd-divw{display:block}
+#bdock[data-chat="1"][data-cpos="b"][data-kb="1"] .bd-divw{display:none}
+.bd-div{position:absolute;inset:0;cursor:row-resize;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.bd-div:focus-visible{outline:3px solid #B3AEFF;outline-offset:-3px;border-radius:16px}
+.bd-grip2{position:absolute;left:50%;top:0;width:96px;height:46px;margin:0 0 0 -48px;padding:0;border:0;background:none;display:flex;align-items:flex-start;justify-content:center;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent}
+.bd-grip2 i{display:block;margin-top:23px;width:40px;height:5px;border-radius:3px;background:rgba(244,241,236,.42);transition:background .16s ease,width .16s ease}
+.bd-grip2:hover i,.bd-grip2:active i,.bd-div:active ~ .bd-grip2 i{background:#D3D0FF;width:52px}
+.bd-grip2:focus-visible{outline:3px solid #B3AEFF;outline-offset:-8px;border-radius:16px}
+.bd-cdone{position:relative;z-index:7}
+/* N10: the panel changes sides while the window travels: it is out of sight on the way (no entrance yet) and arrives with the usual one */
+#bdock.bd-flip > .bd-chat{animation:none;opacity:0;pointer-events:none}
+#bdock.bd-resizing{cursor:col-resize}
+#bdock.bd-resizing-y{cursor:row-resize}
+#bdock.bd-resizing iframe{pointer-events:none}
+#bdock.bd-resizing *{user-select:none;-webkit-user-select:none}
+@media (prefers-reduced-motion:reduce){.bd-sz::before,.bd-sz i,.bd-grip2 i{transition:none}
+  /* the page's own "reduce motion" rule gives every element a 0.001 ms transition, and WebKit then shows a changed value one frame late: the panel (its top follows the window, its width follows the pointer) must not wait */
+  #bdock .bd-chat,#bdock .bd-frame,#bdock .bd-body,#bdock .bd-sz,#bdock .bd-divw{transition:none!important}}
+
+/* ── N11 (real-device fixes) ───────────────────────────────────────────────────────────────────── */
+/* iOS and iPadOS: the page holds no camera (the call frame is the only one that captures), so the pre-join box is a plain card */
+#bdock.bd-ios .bd-prev video,#bdock.bd-ios .bd-lvl,#bdock.bd-ios .bd-ok,#bdock.bd-ios .bd-dev,#bdock.bd-ios .bd-devs{display:none!important}
+#bdock.bd-ios .bd-av{display:flex}
+#bdock.bd-ios .bd-lab{right:10px;white-space:normal;text-align:center;border-radius:16px;line-height:1.3}
+/* the whole-screen window (a phone's full screen, the stage, the browser's full screen on a desktop) stays inside the notch and the side bars */
+#bdock[data-mode="stage"],#bdock[data-full="1"]{padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)}
+/* the call frame is a box of its own: every control sits outside it, or above it */
+.bd-frame iframe{position:relative;z-index:0}
+
+/* ── N12: sign-in inside the call frame ──────────────────────────────────────────────────────────── */
+/* a signed-out frame shows a login form: it gets room for one (the 190 px frame of a silent bridge is only for the card). Full screen and the stage fill the screen anyway. */
+#bdock[data-login="1"][data-mode="call"]:not([data-full="1"]) .bd-frame{height:min(400px,calc(100vh - 330px));height:min(400px,calc(100dvh - 330px));min-height:280px}
+.bd-warn.bd-wsign .bd-again{grid-column:1/-1}
+/* the header has four controls now (Full screen, Bigger, Smaller and the grip): a little less air between them, so the status line keeps its full wording ("Happening now, 14 min") */
+#bdock:not([data-phone="1"]) .bd-head{gap:6px;padding-right:8px}
+/* Scout's chip is a row of its own under the title and the buttons (full width of the window), so "Scout is taking notes" is never broken over two lines */
+.bd-head{flex-wrap:wrap;row-gap:2px}
+.bd-notes{order:9;flex:0 0 100%;display:flex;margin:0;padding:0 0 0 34px;background:none;border-radius:0;font-size:15px;line-height:1.3}
+.bd-notes[hidden]{display:none}
+#bdock:not([data-phone="1"]) .bd-notes{padding-left:30px}
+.bd-np{display:inline-flex;align-items:center;gap:6px;margin-top:2px;padding:3px 10px 3px 8px;border-radius:999px;background:var(--bd-bg2);color:var(--bd-ink2);font-size:15px;font-weight:600;line-height:1.3;white-space:nowrap}
+.bd-np svg{width:18px;height:18px;flex:none;color:#F4BE7E}
+#bdock[data-mode="stage"] .bd-notes{padding-left:0}
+
+/* ══ round 5 (P1): the call page IS the self view ═════════════════════════════════════════════════════════════════
+   Tapping Join opens this card at once. The call page loads in the picture box and opens her camera itself (the browser's question appears
+   there and then); this page never captures. Under the picture: one plain line, the two switches, and "Join now". */
+#bdock[data-v5="1"] .bd-prev,#bdock[data-v5="1"] .bd-mic,#bdock[data-v5="1"] .bd-dev,#bdock[data-v5="1"] .bd-devs{display:none}
+#bdock[data-v5="1"] .bd-call{order:-1;flex:0 0 auto}
+#bdock[data-v5="1"] .bd-frame{height:auto;aspect-ratio:4/3;margin:2px 14px 0;border-radius:18px}
+#bdock[data-v5="1"] .bd-frame iframe{pointer-events:none}
+#bdock[data-v5="1"] .bd-wait{padding:16px 22px 22px}
+#bdock[data-v5="1"] .bd-pre{padding-top:12px;gap:10px}
+.bd-pnote{margin:0;font-size:17px;line-height:1.45;color:var(--bd-ink2);text-align:center}
+.bd-pretry{display:flex;align-items:center;justify-content:center;gap:10px;min-height:60px;width:100%;padding:0 16px;border-radius:18px;border:0;background:var(--bd-join);color:#fff;font:700 19px/1.2 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center;cursor:pointer;box-shadow:0 12px 26px -14px rgba(62,52,188,.9)}
+.bd-pretry svg{width:24px;height:24px;flex:none}
+.bd-pretry:focus-visible{outline:3px solid #B3AEFF;outline-offset:3px;border-radius:14px}
+.bd-pnote[hidden],.bd-pretry[hidden],.bd-pjoin[hidden]{display:none}
+.bd-pnote[data-kind="ok"]{color:var(--bd-go)}
+.bd-pnote[data-kind="bad"]{color:#FFD9D4}
+#bdock[data-v5="1"][data-perm="denied"] .bd-tg{display:none}
+/* a phone, the whole screen: the picture takes what the card leaves */
+#bdock[data-v5="1"][data-full="1"] .bd-body{display:flex;flex-direction:column;min-height:0}
+#bdock[data-v5="1"][data-full="1"] .bd-call{order:-1;flex:1 1 0;min-height:140px}
+#bdock[data-v5="1"][data-full="1"] .bd-frame{flex:1;height:auto;aspect-ratio:auto;margin:0 16px;border-radius:20px;min-height:0}
+#bdock[data-v5="1"][data-full="1"] .bd-pre{flex:0 0 auto;overflow:visible;padding:10px 18px calc(18px + env(safe-area-inset-bottom))}
+@media (max-width:640px) and (max-height:640px){
+  #bdock[data-v5="1"][data-full="1"] .bd-pre{gap:8px;padding-top:8px}
+  #bdock[data-v5="1"][data-full="1"] .bd-t{min-height:48px}
+  #bdock[data-v5="1"][data-full="1"] .bd-join{min-height:54px;font-size:18px}
+  #bdock[data-v5="1"][data-full="1"] .bd-join2{min-height:48px;font-size:17px}
+  #bdock[data-v5="1"][data-full="1"] .bd-who{display:none}
+  .bd-pnote{font-size:16px;line-height:1.35}
+}
+
+/* ══ Pop out (2026-10-27): the call in its own window ═══════════════════════════════════════════════════════════
+   .bd-pop is a header button; .bd-popbar is the small card this page shows while the call is in the other window. In the call window itself
+   (html.bd-win, #bdock[data-win]) nothing but the call is shown, and the call fills the window. */
+.bd-popbar{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 12px;min-height:56px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.bd-popbar:focus-visible{outline:3px solid #B3AEFF;outline-offset:-3px;border-radius:22px}
+.bd-popbar[hidden]{display:none}
+.bd-popbar .bd-grip{width:20px;height:20px}.bd-popbar .bd-grip svg{width:20px;height:20px}
+.bd-pbt{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:10px}
+.bd-pbt .bd-dot{background:var(--bd-go);box-shadow:0 0 0 4px rgba(134,217,166,.22)}
+.bd-pst{display:grid;min-width:0;color:var(--bd-ink);font:600 15px/1.25 Inter,system-ui,-apple-system,sans-serif}
+.bd-pl{grid-area:1/1;opacity:0;filter:blur(3px);transition:opacity 200ms ease,filter 200ms ease;pointer-events:none}
+.bd-pl.on{opacity:1;filter:none}
+.bd-popbar .bd-pill{min-height:36px;padding:0 14px;gap:6px;border-radius:18px;font-size:14px;white-space:nowrap;background:var(--bd-bg3)}
+.bd-popbar .bd-pill svg{width:18px;height:18px}
+.bd-popbar .bd-pill:disabled{opacity:.55;cursor:default}
+/* the header has room for one more button: in the usual window the four icons are a little smaller (44 px, the least a finger needs) so the title stays on one line */
+#bdock[data-size="normal"]:not([data-phone="1"]):not([data-mode="stage"]) .bd-head:has(.bd-pop:not([hidden])) .bd-ib{width:44px;height:44px}
+/* the card: one row, as wide as the words need (never cut off), and the call page behind it stays alive while the new window is still on its way (data-hand) */
+#bdock[data-mode="pop"] > :not(.bd-popbar):not(.bd-live):not(.bd-body){display:none!important}
+#bdock[data-mode="pop"]:not([data-hand="1"]) > .bd-body{display:none!important}
+#bdock[data-mode="pop"]{width:min(580px,calc(100vw - 32px))}
+#bdock[data-mode="pop"][data-hand="1"]{width:min(660px,calc(100vw - 32px))}
+#bdock[data-hand="1"] .bd-body{display:block;position:absolute;left:12px;top:9px;width:68px;height:46px;min-height:0;flex:none;overflow:hidden;border-radius:12px;pointer-events:none;z-index:2}
+#bdock[data-hand="1"] .bd-pre,#bdock[data-hand="1"] :is(.bd-warn,.bd-err){display:none}
+#bdock[data-hand="1"] .bd-call{position:absolute;inset:0;display:block}
+#bdock[data-hand="1"] .bd-frame{position:absolute;inset:0;width:auto;height:auto;margin:0;border-radius:12px}
+#bdock[data-hand="1"] .bd-frame iframe{pointer-events:none}
+#bdock[data-hand="1"] .bd-popbar{padding-left:92px;min-height:64px}
+#bdock[data-hand="1"] .bd-popbar .bd-grip{display:none}
+@media (max-width:640px){
+  #bdock[data-mode="pop"]{width:calc(100vw - 32px)}
+  .bd-popbar{padding:6px 6px 6px 8px;min-height:52px;gap:6px}
+  .bd-pst{font-size:14px}
+  .bd-popbar .bd-pill{min-height:34px;padding:0 12px}
+  .bd-popbar .bd-pshow svg{display:none}
+  #bdock[data-hand="1"] .bd-popbar{padding-left:92px;min-height:64px}
+}
+@media (prefers-reduced-motion:reduce){.bd-pl{transition:none;filter:none}}
+#bdock .bd-ib.bd-fillw{width:auto;min-width:0;padding:0 14px 0 12px;gap:8px;border-radius:28px;background:var(--bd-bg2);font:700 15px/1.2 Inter,system-ui,-apple-system,sans-serif;white-space:nowrap}
+#bdock[data-full="1"]:not([data-mode="stage"]) .bd-grip{display:none}      /* the full-screen call cannot be dragged: the grip would only take room from the title */
+#bdock .bd-ib.bd-fillw svg{width:22px;height:22px}
+#bdock[data-win="1"] :is(.bd-pop,.bd-grip,.bd-big,.bd-min,.bd-fill,.bd-fs,.bd-small,.bd-close){display:none!important}
+html.bd-win body > *:not(#bdock):not(#toast):not(#toasts):not(.bd-wingone):not(.bd-winfail):not(.bd-buildtag):not(.bd-wingate):not(script):not(style):not(link){display:none!important}
+/* the call window: the page IS the window, whatever size it is dragged to (no scroll bars, no minimum width from the page behind) */
+html.bd-win,html.bd-win body{margin:0;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden}
+@media (max-height:380px){#bdock[data-win="1"] .bd-sub{display:none}}
+@media (max-height:460px){#bdock[data-win="1"] .bd-cl2{display:none}#bdock[data-win="1"][data-mode="stage"] .bd-ctl{padding:6px 8px calc(8px + env(safe-area-inset-bottom))}}      /* a short window: the control labels step aside, the icons stay */
+@media (max-height:520px){#bdock[data-win="1"][data-chat="1"][data-cpos="b"][data-mode="stage"]{--bd-strip:clamp(90px,24%,380px)}}      /* Messages under a short video: the video gives room so the message box is never squeezed out */
+@media (max-height:340px){#bdock[data-win="1"][data-chat="1"][data-cpos="b"][data-mode="stage"]{--bd-strip:64px}}
+html.bd-win,html.bd-win body{background:#1F1D1B}
+/* the window's first seconds: one calm line over the whole window (its own layer on the page, so it never depends on the size of the dock), until it is clear whether the call can start here */
+.bd-wingate{position:fixed;inset:0;z-index:2100;background:#1F1D1B;color:#F4F1EC;transition:opacity .24s ease}
+.bd-wingate[data-off="1"]{opacity:0;pointer-events:none}
+.bd-wingate .bd-gh{position:absolute;left:8px;top:6px;display:grid;gap:2px;font:600 15px/1.25 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+.bd-wingate .bd-gh b{font-weight:700;font-size:16px}
+.bd-wingate .bd-gh span{color:#D2CCC3;font-weight:500}
+.bd-wingate .bd-gm{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center}
+.bd-wingate .bd-gd{width:10px;height:10px;border-radius:50%;background:#9A95F0;box-shadow:0 0 0 0 rgba(154,149,240,.5);animation:bdgate 1.6s ease-out infinite}
+.bd-wingate .bd-gt{margin:0;max-width:30em;font:600 18px/1.4 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:-.005em;transition:opacity .18s ease}
+.bd-wingate .bd-gt[data-sw="1"]{opacity:0}
+.bd-wingate .bd-gb{min-height:56px;min-width:min(280px,100%);padding:0 28px;border:0;border-radius:18px;background:#3E34BC;color:#fff;font:700 19px/1.2 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;cursor:pointer;box-shadow:0 12px 26px -14px rgba(62,52,188,.9);transition:transform .12s ease,opacity .18s ease}
+.bd-wingate .bd-gb:active{transform:scale(.98)}
+.bd-wingate .bd-gb:focus-visible{outline:3px solid #B3AEFF;outline-offset:3px}
+.bd-wingate .bd-gd[hidden]{display:none}
+@keyframes bdgate{0%{box-shadow:0 0 0 0 rgba(154,149,240,.5)}100%{box-shadow:0 0 0 18px rgba(154,149,240,0)}}
+@media (prefers-reduced-motion:reduce){.bd-wingate .bd-gd{animation:none}.bd-wingate,.bd-wingate .bd-gt{transition:none}}
+@media (prefers-reduced-motion:reduce){.bd-wingate .bd-gd{animation:none}.bd-wingate,.bd-wingate .bd-gt{transition:none}}
+.bd-buildtag{position:fixed;right:8px;bottom:6px;z-index:2106;font:500 10px/1 Inter,system-ui,-apple-system,sans-serif;letter-spacing:.04em;color:rgba(244,241,236,.55);pointer-events:none}
+.bd-winfail{position:fixed;inset:0;z-index:2110;display:grid;place-items:center;padding:24px;background:#1F1D1B;color:#F4F1EC;font:500 16px/1.5 Inter,system-ui,-apple-system,sans-serif;text-align:center}
+.bd-winfail .bd-wf{max-width:440px;display:grid;gap:14px;justify-items:center}
+.bd-winfail h2{margin:0;font:700 22px/1.25 Inter,system-ui,-apple-system,sans-serif}
+.bd-winfail p{margin:0;color:#D6D0C6}
+.bd-wfb{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px}
+.bd-wfb button{min-height:44px;padding:0 20px;border:0;border-radius:22px;font:600 15px/1 Inter,system-ui,-apple-system,sans-serif;cursor:pointer;background:#3A3633;color:#F4F1EC;white-space:nowrap}
+.bd-wfb button.bd-wf1{background:#F4F1EC;color:#1F1D1B}
+.bd-wfb button:focus-visible{outline:3px solid #B3AEFF;outline-offset:2px}
+.bd-wingone{position:fixed;inset:0;z-index:2105;display:grid;place-items:center;padding:24px;text-align:center;background:#1F1D1B;color:#F4F1EC;font:600 20px/1.4 Inter,system-ui,-apple-system,sans-serif}

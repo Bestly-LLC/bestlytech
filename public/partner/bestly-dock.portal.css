@@ -1,0 +1,3 @@
+/* Portal-only additions to the Studio call dock (the dock files themselves stay verbatim).
+   A sheet or menu from the portal sets pointer-events:none on <body>; the call window must stay tappable above it. */
+#bdock{pointer-events:auto}
