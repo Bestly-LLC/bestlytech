@@ -43,6 +43,18 @@ export const citOpacity = (i: Pick<CitInc, "fade0" | "fade1">, now: number) =>
 /** Halo/dot size by severity, same numbers as the wall (--sc). */
 export const LEVEL_SCALE: Record<CitInc["level"], number> = { low: 0.82, moderate: 1, high: 1.12, critical: 1.26 };
 
+/** Icon color on top of a solid category-colored fill: white, or dark gray when the fill is very light (relative luminance > 0.8, e.g. white traffic). */
+export const iconInk = (color?: string | null) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(color ?? "");
+  if (!m) return "#FFFFFF";
+  const n = parseInt(m[1], 16);
+  const lin = (v: number) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+  const L = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return L > 0.8 ? "#3A3A3C" : "#FFFFFF";
+};
+/** New = pinged in the last 5 minutes (same rule on the map, the wall and the Near home list). */
+export const isNewInc = (c: Pick<CitInc, "pinged_at">, now: number) => c.pinged_at != null && now - c.pinged_at < 5 * 60_000;
+
 /** Registry icon as a small inline SVG (stroke in the category color). */
 export function CatIcon({ cat, className }: { cat?: Pick<CitCat, "icon" | "color"> | null; className?: string }) {
   return (
@@ -152,3 +164,37 @@ export const countShowing = (snap: CitSnap, sw: AlertSw, now: number) => {
 };
 /** Categories that are switched on but whose feed isn't answering (they sit quiet on their switch). */
 export const pausedOn = (snap: CitSnap, sw: AlertSw) => snap.cats.filter((c) => c.state === "paused" && catIsOn(sw, c)).length;
+
+/** "Near home": the incidents the map is drawing right now (category on, not faded out), new first, then nearest. Tap a row to flash its dot. */
+export function NearHomeList({ snap, sw, now, activeKey, onPick }: { snap: CitSnap | null; sw: AlertSw; now: number; activeKey: string | null; onPick: (key: string) => void }) {
+  if (!snap) return <div className="px-4 py-3 text-[13px] text-white/50">Loading alerts…</div>;
+  const reg = new Map(snap.cats.map((c) => [c.id, c] as const));
+  const rows = snap.incidents
+    .filter((i) => { const c = reg.get(i.cat); return !!c && catIsOn(sw, c) && citOpacity(i, now) > 0; })
+    .sort((a, b) => Number(isNewInc(b, now)) - Number(isNewInc(a, now)) || a.dist_ft - b.dist_ft);
+  if (rows.length === 0) return <div className="px-4 py-3 text-[14px] leading-snug text-white/50">Nothing near home right now.</div>;
+  return (
+    <>
+      {rows.map((i) => {
+        const cat = reg.get(i.cat)!;
+        const fresh = isNewInc(i, now);
+        return (
+          <button key={i.key} type="button" onClick={() => onPick(i.key)} aria-pressed={activeKey === i.key}
+            className={cn("flex min-h-[48px] w-full items-center gap-3 border-b border-white/[0.07] px-4 py-2 text-left transition-colors last:border-b-0 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400", activeKey === i.key && "bg-white/[0.08]")}>
+            <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px]" style={{ background: cat.color }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke={iconInk(cat.color)} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]" aria-hidden
+                dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[16px] leading-tight text-white">
+                {i.short || i.title}
+                {fresh && <span className="ml-2 align-middle text-[11px] font-extrabold tracking-[0.09em]" style={{ color: cat.color }}>NEW</span>}
+              </span>
+              {i.sub && <span className="block text-[13px] leading-snug text-white/50">{i.sub}</span>}
+            </span>
+          </button>
+        );
+      })}
+    </>
+  );
+}

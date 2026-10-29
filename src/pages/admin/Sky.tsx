@@ -17,7 +17,7 @@
  *
  * 2026-10-28 (Jared): Local alerts v2, in parity with the projector wall (his words: "Make sure that the sky and wall are in parity, both admin and
  *   projector"). One category registry + incident snapshot (SQL citizen_snapshot_json via wall_admin_citizen) is drawn the same way here and in
- *   wall.html: icon dot per incident in its category color, labels for the nearest four and new ones, a notes stack under Home, a legend of what is
+ *   wall.html: icon dot per incident in its category color, labels for the nearest three and new ones, a notes stack under Home, a legend of what is
  *   showing. The Local alerts button opens the SAME per-category switches as Wall > Sky details, saved in the wall's state, so they change the
  *   projector too. Only Roads/Traffic and Current location are phone-map-only. Components: components/admin/LocalAlerts.tsx.
  * 2026-10-11 (Jared): Blue Steel, the Model 3, shows as a top-down car (marker A) when it is inside the map and its reading is
@@ -26,8 +26,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { Maximize2, Minimize2, Plane, RotateCw, Compass, LocateFixed, Loader2, Route, TrafficCone, Siren, Plus, Minus, X as CloseX } from "lucide-react";
-import { AlertCategoryRows, LEVEL_SCALE, catIsOn, catRGB, citOpacity, countShowing, iconMarkup, pausedOn, useAlertSwitches, useCitizen, type CitCat, type CitInc } from "@/components/admin/LocalAlerts";
+import { Maximize2, Minimize2, Plane, RotateCw, Compass, LocateFixed, Loader2, Route, TrafficCone, Siren, Plus, Minus, Smartphone, Presentation, X as CloseX } from "lucide-react";
+import { AlertCategoryRows, LEVEL_SCALE, catIsOn, citOpacity, countShowing, iconInk, iconMarkup, isNewInc, NearHomeList, pausedOn, useAlertSwitches, useCitizen, type CitCat, type CitInc } from "@/components/admin/LocalAlerts";
 import { Switch } from "@/components/ui/switch";
 
 type Air = {
@@ -110,6 +110,8 @@ const angGap = (a: number, b: number) => ((((a - b) % 360) + 540) % 360) - 180;
 const feetBetween = (a: [number, number], b: [number, number]) => Math.hypot((b[0] - a[0]) * 364000, (b[1] - a[1]) * 364000 * Math.cos((a[0] * Math.PI) / 180));
 type Cond = { place: string | null; weather: { temp_f: number; feels_f: number; wind_mph: number; wind_from: string; sky: string; is_day: boolean; rain_pct: number | null } | null };
 const LAYERS_KEY = "bestly.sky.layers";
+/** Phone | Wall view: a preview setting for this device only (never written to the wall or any RPC). */
+const VIEW_KEY = "sky.view";
 const FN = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sky-area`;
 
 /** Airplane silhouette pointing up, ~24 units long. */
@@ -144,6 +146,16 @@ export default function Sky() {
     try { return { roads: true, traffic: true, ...JSON.parse(localStorage.getItem(LAYERS_KEY) ?? "{}") }; } catch { return { roads: true, traffic: true }; }
   });
   useEffect(() => { try { localStorage.setItem(LAYERS_KEY, JSON.stringify(layers)); } catch { /* private mode */ } }, [layers]);
+  const [view, setViewState] = useState<"phone" | "wall">(() => {
+    try { return localStorage.getItem(VIEW_KEY) === "wall" ? "wall" : "phone"; } catch { return "phone"; }
+  });
+  const setView = (v: "phone" | "wall") => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* private mode */ } };
+  const wall = view === "wall";
+  // Tapping a row in Near home flashes that dot for 4 seconds.
+  const [hi, setHi] = useState<{ key: string; n: number } | null>(null);
+  const hiTimer = useRef<number | undefined>(undefined);
+  const pickAlert = (key: string) => { window.clearTimeout(hiTimer.current); setHi({ key, n: Date.now() }); hiTimer.current = window.setTimeout(() => setHi(null), 4000); };
+  useEffect(() => () => window.clearTimeout(hiTimer.current), []);
   const radiusRef = useRef(15);
   // User zoom overrides the feed radius; null = follow the wall. Step by 1mi, clamped to the same 2..25 as the wall.
   const [zoomRadius, setZoomRadius] = useState<number | null>(null);
@@ -531,7 +543,7 @@ export default function Sky() {
       <div ref={boxRef}
         className={cn("relative w-full overflow-hidden bg-[#02030a] text-white",
           full ? "h-[100dvh]" : "h-[calc(100dvh-7.5rem)] min-h-[480px] md:h-[calc(100dvh-4rem)]")}
-        style={{ backgroundImage: "radial-gradient(120% 90% at 50% 45%, #101a3a 0%, #070b1f 45%, #02030a 100%)" }}>
+        style={{ backgroundImage: wall ? "radial-gradient(120% 90% at 50% 45%, #E4D6BA 0%, #C8B692 100%)" : "radial-gradient(120% 90% at 50% 45%, #101a3a 0%, #070b1f 45%, #02030a 100%)" }}>
         {/* the sky */}
         <svg viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" role="img"
           aria-label={`Sky over ${placeName}, ${inView.length} ${inView.length === 1 ? "aircraft" : "aircraft"} within ${radius} miles`}>
@@ -543,19 +555,16 @@ export default function Sky() {
             {(cit?.cats ?? []).map((c) => (
               <Fragment key={c.id}>
                 <radialGradient id={`cit-${c.id}`} cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stopColor={c.color} stopOpacity=".62" /><stop offset="30%" stopColor={c.color} stopOpacity=".30" />
-                  <stop offset="55%" stopColor={c.color} stopOpacity=".10" /><stop offset="72%" stopColor={c.color} stopOpacity="0" />
-                </radialGradient>
-                <radialGradient id={`citc-${c.id}`} cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stopColor="#0a1222" stopOpacity=".92" /><stop offset="52%" stopColor="#0a1222" stopOpacity=".88" />
-                  <stop offset="82%" stopColor={c.color} stopOpacity=".5" /><stop offset="100%" stopColor={c.color} stopOpacity="0" />
+                  <stop offset="0%" stopColor={c.color} stopOpacity=".85" /><stop offset="45%" stopColor={c.color} stopOpacity=".26" />
+                  <stop offset="100%" stopColor={c.color} stopOpacity="0" />
                 </radialGradient>
               </Fragment>
             ))}
             <filter id="cit-soft" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation={6 * u} /></filter>
-            <style>{`@keyframes citPulse{0%,100%{transform:scale(.62);opacity:.5}50%{transform:scale(1.08);opacity:1}}@keyframes citBeat{0%,100%{transform:scale(.92)}50%{transform:scale(1.12)}}.cit-h{transform-box:fill-box;transform-origin:center;animation:citPulse 3.6s ease-in-out infinite}.cit-c{transform-box:fill-box;transform-origin:center;animation:citBeat 3.6s ease-in-out infinite}@media (prefers-reduced-motion:reduce){.cit-h,.cit-c{animation:none}}`}</style>
+            <style>{`@keyframes citPulse{0%,100%{transform:scale(.62);opacity:.5}50%{transform:scale(1.08);opacity:1}}@keyframes citRing{0%{transform:scale(.7);opacity:.95}100%{transform:scale(1.55);opacity:0}}.cit-h{transform-box:fill-box;transform-origin:center;animation:citPulse 3.6s ease-in-out infinite}.cit-ring{transform-box:fill-box;transform-origin:center;animation:citRing 4s ease-out forwards}@media (prefers-reduced-motion:reduce){.cit-h{animation:none}.cit-ring{animation:none;opacity:.9}}`}</style>
           </defs>
-          {STARS.map((s, n) => <circle key={n} cx={s.x * 1000} cy={s.y * 1000} r={s.s} fill="#fff" opacity={s.o} />)}
+          {!wall && STARS.map((s, n) => <circle key={n} cx={s.x * 1000} cy={s.y * 1000} r={s.s} fill="#fff" opacity={s.o} />)}
+          <g style={wall ? { mixBlendMode: "screen" } : undefined}>
           {rings.map((r) => (
             <g key={r}>
               <circle cx={500} cy={500} r={r * S} fill="none" stroke="#fff" strokeOpacity={r === radius ? 0.28 : 0.12} strokeWidth={r === radius ? 1.6 : 1} strokeDasharray={r === radius ? undefined : "4 8"} />
@@ -673,7 +682,7 @@ export default function Sky() {
           })()}
 
           {/* Local alerts v2 (Sky Sync): same snapshot, registry and rules as the wall (wall.html citPaint). An icon dot per incident in its
-              category color, labels for the nearest four and anything new (kept upright), then a calm notes stack under Home for area alerts,
+              category color, labels for the nearest three and anything new (kept upright), then a calm notes stack under Home for area alerts,
               far items and anything off the map, plus a legend of the categories showing. */}
           {cit && citFresh && alertSw.master && (() => {
             const reg = new Map(cit.cats.map((c) => [c.id, c] as const));
@@ -698,36 +707,44 @@ export default function Sky() {
             }
             const used: { x: number; y: number }[] = [];
             const labelled = new Set<string>();
-            const isNewInc = (c: CitInc) => c.pinged_at != null && now - c.pinged_at < 5 * 60_000;
+            const isNew = (c: CitInc) => isNewInc(c, now);
             for (const p of dots) {
               const clash = used.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 90 * u);
-              if (isNewInc(p.c) || (labelled.size < 4 && !clash)) { used.push(p); labelled.add(p.c.key); }
+              if (isNew(p.c) || (labelled.size < 3 && !clash)) { used.push(p); labelled.add(p.c.key); }
             }
             const fsz = 12 * u;
             const chips = [...cit.cats].sort((a, b) => a.ord - b.ord).filter((c) => vis.has(c.id));
             const W = Math.min(459 * u, 940);
-            const pill = (bgA: number): CSSProperties => ({ borderRadius: 999, background: `rgba(12,20,38,${bgA})`, boxShadow: `0 0 ${9 * u}px ${5 * u}px rgba(12,20,38,${bgA})` });
+            // Phone view keeps the dark pills; Wall view has none (a projector can't draw dark), just white text.
+            const pill = (bgA: number): CSSProperties => (wall ? { borderRadius: 999 } : { borderRadius: 999, background: `rgba(12,20,38,${bgA})`, boxShadow: `0 0 ${9 * u}px ${5 * u}px rgba(12,20,38,${bgA})` });
+            const tile = (cat: CitCat | undefined, size: number) => (
+              <span style={{ display: "grid", placeItems: "center", flex: "none", width: size, height: size, borderRadius: size * 0.3, background: cat?.color ?? "#64D2FF" }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke={iconInk(cat?.color)} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" style={{ width: size * 0.72, height: size * 0.72, overflow: "visible" }} dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />
+              </span>
+            );
             return (
               <g aria-label="Local alerts">
                 {dots.map(({ c, cat, op, x, y }) => {
                   const sub = c.sub ?? "";
                   const title = c.short || c.title;
-                  const isNew = isNewInc(c);
+                  const isNew = isNewInc(c, now);
                   const tw = Math.max(title.length * fsz * 0.58, sub.length * fsz * 0.5) + fsz * 1.8, th = fsz * (isNew ? 3.9 : 2.9);
                   return (
                     <g key={c.key} transform={`translate(${x} ${y})`} opacity={op} style={{ transition: "opacity 1.2s ease" }}>
                       <g transform={`scale(${LEVEL_SCALE[c.level] ?? 1})`}>
-                        <circle className="cit-h" r={34 * u} fill={`url(#cit-${cat.id})`} />
-                        <circle className="cit-c" r={9.2 * u} fill={`url(#citc-${cat.id})`} style={{ filter: `drop-shadow(0 0 ${9 * u}px rgba(${catRGB(cat.color)},.42))` }} />
-                        <g transform={`translate(${-5.2 * u} ${-5.2 * u}) scale(${(10.4 * u) / 24})`} fill="none" stroke={cat.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+                        {/* halo: feathered, still at rest; only a new incident pulses */}
+                        <circle className={isNew ? "cit-h" : undefined} r={34 * u} fill={`url(#cit-${cat.id})`} style={isNew ? undefined : { opacity: 0.8 }} />
+                        <circle r={10 * u} fill={cat.color} />
+                        <g transform={`translate(${-6.6 * u} ${-6.6 * u}) scale(${(13.2 * u) / 24})`} fill="none" stroke={iconInk(cat.color)} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"
                           dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />
                       </g>
+                      {hi?.key === c.key && <circle key={hi.n} className="cit-ring" r={30 * u} fill="none" stroke="#FFFFFF" strokeWidth={5 * u} filter="url(#cit-soft)" />}
                       {labelled.has(c.key) && (
                         <g transform={`rotate(${-mapUp}) translate(${17 * u} 0)`}>
-                          <rect x={0} y={-th / 2} width={tw} height={th} rx={th / 2} fill="#0c1426" fillOpacity={0.62} filter="url(#cit-soft)" />
-                          {isNew && <text x={fsz * 0.9} y={-th / 2 + fsz * 1.15} style={{ fill: cat.color, fontSize: fsz * 0.7, fontWeight: 700, letterSpacing: "0.09em", whiteSpace: "pre" }}>{`SKY SYNC${NB}·${NB}NEW`}</text>}
-                          <text x={fsz * 0.9} y={isNew ? fsz * 0.1 : -fsz * 0.2} style={{ fill: "#EAF2FF", fontSize: fsz, fontWeight: 800, whiteSpace: "pre" }}>{title}</text>
-                          <text x={fsz * 0.9} y={isNew ? fsz * 1.35 : fsz * 1.05} style={{ fill: "#EAF2FF", fillOpacity: 0.74, fontSize: fsz * 0.84, fontWeight: 600, whiteSpace: "pre" }}>{sub}</text>
+                          {!wall && <rect x={0} y={-th / 2} width={tw} height={th} rx={th / 2} fill="#0c1426" fillOpacity={0.62} filter="url(#cit-soft)" />}
+                          {isNew && <text x={fsz * 0.9} y={-th / 2 + fsz * 1.15} style={{ fill: cat.color, fontSize: fsz * 0.7, fontWeight: wall ? 800 : 700, letterSpacing: "0.09em", whiteSpace: "pre" }}>{wall ? "NEW" : `SKY SYNC${NB}·${NB}NEW`}</text>}
+                          <text x={fsz * 0.9} y={isNew ? fsz * 0.1 : -fsz * 0.2} style={{ fill: wall ? "#FFFFFF" : "#EAF2FF", fontSize: fsz, fontWeight: 800, whiteSpace: "pre" }}>{title}</text>
+                          <text x={fsz * 0.9} y={isNew ? fsz * 1.35 : fsz * 1.05} style={{ fill: wall ? "#FFFFFF" : "#EAF2FF", fillOpacity: wall ? 1 : 0.74, fontSize: fsz * 0.84, fontWeight: wall ? 700 : 600, whiteSpace: "pre" }}>{sub}</text>
                         </g>
                       )}
                     </g>
@@ -740,20 +757,20 @@ export default function Sky() {
                         {notes.slice(0, nmax).map((c) => {
                           const cat = reg.get(c.cat);
                           return (
-                            <div key={c.key} style={{ ...pill(0.52), display: "flex", alignItems: "center", gap: 4.2 * u, whiteSpace: "nowrap", fontSize: 9.5 * u, fontWeight: 600, lineHeight: 1.1, color: "rgba(234,242,255,.9)", padding: `${2.8 * u}px ${9 * u}px ${3 * u}px ${6.2 * u}px` }}>
-                              <svg viewBox="0 0 24 24" fill="none" stroke={cat?.color ?? "#64D2FF"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ width: 10.5 * u, height: 10.5 * u, flex: "none", overflow: "visible" }} dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />
+                            <div key={c.key} style={{ ...pill(0.52), display: "flex", alignItems: "center", gap: 4.2 * u, whiteSpace: "nowrap", fontSize: 9.5 * u, fontWeight: 600, lineHeight: 1.1, color: wall ? "#FFFFFF" : "rgba(234,242,255,.9)", padding: `${2.8 * u}px ${9 * u}px ${3 * u}px ${6.2 * u}px` }}>
+                              {wall ? tile(cat, 12.5 * u) : <svg viewBox="0 0 24 24" fill="none" stroke={cat?.color ?? "#64D2FF"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ width: 10.5 * u, height: 10.5 * u, flex: "none", overflow: "visible" }} dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />}
                               <span>{`${c.short || c.title || "Alert"}${c.sub ? ` · ${c.sub}` : ""}`}</span>
                             </div>
                           );
                         })}
                         {notes.length > nmax && (
-                          <div style={{ ...pill(0.52), whiteSpace: "nowrap", fontSize: 9.5 * u, fontWeight: 600, lineHeight: 1.1, color: "rgba(234,242,255,.6)", padding: `${2.8 * u}px ${9 * u}px` }}>+{notes.length - nmax}{NB}more</div>
+                          <div style={{ ...pill(0.52), whiteSpace: "nowrap", fontSize: 9.5 * u, fontWeight: 600, lineHeight: 1.1, color: wall ? "#FFFFFF" : "rgba(234,242,255,.6)", padding: `${2.8 * u}px ${9 * u}px` }}>+{notes.length - nmax}{NB}more</div>
                         )}
                         {chips.length > 0 && (
                           <div style={{ ...pill(0.4), display: "flex", flexWrap: "wrap", justifyContent: "center", gap: `${4.2 * u}px ${9 * u}px`, marginTop: 3.5 * u, padding: `${2.8 * u}px ${9 * u}px` }}>
                             {chips.map((c) => (
-                              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 2.8 * u, whiteSpace: "nowrap", fontSize: 8.6 * u, fontWeight: 600, lineHeight: 1.1, color: "rgba(234,242,255,.78)" }}>
-                                <svg viewBox="0 0 24 24" fill="none" stroke={c.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ width: 9.5 * u, height: 9.5 * u, flex: "none", overflow: "visible" }} dangerouslySetInnerHTML={{ __html: iconMarkup(c) }} />
+                              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 2.8 * u, whiteSpace: "nowrap", fontSize: 8.6 * u, fontWeight: 600, lineHeight: 1.1, color: wall ? "#FFFFFF" : "rgba(234,242,255,.78)" }}>
+                                {wall ? tile(c, 11.5 * u) : <svg viewBox="0 0 24 24" fill="none" stroke={c.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ width: 9.5 * u, height: 9.5 * u, flex: "none", overflow: "visible" }} dangerouslySetInnerHTML={{ __html: iconMarkup(c) }} />}
                                 <span>{c.label}</span>
                               </div>
                             ))}
@@ -820,10 +837,12 @@ export default function Sky() {
             );
           })}
           </g>{/* end mapUp rotation group */}
+          </g>{/* end wall-view blend group */}
         </svg>
 
         {/* top bar */}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-4" style={{ paddingTop: full ? "max(0.75rem, env(safe-area-inset-top))" : undefined }}>
+          <div className="flex min-w-0 flex-col items-start gap-2">
           <div className="pointer-events-auto max-w-[min(60vw,420px)] rounded-2xl bg-black/45 px-3.5 py-2 ring-1 ring-white/10">
             <div className="text-[17px] font-semibold leading-tight">Sky over {placeName}</div>
             {weatherText && <div className="mt-0.5 text-[13px] text-white/80">{weatherText}</div>}
@@ -838,6 +857,18 @@ export default function Sky() {
             )}
             {err && <div className="mt-0.5 text-[13px] text-amber-300">{err}</div>}
             {locErr && <div className="mt-0.5 max-w-[260px] text-[13px] text-amber-300" role="alert">{locErr}</div>}
+          </div>
+          {/* Phone | Wall view: previews the projector's light-only look on this phone; this device only */}
+          <div role="group" aria-label="Map view" className="pointer-events-auto inline-flex rounded-full bg-black/55 p-0.5 ring-1 ring-white/10 backdrop-blur-md">
+            {([{ v: "phone", label: "Phone", Icon: Smartphone }, { v: "wall", label: "Wall view", Icon: Presentation }] as const).map(({ v, label, Icon }) => (
+              <button key={v} type="button" onClick={() => setView(v)} aria-pressed={view === v}
+                className={cn("inline-flex min-h-[44px] items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[14px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400",
+                  view === v ? "bg-white text-black" : "text-white/80 hover:bg-white/10")}>
+                <Icon className="h-4 w-4" aria-hidden />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
           </div>
           <div className="pointer-events-auto flex gap-2">
             <button type="button" onClick={() => { setPick(null); void pull(); }} aria-label="Refresh"
@@ -884,7 +915,12 @@ export default function Sky() {
                 <Switch id="sky-alerts-master" className="h-7 w-12" checked={alertSw.master} onCheckedChange={setAlertMaster} />
                 <button type="button" onClick={() => setAlertsOpen(false)} aria-label="Close" className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-white/70 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"><CloseX className="h-5 w-5" aria-hidden /></button>
               </div>
-              <div className="overflow-y-auto"><AlertCategoryRows snap={cit} sw={alertSw} onCat={setAlertCat} idPrefix="sky-cat" /></div>
+              <div className="overflow-y-auto">
+                <div className="px-4 pb-1 pt-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">Near home</div>
+                <NearHomeList snap={cit} sw={alertSw} now={now} activeKey={hi?.key ?? null} onPick={pickAlert} />
+                <div className="border-t border-white/10 px-4 pb-1 pt-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">Show these</div>
+                <AlertCategoryRows snap={cit} sw={alertSw} onCat={setAlertCat} idPrefix="sky-cat" />
+              </div>
             </div>
           )}
         </div>
