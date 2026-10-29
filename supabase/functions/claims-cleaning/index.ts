@@ -61,12 +61,26 @@ async function load(p: Photo): Promise<{ b64: string; mime: string } | null> {
   return { b64: bytesToB64(new Uint8Array(await data.arrayBuffer())), mime: "image/jpeg" };
 }
 
+// Groq's free vision models take as few as 3 images per call (qwen3.8, 2026-10-29), so photos go 3 at a time and keep their own numbers.
+const PER_CALL = 3;
+
 async function look(photos: Photo[], label: string, res: number) {
-  const imgs = (await Promise.all(photos.map(load))).map((x, i) => x ? { ...x, i } : null).filter(Boolean) as { b64: string; mime: string; i: number }[];
-  if (!imgs.length) return { notes: "", model: "", kept: [] as number[] };
-  const r = await llmVision({ images: imgs.map(({ b64, mime }) => ({ b64, mime })), prompt: `${LOOK}\n(These are the ${label} photos.)`,
-    job: "claims-cleaning-look", ref: String(res), fn: "claims-cleaning", scope: "background", paid: "never", maxTokens: 900, deadlineMs: 70_000 });
-  return { notes: r.text, model: r.model, kept: imgs.map((x) => x.i) };
+  const parts: string[] = [];
+  let model = "";
+  for (let k = 0; k < photos.length; k += PER_CALL) {
+    const group = photos.slice(k, k + PER_CALL);
+    const imgs = (await Promise.all(group.map(load))).filter(Boolean) as { b64: string; mime: string }[];
+    if (imgs.length !== group.length) {   // keep numbering honest: a missing download is noted, not shifted
+      parts.push(...group.map((_, i) => `${k + i + 1} | other | 0 | photo could not be loaded`));
+      continue;
+    }
+    const r = await llmVision({ images: imgs, job: "claims-cleaning-look", ref: String(res), fn: "claims-cleaning", scope: "background",
+      paid: "never", maxTokens: 400, deadlineMs: 45_000,
+      prompt: `${LOOK}\n(These are ${label} photos ${k + 1} to ${k + group.length}. Number your lines ${k + 1} to ${k + group.length}.)` });
+    parts.push(r.text.trim());
+    model = r.model;
+  }
+  return { notes: parts.join("\n"), model };
 }
 
 Deno.serve(async (req) => {
