@@ -1,0 +1,40 @@
+  /* Local alerts v4 (Oct 29): sign-wall card + sky declutter.
+     CARD: #wingAlerts lists what the sky dots show (same filter: category on, not faded), new first then nearest, 2 rows then "+N more" (big enough to read across the room).
+     Slot: under the flight card when it is up (sign-wall units 500..970 x 304..484, clear of the neon sign at y 490), else the flight
+     card's own slot. body.al-on drives the fade and the sign-wall band (signatures start lower while the card sits under the flight card).
+     DECLUTTER: plane name tags never stack (nearest/biggest wins, others fade); scrLabels skips place names that would cover Home, a plane
+     tag, an alert dot or another kept name. Errors land in window.__citErr so Sky Sync's existing check sees them. */
+  var AL={sig:'',slot:'',on:false};
+  const alNb=(s)=>esc(s).replace(/(\d[\d.,:]*)\s(mi|ft|min|mph|AM|PM)\b/g,'<span class="nb">$1&nbsp;$2</span>');
+  function pinAlerts(force){ const el=document.getElementById('wingAlerts'); if(!el||!S.wing||S.wing.length!==4) return;
+    const low=document.body.classList.contains('fl-on'), slot=low?'low':'top'; if(!force&&slot===AL.slot&&el._pinned) return; AL.slot=slot; el._pinned=1;
+    const g=homo(WW,WH,S.wing), f=(x,y)=>{ const d=g[6]*x+g[7]*y+1; return [(g[0]*x+g[1]*y+g[2])/d/innerWidth,(g[3]*x+g[4]*y+g[5])/d/innerHeight]; };
+    const y0=low?304:34, y1=low?484:214; pinEl(el,940,360,[f(500,y0),f(970,y0),f(970,y1),f(500,y1)]); }
+  function citCard(){ try{
+    let el=document.getElementById('wingAlerts'); if(!el){ el=document.createElement('div'); el.id='wingAlerts'; el.setAttribute('aria-hidden','true'); document.body.appendChild(el); el._pinned=0; }
+    const sn=CIT.snap, now=Date.now(), fresh=!!(sn&&CIT.age!=null&&CIT.age<180&&now-CIT.rAt<180000), off=(typeof effMode==='function'&&effMode()==='off');
+    const list=(fresh&&!off&&S.skyAlerts!==false)?sn.incidents.filter(i=>i&&citCatOn(i.cat)&&citOp(i,now)>0):[];
+    const isNew=i=>!!(i.pinged_at&&now-i.pinged_at<300000);
+    list.sort((a,b)=>(isNew(b)-isNew(a))||((+a.dist_ft||1e9)-(+b.dist_ft||1e9)));
+    const on=list.length>0; if(on!==AL.on){ AL.on=on; document.body.classList.toggle('al-on',on); }
+    pinAlerts(false); if(!on) return;
+    const rows=list.slice(0,2).map(i=>{ const c=CIT.reg[i.cat];
+      return '<div class="al-r" style="--r:'+citRGB(c&&c.color)+';--ink:'+citInk(c&&c.color)+'"><div class="al-ic">'+citSvg(c)+'</div><div class="al-tx"><div class="al-t">'+esc(i.short||i.title||'Alert')+(isNew(i)?'<s>NEW</s>':'')+'</div>'+(i.sub?'<div class="al-s">'+alNb(i.sub)+'</div>':'')+'</div></div>'; });
+    if(list.length>2) rows.push('<div class="al-more">+'+(list.length-2)+'&nbsp;more near home</div>');
+    const html='<div class="al"><div class="al-hd"><span>Local alerts</span><span>Within&nbsp;1&nbsp;mi</span></div>'+rows.join('')+'</div>';
+    if(html!==AL.sig){ AL.sig=html; el.innerHTML=html; const box=el.firstChild; if(box){ const h=box.scrollHeight; box.style.transform=h>360?'scale('+(360/h).toFixed(3)+')':''; } }
+  }catch(e){ window.__citErr=window.__citCardErr='card: '+String((e&&e.message)||e); } }
+  setInterval(citCard,1000); addEventListener('resize',()=>{ try{ pinAlerts(true); }catch(_){} });
+  window.__citCard=()=>({on:AL.on,slot:AL.slot,rows:(document.querySelectorAll('#wingAlerts .al-r')||[]).length,text:(document.getElementById('wingAlerts')||{}).innerText||''});
+  const ovl=(a,b)=>a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3];
+  function scrObs(){ const out=[]; try{
+    for(const t of document.querySelectorAll('#airScrP .ac .tag.show:not(.decl)')){ const r=t.getBoundingClientRect(); if(r.width>2&&r.height>2) out.push([r.left-6,r.top-4,r.right+6,r.bottom+4]); }
+    for(const d of document.querySelectorAll('#airCit .ct')){ if(+(d.style.opacity||0)<.05) continue; const c=d.querySelector('.ct-c'); if(!c) continue; const r=c.getBoundingClientRect(); if(r.width>1) out.push([r.left-8,r.top-8,r.right+8,r.bottom+8]); }
+  }catch(_){} return out; }
+  function tagDeclutter(){ try{
+    const tags=[...document.querySelectorAll('#airScrP .ac .tag.show')]; if(!tags.length) return;
+    const m=tags.map(t=>{ const r=t.getBoundingClientRect(), ac=t.closest('.ac'); return {t, r:[r.left-6,r.top-4,r.right+6,r.bottom+4], w:(ac&&/(^|\s)(closest|feat|near)(\s|$)/.test(ac.className)?1e6:0)+r.height*r.width}; });
+    m.sort((a,b)=>b.w-a.w); const kept=window.__scrHome?[window.__scrHome]:[];
+    for(const x of m){ const hit=kept.some(k=>ovl(k,x.r)); x.t.classList.toggle('decl',hit); if(!hit) kept.push(x.r); }
+  }catch(e){ window.__citErr='declutter: '+String((e&&e.message)||e); } }
+  setInterval(tagDeclutter,400);

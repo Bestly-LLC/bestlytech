@@ -1,0 +1,24 @@
+/* Local alerts v4 (Oct 29, Jared: "show up below the air like the plane card, remove the Sky Sync tag", "the sky looks crappy"):
+   the sky keeps only the alert dots (no labels, no notes stack); the words move to a Local alerts card on the sign wall under the
+   flight card. Card style matches the flight card (.ft). Hides itself when nothing is near home. */
+#airCit .ct-l,#airCit .ct-nb{display:none!important;}
+#wingAlerts{position:fixed;left:0;top:0;width:940px;height:360px;overflow:visible;transform-origin:0 0;z-index:6;pointer-events:none;opacity:0;transition:opacity .9s var(--ease);}
+body.al-on #wingAlerts{opacity:1;}
+body.skit #wingAlerts,body.sheep #wingAlerts,body.mapping #wingAlerts,body.thin #wingAlerts,body.pf-nowing #wingAlerts,body.black #wingAlerts{opacity:0!important;}
+body.w2-fxi #wingAlerts{opacity:0!important;visibility:hidden!important;transition:none!important;}
+#wingAlerts .al{box-sizing:border-box;width:940px;padding:24px 40px 22px;border-radius:52px;color:#fff;font-family:var(--sf);background:rgba(255,255,255,.055);box-shadow:inset 0 0 0 2px rgba(255,255,255,.15);transform-origin:0 0;}
+#wingAlerts .al-hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;font:800 28px/1 var(--sf);letter-spacing:.08em;text-transform:uppercase;color:rgba(235,235,245,.72);white-space:nowrap;}
+#wingAlerts .al-r{display:flex;align-items:center;gap:24px;padding:12px 0;}
+#wingAlerts .al-r+.al-r{box-shadow:inset 0 2px 0 rgba(255,255,255,.08);}
+#wingAlerts .al-ic{box-sizing:border-box;width:76px;height:76px;flex:none;border-radius:22px;background:rgb(var(--r));padding:17px;box-shadow:0 0 18px 4px rgba(var(--r),.35);}
+#wingAlerts .al-ic svg{width:42px;height:42px;fill:none;stroke:var(--ink);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;overflow:visible;}
+#wingAlerts .al-tx{min-width:0;flex:1;}
+#wingAlerts .al-t{font:800 48px/1.1 var(--sf);letter-spacing:-.01em;color:#fff;}
+#wingAlerts .al-t s{text-decoration:none;margin-left:14px;font:800 22px/1 var(--sf);letter-spacing:.09em;color:rgb(var(--r));vertical-align:6px;}
+#wingAlerts .al-s{margin-top:4px;font:700 32px/1.2 var(--sf);color:rgba(235,235,245,.78);}
+#wingAlerts .al-more{padding-top:6px;font:700 28px/1 var(--sf);color:rgba(235,235,245,.6);}
+#wingAlerts .nb{white-space:nowrap;}
+/* sky dots: smaller halo so a cluster near home never buries the Home tag (dots are also nudged off Home in citPaint) */
+#airCit .ct-h{left:-84px;top:-84px;width:168px;height:168px;opacity:.72;}
+/* no-overlap pass for plane name tags: a tag that would sit on a closer or bigger one fades out instead of stacking */
+#airScrP .ac .tag.decl{opacity:0!important;}
