@@ -372,13 +372,24 @@ def open_claim(page, url, log=None):
         page.wait_for_load_state("networkidle", timeout=45000)
     except Exception:
         pass
-    time.sleep(6)
-    for _ in range(6):
+    # Progressive's Assured app takes ~20 s to draw its first card. Wait (up to 90 s) for a VISIBLE question:
+    # a choice button, a field, or a step heading. The Back button alone does not count. (fix 2026-10-29: it read a blank page at 6 s)
+    deadline = time.time() + 90
+    while time.time() < deadline:
         try:
-            n = page.evaluate("() => document.querySelectorAll('input,select,textarea,button').length")
+            n = page.evaluate(VISIBLE_QUESTION_JS)
         except Exception:
             n = 0
-        if n > 2:
+        if n > 0:
+            time.sleep(1.5)
             break
-        time.sleep(3)
+        time.sleep(2)
     return page.url
+
+
+VISIBLE_QUESTION_JS = """() => {
+  const vis = e => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e);
+    return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && parseFloat(s.opacity || '1') > 0.05; };
+  const els = [...document.querySelectorAll('button.select-btn,[role=group] button,[role=radio],input:not([type=hidden]),select,textarea')];
+  return els.filter(vis).length;
+}"""
