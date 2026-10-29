@@ -15,7 +15,7 @@
 import chromium from "@sparticuz/chromium";
 import puppeteer from "puppeteer-core";
 import { AsyncLocalStorage } from "node:async_hooks";
-const config = { maxDuration: 120 };
+const config = { maxDuration: 75 };
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://rcqfqhguwpmaarseifqg.supabase.co";
 const SUPABASE_ANON = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw";
 const ENGINE = "vercel-chromium";
@@ -40,9 +40,10 @@ async function keyValid(key) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/cy_render_key_ok`, {
     method: "POST",
     headers: { apikey: SUPABASE_ANON, ...(SUPABASE_ANON.startsWith("sb_") ? {} : { Authorization: `Bearer ${SUPABASE_ANON}` }), "Content-Type": "application/json" },
-    body: JSON.stringify({ p_key: key })
-  });
-  if (!res.ok) return false;
+    body: JSON.stringify({ p_key: key }),
+    signal: AbortSignal.timeout(6e3)
+  }).catch(() => null);
+  if (!res || !res.ok) return false;
   const ok = await res.json() === true;
   if (ok) {
     keyOkHash = h;
@@ -62,41 +63,118 @@ function safeUrl(raw) {
     return null;
   }
 }
+// Chromium is the only memory hog here: ~400 MB each. One Vercel instance can serve several requests at
+// once, so cap browsers per instance and make extra callers wait briefly (or get a fast JSON "busy").
+const MAX_BROWSERS = 2;
+const SLOT_WAIT_MS = 20e3;
+let activeBrowsers = 0;
+const slotWaiters = [];
+function takeSlot(maxWaitMs) {
+  if (activeBrowsers < MAX_BROWSERS) {
+    activeBrowsers++;
+    return Promise.resolve(releaseSlot());
+  }
+  return new Promise((resolve, reject) => {
+    const w = { resolve, timer: null };
+    w.timer = setTimeout(() => {
+      const i = slotWaiters.indexOf(w);
+      if (i >= 0) slotWaiters.splice(i, 1);
+      reject(Object.assign(new Error("busy"), { busy: true }));
+    }, maxWaitMs);
+    slotWaiters.push(w);
+  });
+}
+function releaseSlot() {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    const next = slotWaiters.shift();
+    if (next) {
+      clearTimeout(next.timer);
+      next.resolve(releaseSlot()); // the slot passes straight to the next waiter
+    } else {
+      activeBrowsers = Math.max(0, activeBrowsers - 1);
+    }
+  };
+}
+// A wedged Chromium ignores browser.close(); SIGKILL cannot be ignored, and it makes every pending
+// puppeteer call reject (disconnected) instead of hanging until the platform kills the function.
+function hardKill(browser) {
+  if (!browser) return;
+  try {
+    browser.process()?.kill("SIGKILL");
+  } catch {
+  }
+  browser.close().catch(() => {
+  });
+}
 async function withPage(fn, opts = {}) {
   const profile = opts.phone ? PHONE : DESKTOP;
   const viewport = opts.height ? { ...profile.viewport, height: opts.height } : profile.viewport;
-  const browser = await puppeteer.launch({
-    args: await puppeteer.defaultArgs({ args: chromium.args, headless: "shell" }),
-    defaultViewport: viewport,
-    executablePath: await chromium.executablePath(),
-    headless: "shell"
-  });
   const c = clock.getStore();
-  const watchdog = c ? setTimeout(() => {
-    c.killed = true;
-    browser.close().catch(() => {
-    });
-  }, Math.max(1e3, c.start + KILL_MS - Date.now())) : null;
+  const release = await takeSlot(Math.max(1e3, Math.min(SLOT_WAIT_MS, left() - 20e3)));
+  let browser = null;
+  let finished = false;
+  let deadlineTimer = null;
   try {
-    const page = await browser.newPage();
-    await page.setUserAgent(profile.ua);
-    // Sites with looping animations (bestly.tech's own homepage) peg a serverless CPU so hard that
-    // screenshots never come back. Most honor reduced motion; the screenshot fallback pauses the rest.
-    await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]).catch(() => {
+    // Hard deadline: whatever is hung (launch, a click, a screenshot), we stop at KILL_MS and answer.
+    const deadline = new Promise((_, rej) => {
+      deadlineTimer = setTimeout(() => {
+        if (c) c.killed = true;
+        hardKill(browser);
+        rej(new Error("render deadline"));
+      }, c ? Math.max(1e3, c.start + KILL_MS - Date.now()) : KILL_MS);
     });
-    await page.setRequestInterception(true);
-    page.on("request", (r) => {
-      const t = r.resourceType();
-      if (t === "media" || t === "font" || t === "image" && !opts.images || heavyHost(r.url())) r.abort().catch(() => {
+    const work = (async () => {
+      const b = await puppeteer.launch({
+        args: await puppeteer.defaultArgs({ args: chromium.args, headless: "shell" }),
+        defaultViewport: viewport,
+        executablePath: await chromium.executablePath(),
+        headless: "shell",
+        timeout: 20e3,
+        protocolTimeout: 20e3
       });
-      else r.continue().catch(() => {
+      browser = b;
+      if (finished) {
+        hardKill(b); // launch finished after we already gave up
+        throw new Error("render deadline");
+      }
+      const page = await b.newPage();
+      page.setDefaultTimeout(15e3);
+      // An alert()/confirm()/beforeunload dialog freezes every later evaluate() call on the page.
+      page.on("dialog", (d) => {
+        d.dismiss().catch(() => {
+        });
       });
+      await page.setUserAgent(profile.ua);
+      // Sites with looping animations (bestly.tech's own homepage) peg a serverless CPU so hard that
+      // screenshots never come back. Most honor reduced motion; the screenshot fallback pauses the rest.
+      await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]).catch(() => {
+      });
+      await page.setRequestInterception(true);
+      page.on("request", (r) => {
+        const t = r.resourceType();
+        if (t === "media" || t === "font" || t === "image" && !opts.images || heavyHost(r.url())) r.abort().catch(() => {
+        });
+        else r.continue().catch(() => {
+        });
+      });
+      return await fn(page);
+    })();
+    work.catch(() => {
     });
-    return await fn(page);
+    return await Promise.race([work, deadline]);
   } finally {
-    if (watchdog) clearTimeout(watchdog);
-    await browser.close().catch(() => {
-    });
+    finished = true;
+    if (deadlineTimer) clearTimeout(deadlineTimer);
+    if (browser) {
+      // close() can hang on a wedged browser: give it 3 s, then kill the process outright.
+      await Promise.race([browser.close().catch(() => {
+      }), sleep(3e3)]);
+      hardKill(browser);
+    }
+    release();
   }
 }
 async function load(page, url) {
@@ -132,11 +210,12 @@ const inConsentBanner = (sel) => {
   return !!container && TEXT.test((container.innerText || "").slice(0, 4e3));
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-// Time budget. Vercel kills the function at 120s and the caller only sees a bare 504, so every
-// wait is clamped to what's left of a per-request budget, and a watchdog closes Chromium a few
-// seconds before the platform limit so we can still answer with a plain-English error.
-const BUDGET_MS = 80e3;
-const KILL_MS = 106e3;
+// Time budget. Every Supabase caller gives up after 55-58 s, so we answer before that: every wait is
+// clamped to what's left of a per-request budget, and at KILL_MS the browser is killed and a plain
+// JSON error goes back. (Before 2026-10-29 this was 80/106 s against a 120 s platform limit, and a
+// wedged Chromium still ran into the limit: 240 "Task timed out" errors in 7 days.)
+const BUDGET_MS = 48e3;
+const KILL_MS = 52e3;
 const clock = new AsyncLocalStorage();
 const left = () => {
   const c = clock.getStore();
@@ -379,6 +458,20 @@ async function inner(req, res, c) {
   const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
   const action = body.action;
   if (action === "ping") return res.status(200).json({ ok: true, engine: ENGINE });
+  if (action === "selftest") {
+    // Real Chromium launch + render of an inline page, no network. Used by cy-render-health's watchdog:
+    // "ping" only proves the function answers, this proves the browser itself still starts and renders.
+    try {
+      const out = await withPage(async (page) => {
+        await page.setContent("<title>cy-selftest</title><p id=a>ok</p>", { waitUntil: "domcontentloaded", timeout: cap(1e4) });
+        return { title: await within(page.title(), 5e3, "title") };
+      });
+      return res.status(200).json({ ok: out.title === "cy-selftest", engine: ENGINE, selftest: true });
+    } catch (e) {
+      if (e?.busy) return res.status(503).json({ ok: false, engine: ENGINE, busy: true, error: "The robot browser is busy right now. Try again in a minute." });
+      return res.status(502).json({ ok: false, engine: ENGINE, selftest: true, error: String(e?.message || e).slice(0, 200) });
+    }
+  }
   const url = safeUrl(body.url);
   if (!url) return res.status(400).json({ ok: false, error: "Bad url" });
   const phone = body.viewport === "phone";
@@ -405,16 +498,16 @@ async function inner(req, res, c) {
           r.inConsent = await settledEval(page, inConsentBanner, selector).catch(() => false);
           let clicked = false;
           try {
-            await page.click(selector);
+            await within(page.click(selector), 8e3, "click");
             clicked = true;
           } catch {
           }
           if (!clicked) {
-            await page.evaluate((s) => document.querySelector(s)?.click(), selector).catch(() => {
+            await within(page.evaluate((s) => document.querySelector(s)?.click(), selector), 5e3, "evaluate").catch(() => {
             });
           }
-          await sleep(1800);
-          const after = await page.evaluate(visible, selector).catch(() => ({ exists: false, vis: false }));
+          await napFor(1800);
+          const after = await within(page.evaluate(visible, selector), 8e3, "evaluate").catch(() => ({ exists: false, vis: false }));
           r.dismissed = !after.exists || !after.vis;
         } catch (e) {
           r.error = String(e).slice(0, 200);
@@ -454,8 +547,11 @@ async function inner(req, res, c) {
     }
     return res.status(400).json({ ok: false, error: "Unknown action" });
   } catch (e) {
+    if (e?.busy) {
+      return res.status(503).json({ ok: false, engine: ENGINE, busy: true, error: "The robot browser is busy with other pages right now. Try again in a minute." });
+    }
     if (c.killed) {
-      return res.status(504).json({ ok: false, engine: ENGINE, slow: true, error: "That site took too long for the robot browser (over 100 seconds). Try again, or try the phone view." });
+      return res.status(504).json({ ok: false, engine: ENGINE, slow: true, error: "That site took too long for the robot browser (over 50 seconds). Try again, or try the phone view." });
     }
     const msg = String(e?.message || e);
     if (/didn't load|timeout/i.test(msg)) {
@@ -473,9 +569,16 @@ async function handler(req, res) {
     code = n;
     return status(n);
   };
+  // Last-resort guard: if anything outside the browser ever hangs, still answer before callers give up.
+  const guard = setTimeout(() => {
+    if (res.headersSent) return;
+    c.killed = true;
+    res.status(504).json({ ok: false, engine: ENGINE, slow: true, error: "The robot browser took too long. Try again in a minute." });
+  }, KILL_MS + 4e3);
   try {
     return await clock.run(c, () => inner(req, res, c));
   } finally {
+    clearTimeout(guard);
     const b = req.body && typeof req.body === "object" ? req.body : {};
     let host = "";
     try {
@@ -483,7 +586,7 @@ async function handler(req, res) {
     } catch {
     }
     if (b.action !== "ping") {
-      console.log(JSON.stringify({ cyRender: b.action, host, viewport: b.viewport || "desktop", steps: Array.isArray(b.steps) ? b.steps.length : 0, code, ms: Date.now() - start, slow: c.slow, killed: c.killed }));
+      console.log(JSON.stringify({ cyRender: b.action, host, browsers: activeBrowsers, viewport: b.viewport || "desktop", steps: Array.isArray(b.steps) ? b.steps.length : 0, code, ms: Date.now() - start, slow: c.slow, killed: c.killed }));
     }
   }
 }

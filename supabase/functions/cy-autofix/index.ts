@@ -75,6 +75,7 @@ async function engine(key: string, body: Record<string, unknown>) {
       signal: AbortSignal.timeout(58_000),
     });
     const out = await res.json().catch(() => null);
+    if (out?.busy === true) return { busy: true }; // no free browser right now: not the site's fault
     return res.ok && out?.ok ? out : null;
   } catch {
     return null;
@@ -126,6 +127,10 @@ async function autofix(svc: any, key: string, domain: string, urlOverride?: stri
   const override = urlOverride && /^https?:\/\//i.test(urlOverride) ? urlOverride : null;
   const target = override || row.page_url || `https://${domain}`;
   const page = await engine(key, { action: "content", url: target });
+  if (page?.busy) {
+    // Leave the row 'running': cy_autofix_candidates re-offers it after 10 minutes. Don't record a false "blocked".
+    return { domain, outcome: "running", note: "Render engine busy; will retry on a later sweep." };
+  }
   if (!page?.html) {
     return finish("blocked", `The page wouldn't load for our browser (bot protection or login wall) at ${hostOf(target)}.`);
   }

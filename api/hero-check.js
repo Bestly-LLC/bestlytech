@@ -14,6 +14,12 @@
 // The answer is cached at the edge (15 min, served stale while refreshing) so the 8 s probe
 // never waits on a browser launch and the browser only runs a few times an hour.
 // Read-only: it only loads our own public homepage. No secrets, no writes.
+//
+// Hardening 2026-10-29 (5 "ran out of memory" kills and a few "Task timed out" in 7 days): the old
+// 45 s deadline answered the caller but left Chromium running, and the next call started a second one
+// on the same instance. Now: one check at a time per instance (a second caller joins the running one),
+// the browser is SIGKILLed at the deadline, every CDP call times out on its own (protocolTimeout), and
+// the page loads only the hero photos (no other images, fonts or media).
 
 import chromium from "@sparticuz/chromium";
 import puppeteer from "puppeteer-core";
@@ -54,7 +60,14 @@ async function photosOk() {
   return bad;
 }
 
-async function heroOk() {
+// close() can hang on a wedged browser; SIGKILL cannot be ignored and makes pending calls reject.
+function hardKill(browser) {
+  if (!browser) return;
+  try { browser.process()?.kill("SIGKILL"); } catch { /* already gone */ }
+  browser.close().catch(() => {});
+}
+
+async function heroOk(holder) {
   const problems = [];
   log("launch");
   const browser = await puppeteer.launch({
@@ -62,10 +75,25 @@ async function heroOk() {
     defaultViewport: { width: 1440, height: 900 },
     executablePath: await chromium.executablePath(),
     headless: "shell",
+    timeout: 15000,
+    protocolTimeout: 15000,
   });
+  holder.browser = browser;
+  if (holder.abandoned) { hardKill(browser); throw new Error("check abandoned"); }
   try {
     log("launched");
     const page = await browser.newPage();
+    page.setDefaultTimeout(15000);
+    page.on("dialog", (d) => { d.dismiss().catch(() => {}); });
+    // Memory: the check needs the hero photos and nothing else. (The carousel skips a scene whose photo
+    // fails to load, so only /hero-scenes/ images may be let through, never aborted.)
+    await page.setRequestInterception(true);
+    page.on("request", (r) => {
+      const t = r.resourceType();
+      const hero = t === "image" && r.url().includes("/hero-scenes/");
+      if (t === "media" || t === "font" || (t === "image" && !hero)) r.abort().catch(() => {});
+      else r.continue().catch(() => {});
+    });
     await page.goto(`${SITE}/?hero-check=${Date.now()}`, { waitUntil: "domcontentloaded", timeout: 20000 });
     log("loaded");
     const sel = 'section[aria-roledescription="carousel"]';
@@ -93,11 +121,37 @@ async function heroOk() {
     log("rotation-checked");
     if (!moved) problems.push(`Hero stuck on scene ${first} for 11 seconds`);
   } finally {
-    // close can hang in the serverless sandbox: give it 3 s, then move on
+    // close can hang in the serverless sandbox: give it 3 s, then kill the process outright
     await Promise.race([browser.close().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
+    hardKill(browser);
     log("closed");
   }
   return problems;
+}
+
+const DEADLINE_MS = 40000;
+let running = null; // the check in flight on this instance, if any
+
+// One real check at a time per instance: a second request joins it instead of launching a second Chromium.
+function runCheck() {
+  if (running) return running;
+  const holder = { browser: null, abandoned: false };
+  let timer;
+  const deadline = new Promise((_, rej) => {
+    timer = setTimeout(() => {
+      holder.abandoned = true;
+      hardKill(holder.browser);
+      rej(new Error(`took over ${DEADLINE_MS / 1000} s`));
+    }, DEADLINE_MS);
+  });
+  const work = Promise.all([heroOk(holder), photosOk()]);
+  work.catch(() => {});
+  running = Promise.race([work, deadline]).finally(() => {
+    clearTimeout(timer);
+    hardKill(holder.browser); // belt and braces: never leave a browser behind
+    running = null;
+  });
+  return running;
 }
 
 export default async function handler(req, res) {
@@ -112,8 +166,7 @@ export default async function handler(req, res) {
   t0 = started;
   let problems = [];
   try {
-    const deadline = new Promise((_, rej) => setTimeout(() => rej(new Error("took over 45 s")), 45000));
-    const [hero, photos] = await Promise.race([Promise.all([heroOk(), photosOk()]), deadline]);
+    const [hero, photos] = await runCheck();
     problems = [...hero, ...(photos.length ? [`${photos.length} scene photo(s) missing: ${photos.slice(0, 5).join(", ")}`] : [])];
   } catch (e) {
     problems = [`Check could not run: ${e.message}`];

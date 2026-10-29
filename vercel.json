@@ -1,14 +1,14 @@
 {
   "functions": {
     "api/cy-render.js": {
-      "maxDuration": 120,
+      "maxDuration": 75,
       "regions": [
         "fra1"
       ],
       "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
     },
     "api/hero-check.js": {
-      "maxDuration": 90,
+      "maxDuration": 60,
       "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
     }
   },

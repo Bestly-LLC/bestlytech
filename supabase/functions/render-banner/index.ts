@@ -32,7 +32,8 @@ function extractConsentRegion(html: string): string | null {
   return null;
 }
 
-async function renderHtml(key: string, url: string): Promise<string | null> {
+// busy = the render engine had no free browser (503): not the site's fault, so it must not use up an attempt.
+async function renderHtml(key: string, url: string): Promise<{ html: string | null; busy: boolean }> {
   try {
     const res = await fetch(RENDER_URL, {
       method: "POST",
@@ -41,11 +42,11 @@ async function renderHtml(key: string, url: string): Promise<string | null> {
       body: JSON.stringify({ action: "content", url }),
     });
     const body = await res.json().catch(() => null);
-    if (!res.ok || !body?.ok) { console.log(`render ${res.status} ${url} ${body?.error ?? ""}`); return null; }
-    return typeof body.html === "string" && body.html.length ? body.html : null;
+    if (!res.ok || !body?.ok) { console.log(`render ${res.status} ${url} ${body?.error ?? ""}`); return { html: null, busy: body?.busy === true }; }
+    return { html: typeof body.html === "string" && body.html.length ? body.html : null, busy: false };
   } catch (e) {
     console.log(`render error ${url}: ${e}`);
-    return null;
+    return { html: null, busy: false };
   }
 }
 
@@ -87,10 +88,14 @@ Deno.serve(async (req) => {
   const candidates = (rows ?? []).filter((r: any) => only || !r.banner_html || String(r.banner_html).length < 50);
   const results: any[] = [];
   let rendered = 0, captured = 0;
+  const startedAt = Date.now();
 
   for (const r of candidates) {
+    // Edge wall clock is 150 s and one render can take ~55 s: don't start another late; the rest wait for the next run.
+    if (rendered > 0 && Date.now() - startedAt > 100_000) break;
     const url = r.page_url || `https://${r.domain}`;
-    const html = await renderHtml(String(key), url);
+    const { html, busy } = await renderHtml(String(key), url);
+    if (busy) { results.push({ domain: r.domain, status: "engine_busy" }); break; }
     rendered++;
     const updates: Record<string, unknown> = {
       render_attempts: (r.render_attempts ?? 0) + 1,

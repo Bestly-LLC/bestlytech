@@ -51,13 +51,14 @@ async function engine(key: string, body: Record<string, unknown>) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-render-key": key },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(125_000),
+      signal: AbortSignal.timeout(60_000), // the robot answers within ~55 s (it hard-stops itself); don't wait past the edge limit
     });
     const out = await res.json().catch(() => null);
     console.log(JSON.stringify({ cyGuide: body.action, url: body.url, viewport: body.viewport, status: res.status, ok: !!out?.ok, slow: !!out?.slow, error: out?.error ?? null }));
     if (!res.ok || !out?.ok) {
       const fallback = res.status === 504
         ? "That site took too long for the robot browser. Try again, or try the phone view."
+        : out?.busy ? "The robot browser is busy with other pages. Try again in a minute."
         : `Robot browser answered ${res.status}`;
       return { ok: false, error: out?.error || fallback };
     }

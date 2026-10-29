@@ -59,6 +59,8 @@ Deno.serve(async (req) => {
   const { data: key } = await supabase.rpc("cy_render_key");
   if (!key) return json({ skipped: "render key missing from Vault", validated: 0 });
 
+  const startedAt = Date.now();
+  const RUN_BUDGET_MS = 100_000; // edge wall clock is 150 s and one render can take ~55 s: don't start another late
   let limit = 3;
   let only: string | null = null;
   try { const b = await req.json(); if (b.limit) limit = Math.min(b.limit, 5); if (b.domain) only = b.domain; } catch { /* no body */ }
@@ -75,7 +77,8 @@ Deno.serve(async (req) => {
     let q = supabase.from("cookie_patterns").select(cols)
       .eq("source", "ai_generated").is("validated_at", null).eq("is_active", true)
       .gte("confidence", 1).lt("confidence", 7)
-      .or("validation_status.is.null,validation_status.eq.inconclusive");
+      // An inconclusive page (bot wall, timeout) is retried at most every 2 hours, not every 15 minutes forever.
+      .or(`validation_status.is.null,and(validation_status.eq.inconclusive,updated_at.lt.${new Date(Date.now() - 2 * 3600_000).toISOString()})`);
     q = only ? q.eq("domain", only) : q;
     const { data, error } = await q.order("validation_status", { ascending: true, nullsFirst: true })
       .order("created_at", { ascending: false }).limit(room);
@@ -88,6 +91,7 @@ Deno.serve(async (req) => {
   const now = () => new Date().toISOString();
 
   for (const p of [...(heldRows ?? []).map((r) => ({ ...r, held: true })), ...aiRows.map((r) => ({ ...r, held: false }))]) {
+    if (results.length > 0 && Date.now() - startedAt > RUN_BUDGET_MS) break; // the rest wait for the next run
     let testUrl = `https://${p.domain}`;
     try {
       const { data: rep } = await supabase.from("missed_banner_reports").select("page_url")
