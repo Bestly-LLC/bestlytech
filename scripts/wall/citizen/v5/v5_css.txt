@@ -1,0 +1,8 @@
+/* Wall v5 (Oct 29, Jared: "fix all broken, dont hide"):
+   - scrolling lines (.wmq) fade in and out over a wide soft edge, so a line mid-scroll reads as scrolling, never cut off
+   - roads and live traffic drawn 25% dimmer so names, planes and dots read on the beige wall
+   - plane name tags bold white (the kind color stays on the plane icon and in the sky key) */
+.wmq{margin-left:-34px;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 34px,#000 calc(100% - 52px),transparent);mask-image:linear-gradient(90deg,transparent 0,#000 34px,#000 calc(100% - 52px),transparent);}
+.wmq>.wmq-in{padding-left:34px;}
+#airScrR,#airScrT,#airRoads,#airTraffic{filter:brightness(.75);}
+#airScrP .ac .tag,#air .ac .tag{color:#fff!important;font-weight:800;}

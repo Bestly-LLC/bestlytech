@@ -1,0 +1,12 @@
+  /* Wall v5 (Oct 29): left panel never spills into the middle widget. The clock (and whatever the panel rotates to) is scaled
+     down just enough to fit the 500 px panel, measured every 500 ms, so a wide time like 12:23 PM or a long headline stays in its lane.
+     Scale only, never clipped or hidden. Errors land in window.__leftFitErr. */
+  function leftFit(){ try{
+    const L=document.querySelector('#board .left'); if(!L||!L.clientWidth) return;
+    const pl=parseFloat(getComputedStyle(L).paddingLeft)||0, avail=L.clientWidth-pl;
+    const els=[...L.querySelectorAll('.clock, #lalt > *, .lclk > *')];
+    for(const el of els){ if(!el.isConnected||!el.offsetParent) continue;
+      const need=el.scrollWidth, k=need>avail?Math.max(.55,avail/need):1, v=k<1?'scale('+k.toFixed(3)+')':'';
+      if(el.style.transform!==v){ el.style.transformOrigin='left center'; el.style.transform=v; } }
+  }catch(e){ window.__leftFitErr=String((e&&e.message)||e); } }
+  setInterval(leftFit,500);
