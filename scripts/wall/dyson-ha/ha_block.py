@@ -65,6 +65,10 @@ def w5_dyson_read_ha():
             rd["temp_f"] = v if "F" in u else round(v * 9 / 5 + 32, 1)
         else:
             rd[k] = v
+    if all(rd[k] is None for k in ("pm25", "pm10", "voc", "no2", "temp_f", "humidity")):
+        # HA keeps the last fan state, but a Dyson that is really connected sends air data every ~30 s. All blank = not connected.
+        W5["air"]["found"] = True
+        raise RuntimeError("the Dyson is on Wi-Fi but isn't answering Home Assistant (its local connection is closed)")
     if isinstance(rd["filter"], (int, float)):
         rd["filter_change"] = 1 if rd["filter"] <= 5 else 0
     W5["air"]["found"] = True
