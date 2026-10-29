@@ -437,10 +437,14 @@ export async function estimatePipeline(ctx: Ctx, c: Row, settings: Row, notes: s
   if (c.estimate_amount && c.chosen_estimate_id) {
     const { data: acts } = await ctx.db.from("claim_turo_actions").select("id, status").eq("case_id", c.id).eq("kind", "create_invoice").in("status", ["queued", "sending", "done"]);
     const invoiceThere = (acts ?? []).length > 0 || (c.turo_invoice && Object.keys(c.turo_invoice).length > 0) || (c.invoices ?? []).some((i: Row) => i.amount);
-    if (!invoiceThere) {
+    // the invoice message is a guest message: same gate as every other (reservation ended AND Jared tapped Complete trip, never live)
+    const gateOk = invoiceThere ? true : ((await ctx.db.rpc("claims_send_ok", { p_case: c.id })).data === true);
+    if (!invoiceThere && !gateOk) notes.push("Turo invoice waiting for the trip to be complete");
+    if (!invoiceThere && gateOk) {
       const e = ests.find((x) => x.id === c.chosen_estimate_id)!; const shop = shops.get(e.shop_id)!;
-      const max = Number(c.invoice_max ?? c.guest_max ?? 500);
-      const amount = Math.min(Number(c.estimate_amount), max);
+      // internal only: a limit Turo's invoice form reported or a coverage amount the guest stated; with neither we assume nothing and invoice the estimate
+      const limit = c.invoice_max ?? c.guest_max;
+      const amount = limit != null ? Math.min(Number(c.estimate_amount), Number(limit)) : Number(c.estimate_amount);
       const pdf = await summaryPdf(ctx, c, e, shop);
       const docPath = `${c.id}/estimate/${e.id}.pdf`;
       await ctx.db.storage.from("claim-evidence").upload(docPath, pdf, { contentType: "application/pdf", upsert: true });
@@ -453,7 +457,7 @@ export async function estimatePipeline(ctx: Ctx, c: Row, settings: Row, notes: s
       const shopShort = String(shop.name).replace(/ Collision Center.*$/i, "").replace(/ Body Shop.*$/i, "");
       const msg = [`Repair estimate: ${ctx.money(Number(c.estimate_amount))} from ${shop.name}`,
         e.repair_vs_replace ? ` (${e.repair_vs_replace === "both" ? "repair and replace" : e.repair_vs_replace})` : "",
-        `, for the passenger-side front bumper damage found at check-in. This invoice is ${ctx.money(amount)}, the most Turo allows here under your protection plan.`,
+        `, for the damage found at check-in.`,
         Number(c.estimate_amount) > amount ? " The photos are attached. If you have personal auto insurance, send me your insurer and policy number and I'll run the full repair through it." : " The photos are attached."].join("");
       const message = msg.length <= 500 ? msg : msg.replace(` from ${shop.name}`, ` from ${shopShort}`).slice(0, 500);
       await ctx.db.from("claim_turo_actions").insert({ case_id: c.id, kind: "create_invoice",
