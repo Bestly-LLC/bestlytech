@@ -116,6 +116,55 @@ Deno.serve(async (req) => {
       return J({ ok: true, stored, lastUid: body.lastUid ?? 0 });
     }
 
+    // queue_claim / queue_report (2026-10-29): the always-on Hestia puller (mail_sync.py) drains the
+    // archive/delete queue itself, so moves no longer wait for the MacBook Air agent to be awake.
+    // Claimed rows say 'claimed'; the Mac agent only ever takes 'pending', so the two never collide.
+    if (action === "queue_claim") {
+      if (!body.mailbox) return J({ error: "mailbox required" }, 400);
+      const limit = Math.min(Math.max(Number(body.limit) || 25, 1), 100);
+      // A claim older than 15 min was abandoned (puller killed mid-run): hand it back.
+      await db.from("bestly_mail_queue").update({ status: "pending", claimed_at: null })
+        .eq("status", "claimed").eq("mailbox", body.mailbox)
+        .lt("claimed_at", new Date(Date.now() - 15 * 60000).toISOString());
+      const { data: rows, error } = await db.from("bestly_mail_queue")
+        .select("id").eq("status", "pending").eq("mailbox", body.mailbox).eq("folder", folder)
+        .order("created_at").limit(limit);
+      if (error) return J({ error: error.message }, 500);
+      const ids = (rows ?? []).map((r: { id: string }) => r.id);
+      if (!ids.length) return J({ ok: true, items: [] });
+      const { data: claimed, error: e2 } = await db.from("bestly_mail_queue")
+        .update({ status: "claimed", claimed_at: new Date().toISOString() })
+        .in("id", ids).eq("status", "pending").select("id, uid, action, target");
+      if (e2) return J({ error: e2.message }, 500);
+      return J({ ok: true, items: claimed ?? [] });
+    }
+
+    if (action === "queue_report") {
+      const results = Array.isArray(body.results) ? body.results : [];
+      let done = 0, failed = 0;
+      for (const r of results) {
+        if (!r?.id) continue;
+        if (r.dryRun) {
+          await db.from("bestly_mail_queue").update({ status: "pending", claimed_at: null })
+            .eq("id", r.id).eq("status", "claimed");
+          continue;
+        }
+        if (r.ok) {
+          await db.from("bestly_mail_queue").update({ status: "done", error: null }).eq("id", r.id);
+          done++;
+          continue;
+        }
+        const { data: row } = await db.from("bestly_mail_queue").select("attempts").eq("id", r.id).maybeSingle();
+        const n = (row?.attempts ?? 0) + 1;
+        await db.from("bestly_mail_queue").update({
+          status: n >= 5 ? "failed" : "pending", attempts: n, claimed_at: null,
+          error: String(r.error ?? "move failed").slice(0, 400),
+        }).eq("id", r.id);
+        failed++;
+      }
+      return J({ ok: true, done, failed });
+    }
+
     return J({ error: "unknown action" }, 400);
   } catch (e) {
     return J({ error: String(e) }, 500);
