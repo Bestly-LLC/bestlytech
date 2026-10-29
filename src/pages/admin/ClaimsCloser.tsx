@@ -12,6 +12,7 @@ import { CalendarCheck, CheckCircle2, CircleAlert, Copy, Loader2, RefreshCw, Sen
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { Lines } from "@/components/Lines";
 import { btnPlain, btnPrimary, btnTinted, btnDestructivePlain, card, field, label, secondary, tertiary } from "./laxUi";
 
 type Draft = { id: string; kind: string; body: string; reason: string | null; status: string; created_at: string; sent_at: string | null; last_error: string | null; verified: boolean | null };
@@ -113,6 +114,99 @@ function Evidence({ c, items }: { c: Case; items: Evidence[] }) {
         ))}
       </div>
     </details>
+  );
+}
+
+/* ───────── Cleaning reports (2026-10-29, migration 20261029230000_claims_cleaning.sql, edge fn claims-cleaning) ───────── */
+type CleanPhoto = { uuid: string; side: "pre" | "post" | "guest_post"; taken_at: string | null; support: boolean };
+type CleanRow = { reservation_id: number; guest_first: string | null; trip_end: string; deadline: string; status: string; dry_run: boolean;
+  verdict: "abuse" | "normal" | "unclear" | null; confidence: number | null; reasons: string | null; pre_count: number | null; post_count: number | null;
+  turo_status: string | null; filed_at: string | null; last_error: string | null; photos: CleanPhoto[] };
+type CleanData = { settings: { mode: "auto" | "ask"; min_confidence: number } | null; rows: CleanRow[] };
+const CLEAN: Record<string, string> = {
+  waiting: "Waiting for your check-out photos", checking: "Checking the photos", clean: "Looks like normal use", no_evidence: "Can't report: photos missing",
+  needs_you: "Your call", filing: "Filing with Turo", filed: "Filed, confirming with Turo", saved: "Turo has the report", approved: "Turo approved the fee",
+  denied: "Turo turned it down", skipped: "You skipped it", expired: "Turo's window closed", error: "Couldn't check yet" };
+const CLEAN_TONE: Record<string, string> = { needs_you: "text-[#FF9F0A]", approved: "text-[#30D158]", saved: "text-[#30D158]", denied: "text-[#FF453A]", error: "text-[#FF453A]" };
+
+function CleaningRow({ r, reload }: { r: CleanRow; reload: () => void }) {
+  const [busy, setBusy] = useState("");
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open || !r.photos.length || Object.keys(urls).length) return;
+    void supabase.functions.invoke("claims-cleaning", { body: { op: "urls", reservation_id: r.reservation_id } }).then(({ data }) => { if (data?.urls) setUrls(data.urls); });
+  }, [open, r.photos.length, r.reservation_id, urls]);
+  const live = Date.parse(r.deadline) > Date.now();
+  const act = async (action: "file" | "skip" | "recheck") => {
+    setBusy(action);
+    const { error } = await rpc("claims_cleaning_decide", { p_res: r.reservation_id, p_action: action });
+    setBusy("");
+    if (error) { toast.error(error.message); return; }
+    toast.success(action === "file" ? "Filing with Turo now. Claims Closer confirms Turo saved it." : action === "skip" ? "Skipped" : "Checking the photos again");
+    reload();
+  };
+  const after = r.photos.filter((p) => p.side !== "pre"), before = r.photos.filter((p) => p.side === "pre");
+  return (
+    <li className="py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+        <p className={cn("text-[15px] font-medium", label)}>{r.guest_first ?? "Guest"}{r.dry_run ? <span className={cn("ml-2 text-[12px] font-normal", tertiary)}>Test run</span> : null}</p>
+        <p className={cn("text-[13px] font-medium", CLEAN_TONE[r.status] ?? secondary)}>{CLEAN[r.status] ?? r.status}</p>
+      </div>
+      <p className={cn("mt-0.5 text-[13px]", tertiary)}>
+        Trip ended <span className="whitespace-nowrap">{when(r.trip_end)}</span>
+        {live && !["clean", "skipped", "saved", "approved", "denied"].includes(r.status) ? <> · Turo&rsquo;s window closes <span className="whitespace-nowrap">{when(r.deadline)}</span></> : null}
+      </p>
+      {r.reasons && <p className={cn("mt-1 text-[13px]", secondary)}>{r.reasons}</p>}
+      {r.status === "error" && r.last_error && <p className={cn("mt-1 text-[13px]", tertiary)}>{r.last_error}</p>}
+      {r.status === "needs_you" && !r.dry_run && live && (
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          <button type="button" className={btnPrimary} disabled={!!busy} onClick={() => act("file")}>{busy === "file" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} File the <span className="whitespace-nowrap">$150</span> report</button>
+          <button type="button" className={btnPlain} disabled={!!busy} onClick={() => act("skip")}><X className="h-4 w-4" /> Skip</button>
+        </div>
+      )}
+      {["clean", "no_evidence", "error", "needs_you"].includes(r.status) && live && (r.dry_run || r.status !== "needs_you") && (
+        <button type="button" className={cn(btnPlain, "mt-2")} disabled={!!busy} onClick={() => act("recheck")}>{busy === "recheck" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Check again</button>
+      )}
+      {r.photos.length > 0 && (
+        <details className="mt-2" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+          <summary className={cn("cursor-pointer text-[13px]", secondary)}>Photos · <span className="whitespace-nowrap">{after.length} return</span> · <span className="whitespace-nowrap">{before.length} check-in</span></summary>
+          {[["Return", after], ["Check-in", before]].map(([title, list]) => (list as CleanPhoto[]).length > 0 && (
+            <div key={title as string} className="mt-2"><p className={cn("text-[12px] font-semibold", label)}>{title as string}</p>
+              <div className="mt-1 grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+                {(list as CleanPhoto[]).map((p) => urls[p.uuid]
+                  ? <a key={p.uuid} href={urls[p.uuid]} target="_blank" rel="noreferrer"><img src={urls[p.uuid]} alt={`${title as string} photo`} loading="lazy"
+                      className={cn("aspect-square w-full rounded-lg object-cover", p.support && "ring-2 ring-[#FF9F0A]")} /></a>
+                  : <div key={p.uuid} className="aspect-square w-full animate-pulse rounded-lg bg-white/10 bento:bg-black/5" />)}
+              </div></div>
+          ))}
+        </details>
+      )}
+    </li>
+  );
+}
+
+function Cleaning({ data, reload }: { data: CleanData; reload: () => void }) {
+  const auto = data.settings?.mode !== "ask";
+  const toggle = async () => {
+    const { error } = await rpc("claims_cleaning_settings_set", { p_mode: auto ? "ask" : "auto" });
+    if (error) toast.error(error.message); else { toast.success(auto ? "Cleaning reports wait for your File tap" : "Clear messes get filed on their own"); reload(); }
+  };
+  return (
+    <section className={card}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className={cn("text-[17px] font-semibold", label)}>Cleaning reports</p>
+          <p className={cn("mt-0.5 text-[13px]", secondary)}>
+            <Lines>{`After every trip, Claims Closer compares your check-in and check-out photos. ${auto ? "A clear mess gets Turo's cleaning report filed on its own, and anything borderline waits for you." : "Anything that looks dirty waits for your File tap."} Turo only takes reports for 72 hours after a trip.`}</Lines>
+          </p>
+        </div>
+        <button type="button" className={btnPlain} onClick={toggle}>{auto ? "Ask me first" : "File on its own"}</button>
+      </div>
+      {!data.rows.length
+        ? <p className={cn("mt-2 text-[13px]", tertiary)}>No trips checked yet. The first check runs an hour after the next trip ends.</p>
+        : <ul className="mt-1 divide-y divide-white/[0.06] bento:divide-neutral-100">{data.rows.map((r) => <CleaningRow key={r.reservation_id} r={r} reload={reload} />)}</ul>}
+    </section>
   );
 }
 
@@ -368,10 +462,12 @@ function HistoryCard({ c }: { c: Case }) {
 
 export default function ClaimsCloser() {
   const [data, setData] = useState<Data | null>(null);
+  const [clean, setClean] = useState<CleanData | null>(null);
   const load = useCallback(async () => {
-    const { data: d, error } = await rpc<Data>("claims_admin");
+    const [{ data: d, error }, c] = await Promise.all([rpc<Data>("claims_admin"), rpc<CleanData>("claims_cleaning_admin")]);
     if (error) { toast.error(error.message); return; }
     setData(d);
+    if (!c.error) setClean(c.data);
   }, []);
   useEffect(() => { void load(); const t = setInterval(() => { if (!document.hidden) void load(); }, 30000); return () => clearInterval(t); }, [load]);
   const toggle = async () => {
@@ -408,6 +504,7 @@ export default function ClaimsCloser() {
               if (error) toast.error(error.message); else { toast.success(next === "full" ? "Hands-off" : "Guest messages will wait for your OK"); void load(); }
             }}>{data.settings?.autonomy === "guest_approval" ? "Go hands-off" : "Ask me first"}</button>
           </div>
+          {clean && <Cleaning data={clean} reload={load} />}
           {!open.length && <p className={cn("px-1 text-[15px]", secondary)}>No open claims. A case opens on its own when Turo emails that a claim started.</p>}
           {open.map((r) => <CaseCard key={r.case.id} row={r} reload={load} autonomy={data.settings?.autonomy ?? "full"} shops={data.shops ?? []} />)}
           {won.length > 0 && (

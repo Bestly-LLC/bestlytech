@@ -76,12 +76,28 @@ Deno.serve(async (req) => {
   const tw = req.headers.get("x-tesla-worker") ?? "";
   let allowed = SECRETS.includes(bearer) || SECRETS.includes(req.headers.get("apikey") ?? "");
   if (!allowed && tw) allowed = !!(await db.rpc("tesla_worker_ok", { p_token: tw })).data;
-  if (!allowed) return J({ ok: false, error: "unauthorized" }, 401);
+  let admin = false;
+  if (!allowed && bearer) {   // the Claims page: Jared's own sign-in, photo links only
+    const { data } = await db.auth.getUser(bearer);
+    if (data?.user) admin = !!(await db.rpc("has_role", { _user_id: data.user.id, _role: "admin" })).data;
+  }
+  if (!allowed && !admin) return J({ ok: false, error: "unauthorized" }, 401);
 
   const b = await req.json().catch(() => null);
   if (!b) return J({ ok: false, error: "expected JSON" }, 400);
   const res = Number(b.reservation_id);
   if (!Number.isFinite(res) || res <= 0) return J({ ok: false, error: "bad reservation_id" }, 400);
+
+  if (b.op === "urls") {   // signed photo links for the Claims page (1 hour)
+    const { data } = await db.from("claim_cleaning_photos").select("uuid, storage_path").eq("reservation_id", res);
+    const out: Record<string, string> = {};
+    for (const p of (data ?? []) as { uuid: string; storage_path: string }[]) {
+      const { data: u } = await db.storage.from(BUCKET).createSignedUrl(p.storage_path, 3600);
+      if (u?.signedUrl) out[p.uuid] = u.signedUrl;
+    }
+    return J({ ok: true, urls: out });
+  }
+  if (!allowed) return J({ ok: false, error: "unauthorized" }, 401);
 
   if (b.op === "put") {
     const uuid = String(b.uuid ?? "");
