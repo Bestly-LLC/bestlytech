@@ -32,7 +32,7 @@ import { RecorderBar, useRecorder, useNow, clock, listNames, type RecentRecordin
 import { JobCard, useJobFollow, useMacJobs, type MacJob } from "./ScoutJobs";
 import { AttachBar, AttachButton, FileChips, splitFiles, useScoutFiles } from "./ScoutAttach";
 import { ScoutAutoRunBar, refreshScoutPrefs } from "./ScoutAutoRun";
-import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, type ScoutAsk } from "./scoutBus";
+import { SCOUT_ASK_EVENT, SCOUT_OPEN_EVENT, SCOUT_THREAD_EVENT, type ScoutAsk } from "./scoutBus";
 import { NeedsYouCard, useNeedsYou, type TodayRow } from "./ScoutNeedsYou";
 import { dotHex, markScoutThreadRead, publishScoutDot, scoutDotColor, useScoutUnread } from "./scoutUnread";
 import { ScoutBuddy, type ScoutMood } from "./scout/ScoutBuddy";
@@ -847,13 +847,24 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
       }, 0);
     };
     const onOpen = () => reveal();
+    const onThread = (e: Event) => {
+      const tid = (e as CustomEvent<{ threadId?: string }>).detail?.threadId;
+      if (!tid) return;
+      reveal();
+      setMsgs([]);
+      setThreadId(tid);
+      setView("chat");
+      void loadThread(tid);
+    };
     window.addEventListener(SCOUT_ASK_EVENT, onAsk);
     window.addEventListener(SCOUT_OPEN_EVENT, onOpen);
+    window.addEventListener(SCOUT_THREAD_EVENT, onThread);
     return () => {
       window.removeEventListener(SCOUT_ASK_EVENT, onAsk);
       window.removeEventListener(SCOUT_OPEN_EVENT, onOpen);
+      window.removeEventListener(SCOUT_THREAD_EVENT, onThread);
     };
-  }, [send, primary, reveal]);
+  }, [send, primary, reveal, loadThread]);
 
   // A push or bell item links to ?scout=open: open Scout and tidy the URL.
   useEffect(() => {

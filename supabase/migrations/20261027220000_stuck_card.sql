@@ -361,7 +361,7 @@ begin
     if g_after is null then raise exception 'This trip has no guest page to complete.'; end if;
     steps := steps || jsonb_build_array(jsonb_build_object('block', 'trip_complete', 'reservation_id', r.reservation_id,
       'before', jsonb_build_object('returned_at', g_ret, 'settled_at', g_set, 'host_completed_at', g_hc), 'after_hc', g_after));
-    labels := labels || 'Trip marked complete';
+    labels := array_append(labels, 'Trip marked complete'::text);
   end if;
 
   -- 2. Release the hold (the existing claims_hold_release does the write and logs its own note)
@@ -372,7 +372,7 @@ begin
     steps := steps || jsonb_build_array(jsonb_build_object('block', 'hold',
       'before', jsonb_build_object('outbound_hold', b_hold, 'outbound_hold_reason', b_reason, 'outbound_hold_at', b_hold_at,
                                    'needs_work', b_need, 'work_reason', b_wreason, 'next_check_at', b_next)));
-    labels := labels || 'Hold released';
+    labels := array_append(labels, 'Hold released'::text);
   end if;
 
   -- 3. Sync: poke the Pi reader (the path claims_watch uses) and put the case back on the worker's list
@@ -382,7 +382,7 @@ begin
     update claim_cases set needs_work = true, work_reason = 'sync asked from Command Center', next_check_at = now(), updated_at = now() where id = r.id;
     steps := steps || jsonb_build_array(jsonb_build_object('block', 'sync',
       'before', jsonb_build_object('needs_work', b_need, 'work_reason', b_wreason, 'next_check_at', b_next)));
-    labels := labels || 'Sync asked';
+    labels := array_append(labels, 'Sync asked'::text);
   end if;
 
   -- 4. Wake: run the worker now (the same call claims_tick makes every 2 minutes)
@@ -392,7 +392,7 @@ begin
     begin perform invoke_edge_function('claims-closer', '{"op":"tick"}'::jsonb, 120000); exception when others then null; end;
     steps := steps || jsonb_build_array(jsonb_build_object('block', 'wake',
       'before', jsonb_build_object('needs_work', b_need, 'work_reason', b_wreason, 'next_check_at', b_next)));
-    labels := labels || 'Worker woken';
+    labels := array_append(labels, 'Worker woken'::text);
   end if;
 
   insert into stuck_undo (item_id, employee_slug, employee_name, label, subtitle, action, snapshot, by_user)
@@ -452,7 +452,7 @@ begin
        where id = v_case;
       get diagnostics n = row_count;
     end if;
-    if n > 0 then done_ := done_ || (s.step->>'block'); else skipped := skipped || (s.step->>'block'); end if;
+    if n > 0 then done_ := array_append(done_, (s.step->>'block')::text); else skipped := array_append(skipped, (s.step->>'block')::text); end if;
   end loop;
 
   update stuck_undo set undone_at = now() where id = u.id;
@@ -515,7 +515,7 @@ begin
         end if;
       end if;
     exception when others then
-      v_err := v_err || (r.slug || ': ' || left(sqlerrm, 160));
+      v_err := array_append(v_err, (r.slug || ': ' || left(sqlerrm, 160))::text);
     end;
   end loop;
   update stuck_state set checked_at = now(), last_error = nullif(array_to_string(v_err, '; '), '') where id;
@@ -598,22 +598,22 @@ begin
     select count(*) into n_hold from claim_cases where status not in ('paid', 'closed') and not coalesce(history, false) and coalesce(outbound_hold, false);
     select count(*) into n_seen from jsonb_array_elements(v_items) i
      where i->>'item_id' like 'claim:%' and exists (select 1 from jsonb_array_elements(i->'blocks') b where b->>'id' = 'hold');
-    if n_hold <> n_seen then v_probs := v_probs || (n_hold || ' claim(s) are on hold but the card shows ' || n_seen); end if;
+    if n_hold <> n_seen then v_probs := array_append(v_probs, (n_hold || ' claim(s) are on hold but the card shows ' || n_seen)::text); end if;
   exception when others then
-    v_probs := v_probs || ('the feed raised an error: ' || left(sqlerrm, 160));
+    v_probs := array_append(v_probs, ('the feed raised an error: ' || left(sqlerrm, 160))::text);
   end;
 
   if coalesce(st.swept_at, st.created_at) < now() - interval '20 minutes' then
     begin perform stuck_sweep(); exception when others then null; end;
     select * into st from stuck_state where id;
-    if coalesce(st.swept_at, st.created_at) < now() - interval '20 minutes' then v_probs := v_probs || 'the 5-minute sweep has not run in over 20 minutes';
+    if coalesce(st.swept_at, st.created_at) < now() - interval '20 minutes' then v_probs := array_append(v_probs, 'the 5-minute sweep has not run in over 20 minutes'::text);
     else v_healed := true; end if;
   end if;
 
   if exists (select 1 from outside_claims where status = 'waiting' and reply_due_at < now() - interval '36 hours') then
     begin perform outside_claims_check(); exception when others then null; end;
     if exists (select 1 from outside_claims where status = 'waiting' and reply_due_at < now() - interval '36 hours') then
-      v_probs := v_probs || 'an outside claim is 36+ hours past its reply date and the daily check did not act on it';
+      v_probs := array_append(v_probs, 'an outside claim is 36+ hours past its reply date and the daily check did not act on it'::text);
     else v_healed := true; end if;
   end if;
 

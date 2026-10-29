@@ -1,9 +1,14 @@
 /**
- * Stuck card + Waiting card, top of the Command Center home (design approved 2026-10-27).
+ * Stuck card + Waiting card, top of the Command Center home (design approved 2026-10-27; fix buttons added 2026-10-28).
  *
  *   Health line      "1 employee stuck · 1 waiting on someone else". Not drawn at all when there is nothing to say.
- *   Stuck card       who is stuck, what blocks them, one 44px button per block, and a primary "Fix all three".
- *                    Every fix is Jared's tap. After a fix the card shows what changed and an Undo (24 hours).
+ *   Stuck card       who is stuck and why. A claim has one 44px button per block and a primary "Fix all three".
+ *                    An employee whose check-in said "not OK" has ONE big button chosen by the server from the error:
+ *                      "Update key"       the key stopped working: opens the page where the new key is pasted
+ *                      "Retry now"        a hiccup: runs the job again now and shows the result on the card
+ *                      "Have Scout fix it" anything else: hands it to Scout, with a link to the thread
+ *                    plus "More": the other fix, "Prompt for Claude" (a copy-ready block; copied only when tapped), "Snooze 1 day".
+ *   After a tap      the card shows working, then done or failed, with the reason, signed by the employee. Snooze has Undo.
  *   Waiting card     a claim we are waiting on someone else for: no buttons, just what was sent and what happens next.
  *
  * Feed: the admin_stuck_items() RPC. If it is not deployed yet (or fails) this renders nothing, never an error.
@@ -12,13 +17,18 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Loader2 } from "lucide-react";
+import { Check, ChevronDown, CircleAlert, KeyRound, Loader2, MessageSquare, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { copyText } from "@/lib/copyForClaude";
 import { rpcArgs } from "@/components/admin/roofguard/AvaShared";
 import { errText, usePipelineRpc } from "@/components/admin/pipeline/lib";
 import { Pill, cardCls, focusRing, tint } from "@/components/admin/ui";
-import { NBSP, Nums, cap, fixAllLabel, initials, parseStuck, spanText, word, type StuckItem, type StuckUndo } from "./stuckLib";
+import { openScoutThread } from "@/components/admin/scoutBus";
+import {
+  NBSP, Nums, actionLine, buttonLabel, cap, fixAllLabel, initials, moreButtons, parseStuck, primaryLabel, spanText, word,
+  type FixButton, type StuckAction, type StuckItem, type StuckUndo,
+} from "./stuckLib";
 
 /* ───────── shared bits ───────── */
 
@@ -27,6 +37,7 @@ const btn44 = "inline-flex min-h-[44px] shrink-0 items-center justify-center gap
 const btnBlue = cn(btn44, "bg-[#0A84FF] text-[#fff] hover:bg-[#409CFF] bento:bg-[#007AFF] bento:hover:bg-[#0062CC]", focusRing);
 const btnGrey = cn(btn44, "bg-white/[0.12] text-white hover:bg-white/[0.18]", focusRing);
 const rowBg = "rounded-[14px] bg-white/[0.05]";
+const SPIN = "h-4 w-4 animate-spin motion-reduce:animate-none";
 
 function Header({ name, title, subtitle, pill }: { name: string | null; title: string; subtitle: string | null; pill: React.ReactNode }) {
   return (
@@ -45,11 +56,70 @@ const StuckPill = () => (
   <span className="inline-flex shrink-0 items-center rounded-full bg-[#FF9F0A] px-2.5 py-1 text-[12px] font-bold leading-4 text-[#1C1C1E] bento:bg-[#FF9500]">STUCK</span>
 );
 
+/* ───────── what happened after a tap ───────── */
+
+/** Working, done, failed or needs-your-yes, in the employee's own voice. role=status so a screen reader hears it change. */
+function ActionRow({ action, name }: { action: StuckAction; name: string | null }) {
+  const working = action.status === "working";
+  const done = action.status === "done";
+  const tone = done ? "bg-[#30D158]/[0.12] bento:bg-[#34C759]/[0.12]" : working ? "bg-white/[0.07]" : "bg-[#FF9F0A]/[0.14] bento:bg-[#FF9500]/[0.14]";
+  return (
+    <div className={cn("flex flex-col gap-2.5 rounded-[14px] p-3", tone)} role="status" aria-live="polite" data-testid="stuck-action" data-status={action.status}>
+      <div className="flex items-start gap-3">
+        {working ? <Loader2 className={cn(SPIN, "mt-0.5 shrink-0 text-white")} aria-hidden />
+          : done ? <Check className={cn("mt-0.5 h-4 w-4 shrink-0", tint.green)} aria-hidden />
+          : <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#FF9F0A] bento:text-[#C93400]" aria-hidden />}
+        <p className="min-w-0 flex-1 text-[15px] leading-[21px] text-white">
+          {action.auto && <span>I tried again on my own. </span>}
+          {working && <span className="font-semibold">Working on it. </span>}
+          <Nums text={actionLine(action)} />
+          {name && <span className="whitespace-nowrap text-white/60"> — {name}</span>}
+        </p>
+      </div>
+      {action.kind === "scout" && action.thread_id && (
+        <button type="button" onClick={() => openScoutThread(action.thread_id as string)} className={cn(btnGrey, "w-full")}>
+          <MessageSquare className="h-4 w-4" aria-hidden />
+          <span className="whitespace-nowrap">Open Scout&rsquo;s thread</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ───────── "Prompt for Claude" ───────── */
+
+/** The prompt, in a block he can read first. It is copied only when he taps Copy, never on its own. */
+function PromptPanel({ text, onClose }: { text: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    if (await copyText(text)) { setCopied(true); window.setTimeout(() => setCopied(false), 1600); }
+    else toast.error("Couldn't copy that", { description: "Your browser blocked the clipboard. Select the text and copy it by hand." });
+  };
+  return (
+    <div role="region" aria-label="Prompt for Claude" data-testid="stuck-prompt" className={cn(rowBg, "flex flex-col gap-2.5 p-3")}>
+      <p className="text-[13px] leading-[18px] text-white/60">Paste this into Claude. Nothing is copied until you tap Copy.</p>
+      <pre
+        tabIndex={0}
+        className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-black/40 p-3 font-mono text-[12px] leading-relaxed text-white/90 bento:bg-[#F3F2EE] bento:text-[#1C1C1E]"
+      >{text}</pre>
+      <div className="flex gap-2.5">
+        <button type="button" onClick={() => void copy()} className={cn(btnBlue, "flex-1")} aria-label={copied ? "Copied" : "Copy the prompt"}>
+          {copied ? <Check className="h-4 w-4" aria-hidden /> : null}
+          <span className="whitespace-nowrap">{copied ? "Copied" : "Copy"}</span>
+        </button>
+        <button type="button" onClick={onClose} className={btnGrey}>Close</button>
+      </div>
+    </div>
+  );
+}
+
 /* ───────── one stuck card ───────── */
 
 type Act = (item: StuckItem, action: string) => Promise<void>;
+type Run = (item: StuckItem, button: "retry" | "scout" | "snooze") => Promise<void>;
+type UndoAct = (u: StuckUndo) => Promise<void>;
 
-function StuckCard({ item, busy, onFix, onUndo }: { item: StuckItem; busy: string | null; onFix: Act; onUndo: (u: StuckUndo) => Promise<void> }) {
+function StuckCard({ item, busy, onFix, onRun, onUndo }: { item: StuckItem; busy: string | null; onFix: Act; onRun: Run; onUndo: UndoAct }) {
   const fixable = item.blocks.filter((b) => b.fix_action);
   const since = spanText(item.stuck_since);
   const isClaim = item.item_id.startsWith("claim:");
@@ -57,6 +127,30 @@ function StuckCard({ item, busy, onFix, onUndo }: { item: StuckItem; busy: strin
   const blocking = item.blocks.length === 1 ? "One thing is blocking me:" : `${cap(word(item.blocks.length))} things are blocking me:`;
   // The first button is the blue one (the design's primary row); the rest are grey.
   const firstFix = fixable[0]?.id;
+
+  const fix = item.fix ?? null;
+  const [more, setMore] = useState(false);
+  const [prompt, setPrompt] = useState<string | null>(null);
+  const [promptBusy, setPromptBusy] = useState(false);
+  const working = item.action?.status === "working";
+  const locked = busy != null || working;
+  const buttons: FixButton[] = moreButtons(fix);
+  const busyOn = (b: string) => busy === `${item.item_id}|${b}`;
+
+  const openPrompt = async () => {
+    if (promptBusy) return;
+    setPromptBusy(true);
+    const { data, error } = await rpcArgs<string>("admin_stuck_prompt", { p_item_id: item.item_id });
+    setPromptBusy(false);
+    if (error || typeof data !== "string") { toast.error(errText(error, "Couldn't build the prompt. Try again in a moment.")); return; }
+    setPrompt(data);
+    setMore(false);
+  };
+
+  const press = (b: FixButton) => {
+    if (b === "prompt") { void openPrompt(); return; }
+    if (b === "retry" || b === "scout" || b === "snooze") { setMore(false); void onRun(item, b); }
+  };
 
   return (
     <section
@@ -86,12 +180,12 @@ function StuckCard({ item, busy, onFix, onUndo }: { item: StuckItem; busy: strin
               {b.fix_action && (
                 <button
                   type="button"
-                  disabled={busy != null}
+                  disabled={locked}
                   onClick={() => void onFix(item, b.fix_action as string)}
                   aria-label={`${b.fix_label ?? "Fix"}: ${b.label}`}
                   className={b.id === firstFix ? btnBlue : btnGrey}
                 >
-                  {busy === key && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+                  {busy === key && <Loader2 className={SPIN} aria-hidden />}
                   <span className="whitespace-nowrap">{b.fix_label ?? "Fix"}</span>
                 </button>
               )}
@@ -100,17 +194,70 @@ function StuckCard({ item, busy, onFix, onUndo }: { item: StuckItem; busy: strin
         })}
       </ul>
 
+      {fix?.where && <p className="text-[13px] leading-[18px] text-white/60">Runs on {fix.where}.</p>}
+
       {fixable.length >= 2 && (
         <button
           type="button"
-          disabled={busy != null}
+          disabled={locked}
           onClick={() => void onFix(item, "all")}
           className={cn(btnBlue, "min-h-[50px] w-full rounded-[14px] text-[17px]")}
         >
-          {busy === `${item.item_id}|all` && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+          {busy === `${item.item_id}|all` && <Loader2 className={SPIN} aria-hidden />}
           <span className="whitespace-nowrap">{fixAllLabel(fixable.length)}</span>
         </button>
       )}
+
+      {item.action && <ActionRow action={item.action} name={item.employee_name} />}
+
+      {/* The one big button, then More. While something is working the buttons wait. */}
+      {!working && (
+        <div className="flex gap-2.5">
+          {fix && (fix.primary === "key" ? (
+            <Link to={fix.link} className={cn(btnBlue, "min-h-[50px] flex-1 rounded-[14px] text-[17px]")} data-testid="stuck-primary">
+              <KeyRound className="h-[18px] w-[18px]" aria-hidden />
+              <span className="whitespace-nowrap">{primaryLabel(fix)}</span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled={locked}
+              onClick={() => void onRun(item, fix.primary === "retry" ? "retry" : "scout")}
+              className={cn(btnBlue, "min-h-[50px] flex-1 rounded-[14px] text-[17px]")}
+              data-testid="stuck-primary"
+            >
+              {busyOn(fix.primary) ? <Loader2 className={SPIN} aria-hidden /> : fix.primary === "retry" ? <RotateCw className="h-[18px] w-[18px]" aria-hidden /> : <MessageSquare className="h-[18px] w-[18px]" aria-hidden />}
+              <span className="whitespace-nowrap">{primaryLabel(fix)}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            disabled={busy != null}
+            onClick={() => setMore((v) => !v)}
+            aria-expanded={more}
+            aria-controls={`more-${item.item_id}`}
+            className={cn(btnGrey, "min-h-[50px] rounded-[14px] px-4", !fix && "flex-1")}
+          >
+            <span className="whitespace-nowrap">More</span>
+            <ChevronDown className={cn("h-4 w-4 transition-transform motion-reduce:transition-none", more && "rotate-180")} aria-hidden />
+          </button>
+        </div>
+      )}
+
+      {more && !working && (
+        <ul id={`more-${item.item_id}`} className="flex flex-col gap-2" data-testid="stuck-more">
+          {buttons.map((b) => (
+            <li key={b}>
+              <button type="button" disabled={locked || (b === "prompt" && promptBusy)} onClick={() => press(b)} className={cn(btnGrey, "w-full justify-start")}>
+                {b === "prompt" && promptBusy && <Loader2 className={SPIN} aria-hidden />}
+                <span className="whitespace-nowrap">{buttonLabel[b]}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {prompt != null && <PromptPanel text={prompt} onClose={() => setPrompt(null)} />}
 
       {item.undo && <UndoRow undo={item.undo} busy={busy} onUndo={onUndo} />}
 
@@ -119,28 +266,35 @@ function StuckCard({ item, busy, onFix, onUndo }: { item: StuckItem; busy: strin
   );
 }
 
-/** "Fixed: Trip marked complete, Hold released.   [Undo]" */
-function UndoRow({ undo, busy, onUndo }: { undo: StuckUndo; busy: string | null; onUndo: (u: StuckUndo) => Promise<void> }) {
+/** "Fixed: Trip marked complete, Hold released.   [Undo]"   or   "Snoozed for 1 day.   [Undo]" */
+function UndoRow({ undo, busy, onUndo }: { undo: StuckUndo; busy: string | null; onUndo: UndoAct }) {
+  const snooze = undo.kind === "snooze";
   return (
     <div className="flex items-center gap-3 rounded-[14px] bg-[#30D158]/[0.12] p-3 bento:bg-[#34C759]/[0.12]" role="status">
       <Check className={cn("h-4 w-4 shrink-0", tint.green)} aria-hidden />
-      <p className="min-w-0 flex-1 text-[15px] text-white"><span className="font-semibold">Fixed:</span> {undo.label}.</p>
+      <p className="min-w-0 flex-1 text-[15px] text-white">
+        {snooze ? <Nums text={`${undo.label}.`} /> : <><span className="font-semibold">Fixed:</span> {undo.label}.</>}
+      </p>
       <button type="button" disabled={busy != null} onClick={() => void onUndo(undo)} className={cn(btn44, "px-2 text-[#409CFF] bento:text-[#007AFF]", focusRing)}>
-        {busy === `undo|${undo.id}` && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+        {busy === `undo|${undo.id}` && <Loader2 className={SPIN} aria-hidden />}
         <span>Undo</span>
       </button>
     </div>
   );
 }
 
-/** A fix whose item is no longer stuck: one quiet row so the 24-hour Undo stays reachable. */
-function FixedRow({ item, busy, onUndo }: { item: StuckItem; busy: string | null; onUndo: (u: StuckUndo) => Promise<void> }) {
+/** A fix whose item is no longer stuck: what worked, and the 24-hour Undo when there is one. */
+function FixedRow({ item, busy, onUndo }: { item: StuckItem; busy: string | null; onUndo: UndoAct }) {
   return (
     <section aria-label="Recently fixed" data-testid="fixed-row" className={cn(cardCls, "flex flex-col gap-2 p-4")}>
+      {item.action && !item.undo && <p className="text-[15px] font-semibold text-white">{item.employee_name ?? item.title}</p>}
+      {item.action && <ActionRow action={item.action} name={item.employee_name} />}
       {item.undo && <UndoRow undo={item.undo} busy={busy} onUndo={onUndo} />}
-      <p className="text-center text-[13px] text-white/60">
-        {item.subtitle ? <><Nums text={item.subtitle} />. </> : null}{item.footer ? <Nums text={item.footer} /> : null}
-      </p>
+      {(item.subtitle || item.footer) && (
+        <p className="text-center text-[13px] text-white/60">
+          {item.subtitle ? <><Nums text={item.subtitle} />. </> : null}{item.footer ? <Nums text={item.footer} /> : null}
+        </p>
+      )}
     </section>
   );
 }
@@ -190,6 +344,7 @@ function HealthLine({ stuck, waiting }: { stuck: number; waiting: number }) {
 /* ───────── the section ───────── */
 
 const MAX_STUCK = 3;
+const POLL_MS = 3000;
 
 export function StuckSection() {
   const { data, missing, reload, hold } = usePipelineRpc<unknown>("admin_stuck_items", undefined, 60_000);
@@ -203,6 +358,18 @@ export function StuckSection() {
     return () => window.removeEventListener("admin:refresh-now", on);
   }, [reload]);
 
+  // While a fix is working, ask for its answer every few seconds (the server settles it and tells us), then redraw the card.
+  const workingIds = items.filter((i) => i.action?.status === "working").map((i) => i.action?.id).filter(Boolean).join(",");
+  useEffect(() => {
+    if (!workingIds) return;
+    const first = workingIds.split(",")[0];
+    const t = window.setInterval(() => {
+      if (document.hidden) return;
+      void rpcArgs("admin_stuck_action", { p_action_id: first }).then(() => reload());
+    }, POLL_MS);
+    return () => window.clearInterval(t);
+  }, [workingIds, reload]);
+
   if (missing || data == null) return null;
 
   const stuck = items.filter((i) => i.kind === "stuck");
@@ -214,13 +381,13 @@ export function StuckSection() {
   const shown = stuck.slice(0, MAX_STUCK);
   const hidden = stuck.length - shown.length;
 
-  const run = async (key: string, fn: string, args: Record<string, unknown>, ok: (d: unknown) => string) => {
+  const run = async (key: string, fn: string, args: Record<string, unknown>, ok: ((d: unknown) => string) | null) => {
     if (busy) return;
     setBusy(key); hold(true);
     const { data: d, error } = await rpcArgs<unknown>(fn, args);
     hold(false); setBusy(null);
-    if (error) { toast.error(errText(error)); return; }
-    toast.success(ok(d));
+    if (error) { toast.error(errText(error)); await reload(); return; }
+    if (ok) toast.success(ok(d));
     await reload();
   };
 
@@ -230,13 +397,17 @@ export function StuckSection() {
         const labels = (d as { fixed?: unknown } | null)?.fixed;
         return Array.isArray(labels) && labels.length > 0 ? `Fixed: ${labels.join(", ")}` : "Fixed";
       });
-  const onUndo = (u: StuckUndo) =>
+  // Retry and Scout answer on the card itself (working, then done or failed); only Snooze also says so in a toast.
+  const onRun: Run = (item, button) =>
+    run(`${item.item_id}|${button}`, "admin_stuck_run", { p_item_id: item.item_id, p_action: button },
+      button === "snooze" ? () => `Snoozed for 1${NBSP}day` : null);
+  const onUndo: UndoAct = (u) =>
     run(`undo|${u.id}`, "admin_stuck_undo", { p_undo_id: u.id }, () => `Undone: ${u.label}`);
 
   return (
     <div className="space-y-3" data-testid="stuck-section">
       <HealthLine stuck={employeesStuck} waiting={waiting.length} />
-      {shown.map((i) => <StuckCard key={i.item_id} item={i} busy={busy} onFix={onFix} onUndo={onUndo} />)}
+      {shown.map((i) => <StuckCard key={i.item_id} item={i} busy={busy} onFix={onFix} onRun={onRun} onUndo={onUndo} />)}
       {hidden > 0 && (
         <Link to="/admin/overview" className={cn(btn44, "w-full bg-white/[0.06] text-[#409CFF] bento:text-[#007AFF]", focusRing)}>
           {hidden} more stuck. Open the status board

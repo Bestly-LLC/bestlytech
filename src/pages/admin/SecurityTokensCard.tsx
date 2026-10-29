@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Section, btnPrimary, card, field, label, pill, secondary } from "./laxUi";
 import { Lines } from "@/components/Lines";
+import { useHashScroll } from "@/hooks/useHashScroll";
 import { IPostalLoginSlot } from "./IPostalLoginSlot";
 
 const rpc = supabase.rpc.bind(supabase) as unknown as (fn: string, args?: object) => Promise<{ data: unknown; error: { message: string } | null }>;
@@ -57,6 +58,7 @@ function foot(t: One): ReactNode {
 }
 
 export function SecurityTokensCard() {
+  useHashScroll("audit-tokens");
   const [s, setS] = useState<Status | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -101,7 +103,7 @@ export function SecurityTokensCard() {
   if (failed) {
     return (
       <>
-      <Section title="Audit tokens">
+      <Section id="audit-tokens" title="Audit tokens">
         <div className={cn(card, "space-y-1")}>
           <p className={cn("text-[15px] font-semibold", label)}>Token storage isn&rsquo;t set up yet</p>
           <p className={cn("text-[13px] leading-snug", secondary)}>
@@ -133,7 +135,7 @@ export function SecurityTokensCard() {
 
   return (
     <>
-    <Section title="Audit tokens"
+    <Section id="audit-tokens" title="Audit tokens"
       footer="Stored in Vault under pi:vercel:api_token, pi:supabase:management_token and pi:cloudflare:api_token. Write-only: nothing typed here can be read back, by this page or anyone.">
       <div className={cn(card, "space-y-4")}>
         <div>

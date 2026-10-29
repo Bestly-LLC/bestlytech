@@ -4,7 +4,35 @@ import { Fragment } from "react";
 /* ───────── types and parsing ───────── */
 
 export interface StuckBlock { id: string; label: string; detail: string | null; fix_action: string | null; fix_label: string | null }
-export interface StuckUndo { id: string; label: string; until: string; at: string }
+export interface StuckUndo { id: string; label: string; until: string; at: string; kind: string | null }
+
+/** The server's verdict on an employee's error (stuck_classify): which button leads, and why. */
+export type FixKind = "auth" | "transient" | "other";
+export type FixPrimary = "key" | "retry" | "scout";
+export interface StuckFix {
+  kind: FixKind;
+  service: string | null;
+  label: string;
+  tail: string;
+  link: string;
+  link_label: string | null;
+  retry: boolean;
+  where: string | null;
+  primary: FixPrimary;
+}
+
+/** The latest thing tapped on a card: working, then done, failed, or (Scout only) needs Jared's yes. */
+export type ActionStatus = "working" | "done" | "failed" | "needs_yes";
+export interface StuckAction {
+  id: string;
+  kind: "retry" | "auto_retry" | "scout";
+  status: ActionStatus;
+  note: string | null;
+  thread_id: string | null;
+  auto: boolean;
+  by: string | null;
+}
+
 export interface StuckItem {
   kind: "stuck" | "waiting" | "fixed";
   item_id: string;
@@ -16,11 +44,35 @@ export interface StuckItem {
   blocks: StuckBlock[];
   footer: string | null;
   undo?: StuckUndo | null;
+  fix?: StuckFix | null;
+  action?: StuckAction | null;
   link?: string | null;
   link_label?: string | null;
 }
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
+
+function parseFix(raw: unknown): StuckFix | null {
+  const f = raw as Record<string, unknown> | null | undefined;
+  if (!f || typeof f !== "object") return null;
+  const kind = f.kind === "auth" || f.kind === "transient" ? f.kind : "other";
+  const retry = f.retry === true;
+  // A Retry button only exists where a retry does; an unknown or missing verdict falls back to Scout, never to a dead button.
+  let primary: FixPrimary = f.primary === "key" || f.primary === "retry" || f.primary === "scout" ? f.primary : "scout";
+  if (primary === "retry" && !retry) primary = "scout";
+  return {
+    kind, service: str(f.service), label: str(f.label) ?? "Last check-in was not OK", tail: str(f.tail) ?? "",
+    link: str(f.link) ?? "/admin/settings", link_label: str(f.link_label), retry, where: str(f.where), primary,
+  };
+}
+
+function parseAction(raw: unknown): StuckAction | null {
+  const a = raw as Record<string, unknown> | null | undefined;
+  if (!a || typeof a !== "object" || !str(a.id)) return null;
+  const kind = a.kind === "scout" || a.kind === "auto_retry" ? a.kind : "retry";
+  const status = a.status === "done" || a.status === "failed" || a.status === "needs_yes" ? a.status : "working";
+  return { id: String(a.id), kind, status, note: str(a.note), thread_id: str(a.thread_id), auto: a.auto === true, by: str(a.by) };
+}
 
 /** Defensive: anything that is not the shape we expect is dropped, so a bad feed can never throw inside the page. */
 export function parseStuck(raw: unknown): StuckItem[] {
@@ -37,11 +89,45 @@ export function parseStuck(raw: unknown): StuckItem[] {
     out.push({
       kind, item_id: String(x.item_id), employee_slug: str(x.employee_slug), employee_name: str(x.employee_name),
       title: String(x.title), subtitle: str(x.subtitle), stuck_since: str(x.stuck_since), blocks, footer: str(x.footer),
-      undo: u && str(u.id) ? { id: String(u.id), label: str(u.label) ?? "the fix", until: str(u.until) ?? "", at: str(u.at) ?? "" } : null,
+      undo: u && str(u.id) ? { id: String(u.id), label: str(u.label) ?? "the fix", until: str(u.until) ?? "", at: str(u.at) ?? "", kind: str(u.kind) } : null,
+      fix: parseFix(x.fix), action: parseAction(x.action),
       link: str(x.link), link_label: str(x.link_label),
     });
   }
   return out;
+}
+
+/* ───────── the buttons ───────── */
+
+export type FixButton = "key" | "retry" | "scout" | "prompt" | "snooze";
+
+/** The one big button on an employee card. */
+export function primaryLabel(fix: StuckFix): string {
+  return fix.primary === "key" ? fix.link_label ?? "Update key" : fix.primary === "retry" ? "Retry now" : "Have Scout fix it";
+}
+
+/** What "More" holds, in order: whatever is not already the big button, then the prompt, then Snooze. */
+export function moreButtons(fix: StuckFix | null | undefined): FixButton[] {
+  const out: FixButton[] = [];
+  if (fix) {   // a claim has no verdict: its own block buttons are the fixes, so More is just the prompt and Snooze
+    if (fix.primary !== "scout") out.push("scout");
+    if (fix.primary !== "retry" && fix.retry) out.push("retry");
+  }
+  out.push("prompt", "snooze");
+  return out;
+}
+
+export const buttonLabel: Record<FixButton, string> = {
+  key: "Update key", retry: "Retry now", scout: "Have Scout fix it", prompt: "Prompt for Claude", snooze: "Snooze 1 day",
+};
+
+/** The status line after a tap, in the employee's voice. The card adds "— Name" after it. */
+export function actionLine(a: StuckAction): string {
+  if (a.note) return a.note;
+  if (a.status === "working") return a.kind === "scout" ? "Scout is looking into it." : "Trying again right now.";
+  if (a.status === "done") return "That worked.";
+  if (a.status === "needs_yes") return "Scout found a fix but needs your yes.";
+  return "That did not work.";
 }
 
 /* ───────── small helpers ───────── */

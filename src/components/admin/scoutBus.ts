@@ -31,6 +31,13 @@ export function openScout() {
   window.dispatchEvent(new Event(SCOUT_OPEN_EVENT));
 }
 
+/** Open Scout on one existing conversation (the stuck card's "Open Scout's thread"). Scout listens in Scout.tsx. */
+export const SCOUT_THREAD_EVENT = "bestly:scout-thread";
+
+export function openScoutThread(threadId: string) {
+  window.dispatchEvent(new CustomEvent<{ threadId: string }>(SCOUT_THREAD_EVENT, { detail: { threadId } }));
+}
+
 /**
  * Open the call debrief (Scout's review of a recorded call, waiting on Jared's OK) from anywhere in the admin:
  *

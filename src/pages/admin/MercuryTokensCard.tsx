@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, CircleAlert, Copy, KeyRound, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { Lines } from "@/components/Lines";
+import { useHashScroll } from "@/hooks/useHashScroll";
 import { cn } from "@/lib/utils";
 import { Section, btnPrimary, btnTinted, card, field, label, pill, secondary, tint } from "./laxUi";
 import { rpc, shortDay, shortTime } from "./settlementsShared";
@@ -39,6 +40,7 @@ function badge(kind: "business" | "personal", t: One) {
 }
 
 export function MercuryTokensCard() {
+  useHashScroll("mercury-tokens");
   const [s, setS] = useState<Status | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -75,7 +77,7 @@ export function MercuryTokensCard() {
 
   if (failed) {
     return (
-      <Section title="Mercury tokens">
+      <Section id="mercury-tokens" title="Mercury tokens">
         <div className={cn(card, "space-y-1")}>
           <p className={cn("text-[15px] font-semibold", label)}>Token storage isn&rsquo;t set up yet</p>
           <p className={cn("text-[13px] leading-snug", secondary)}>
@@ -99,7 +101,7 @@ export function MercuryTokensCard() {
   ];
 
   return (
-    <Section title="Mercury tokens"
+    <Section id="mercury-tokens" title="Mercury tokens"
       footer="Stored in Vault under pi:mercury_api_token and pi:mercury_personal_api_token. Write-only: nothing pasted here can be read back, by this page or anyone. Anything learned from the personal token is kept private and never goes in shared notes.">
       <div className={cn(card, "space-y-5")}>
         <div className="space-y-2">

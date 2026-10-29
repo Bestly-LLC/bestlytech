@@ -332,6 +332,29 @@ Deno.serve(async (req) => {
       return J({ ok: true, result: await climb(fresh as Issue, { scoutOk: true, freeAiOk: true, force: true }) });
     }
 
+    // stuck_scout: Jared tapped "Have Scout fix it" on a stuck employee in the Command Center. The database already opened the
+    // Autopilot thread and logged the action (stuck_run_scout); this sends Scout the brief the same way scoutStart does, so Scout's
+    // approval rules apply (anything that needs Jared's yes comes back as NEEDS_YES). stuck_actions_settle reads the verdict line.
+    if (body.op === "stuck_scout") {
+      const actionId = String(body.action_id ?? "");
+      const { data: brief, error: be } = await db.rpc("stuck_scout_brief", { p_action_id: actionId });
+      const b = brief as { thread_id?: string; ask?: string } | null;
+      if (be || !b?.thread_id || !b?.ask) {
+        await db.from("stuck_actions").update({ status: "failed", finished_at: new Date().toISOString(), note: "Scout could not be reached: there was nothing to send." })
+          .eq("id", actionId).eq("status", "working");
+        return J({ ok: false, error: be?.message ?? "no brief" });
+      }
+      const run = fetch(`${URL_}/functions/v1/admin-chat`, {
+        method: "POST",
+        headers: { ...sbHeaders(SB_SECRET), "Content-Type": "application/json" },
+        body: JSON.stringify({ body: b.ask, autopilot: true, thread_id: b.thread_id }),
+      }).then((r) => r.text()).catch(() => "");
+      // deno-lint-ignore no-explicit-any
+      const rt = (globalThis as any).EdgeRuntime;
+      if (rt?.waitUntil) rt.waitUntil(run); else await Promise.race([run, new Promise((r) => setTimeout(r, 3000))]);
+      return J({ ok: true, result: "scout: started", thread_id: b.thread_id });
+    }
+
     // tick: every open incident whose turn it is. One Scout call per tick.
     const { data: open } = await db.from("monitor_issues").select("*").eq("status", "open")
       .not("fix_stage", "in", "(needs_yes,claude,fixed)").order("opened_at");
