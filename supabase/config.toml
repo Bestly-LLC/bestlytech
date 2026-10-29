@@ -165,6 +165,9 @@ project_id = "rcqfqhguwpmaarseifqg"
 [functions.basil-chef]
     verify_jwt = false
 
+[functions.recipe-parse]
+  verify_jwt = false
+
 [functions.email-builder]
   verify_jwt = false
 

@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 import { Segmented, TAP } from "@/components/admin/kitchen/Segmented";
 import { RecipeSheet } from "@/components/admin/kitchen/RecipeSheet";
 import { Lines } from "@/components/Lines";
+import RecipesTab from "@/components/admin/recipes/RecipesTab";
+import { HandoffWatcher } from "@/components/admin/recipes/Overlays";
 import {
   Apple, ChefHat, ChevronRight, Clock, CookingPot, Loader2, Mic, MousePointerClick, Package, Plus, Receipt, RefreshCw,
   Refrigerator, Search, Snowflake, Truck, Undo2, UtensilsCrossed, type LucideIcon,
@@ -91,7 +93,32 @@ function useMinWidth(px: number) {
 const canUndoEvent = (e: KitchenEvent) =>
   ["have", "low", "out", "arriving"].includes(e.action) && !!e.item_id && !!e.before_status;
 
+/** Kitchen has two sides: the Pantry (everything it did before) and Recipes. The switch lives in the URL (?tab=recipes) so
+ *  back, a shared link and the iPhone's "Send to iPad" all land in the right place. The handoff banner sits above both. */
 export default function HomeHubKitchen() {
+  const [sp, setSp] = useSearchParams();
+  const tab = sp.get("tab") === "recipes" ? "recipes" : "pantry";
+  const inRecipe = tab === "recipes" && !!sp.get("recipe");
+  const pick = (v: string) => setSp((prev) => {
+    const n = new URLSearchParams(prev);
+    if (v === "recipes") n.set("tab", "recipes"); else { n.delete("tab"); n.delete("recipe"); n.delete("cook"); n.delete("link"); }
+    return n;
+  });
+  return (
+    <div className="space-y-6">
+      {!inRecipe && (
+        <Segmented
+          label="Kitchen" value={tab} onChange={pick} className="w-full sm:w-auto sm:min-w-[18rem]"
+          options={[{ key: "pantry", label: "Pantry" }, { key: "recipes", label: "Recipes" }]}
+        />
+      )}
+      {tab === "recipes" ? <RecipesTab /> : <PantryView />}
+      <HandoffWatcher />
+    </div>
+  );
+}
+
+function PantryView() {
   const [data, setData] = useState<Kitchen | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
