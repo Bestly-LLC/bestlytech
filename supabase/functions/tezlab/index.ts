@@ -10,9 +10,14 @@
 //   POST {op:"job", id}          (from the DB trigger) → runs one queued guest command
 // If TezLab fails, the job goes back to the queue for the Mac mini worker (Tesla Fleet API) and Scout is told.
 //
+// v22 (2026-10-29): the asleep budget goes from 4 retries to 6. First live test (job 11278, 02:48) proved the
+//      retry loop works, but 4 retries (72 s) were not enough for a car that had gone offline: it used all four
+//      and still failed asleep. 6 retries is 108 s of waiting and ~119 s end to end with the wake_up and status
+//      calls, so it sits right under the 2-minute re-queue window. Do not raise it further without re-checking
+//      that window; a longer wait means the job gets picked up twice.
 // v16 (2026-10-29): a sleeping car is waited out. When TezLab answers "vehicle is asleep" to a command, the
-//      same command is retried up to 4 times, 18 s apart, with a log line per retry. The retry budget is per
-//      job, not per command, so a two-step climate job cannot spend 4 × 18 s twice and blow past the
+//      same command is retried 6 times, 18 s apart, with a log line per retry. The retry budget is per
+//      job, not per command, so a two-step climate job cannot spend 6 × 18 s twice and blow past the
 //      2-minute re-queue window. Only "asleep" is retried; refusals, outages and busy stay as they were.
 // v15 (2026-09-27): a car REFUSAL (TezLab says "car could not execute command: <reason>", e.g. low_power_mode_low_soc)
 //      is the car's answer, not a TezLab failure: fail the job in plain words instead of falling back to the Tesla
@@ -79,7 +84,7 @@ const refusalText = (r: string) => REFUSALS[r] ?? `The car said no (${r.replace(
 const DOWN_MSG = (what: string) => `TezLab's servers are down (${what}). That's on TezLab's side, nothing to reconnect; the Tesla backup covers until they're back.`;
 /** The car answered, it just wasn't listening yet. Worth waiting out; nothing to reconnect and no refusal. */
 const isAsleep = (e: unknown) => /asleep/i.test(String(e));
-const ASLEEP_RETRIES = 4;      // 4 retries × 18 s = 72 s of waiting, inside the 2-minute re-queue window
+const ASLEEP_RETRIES = 6;      // 6 retries × 18 s = 108 s of waiting, ~119 s with the calls, under the 2-minute re-queue window
 const ASLEEP_WAIT_MS = 18e3;
 
 async function isAdmin(req: Request) {
@@ -253,8 +258,8 @@ function planFor(job: any) {
 }
 
 /**
- * Run one TezLab command, riding out a sleeping car. Only "asleep" is retried, up to 4 times, 18 s apart.
- * `budget` is shared by every command in the job: two 4 × 18 s ladders would go past the re-queue window.
+ * Run one TezLab command, riding out a sleeping car. Only "asleep" is retried, up to 6 times, 18 s apart.
+ * `budget` is shared by every command in the job: two 6 × 18 s ladders would go past the re-queue window.
  */
 async function retryAsleep<T>(what: string, budget: { left: number }, send: () => Promise<T>): Promise<T> {
   for (;;) {
