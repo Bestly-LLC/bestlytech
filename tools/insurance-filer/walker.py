@@ -231,7 +231,32 @@ class Walker:
         if rules.digits(got) != rules.digits(val) and t in ("tel", "number"):
             loc.fill("")
             loc.type(val, delay=15)
+        self.close_popovers()       # a date picker's calendar stays open over the Continue button (fix 2026-10-29)
         answers.append({"key": key, "label": label, "value": val[:200]})
+
+    def close_popovers(self):
+        try:
+            if self.page.evaluate("() => !!document.querySelector('.react-datepicker, .react-datepicker-popper, [id$=-date-popover], [role=dialog][aria-modal=true] .react-datepicker')"):
+                self.page.keyboard.press("Escape")
+                time.sleep(0.4)
+                if self.page.evaluate("() => !!document.querySelector('.react-datepicker-popper, [id$=-date-popover]')"):
+                    self.page.mouse.click(5, 300)     # click empty page background, away from every control
+                    time.sleep(0.4)
+        except Exception:
+            pass
+
+    def click_btn(self, sel):
+        """Click a form button. If something of the form's own (a calendar pop-up) is over it, close that and try again."""
+        for attempt in range(3):
+            try:
+                self.page.locator(sel).click(timeout=8000)
+                return
+            except Exception:
+                if attempt == 2:
+                    raise
+                self.close_popovers()
+                self.page.keyboard.press("Escape")
+                time.sleep(0.6)
 
     def do_files(self, f):
         if self._photo_files is None:
@@ -318,7 +343,7 @@ class Walker:
                         out["reached"] = "consent"
                         return self.finish(out)
                     self.consent_clicked = True
-                    self.page.locator('[data-ins-b="%d"]' % consent[0]["i"]).click()
+                    self.click_btn('[data-ins-b="%d"]' % consent[0]["i"])
                     self.wait_change(sg)
                     continue
                 if final:
@@ -341,7 +366,7 @@ class Walker:
                     out["claim_no"] = rules.claim_no_from(s2.get("body") or "", self.turo_claim_no)
                     return self.finish(out)
                 if adv:
-                    self.page.locator('[data-ins-b="%d"]' % adv[0]["i"]).click()
+                    self.click_btn('[data-ins-b="%d"]' % adv[0]["i"])
                     self.wait_change(sg)
                     continue
                 if s["choices"] or not s["buttons"]:
@@ -356,6 +381,16 @@ class Walker:
                 out["reached"] = out["reached"] or e.kind
                 out["blocked_reason"] = e.reason
             return self.finish(out, stop=e.kind)
+        except Exception as e:
+            # a page hiccup (a click that timed out...). finish() reports not_sent = the final button was never clicked,
+            # so a crash on screen 3 is known to be unsent instead of "it may have gone through". (fix 2026-10-29)
+            try:
+                self.shot("crash")
+            except Exception:
+                pass
+            out["reached"] = out["reached"] or "error"
+            out["blocked_reason"] = "The form hiccupped on screen %d (%s)" % (self.n, str(e).split("\n")[0][:120])
+            return self.finish(out, stop="error")
 
     def finish(self, out, stop=None):
         out.update({"url": self.page.url, "consent_clicked": self.consent_clicked, "consent": self.consent, "screens": self.screens,
