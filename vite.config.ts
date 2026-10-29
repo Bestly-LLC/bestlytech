@@ -96,6 +96,8 @@ export default defineConfig(() => ({
         lax: path.resolve(__dirname, "lax.html"),
         // Personal trip pages /t/:token (LAX or home pickup), see trip.html.
         trip: path.resolve(__dirname, "trip.html"),
+        // Family Cookbook (/cookbook): its own installable app, see cookbook.html.
+        cookbook: path.resolve(__dirname, "cookbook.html"),
       },
     },
   },

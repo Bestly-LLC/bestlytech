@@ -1,0 +1,36 @@
+{
+  "name": "Harris Cookbook",
+  "short_name": "Harris Cookbook",
+  "description": "Our family's recipe cards, kept safe in one place.",
+  "id": "/cookbook",
+  "start_url": "/cookbook",
+  "scope": "/cookbook",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F6EFE3",
+  "theme_color": "#F6EFE3",
+  "categories": [
+    "food",
+    "lifestyle"
+  ],
+  "icons": [
+    {
+      "src": "/cookbook-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/cookbook-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/cookbook-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#F6EFE3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#17120D" media="(prefers-color-scheme: dark)" />
+    <title>Family Cookbook</title>
+    <meta name="description" content="Our family's recipe cards, kept safe in one place." />
+    <!-- A family app, not a page to find in search. -->
+    <meta name="robots" content="noindex, nofollow" />
+
+    <!--
+      The Family Cookbook (bestly.tech/cookbook) is its own installable app, like /admin: everything the OS reads at
+      "Add to Home Screen" time is static here. The name on the Home Screen follows the person: the page swaps the
+      manifest link and the apple-mobile-web-app-title once someone is signed in ("Harris Cookbook" for Mom,
+      "Best Cookbook" for Jared and Mariah). Before sign-in it is the generic "Family Cookbook".
+      Vercel rewrites /cookbook and /cookbook/* to this file.
+    -->
+    <link rel="icon" type="image/png" sizes="512x512" href="/cookbook-icon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/cookbook-apple-touch-icon.png" />
+    <link rel="manifest" href="/cookbook.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Family Cookbook" />
+
+    <link rel="preconnect" href="https://rcqfqhguwpmaarseifqg.supabase.co" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=Young+Serif&display=swap" />
+  </head>
+  <body>
+    <div id="app"><main id="view" aria-live="off"></main></div>
+    <div class="actionbar" id="actionbar"><button class="btn primary big" data-act="cook">Start Cooking</button></div>
+    <div class="timers" id="timers" aria-live="polite"></div>
+    <div id="layer" class="layer"><div id="l-cam"></div><div id="l-cook"></div><div id="l-sheet"></div></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"><span id="toast-msg"></span><button type="button" id="toast-act" hidden></button></div>
+    <script type="module" src="/src/cookbook/main.ts"></script>
+  </body>
+</html>

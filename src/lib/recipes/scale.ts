@@ -153,7 +153,7 @@ export function altNote(ing: RIngredient, f: number): string | null {
   const v = q * (ing.no_scale ? 1 : f);
   return numStr(v) + " " + m[2] + (snapVal(v) > 1 + 1e-9 ? "s" : "");
 }
-const PLURALS: [RegExp, string][] = [
+export const PLURALS: [RegExp, string][] = [
   [/^(\s*(?:small )?garlic clove)s?(?![A-Za-z])/, "s"], [/^(\s*whole clove)s?(?![A-Za-z])/, "s"], [/^(\s*cinnamon stick)s?(?![A-Za-z])/, "s"],
   [/^(\s*(?:ripe )?pineapple)s?(?![A-Za-z])/, "s"], [/^(\s*espresso)s?(?![A-Za-z])/, "s"], [/^(\s*(?:large )?egg)s?(?![A-Za-z])/, "s"],
 ];
