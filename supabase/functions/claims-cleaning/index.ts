@@ -20,8 +20,8 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, SECRETS[0], { auth: { per
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info, x-tesla-worker", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 const BUCKET = "claim-evidence";
-const MAX_POST = 15;   // return photos looked at (Jared's check-out first, then the guest's own)
-const MAX_PRE = 10;    // check-in photos looked at, spread across the set
+const MAX_POST = 9;    // return photos looked at (Jared's check-out first, then the guest's own)
+const MAX_PRE = 6;     // check-in photos looked at, spread across the set
 
 const b64ToBytes = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 function bytesToB64(u: Uint8Array) {
@@ -64,6 +64,8 @@ async function load(p: Photo): Promise<{ b64: string; mime: string } | null> {
 // Groq's free vision models take as few as 3 images per call (qwen3.8, 2026-10-29), so photos go 3 at a time and keep their own numbers.
 const PER_CALL = 3;
 
+let started = Date.now();
+
 async function look(photos: Photo[], label: string, res: number) {
   const parts: string[] = [];
   let model = "";
@@ -74,11 +76,20 @@ async function look(photos: Photo[], label: string, res: number) {
       parts.push(...group.map((_, i) => `${k + i + 1} | other | 0 | photo could not be loaded`));
       continue;
     }
-    const r = await llmVision({ images: imgs, job: "claims-cleaning-look", ref: String(res), fn: "claims-cleaning", scope: "background",
-      paid: "never", maxTokens: 400, deadlineMs: 45_000,
-      prompt: `${LOOK}\n(These are ${label} photos ${k + 1} to ${k + group.length}. Number your lines ${k + 1} to ${k + group.length}.)` });
-    parts.push(r.text.trim());
-    model = r.model;
+    let r: Awaited<ReturnType<typeof llmVision>> | null = null;
+    for (let attempt = 0; attempt < 4 && !r; attempt++) {
+      try {
+        r = await llmVision({ images: imgs, job: "claims-cleaning-look", ref: String(res), fn: "claims-cleaning", scope: "background",
+          paid: "never", maxTokens: 400, deadlineMs: 30_000,
+          prompt: `${LOOK}\n(These are ${label} photos ${k + 1} to ${k + group.length}. Number your lines ${k + 1} to ${k + group.length}.)` });
+      } catch (e) {
+        // Groq's free tier allows only a few image calls a minute: wait it out and try again, inside the time the reader allows.
+        if (attempt === 3 || Date.now() - started > 100_000) throw e;
+        await new Promise((x) => setTimeout(x, 15_000));
+      }
+    }
+    parts.push(r!.text.trim());
+    model = r!.model;
   }
   return { notes: parts.join("\n"), model };
 }
@@ -139,7 +150,9 @@ Deno.serve(async (req) => {
     const post = [...host, ...spread(guest, Math.max(0, MAX_POST - host.length))].slice(0, MAX_POST);
     if (!pre.length || !post.length) return J({ ok: false, error: `need photos on both sides (before ${pre.length}, after ${post.length})` });
     try {
-      const [a, z] = await Promise.all([look(post, "AFTER (return)", res), look(pre, "BEFORE (check-in)", res)]);
+      started = Date.now();
+      const a = await look(post, "AFTER (return)", res);   // one at a time: the free tier has a per-minute limit
+      const z = await look(pre, "BEFORE (check-in)", res);
       if (!a.notes || !z.notes) return J({ ok: false, error: "the photo read came back empty" });
       const j = await llm({ task: "judge", system: JUDGE, json: true, maxTokens: 500, job: "claims-cleaning-judge", ref: String(res), fn: "claims-cleaning",
         scope: "background", paid: "never", privacy: "private",
