@@ -262,6 +262,10 @@ class Walker:
             self.log("ask failed:", e)
             a = None
         self.deadline += time.time() - t0
+        if isinstance(a, dict):                     # {"answer": "...", "set": {"policy.holder": "Cody James"}}: Jared corrected a fact
+            self.values.update(a.get("set") or {})
+            self.log("Jared corrected:", a.get("set"))
+            a = a.get("answer")
         if a is not None:
             self.values["asked." + question[:60]] = a
         return a

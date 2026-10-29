@@ -180,7 +180,8 @@ def live_ask(job):
         while time.time() < end:
             if os.path.exists(af):
                 try:
-                    a = json.load(open(af)).get("answer")
+                    raw = json.load(open(af))
+                    a = raw if raw.get("set") else raw.get("answer")
                 except Exception:
                     time.sleep(1)
                     continue
@@ -214,7 +215,12 @@ def run_walk(job, mode, url, packet, tmp, approved_hash=None, upload_shots=True,
         try:
             page = ctx.new_page()
             walker.open_claim(page, url, log)
-            w = walker.Walker(page, packet.get("values") or {}, mode=mode, shots_dir=run_dir, consent_before_tap=consent_before_tap,
+            values = dict(packet.get("values") or {})
+            ov = os.path.join(HERE, "inbox", "overrides-%s.json" % (oc_id or "x")[:8])
+            if os.path.exists(ov):                   # facts Jared corrected in chat for this claim (e.g. the policyholder's name)
+                values.update(json.load(open(ov)))
+                log("overrides from Jared: %s" % ", ".join(sorted(json.load(open(ov)))))
+            w = walker.Walker(page, values, mode=mode, shots_dir=run_dir, consent_before_tap=consent_before_tap,
                               fetch_photos=photo_fetcher(job, tmp) if (with_photos and job.get("photos")) else None,
                               packet_hash=packet.get("hash"), approved_hash=approved_hash,
                               turo_claim_no=(packet.get("values") or {}).get("turo.claim_no"), unknown_why=unknown_why(packet),
