@@ -7,12 +7,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Lines } from "@/components/Lines";
 import { supabase } from "@/integrations/supabase/client";
 import { pollInterval } from "@/lib/polling";
+import { useSearchParams } from "react-router-dom";
+import { Segmented } from "@/components/admin/homeHub/fixer/ui";
+import { FixProblem, type FixPreset } from "@/components/admin/homeHub/fixer/FixProblem";
+import { MyAutomations } from "@/components/admin/homeHub/fixer/MyAutomations";
+import { FIXER_AGENT, readAgentVersion, versionLt } from "@/components/admin/homeHub/fixer/api";
 import {
   Wand2, CheckCircle2, AlertTriangle, XCircle, Copy, ChevronDown, Send, Undo2, Trash2, Pencil, RotateCcw, Rocket, Code2, Loader2,
 } from "lucide-react";
 
 /* Automation Maker: Jared types what should happen, Tinker (Home Automation Engineer) drafts it, he taps Install.
-   Everything goes through the ha-automator edge function; rows come from ha_automations (contract: docs/ha-automator-opusplan.md). */
+   Everything goes through the ha-automator edge function; rows come from ha_automations (contract: docs/ha-automator-opusplan.md).
+   Three tabs: Make (this file), My automations and Fix a problem (src/components/admin/homeHub/fixer, docs/ha-fixer-opusplan.md). */
 
 type Status = "drafting" | "preview" | "installing" | "installed" | "failed" | "handoff" | "undoing" | "undone" | "discarded";
 
@@ -380,7 +386,7 @@ function AutomationCard({
 
 /* ---------- page ---------- */
 
-export default function HomeHubAutomations() {
+function MakeTab() {
   const [rows, setRows] = useState<AutomationRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -496,11 +502,6 @@ export default function HomeHubAutomations() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Automation Maker"
-        description="Say what should happen in your home. Tinker writes it, you look it over, then one tap installs it."
-      />
-
       {loaded && !loadError && (
         <p role="status" className="inline-flex min-h-[44px] items-center gap-2.5 rounded-full border border-green-500/25 bg-green-500/[0.07] px-4 text-sm text-green-200">
           <span aria-hidden className="relative inline-flex h-2.5 w-2.5 shrink-0">
@@ -630,6 +631,83 @@ export default function HomeHubAutomations() {
               ))}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- the page: three tabs ---------- */
+
+type Tab = "make" | "mine" | "fix";
+const TABS: Tab[] = ["make", "mine", "fix"];
+
+export default function HomeHubAutomations() {
+  const [params, setParams] = useSearchParams();
+  const asked = params.get("tab");
+  const tab: Tab = TABS.includes(asked as Tab) ? (asked as Tab) : "make";
+  const [preset, setPreset] = useState<FixPreset | null>(null);
+  const [agent, setAgent] = useState<string | null>(null);
+  const [toTap, setToTap] = useState(0);
+
+  const go = useCallback((t: Tab) => {
+    setParams((p) => { const n = new URLSearchParams(p); if (t === "make") n.delete("tab"); else n.set("tab", t); return n; }, { replace: true });
+  }, [setParams]);
+
+  // Which Home Hub version is on the Pi: the fixing tools need 1.6.2. Below that the tabs say so, and Tinker asks the Pi to update.
+  useEffect(() => {
+    let live = true;
+    const run = async () => { const v = await readAgentVersion(); if (live) setAgent(v); };
+    void run();
+    const iv = setInterval(run, pollInterval(60_000, 0.1));
+    return () => { live = false; clearInterval(iv); };
+  }, []);
+  const agentOld = agent && versionLt(agent, FIXER_AGENT) ? agent : null;
+
+  // A dot on "Fix a problem" when a fix is waiting for Jared's tap.
+  useEffect(() => {
+    let live = true;
+    const count = async () => {
+      const { count: n } = await supabase.from("ha_fixes" as never).select("id", { count: "exact", head: true }).eq("status", "proposed");
+      if (live) setToTap(n ?? 0);
+    };
+    void count();
+    const channel = supabase.channel("ha_fixes_badge").on("postgres_changes", { event: "*", schema: "public", table: "ha_fixes" }, () => { void count(); }).subscribe();
+    return () => { live = false; void supabase.removeChannel(channel); };
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Automation Maker"
+        description="Make a new automation, see everything that runs in your home, or tell Tinker what went wrong and he fixes it."
+      />
+      <Segmented<Tab>
+        label="Automation Maker sections"
+        value={tab}
+        onChange={go}
+        items={[
+          { id: "make", label: "Make" },
+          { id: "mine", label: "My automations" },
+          { id: "fix", label: "Fix a problem", badge: toTap },
+        ]}
+      />
+      {tab === "make" && <MakeTab />}
+      {tab === "mine" && (
+        <MyAutomations
+          agentOld={agentOld}
+          onFix={(item) => { setPreset({ ...item, n: Date.now() }); go("fix"); }}
+        />
+      )}
+      {tab === "fix" && (
+        <div className="space-y-5">
+          {agentOld && (
+            <p role="status" className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-3.5 py-3 text-sm text-amber-100">
+              <span className="font-semibold">Home Hub needs an update.</span>{" "}
+              Your Pi is on <span className="whitespace-nowrap">{agentOld}</span>. Tinker needs <span className="whitespace-nowrap">{FIXER_AGENT}</span> to read what happened. He asks it to update when you tap Look into it, then starts again on his own.
+            </p>
+          )}
+          <FixProblem preset={preset} />
         </div>
       )}
     </div>
