@@ -9,7 +9,12 @@
 //   toggle   { id, enabled }        turn an installed automation on/off (toggle_automation)
 //   discard  { id }
 //   handoff  { id }                 build the prompt and queue a Code Worker job (also automatic when Tinker cannot build it)
-//   watch                           cron, service role only: stuck installs, Code Worker files coming back, heartbeat
+//   watch                           cron, service role only: page check + self-heal, drafts waiting on a free model, stuck installs,
+//                                   Code Worker files coming back, warm device list, heartbeat
+//
+// v2 (2026-10-28, docs/ha-automator-v2-opusplan.md): Tinker checks and heals his own page (tinker_page_check), never says "try again
+// later" (a draft with no free model waits and the watch re-runs it; after 6 tries Scout's out-of-room path suggests a new provider),
+// keeps the device list warm, and ships as plain source (no GitHub raw-import shim).
 //
 // Admin only (has_role admin), except watch which takes the service role. verify_jwt = true.
 // Nothing touches Home Assistant until `install`. The Pi agent (1.6.1+) enforces the same id/denylist rules again.
@@ -17,7 +22,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parse as yamlParse } from "jsr:@std/yaml@1.0.5";
 import { corsHeaders } from "../_shared/cors.ts";
-import { llm, LlmUnavailable } from "../_shared/free-llm.ts";
+import { llm, LlmUnavailable, outOfRoomMessage } from "../_shared/free-llm.ts";
 
 /* ───────── setup ───────── */
 
@@ -54,6 +59,10 @@ const DENY = ["!secret", "shell_command", "command_line", "rest_command", "pytho
 const MAX_YAML = 40_000;
 const MIN_AGENT = "1.6.1";
 const CATALOG_FRESH_MS = 30 * 60_000;
+const CATALOG_WARM_MS = 6 * 3_600_000;   // the watch asks the Pi for a fresh device list when ours is older than this
+const WAIT_QUICK_TRIES = 6;              // 4 minutes apart, about 30 minutes, then Scout's out-of-room path
+const WAIT_MAX_TRIES = 24;               // after that, 15 minutes apart, until about 5 hours in
+const WAIT_NOTE = "Waiting on a free model. Tinker finishes on his own.";
 const ENTITY_RE = /^[a-z_]+\.[a-z0-9_]+$/;
 
 const HOUSE_RULES = `House rules (Jared's):
@@ -507,8 +516,43 @@ async function makeHandoff(row: Row, d: Draft | null, reason: string, ids: strin
     kind: "cannot", status: "handoff", package_name: finalName, title, code_job_id: codeJobId, handoff_prompt: goal,
     summary: d?.summary?.length ? d.summary : (row.summary ?? [`You asked: ${request.slice(0, 200)}`]),
     assumptions: d?.assumptions ?? row.assumptions ?? [], error: note ?? (reason ? `Tinker could not build this one alone: ${reason}` : null),
-    config: null, package_yaml: null, yaml: null, ...extra,
+    config: null, package_yaml: null, yaml: null, wait_tries: 0, retry_at: null, ...extra,
   });
+}
+
+/* ───────── waiting instead of "try again" ─────────
+   Jared's rule (2026-10-28): never tell him to wait or retry. When no free model can answer, the row stays "drafting" with a calm
+   note and the watch re-runs it every 4 minutes. At the 6th try (about 30 minutes) Scout's out-of-room path names one vetted provider
+   to connect (sent to the recap, signed Tinker); the row keeps waiting. Free models only, always. */
+
+async function parkDraft(row: Row, note: string, tried: Json[], attempts: number, extra: Row = {}): Promise<void> {
+  const tries = (row.wait_tries ?? 0) + 1;
+  const base = { tried, attempts: (row.attempts ?? 0) + attempts, ...extra };
+  if (tries >= WAIT_MAX_TRIES) {
+    await patch(row.id, { ...base, status: "failed", wait_tries: 0, retry_at: null,
+      error: "No free model could write this one in about 5 hours, so Tinker stopped. Nothing was spent. Tap Change it and he starts it over." });
+    await notify("I could not write one request", "No free AI model could write it in about 5 hours. Nothing was spent and nothing was installed.", "info", `tinker.gaveup.${row.id}`);
+    return;
+  }
+  let msg = note;
+  if (tries >= WAIT_QUICK_TRIES) {
+    let ask = "";
+    try {
+      const room = await outOfRoomMessage({ tried: tried as never, noPaid: true });
+      const c = room.candidate;
+      ask = c
+        ? `To add room now, connect ${c.label}: get a key at ${c.keyUrl} and save it in Supabase Vault as ${c.keyName}. Scout switches it on within 10 minutes.`
+        : "Every provider on Scout's vetted no-training list is already connected.";
+    } catch (e) { console.error("outOfRoomMessage", plainErr(e)); }
+    msg = "Every free model is out of room right now. Tinker keeps checking and finishes on his own." + (ask ? " He sent you a note about which new one to connect." : "");
+    if (tries === WAIT_QUICK_TRIES) {
+      await notify("The free AI is out of room",
+        `I tried every free model for about 30 minutes and none could write "${String(row.request).replace(/\s+/g, " ").slice(0, 80)}". ${ask} I keep trying on my own and finish it the moment one answers.`,
+        "info", `tinker.outofroom.${row.id}`);
+    }
+  }
+  await patch(row.id, { ...base, status: "drafting", error: msg, wait_tries: tries,
+    retry_at: new Date(Date.now() + (tries < WAIT_QUICK_TRIES ? 4 : 15) * 60_000).toISOString() });
 }
 
 /* ───────── the drafting pipeline ───────── */
@@ -521,7 +565,7 @@ async function runDraft(row: Row, feedback: string | null) {
   try {
     const { cat, note } = await ensureCatalog();
     if (!cat) {
-      await patch(row.id, { status: "failed", error: "I can't see your Home Assistant yet. The Pi agent has to send me your device list first (it needs agent 1.6.1 or newer). Try again once that is done." });
+      await parkDraft(row, "Waiting on your Pi's device list. Tinker finishes on his own.", tried, attempts);
       return;
     }
     const pf = prefilter(cat, request + " " + (feedback ?? ""));
@@ -559,10 +603,10 @@ async function runDraft(row: Row, feedback: string | null) {
     }
 
     if (!last || !lastCheck) {
-      await patch(row.id, { status: "failed", error: "The free AI answered, but not in a shape I could use. Nothing was spent. Try again.", model, provider, tried, attempts: (row.attempts ?? 0) + attempts });
+      await parkDraft(row, "The free AI's last answer was not usable. Tinker is asking another model.", tried, attempts, { model, provider });
       return;
     }
-    const patchBase = { model, provider, tried, attempts: (row.attempts ?? 0) + attempts, feedback: feedback ?? row.feedback ?? null };
+    const patchBase = { model, provider, tried, attempts: (row.attempts ?? 0) + attempts, feedback: feedback ?? row.feedback ?? null, wait_tries: 0, retry_at: null };
     if (lastCheck.errors.length) {
       // still not safe after the repair rounds: do not show it, hand the job to the Code Worker with the same rules
       await makeHandoff(row, last, "the draft kept failing my safety checks (" + lastCheck.errors.slice(0, 3).join("; ") + ")", pf.ids, patchBase);
@@ -582,10 +626,11 @@ async function runDraft(row: Row, feedback: string | null) {
     });
   } catch (e) {
     console.error("ha-automator draft", plainErr(e));
-    const msg = e instanceof LlmUnavailable
-      ? "Every free AI model is busy or out of room right now. Nothing was spent. Try again in a few minutes."
-      : "Something broke while I was writing it: " + plainErr(e);
-    await patch(row.id, { status: "failed", error: msg, tried: e instanceof LlmUnavailable ? e.tried : tried, attempts: (row.attempts ?? 0) + attempts });
+    if (e instanceof LlmUnavailable) {
+      await parkDraft(row, WAIT_NOTE, tried, attempts);
+      return;
+    }
+    await patch(row.id, { status: "failed", error: "Something broke while I was writing it: " + plainErr(e), tried, attempts: (row.attempts ?? 0) + attempts, wait_tries: 0, retry_at: null });
   }
 }
 
@@ -602,10 +647,15 @@ async function opGenerate(b: Row, userId: string | null) {
   const request = str(b.request, 1000);
   if (request.length < 5) return { ok: false, error: "Tell me what should happen, in a sentence or two." };
   const { count } = await db.from("ha_automations").select("id", { count: "exact", head: true }).eq("status", "drafting");
-  if ((count ?? 0) >= 4) return { ok: false, error: "I am already working on a few. Give me a minute, then try again." };
-  const { data: row, error } = await db.from("ha_automations").insert({ request, status: "drafting", requested_by: userId }).select("*").single();
+  if ((count ?? 0) >= 12) return { ok: false, error: "Tinker already has twelve drafts in line, so this one was not added. Discard one you no longer need." };
+  // 4 at once; the rest wait in line and the watch starts them (never "try again in a minute")
+  const inLine = (count ?? 0) >= 4;
+  const { data: row, error } = await db.from("ha_automations").insert({
+    request, status: "drafting", requested_by: userId,
+    ...(inLine ? { wait_tries: 1, retry_at: new Date().toISOString(), error: "In line behind other drafts. Tinker starts it on his own." } : {}),
+  }).select("*").single();
   if (error || !row) return { ok: false, error: "I could not save that request: " + (error?.message ?? "no row").slice(0, 120) };
-  inBackground(runDraft(row, null));
+  if (!inLine) inBackground(runDraft(row, null));
   return { ok: true, row };
 }
 
@@ -615,8 +665,8 @@ async function opRevise(b: Row) {
   const feedback = str(b.feedback, 1000);
   if (feedback.length < 3) return { ok: false, error: "Tell me what to change." };
   if (row.installed_at && row.status !== "undone") return { ok: false, error: "That one is already in Home Assistant. Undo it first, or make a new one." };
-  if (!["preview", "failed", "handoff", "undone"].includes(row.status)) return { ok: false, error: "That one is busy right now. Try again in a moment." };
-  const upd = await patch(row.id, { status: "drafting", feedback, error: null });
+  if (!["preview", "failed", "handoff", "undone"].includes(row.status)) return { ok: false, error: "Tinker is still working on that one. Send the change when he is done." };
+  const upd = await patch(row.id, { status: "drafting", feedback, error: null, wait_tries: 0, retry_at: null });
   inBackground(runDraft({ ...row, ...(upd ?? {}) }, feedback));
   return { ok: true, row: upd };
 }
@@ -691,7 +741,7 @@ async function opToggle(b: Row) {
 async function opDiscard(b: Row) {
   const row = await getRow(b.id);
   if (!row) return { ok: false, error: "I can't find that one." };
-  if (row.status === "drafting") return { ok: false, error: "I am still writing that one. Give me a minute." };
+  if (row.status === "drafting" && !(row.wait_tries > 0)) return { ok: false, error: "Tinker is writing that one right now. You can discard it the moment it appears." };
   if (["installing", "undoing", "installed"].includes(row.status)) return { ok: false, error: "That one is in Home Assistant. Undo it first." };
   return { ok: true, row: await patch(row.id, { status: "discarded", error: null }) };
 }
@@ -710,14 +760,45 @@ async function opHandoff(b: Row) {
 /* ───────── watch (cron, every 5 minutes) ───────── */
 
 async function watch() {
-  const out: Row = { requeued: 0, failed: 0, handbacks: 0, interrupted: 0 };
+  const out: Row = { requeued: 0, failed: 0, handbacks: 0, interrupted: 0, redrafted: 0, catalog: "fresh", page: "page check did not run" };
+  let pageOk = true;
   const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
   try {
-    // 1. drafting that never finished (the function was cut off)
-    const { data: drafting } = await db.from("ha_automations").select("id").eq("status", "drafting").lt("updated_at", minutesAgo(6));
+    // 0. Tinker checks his own page: the signed-in read permission and admin policy on his two tables.
+    //    Grant gone + policy there -> the same grant is put back (logged, with undo). Policy gone -> never granted, Tinker alerts.
+    //    (2026-10-21 to 2026-10-29 the page said "permission denied" while this watch, running as the service role, stayed green.)
+    try {
+      const { data: pc, error: pcErr } = await db.rpc("tinker_page_check");
+      if (pcErr) { out.page = "page check could not run: " + plainErr(pcErr.message); pageOk = false; }
+      else { out.page = String(pc?.summary ?? "page check ok"); pageOk = pc?.ok !== false; }
+    } catch (e) { out.page = "page check could not run: " + plainErr(e); pageOk = false; }
+
+    // 1. drafting that never finished (the function was cut off): not a failure, back in line to be written again
+    const { data: drafting } = await db.from("ha_automations").select("id").eq("status", "drafting").eq("wait_tries", 0).is("retry_at", null).lt("updated_at", minutesAgo(6));
     for (const r of drafting ?? []) {
-      await patch(r.id, { status: "failed", error: "That draft was interrupted before it finished. Nothing was spent or changed. Try again." });
+      await patch(r.id, { wait_tries: 1, retry_at: new Date().toISOString(), error: "Tinker's last try was cut off. He starts it again on his own." });
       out.interrupted++;
+    }
+
+    // 1b. drafts waiting on a free model (or in line): re-run the ones that are due, two at a time.
+    //     retry_at is moved forward first (a 12 minute lease), so two ticks never run the same draft twice.
+    const { data: due } = await db.from("ha_automations").select("*").eq("status", "drafting").gt("wait_tries", 0).lte("retry_at", new Date().toISOString()).order("retry_at").limit(2);
+    for (const r of due ?? []) {
+      const { data: got } = await db.from("ha_automations").update({ retry_at: new Date(Date.now() + 12 * 60_000).toISOString() })
+        .eq("id", r.id).eq("retry_at", r.retry_at).select("*").maybeSingle();
+      if (got) { inBackground(runDraft(got, got.feedback ?? null)); out.redrafted++; }
+    }
+
+    // 1c. a warm device list: when ours is over 6 hours old, ask the Pi for a new one now (no AI; Hestia does the work),
+    //     so the first draft of the day does not stand around for 25 seconds. At most one ask per 30 minutes.
+    const { data: cat } = await db.from("ha_entity_catalog").select("captured_at").eq("id", true).maybeSingle();
+    const catAge = cat?.captured_at ? Date.now() - Date.parse(cat.captured_at) : Infinity;
+    if (catAge > CATALOG_WARM_MS) {
+      const { data: recent } = await db.from("home_hub_commands").select("id").eq("requested_by", "ha-automator").eq("action", "catalog").gte("created_at", minutesAgo(30)).limit(1);
+      if (!recent?.length) {
+        const { error } = await db.from("home_hub_commands").insert({ id: crypto.randomUUID(), target: "homeassistant", action: "catalog", payload: {}, requested_by: "ha-automator" });
+        out.catalog = error ? "could not ask the Pi: " + plainErr(error.message) : "asked the Pi for a new device list";
+      } else out.catalog = "device list is old, Pi already asked";
     }
 
     // 2. installing / undoing that the Pi never answered: one re-queue, then give up and say so
@@ -775,8 +856,9 @@ async function watch() {
       }
     }
     out.agent = st?.version ?? null;
-    await db.from("agent_beats").upsert({ slug: "tinker", at: new Date().toISOString(), ok: true,
-      summary: `Watch ran: ${out.requeued} re-sent, ${out.failed} gave up, ${out.handbacks} came back from the Code Worker` }, { onConflict: "slug" });
+    await db.from("agent_beats").upsert({ slug: "tinker", at: new Date().toISOString(), ok: pageOk,
+      summary: `Watch ran: ${out.page}; ${out.requeued} re-sent, ${out.failed} gave up, ${out.handbacks} came back from the Code Worker, ${out.redrafted} waiting drafts re-run` +
+        (out.catalog === "fresh" ? "" : `; ${out.catalog}`) }, { onConflict: "slug" });
   } catch (e) {
     console.error("ha-automator watch", plainErr(e));
     await db.from("agent_beats").upsert({ slug: "tinker", at: new Date().toISOString(), ok: false, summary: "Watch broke: " + plainErr(e) }, { onConflict: "slug" });

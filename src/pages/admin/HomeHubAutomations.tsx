@@ -34,6 +34,8 @@ type AutomationRow = {
   error: string | null;
   handoff_prompt: string | null;
   installed_at: string | null;
+  /** Drafting rows only: more than 0 means Tinker is waiting on a free model (or in line) and re-runs on his own. */
+  wait_tries?: number | null;
 };
 
 type Op = "generate" | "revise" | "install" | "undo" | "toggle" | "discard" | "handoff";
@@ -90,9 +92,9 @@ async function errorText(error: unknown, data: unknown): Promise<string> {
     } catch { /* not JSON */ }
   }
   const msg = (error as { message?: string } | null)?.message ?? "";
-  if (/failed to send|fetch|network/i.test(msg)) return "Could not reach the automation maker. Check your connection and try again.";
+  if (/failed to send|fetch|network/i.test(msg)) return "Could not reach the automation maker. Check your connection.";
   if (/not found|404/i.test(msg)) return "The automation maker is not switched on yet. It will work once the backend is deployed.";
-  return msg || "Something went wrong. Try again in a minute.";
+  return msg || "Something went wrong on the way to Tinker.";
 }
 
 async function callMaker(body: { op: Op } & Record<string, unknown>): Promise<{ ok: boolean; row?: AutomationRow; error?: string }> {
@@ -133,7 +135,7 @@ function TinkerWorking({ steps, label = "Tinker" }: { steps: string[]; label?: s
 
 /* ---------- small pieces ---------- */
 
-function StatusPill({ status }: { status: Status }) {
+function StatusPill({ status, waiting = false }: { status: Status; waiting?: boolean }) {
   const tone: Record<Status, string> = {
     drafting: "text-amber-200 bg-amber-400/10 border-amber-400/25",
     preview: "text-sky-200 bg-sky-400/10 border-sky-400/25",
@@ -149,7 +151,7 @@ function StatusPill({ status }: { status: Status }) {
   return (
     <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${tone[status]}`}>
       {Icon && <Icon className={`h-3.5 w-3.5 ${Icon === Loader2 ? "motion-safe:animate-spin" : ""}`} aria-hidden />}
-      {STATUS_LABEL[status]}
+      {status === "drafting" && waiting ? "Waiting" : STATUS_LABEL[status]}
     </span>
   );
 }
@@ -201,7 +203,10 @@ function AutomationCard({
   const muted = row.status === "undone" || row.status === "discarded";
   const working = BUSY_STATUSES.includes(row.status);
   const busy = busyOp !== null;
-  const steps = row.status === "installing" ? INSTALL_STEPS : row.status === "undoing" ? UNDO_STEPS : DRAFT_STEPS;
+  // A draft that cannot get a free model right now waits calmly and finishes on its own; the note comes from Tinker.
+  const waiting = row.status === "drafting" && (row.wait_tries ?? 0) > 0;
+  const waitNote = waiting ? (row.error?.trim() || "Waiting on a free model. Tinker finishes on his own.") : null;
+  const steps = waitNote ? [waitNote] : row.status === "installing" ? INSTALL_STEPS : row.status === "undoing" ? UNDO_STEPS : DRAFT_STEPS;
   const title = row.title?.trim() || (working ? "Working on it" : "Untitled automation");
 
   const btnOutline = "h-11 border-white/15 bg-transparent text-white/85 hover:bg-white/5 hover:text-white";
@@ -220,7 +225,7 @@ function AutomationCard({
             <h3 className="text-base font-semibold leading-snug text-white">{title}</h3>
             <p className="mt-1 text-xs text-white/60"><span className="whitespace-nowrap">{when(row.created_at)}</span></p>
           </div>
-          <StatusPill status={row.status} />
+          <StatusPill status={row.status} waiting={waiting} />
         </header>
 
         <p className="text-sm text-white/60">
@@ -255,6 +260,14 @@ function AutomationCard({
           <Banner tone="amber" title="Worth a careful look">
             {row.risk_reason?.trim() || "This one touches something that matters, like a lock, a door, the heat or a sound at night."}
           </Banner>
+        )}
+
+        {waiting && (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="ghost" onClick={() => onAct("discard")} disabled={busy} className="h-11 text-white/70 hover:bg-white/5 hover:text-white">
+              <Trash2 aria-hidden /> Discard
+            </Button>
+          </div>
         )}
 
         {row.status === "failed" && (
@@ -379,16 +392,29 @@ export default function HomeHubAutomations() {
   const [showEarlier, setShowEarlier] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  const lastCheck = useRef(0);
+  const read = () =>
+    supabase.from("ha_automations" as any).select("*").order("created_at", { ascending: false }).limit(30);
+
   const load = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("ha_automations" as any)
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(30);
+    let { data, error } = await read();
+    if (error && !/does not exist|schema cache|relation/i.test(error.message)) {
+      // Never show raw database text. Ask Tinker to check (and, if it is only a missing permission, repair) his own page,
+      // read once more, and only then give the plain message. He is told either way (tinker_page_check alerts).
+      // (At most once a minute, so the 4 second poll never hammers it.)
+      if (Date.now() - lastCheck.current > 60_000) {
+        lastCheck.current = Date.now();
+        try { await supabase.rpc("tinker_page_check" as any); } catch { /* the reload below decides */ }
+        ({ data, error } = await read());
+        if (error) {
+          try { await supabase.rpc("tinker_page_check" as any, { p_still_failing: true, p_load_error: error.message }); } catch { /* best effort */ }
+        }
+      }
+    }
     if (error) {
       setLoadError(/does not exist|schema cache|relation/i.test(error.message)
         ? "The automation list is not set up in the database yet. You can still type a request once it is."
-        : `Could not load your automations. ${error.message}`);
+        : "Tinker can't open your list right now. He's been told and is on it.");
     } else {
       setLoadError(null);
       setRows((data ?? []) as unknown as AutomationRow[]);
