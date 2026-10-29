@@ -371,6 +371,17 @@ class Walker:
                     self.wait_change(sg)
                     continue
 
+                # Jared said skip the insurer's policy lookup (the guest's policy number did not match): press the form's own Skip
+                if self.values.get("policy.skip_lookup") and any(rules.key_for_text(f.get("label") or "", s.get("title") or "") == "policy.number" for f in s["fields"]):
+                    sk = [b for b in s["buttons"] if re.search(r"^\s*skip\b", b["label"], re.I) and not b["disabled"]]
+                    if sk:
+                        step["answers"].append({"key": "policy.skip_lookup", "label": "Policy lookup", "value": "Skipped (Jared)"})
+                        self.filled.append({"key": "policy.skip_lookup", "label": "Policy lookup", "value": "Skipped (Jared)", "screen": self.n})
+                        step["shot"] = self.shot("policy-skip")
+                        self.click_btn('[data-ins-b="%d"]' % sk[0]["i"])
+                        self.wait_change(sg)
+                        continue
+
                 # fields
                 blank_before = len(self.left_blank)
                 for f in s["fields"]:

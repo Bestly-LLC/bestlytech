@@ -183,6 +183,12 @@ def choose(question, options, values):
         if len(pick) == 1:
             return pick[0], "reporter.insurer", "Jared's own policy is with Tesla Insurance"
         return None, None, "No 'another insurer' choice in: " + ", ".join(labels)[:120]
+    # "We can't find a record of that Progressive policy. Please try again." -> Try again (then the policy screen is skipped if Jared said so)
+    if re.search(r"(can.?t|cannot|could not|unable to) find (a record of )?(that|the|this|your)? ?.{0,20}policy", q):
+        pick = [l for l in labels if re.search(r"try again|go back|edit", norm(l))]
+        if len(pick) == 1 and v.get("policy.skip_lookup"):
+            return pick[0], "policy.skip_lookup", "Back to the policy screen, then Skip (Jared)"
+        return None, None, "The insurer found no policy with that number and name"
     if re.search(r"everyone.*(safe|okay|ok|fine)|is anyone (safe)", q):
         return yn(_safe(v), "loss.injuries", "Safe means nobody was injured (guest damage report)")
     if re.search(r"(anyone|anybody|any one|someone|were there any).*(injur|hurt)|any injuries|injuries", q):
