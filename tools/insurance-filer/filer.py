@@ -50,7 +50,7 @@ UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML,
 MAX_JOBS_PER_RUN = 4
 FILL_SECONDS = 480           # cooperative deadline inside the walker
 JOB_HARD_SECONDS = 600       # watchdog thread: reports the job failed, kills the browser, exits
-RUN_HARD_SECONDS = 1500
+RUN_HARD_SECONDS = 3600          # a submit may wait on live questions to Jared (2026-10-29)
 
 
 # ------------------------------------------------------------------------------------------------ plumbing
@@ -164,6 +164,36 @@ def unknown_why(packet):
     return dict((u.get("key"), u.get("why")) for u in (packet.get("unknown") or []) if u.get("key"))
 
 
+def live_ask(job):
+    """File-based live question for the submit walk: writes inbox/q-<job>.json, waits up to 25 min for inbox/a-<job>.json
+    ({"answer": "..."}; "" means skip). Relayed to Jared; later the Command Center card answers it. (2026-10-29)"""
+    jid = (job.get("id") or "x")[:8]
+    qf, af = os.path.join(HERE, "inbox", "q-%s.json" % jid), os.path.join(HERE, "inbox", "a-%s.json" % jid)
+
+    def ask(question, options):
+        for x in (af,):
+            if os.path.exists(x):
+                os.remove(x)
+        json.dump({"question": question, "options": options, "at": time.strftime("%I:%M %p")}, open(qf, "w"))
+        log("ASKING JARED: %s %s" % (question, options or ""))
+        end = time.time() + 25 * 60
+        while time.time() < end:
+            if os.path.exists(af):
+                try:
+                    a = json.load(open(af)).get("answer")
+                except Exception:
+                    time.sleep(1)
+                    continue
+                os.remove(af)
+                os.remove(qf)
+                log("JARED ANSWERED: %s" % a)
+                return a
+            time.sleep(2)
+        os.remove(qf)
+        return None
+    return ask
+
+
 def run_walk(job, mode, url, packet, tmp, approved_hash=None, upload_shots=True, seconds=FILL_SECONDS, consent_before_tap=True, with_photos=True):
     """Open the form and walk it. -> walker result dict. The browser is always closed."""
     from playwright.sync_api import sync_playwright
@@ -188,7 +218,7 @@ def run_walk(job, mode, url, packet, tmp, approved_hash=None, upload_shots=True,
                               fetch_photos=photo_fetcher(job, tmp) if (with_photos and job.get("photos")) else None,
                               packet_hash=packet.get("hash"), approved_hash=approved_hash,
                               turo_claim_no=(packet.get("values") or {}).get("turo.claim_no"), unknown_why=unknown_why(packet),
-                              on_shot=on_shot, log=log, seconds=seconds)
+                              on_shot=on_shot, log=log, seconds=seconds, ask=live_ask(job) if mode == "submit" else None)
             res = w.run()
             res["run_dir"] = run_dir
             return res
@@ -336,7 +366,7 @@ def main_run():
                 done(job["id"], "failed", {}, "this filer does not do '%s'" % job["kind"])
                 continue
             try:
-                with Watchdog(job, JOB_HARD_SECONDS):
+                with Watchdog(job, 3300 if job["kind"] == "submit" else JOB_HARD_SECONDS):   # submit can wait on live questions
                     fn(job)
                 ran.append(job["kind"])
             except Exception as e:

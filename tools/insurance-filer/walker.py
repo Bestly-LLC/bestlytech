@@ -100,7 +100,7 @@ class Stop(Exception):
 
 class Walker:
     def __init__(self, page, values, mode="dry", shots_dir=None, consent_before_tap=True, fetch_photos=None, packet_hash=None,
-                 approved_hash=None, turo_claim_no=None, unknown_why=None, on_shot=None, log=None, seconds=480):
+                 approved_hash=None, turo_claim_no=None, unknown_why=None, on_shot=None, log=None, seconds=480, ask=None):
         assert mode in ("dry", "fill", "submit")
         self.page = page
         self.values = values or {}
@@ -126,6 +126,7 @@ class Walker:
         self._photo_files = None
         self.n = 0
         self.restarts = 0
+        self.ask = ask                       # submit only: ask(question, options|None) -> answer text, '' to skip, None = no answer
 
     # ------------------------------------------------------------------ helpers
     def snap(self):
@@ -207,6 +208,10 @@ class Walker:
             return
         key = rules.key_for_text(label, title)
         val = rules.text_value(key, self.values, title)
+        if (val is None or (key in ("loss.time", "vehicle.color") and not val)) and self.ask:
+            a = self.asked(label or title, [o.get("text") for o in (f.get("options") or [])] or None)
+            if a:
+                val = a
         if key in ("loss.time", "vehicle.color") and not val:
             self.unknown(key, label, self.n)
             return
@@ -245,6 +250,21 @@ class Walker:
                     time.sleep(0.4)
         except Exception:
             pass
+
+    def asked(self, question, options):
+        """Ask Jared live and keep this session open (a restart makes Progressive text him a code). The wait does not count
+        against the time limit. -> answer text or None. (2026-10-29)"""
+        t0 = time.time()
+        self.shot("asking")
+        try:
+            a = self.ask(question, options)
+        except Exception as e:
+            self.log("ask failed:", e)
+            a = None
+        self.deadline += time.time() - t0
+        if a is not None:
+            self.values["asked." + question[:60]] = a
+        return a
 
     def handle_verify(self):
         """Progressive's 'Verify your identity' pop-up (it texts Jared a code to resume an unfinished claim) shows up a moment
@@ -332,6 +352,10 @@ class Walker:
                 if s["choices"] and not [f for f in s["fields"] if f.get("type") not in ("radio",)]:
                     opts = [c["label"] for c in s["choices"]]
                     pick, key, note = rules.choose(s.get("title") or "", opts, self.values)
+                    if not pick and self.ask:
+                        a = self.asked(s.get("title") or "", opts)
+                        if a in opts:
+                            pick, key = a, "asked." + (s.get("step_key") or "q")
                     if not pick:
                         step["shot"] = self.shot("question")
                         raise Stop("blocked", "The form asked \"%s\" and I have no answer on file for it. %s" % ((s.get("title") or "")[:140], note or ""))

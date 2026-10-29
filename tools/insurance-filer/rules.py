@@ -195,6 +195,12 @@ def choose(question, options, values):
         return yn("Yes", "reporter.role", "Owner of the car (Turo host)")
     if re.search(r"were you (driving|in the (car|vehicle)|present|a passenger)|were you there", q):
         return yn("No", "reporter.role", "The renter was driving; the owner was not in the car")
+    # "Who are you insured by?" = Jared's OWN policy on the car: Tesla Insurance (Jared 2026-10-29) -> "Another insurer"
+    if re.search(r"who are you insured (by|with)|who is your (insurer|insurance)|your (own )?(auto )?insurance (company|carrier|provider)", q):
+        pick = [l for l in labels if re.search(r"another|other (insurer|company)|different", norm(l))]
+        if len(pick) == 1:
+            return pick[0], "reporter.insurer", "Jared's own policy is with Tesla Insurance"
+        return None, None, "No 'another insurer' choice in: " + ", ".join(labels)[:120]
     # "Are you filing on behalf of yourself, or someone else?" Jared files for his OWN car (he owns it), so: Myself. (fix 2026-10-29)
     if re.search(r"on behalf of (yourself|you)\b|yourself,? or someone else|for yourself or", q):
         pick = [l for l in labels if re.search(r"\b(myself|yourself)\b", norm(l))]
