@@ -17,13 +17,13 @@
  *
  * 2026-10-28 (Jared): Local alerts v2, in parity with the projector wall (his words: "Make sure that the sky and wall are in parity, both admin and
  *   projector"). One category registry + incident snapshot (SQL citizen_snapshot_json via wall_admin_citizen) is drawn the same way here and in
- *   wall.html: icon dot per incident in its category color, labels for the nearest three and new ones, a notes stack under Home, a legend of what is
- *   showing. The Local alerts button opens the SAME per-category switches as Wall > Sky details, saved in the wall's state, so they change the
+ *   wall.html: icon dot per incident in its category color (dots only on the map; the words live in the Near home list, like the wall's Local
+ *   alerts card; no labels, notes stack or legend on the map). The Local alerts button opens the SAME per-category switches as Wall > Sky details, saved in the wall's state, so they change the
  *   projector too. Only Roads/Traffic and Current location are phone-map-only. Components: components/admin/LocalAlerts.tsx.
  * 2026-10-11 (Jared): Blue Steel, the Model 3, shows as a top-down car (marker A) when it is inside the map and its reading is
  * under 30 min old. Parked = "Blue Steel"; in D or R = "Blue Steel · 34 mph". Same rule as the wall (wall.html, /api/car).
  */
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Maximize2, Minimize2, Plane, RotateCw, Compass, LocateFixed, Loader2, Route, TrafficCone, Siren, Plus, Minus, Smartphone, Presentation, X as CloseX } from "lucide-react";
@@ -681,105 +681,50 @@ export default function Sky() {
             );
           })()}
 
-          {/* Local alerts v2 (Sky Sync): same snapshot, registry and rules as the wall (wall.html citPaint). An icon dot per incident in its
-              category color, labels for the nearest three and anything new (kept upright), then a calm notes stack under Home for area alerts,
-              far items and anything off the map, plus a legend of the categories showing. */}
+          {/* Local alerts v2 (Sky Sync): same snapshot, registry and rules as the wall (wall.html citPaint). Dots only on the map: an icon dot per
+              incident in its category color (a new one pulses), nudged clear of the Home marker. The words live in the Near home list, same as the wall's Local alerts card. */}
           {cit && citFresh && alertSw.master && (() => {
             const reg = new Map(cit.cats.map((c) => [c.id, c] as const));
-            const dotFt = cit.dot_ft ?? 6600, nmax = cit.notes_max ?? 3;
-            let ring = 0;
+            const dotFt = cit.dot_ft ?? 6600;
+            const hx = X(homeMi.x), hy = Y(homeMi.y), clear = 34 * u;
+            let ring = 0, stack = 0;
             const dots: { c: CitInc; cat: CitCat; op: number; x: number; y: number }[] = [];
-            const notes: CitInc[] = [];
-            const vis = new Set<string>();
             for (const c of cit.incidents) {
               const cat = reg.get(c.cat);
               if (!cat || !catIsOn(alertSw, cat)) continue;
               const op = citOpacity(c, now);
-              if (op <= 0) continue;
-              vis.add(c.cat);
-              if (c.place === "note") { notes.push(c); continue; }
+              if (op <= 0 || c.place === "note") continue;
               let la = c.lat, lo = c.lng;
               if (c.place === "ring") { const th = ((ring++ * 72 + 20) * Math.PI) / 180; la = HOME[0] + (0.32 / 69) * Math.cos(th); lo = HOME[1] + (0.32 / 57.3) * Math.sin(th); }
-              else if (c.dist_ft > dotFt) { notes.push(c); continue; }
+              else if (c.dist_ft > dotFt) continue;
               const m = toMi(la, lo, home);
-              if (!Number.isFinite(m.x) || !Number.isFinite(m.y) || Math.hypot(m.x, m.y) > radius * 1.04) { notes.push(c); continue; }
-              dots.push({ c, cat, op, x: X(m.x), y: Y(m.y) });
+              if (!Number.isFinite(m.x) || !Number.isFinite(m.y) || Math.hypot(m.x, m.y) > radius * 1.04) continue;
+              let x = X(m.x), y = Y(m.y);
+              const dx = x - hx, dy = y - hy, d = Math.hypot(dx, dy);
+              if (d < clear) {
+                // keep clear of the Home marker: push radially out to the edge of its zone (spread around it when dead on Home)
+                const a = d > 0.01 ? Math.atan2(dy, dx) : ((135 + 66 * stack++) * Math.PI) / 180;
+                x = hx + Math.cos(a) * clear; y = hy + Math.sin(a) * clear;
+              }
+              dots.push({ c, cat, op, x, y });
             }
-            const used: { x: number; y: number }[] = [];
-            const labelled = new Set<string>();
-            const isNew = (c: CitInc) => isNewInc(c, now);
-            for (const p of dots) {
-              const clash = used.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 90 * u);
-              if (isNew(p.c) || (labelled.size < 3 && !clash)) { used.push(p); labelled.add(p.c.key); }
-            }
-            const fsz = 12 * u;
-            const chips = [...cit.cats].sort((a, b) => a.ord - b.ord).filter((c) => vis.has(c.id));
-            const W = Math.min(459 * u, 940);
-            // Phone view keeps the dark pills; Wall view has none (a projector can't draw dark), just white text.
-            const pill = (bgA: number): CSSProperties => (wall ? { borderRadius: 999 } : { borderRadius: 999, background: `rgba(12,20,38,${bgA})`, boxShadow: `0 0 ${9 * u}px ${5 * u}px rgba(12,20,38,${bgA})` });
-            const tile = (cat: CitCat | undefined, size: number) => (
-              <span style={{ display: "grid", placeItems: "center", flex: "none", width: size, height: size, borderRadius: size * 0.3, background: cat?.color ?? "#64D2FF" }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke={iconInk(cat?.color)} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" style={{ width: size * 0.72, height: size * 0.72, overflow: "visible" }} dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />
-              </span>
-            );
             return (
               <g aria-label="Local alerts">
                 {dots.map(({ c, cat, op, x, y }) => {
-                  const sub = c.sub ?? "";
-                  const title = c.short || c.title;
                   const isNew = isNewInc(c, now);
-                  const tw = Math.max(title.length * fsz * 0.58, sub.length * fsz * 0.5) + fsz * 1.8, th = fsz * (isNew ? 3.9 : 2.9);
                   return (
                     <g key={c.key} transform={`translate(${x} ${y})`} opacity={op} style={{ transition: "opacity 1.2s ease" }}>
                       <g transform={`scale(${LEVEL_SCALE[c.level] ?? 1})`}>
                         {/* halo: feathered, still at rest; only a new incident pulses */}
-                        <circle className={isNew ? "cit-h" : undefined} r={34 * u} fill={`url(#cit-${cat.id})`} style={isNew ? undefined : { opacity: 0.8 }} />
+                        <circle className={isNew ? "cit-h" : undefined} r={24 * u} fill={`url(#cit-${cat.id})`} style={isNew ? undefined : { opacity: 0.72 }} />
                         <circle r={10 * u} fill={cat.color} />
                         <g transform={`translate(${-6.6 * u} ${-6.6 * u}) scale(${(13.2 * u) / 24})`} fill="none" stroke={iconInk(cat.color)} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"
                           dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />
                       </g>
                       {hi?.key === c.key && <circle key={hi.n} className="cit-ring" r={30 * u} fill="none" stroke="#FFFFFF" strokeWidth={5 * u} filter="url(#cit-soft)" />}
-                      {labelled.has(c.key) && (
-                        <g transform={`rotate(${-mapUp}) translate(${17 * u} 0)`}>
-                          {!wall && <rect x={0} y={-th / 2} width={tw} height={th} rx={th / 2} fill="#0c1426" fillOpacity={0.62} filter="url(#cit-soft)" />}
-                          {isNew && <text x={fsz * 0.9} y={-th / 2 + fsz * 1.15} style={{ fill: cat.color, fontSize: fsz * 0.7, fontWeight: wall ? 800 : 700, letterSpacing: "0.09em", whiteSpace: "pre" }}>{wall ? "NEW" : `SKY SYNC${NB}·${NB}NEW`}</text>}
-                          <text x={fsz * 0.9} y={isNew ? fsz * 0.1 : -fsz * 0.2} style={{ fill: wall ? "#FFFFFF" : "#EAF2FF", fontSize: fsz, fontWeight: 800, whiteSpace: "pre" }}>{title}</text>
-                          <text x={fsz * 0.9} y={isNew ? fsz * 1.35 : fsz * 1.05} style={{ fill: wall ? "#FFFFFF" : "#EAF2FF", fillOpacity: wall ? 1 : 0.74, fontSize: fsz * 0.84, fontWeight: wall ? 700 : 600, whiteSpace: "pre" }}>{sub}</text>
-                        </g>
-                      )}
                     </g>
                   );
                 })}
-                {(notes.length > 0 || chips.length > 0) && (
-                  <g transform={`translate(500 500) rotate(${-mapUp}) translate(0 ${42 * u})`}>
-                    <foreignObject x={-W / 2} y={0} width={W} height={160 * u} style={{ overflow: "visible", pointerEvents: "none" }}>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3.5 * u }}>
-                        {notes.slice(0, nmax).map((c) => {
-                          const cat = reg.get(c.cat);
-                          return (
-                            <div key={c.key} style={{ ...pill(0.52), display: "flex", alignItems: "center", gap: 4.2 * u, whiteSpace: "nowrap", fontSize: 9.5 * u, fontWeight: 600, lineHeight: 1.1, color: wall ? "#FFFFFF" : "rgba(234,242,255,.9)", padding: `${2.8 * u}px ${9 * u}px ${3 * u}px ${6.2 * u}px` }}>
-                              {wall ? tile(cat, 12.5 * u) : <svg viewBox="0 0 24 24" fill="none" stroke={cat?.color ?? "#64D2FF"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ width: 10.5 * u, height: 10.5 * u, flex: "none", overflow: "visible" }} dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />}
-                              <span>{`${c.short || c.title || "Alert"}${c.sub ? ` · ${c.sub}` : ""}`}</span>
-                            </div>
-                          );
-                        })}
-                        {notes.length > nmax && (
-                          <div style={{ ...pill(0.52), whiteSpace: "nowrap", fontSize: 9.5 * u, fontWeight: 600, lineHeight: 1.1, color: wall ? "#FFFFFF" : "rgba(234,242,255,.6)", padding: `${2.8 * u}px ${9 * u}px` }}>+{notes.length - nmax}{NB}more</div>
-                        )}
-                        {chips.length > 0 && (
-                          <div style={{ ...pill(0.4), display: "flex", flexWrap: "wrap", justifyContent: "center", gap: `${4.2 * u}px ${9 * u}px`, marginTop: 3.5 * u, padding: `${2.8 * u}px ${9 * u}px` }}>
-                            {chips.map((c) => (
-                              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 2.8 * u, whiteSpace: "nowrap", fontSize: 8.6 * u, fontWeight: 600, lineHeight: 1.1, color: wall ? "#FFFFFF" : "rgba(234,242,255,.78)" }}>
-                                {wall ? tile(c, 11.5 * u) : <svg viewBox="0 0 24 24" fill="none" stroke={c.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ width: 9.5 * u, height: 9.5 * u, flex: "none", overflow: "visible" }} dangerouslySetInnerHTML={{ __html: iconMarkup(c) }} />}
-                                <span>{c.label}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </foreignObject>
-                  </g>
-                )}
               </g>
             );
           })()}
