@@ -3,7 +3,7 @@
  */
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Binoculars, CheckCircle2, ExternalLink, Loader2, MessagesSquare, Phone, Siren, Users, Video } from "lucide-react";
+import { Binoculars, CheckCircle2, ExternalLink, Loader2, MessagesSquare, Phone, Siren, Users, Video, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,6 +60,7 @@ export function QuickRow() {
     <nav aria-label="Quick actions" className="flex flex-wrap gap-2">
       <EmergencyTile />
       <Quick onClick={openScout} icon={Binoculars} label="Ask Scout" />
+      <Quick to="/admin/home-hub/automations" icon={Wand2} label="Make an automation" />
       <Quick href="https://cloud.bestly.tech/apps/spreed" icon={MessagesSquare} label="Talk" />
       <Quick href="https://studio.bestly.tech" icon={ExternalLink} label="Studio" />
       <Quick to="/partner" icon={Users} label="Eli's portal" />

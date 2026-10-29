@@ -72,11 +72,11 @@ const cookieYetiItems = [
 const homeHubItems = [
   { title: "Emergency", url: "/admin/emergency", icon: Siren },
   { title: "Overview", url: "/admin/home-hub", icon: Server },
+  { title: "Automation Maker", url: "/admin/home-hub/automations", icon: Wand2 },
   { title: "Kitchen", url: "/admin/home-hub/kitchen", icon: ChefHat },
   { title: "Callbox", url: "/admin/home-hub/callbox", icon: DoorOpen },
   { title: "Pi-hole", url: "/admin/home-hub/pihole", icon: Shield },
   { title: "Home Assistant", url: "/admin/home-hub/home-assistant", icon: House },
-  { title: "Automation Maker", url: "/admin/home-hub/automations", icon: Wand2 },
   { title: "Homebridge", url: "/admin/home-hub/homebridge", icon: Boxes },
   { title: "Access backup", url: "/admin/home-hub/access", icon: KeyRound },
   { title: "Wall", url: "/admin/wall", icon: Projector },

@@ -491,6 +491,7 @@ export default function HomeHubAutomations() {
   const earlier = rows.filter((r) => r.status === "undone" || r.status === "discarded");
   const current = rows.filter((r) => r.status !== "undone" && r.status !== "discarded");
   const drafting = rows.some((r) => r.status === "drafting");
+  const installedCount = rows.filter((r) => r.status === "installed").length;
   const canSend = request.trim().length > 0 && !submitting;
 
   return (
@@ -499,6 +500,21 @@ export default function HomeHubAutomations() {
         title="Automation Maker"
         description="Say what should happen in your home. Tinker writes it, you look it over, then one tap installs it."
       />
+
+      {loaded && !loadError && (
+        <p role="status" className="inline-flex min-h-[44px] items-center gap-2.5 rounded-full border border-green-500/25 bg-green-500/[0.07] px-4 text-sm text-green-200">
+          <span aria-hidden className="relative inline-flex h-2.5 w-2.5 shrink-0">
+            <span className="absolute -inset-1.5 rounded-full bg-[radial-gradient(closest-side,rgba(74,222,128,0.45),transparent)]" />
+            <span className="relative h-2.5 w-2.5 rounded-full bg-green-400" />
+          </span>
+          <span>
+            <span className="font-semibold text-green-100">Tinker is on.</span>{" "}
+            {installedCount > 0
+              ? <span className="whitespace-nowrap">{installedCount} {installedCount === 1 ? "automation" : "automations"} installed.</span>
+              : "Ready for your first automation."}
+          </span>
+        </p>
+      )}
 
       {/* Composer */}
       <section aria-label="Make an automation" className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 sm:p-6">
@@ -577,8 +593,9 @@ export default function HomeHubAutomations() {
       {/* List */}
       {!loaded ? (
         <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} className="h-36 rounded-2xl bg-white/[0.04]" />)}</div>
-      ) : current.length === 0 && earlier.length === 0 ? (
-        !loadError && (
+      ) : loadError && rows.length === 0 ? null : (
+        <div className="space-y-4">
+          {current.length === 0 && (
           <Panel>
             <div className="flex flex-col items-center gap-2 py-6 text-center">
               <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.05]" aria-hidden><Wand2 className="h-5 w-5 text-white/60" /></span>
@@ -586,9 +603,7 @@ export default function HomeHubAutomations() {
               <p className="max-w-sm text-sm text-white/60"><Lines>Type what you want above and tap Make it. What Tinker makes shows up here.</Lines></p>
             </div>
           </Panel>
-        )
-      ) : (
-        <div className="space-y-4">
+          )}
           {current.map((row) => (
             <AutomationCard
               key={row.id}

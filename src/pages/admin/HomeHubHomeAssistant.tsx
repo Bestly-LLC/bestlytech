@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { ActionMenu } from "@/components/admin/ActionMenu";
 import { EmptyState } from "@/components/admin/EmptyState";
@@ -10,7 +11,7 @@ import { SNAPSHOT_STALE_MS, type HaSnapshot } from "@/services/homeHubApi";
 import {
   ago, HealthBadge, Panel, Stat, AgentUpgradeBanner, useAgent, useCommand, useSnapshot, type Health,
 } from "@/components/admin/homeHub/shared";
-import { Home, RefreshCw, ExternalLink, Search, Zap, AlertTriangle, ArrowUpCircle, Loader2, Lightbulb } from "lucide-react";
+import { Home, RefreshCw, ExternalLink, Search, Zap, AlertTriangle, ArrowUpCircle, Loader2, Lightbulb, Wand2 } from "lucide-react";
 
 const LAN_URL = "http://192.168.1.211:8123";
 const TAILSCALE_URL = "http://100.79.2.74:8123";
@@ -98,6 +99,19 @@ export default function HomeHubHomeAssistant() {
               hint={`${d.unavailable_count ?? 0} unavailable · ${(d.updates ?? []).length} updates`}
             />
           </div>
+
+          <Link
+            to="/admin/home-hub/automations"
+            className="group flex min-h-[64px] items-center gap-3 rounded-2xl border border-amber-400/25 bg-gradient-to-r from-amber-400/[0.10] to-transparent px-4 py-3 text-white hover:border-amber-400/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30 motion-safe:transition-colors motion-safe:active:scale-[0.99]"
+          >
+            <span aria-hidden className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300/90 to-orange-500/80">
+              <Wand2 className="h-5 w-5 text-black/75" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[15px] font-semibold">Make a new automation</span>
+              <span className="block text-sm text-white/65">Say what should happen. Tinker writes it, you tap Install.</span>
+            </span>
+          </Link>
 
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/55" aria-hidden />
