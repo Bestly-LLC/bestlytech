@@ -23,7 +23,7 @@
   14%, 32% { transform: translateX(-2px) scaleY(1); }
   46%, 62% { transform: translateX(2px) scaleY(1); }
   76% { transform: translateX(0) scaleY(1); }
-  88%, 100% { transform: translate(0, -1px) scaleY(.6); }
+  88%, 100% { transform: translate(0, -.5px) scale(1.06, 1.14); }
 }
 @keyframes ao-smile {
   0%, 76% { transform: scale(1, 1); }
@@ -44,7 +44,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .agent-orb .ao-face, .agent-orb .ao-spec, .agent-orb .ao-ring { animation: none !important; }
-  .agent-orb .ao-eyes  { animation: none !important; transform: translate(0, -1px) scaleY(.6); }
+  .agent-orb .ao-eyes  { animation: none !important; transform: translate(0, -.5px) scale(1.06, 1.14); }
   .agent-orb .ao-smile { animation: none !important; transform: scale(1.14, 1.45); }
 }
 @media (prefers-reduced-transparency: reduce) {
@@ -52,6 +52,6 @@
   .agent-orb .ao-ring { filter: none; }
 }
 
-/* animate="none": rest on the smiling frame */
-.agent-orb.is-static .ao-eyes  { transform: translate(0, -1px) scaleY(.6); }
+/* animate="none": rest on the smiling frame, eyes wide open */
+.agent-orb.is-static .ao-eyes  { transform: translate(0, -.5px) scale(1.06, 1.14); }
 .agent-orb.is-static .ao-smile { transform: scale(1.14, 1.45); }
