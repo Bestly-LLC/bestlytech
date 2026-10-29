@@ -2,14 +2,15 @@
 // Admin JWT (or the service key). Nothing here ever stores or shows a Bestly Cloud password.
 //   overview                    -> people, paid-reader budget, last purge, photo sync state
 //   save_member {role,name,last_name,email}   -> remember who the seat is for (mom | mariah)
-//   create_account {role}       -> Bestly Cloud account (random password nobody sees, NO email on the account, so Bestly Cloud
-//                                  sends nothing), "Family" group, per-person folder shares under Family Recipes
+//   create_account {role}       -> links (or, if Bestly Cloud allows it, makes) the account: random password nobody sees, NO email on
+//                                  the account so Bestly Cloud sends nothing; "Family" group; per-person folder shares under Family Recipes.
+//                                  Making new accounts needs Jared's real admin password, which this app does not hold: returns needsAdmin.
 //   draft {role}                -> the welcome email wording (editable in the page)
 //   send_welcome {role,subject,text} -> sets the account's email (so "Forgot password?" works) and sends the welcome from
 //                                  jared@bestly.tech with his Bestly signature (bestly-send-mail). Only on Jared's tap.
 //   cloud_welcome {role}        -> optional: Bestly Cloud's own set-password message, for people who skip the "Forgot password?" step
 //   set_paid {on,cap}           -> the small paid reader switch and monthly cap (0 to 50 dollars)
-//   selftest                    -> creates and deletes a throwaway email-less account to prove creation sends nothing
+//   check_cloud                 -> does the Family group exist, and are the linked accounts there with no email on them
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -67,10 +68,11 @@ const randomPassword = () => {
 };
 async function ensureGroup(c: Nc, name: string): Promise<string> {
   const g = await ocs(c, "GET", `/cloud/groups?search=${encodeURIComponent(name)}`);
-  if ((g.data?.groups ?? []).includes(name)) return "group already there";
+  if ((g.data?.groups ?? []).includes(name)) return "Family group is there";
   const m = await ocs(c, "POST", "/cloud/groups", new URLSearchParams({ groupid: name }));
-  if (m.code !== 100) throw new Error(`could not make the ${name} group: ${m.msg || m.code}`);
-  return "group made";
+  if (m.code === 100) return "Family group made";
+  // The house app password can read and share but Bestly Cloud asks for Jared's real password before it makes groups or accounts.
+  return `Family group is missing (${m.msg || m.code}); the one-time setup script makes it`;
 }
 const canSee = (viewer: string, owner: string) => owner === "mom" ? true : viewer === "mom" ? false : (viewer === "jared" || viewer === "mariah") && (owner === "jared" || owner === "mariah");
 
@@ -97,6 +99,7 @@ async function ensureShares(c: Nc): Promise<string[]> {
 
 const baseUid = (name: string) => name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "").slice(0, 24);
 
+class NeedsAdmin extends Error {}
 async function createAccount(role: string) {
   const steps: string[] = [];
   const { data: m } = await db.from("family_members").select("*").eq("role", role).maybeSingle();
@@ -109,18 +112,20 @@ async function createAccount(role: string) {
   if (!uid) throw new Error("Could not make a username from that name.");
   const ex = await ocs(c, "GET", `/cloud/users/${encodeURIComponent(uid)}`);
   if (ex.code === 100) {
-    if (!m.nc_uid) throw new Error(`A Bestly Cloud account named "${uid}" already exists and is not part of this seat. Pick another name.`);
-    steps.push(`account ${uid} already there`);
+    const shown = String(ex.data?.displayname ?? ex.data?.["display-name"] ?? "").trim().toLowerCase();
+    if (!m.nc_uid && shown !== `${m.name} ${m.last_name}`.toLowerCase()) throw new Error(`A Bestly Cloud account named "${uid}" already exists under a different name. Pick another name.`);
+    steps.push(`account ${uid} is there${ex.data?.email ? " (it has an email on it)" : ", no email on it"}`);
   } else {
     // No email on the account on purpose: Bestly Cloud sends its own welcome message only when an address is given.
     const form = new URLSearchParams({ userid: uid, password: randomPassword(), displayName: `${m.name} ${m.last_name}` });
     form.append("groups[]", "Family");
     const r = await ocs(c, "POST", "/cloud/users", form);
+    if (r.code === 403) throw new NeedsAdmin("Bestly Cloud wants Jared's own admin password before it makes a new account, and this app only holds a limited key. Make the account once with the setup script (or in Bestly Cloud under Users, leaving email empty), then press Create again to link it.");
     if (r.code !== 100) throw new Error(`Bestly Cloud would not make the account: ${r.msg || r.code}`);
     steps.push(`account ${uid} made, no email on it`);
   }
   const g = await ocs(c, "POST", `/cloud/users/${encodeURIComponent(uid)}/groups`, new URLSearchParams({ groupid: "Family" }));
-  steps.push(g.code === 100 ? "added to the Family group" : "already in the Family group");
+  steps.push(g.code === 100 ? "added to the Family group" : (ex.data?.groups ?? []).includes("Family") ? "already in the Family group" : "not in the Family group yet (optional)");
   await db.from("family_members").update({ nc_uid: uid, status: m.status === "active" ? "active" : "invited", invited_at: m.invited_at ?? new Date().toISOString() }).eq("role", role);
   steps.push(...await ensureShares(c));
   return { uid, steps };
@@ -208,7 +213,7 @@ Deno.serve(async (req) => {
         if (error) return J({ ok: false, error: error.message }, 500);
         return J({ ok: true });
       }
-      case "create_account": return J({ ok: true, ...(await createAccount(role)) });
+      case "create_account": try { return J({ ok: true, ...(await createAccount(role)) }); } catch (e) { if (e instanceof NeedsAdmin) return J({ ok: false, needsAdmin: true, error: e.message }, 409); throw e; }
       case "draft": {
         const { data: m } = await db.from("family_members").select("name, email, nc_uid").eq("role", role).maybeSingle();
         if (!m) return J({ ok: false, error: "No such seat." }, 404);
@@ -245,20 +250,12 @@ Deno.serve(async (req) => {
         if (error) return J({ ok: false, error: error.message }, 500);
         return J({ ok: true });
       }
-      case "selftest": {
-        const c = await nc(); const uid = "zz-cookbook-test"; const steps: string[] = [];
-        const pre = await ocs(c, "GET", `/cloud/users/${uid}`);
-        if (pre.code === 100) await ocs(c, "DELETE", `/cloud/users/${uid}`);
-        steps.push(await ensureGroup(c, "Family"));
-        const form = new URLSearchParams({ userid: uid, password: randomPassword(), displayName: "Cookbook test (delete me)" });
-        form.append("groups[]", "Family");
-        const made = await ocs(c, "POST", "/cloud/users", form);
-        steps.push(`create: ${made.code} ${made.msg}`);
-        const who = await ocs(c, "GET", `/cloud/users/${uid}`);
-        steps.push(`email on the account: ${who.data?.email ? "yes (unexpected)" : "none"}; groups: ${JSON.stringify(who.data?.groups ?? [])}`);
-        const del = await ocs(c, "DELETE", `/cloud/users/${uid}`);
-        steps.push(`delete: ${del.code}`);
-        return J({ ok: made.code === 100 && del.code === 100, steps });
+      case "check_cloud": {
+        const c = await nc(); const out: Record<string, unknown> = {};
+        out.family_group = (await ocs(c, "GET", "/cloud/groups?search=Family")).data?.groups ?? [];
+        const { data: ms } = await db.from("family_members").select("role, nc_uid");
+        for (const m of ms ?? []) if (m.nc_uid) { const u = await ocs(c, "GET", `/cloud/users/${encodeURIComponent(m.nc_uid)}`); out[m.role] = { exists: u.code === 100, email: !!u.data?.email, groups: u.data?.groups ?? [] }; }
+        return J({ ok: true, ...out });
       }
       default: return J({ ok: false, error: "unknown op" }, 400);
     }
