@@ -1,0 +1,28 @@
+/* Local alerts on the sky (Sky Sync, v3 Oct 29, beige wall): the projector can only ADD light, so nothing here relies on a dark fill.
+   Solid dot in the category color with a white icon (dark ink for very light colors), feathered halo, bold white text, no pills.
+   Quiet at rest: only a NEW incident (pinged in the last 5 min) pulses. Same registry, rules and order as the admin Sky map. */
+#airScrP #airCit{position:absolute;left:0;top:0;width:0;height:0;transition:opacity .8s ease;pointer-events:none;}
+#airCit .ct{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;opacity:0;transition:opacity 1.2s ease;pointer-events:none;--r:100,210,255;--ink:#FFFFFF;--sc:1;}
+#airCit .ct[data-lv="low"]{--sc:.82;} #airCit .ct[data-lv="high"]{--sc:1.12;} #airCit .ct[data-lv="critical"]{--sc:1.26;}
+#airCit .ct-s{position:absolute;left:0;top:0;width:0;height:0;transform:scale(var(--sc));}
+#airCit .ct-h{position:absolute;left:-120px;top:-120px;width:240px;height:240px;border-radius:50%;opacity:.8;background:radial-gradient(circle,rgba(var(--r),.85) 0%,rgba(var(--r),.26) 32%,rgba(var(--r),.08) 54%,rgba(var(--r),0) 72%);}
+#airCit .ct.ct-new .ct-h{animation:ctPulse 2.8s ease-in-out infinite;will-change:transform,opacity;}
+#airCit .ct-c{position:absolute;left:-24px;top:-24px;width:48px;height:48px;border-radius:50%;background:rgb(var(--r));box-shadow:0 0 24px 10px rgba(var(--r),.45);}
+#airCit .ct-c svg{position:absolute;left:10px;top:10px;width:28px;height:28px;fill:none;stroke:var(--ink);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;overflow:visible;}
+@keyframes ctPulse{0%,100%{transform:scale(.72);opacity:.6}50%{transform:scale(1.08);opacity:1}}
+@media (prefers-reduced-motion:reduce){#airCit .ct.ct-new .ct-h{animation:none;}}
+#airCit .ct-l{position:absolute;left:44px;top:-38px;white-space:nowrap;font:800 40px/1.06 var(--sf);letter-spacing:-.01em;color:#FFFFFF;padding:6px 10px;transition:opacity .8s ease;}
+#airCit .ct-l u{display:block;text-decoration:none;font-weight:700;font-size:29px;color:#FFFFFF;margin-top:3px;}
+#airCit .ct-l s{display:none;text-decoration:none;font-size:24px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:rgb(var(--r));margin-bottom:4px;}
+#airCit .ct.ct-new .ct-l{font-size:46px;} #airCit .ct.ct-new .ct-l s{display:block;}
+#airCit .ct.ct-nolab .ct-l{opacity:0;}
+/* notes under Home: area alerts, far items and anything outside the frame; then the legend for what is showing. No backing: white text. */
+#airCit .ct-nb{position:absolute;left:0;top:0;width:1400px;margin-left:-700px;display:flex;flex-direction:column;align-items:center;gap:12px;opacity:0;transition:opacity 1.2s ease;pointer-events:none;}
+#airCit .ct-nr{display:flex;align-items:center;gap:14px;white-space:nowrap;font:700 32px/1.1 var(--sf);color:#FFFFFF;padding:4px 10px;--r:100,210,255;--ink:#FFFFFF;}
+#airCit .ct-nr svg,#airCit .ct-lc svg{box-sizing:border-box;flex:none;border-radius:50%;background:rgb(var(--r));box-shadow:0 0 14px 4px rgba(var(--r),.4);fill:none;stroke:var(--ink);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;overflow:visible;}
+#airCit .ct-nr svg{width:42px;height:42px;padding:8px;}
+#airCit .ct-nr.more{font-weight:600;padding-left:10px;}
+#airCit .ct-lg{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 30px;margin-top:12px;padding:4px 10px;}
+#airCit .ct-lc{display:flex;align-items:center;gap:10px;white-space:nowrap;font:700 27px/1.1 var(--sf);color:#FFFFFF;--r:100,210,255;--ink:#FFFFFF;}
+#airCit .ct-lc svg{width:34px;height:34px;padding:6px;}
+body.skit #airCit,body.sheep #airCit,body.pf-noyou #airCit,body.mapping #airCit{display:none!important;}
