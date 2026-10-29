@@ -168,6 +168,21 @@ project_id = "rcqfqhguwpmaarseifqg"
 [functions.recipe-parse]
   verify_jwt = false
 
+[functions.family-auth]
+  verify_jwt = false
+
+[functions.family-upload]
+  verify_jwt = false
+
+[functions.family-photo]
+  verify_jwt = false
+
+[functions.family-admin]
+  verify_jwt = false
+
+[functions.family-maint]
+  verify_jwt = false
+
 [functions.email-builder]
   verify_jwt = false
 
