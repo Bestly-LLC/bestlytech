@@ -23,6 +23,12 @@ Why this shape (2026-10-03, docs/pi-move-opusplan-2026-10-03.md):
     check-in and return photos the same way (signed-in Chromium, AVIF -> JPEG) and pushes each to the PRIVATE insurance-photos bucket through
     the insurance-filer edge function (op photo_put). Tries every photo type Turo is known or likely to use, logs a count per type so the
     first real run shows which ones exist, and never stops trip/inbox reading. Read-only in Turo.
+  - 1.5.0 (2026-10-29): Claims Closer cleaning reports (migration 20261029230000_claims_cleaning.sql). claims_cleaning_take hands out one
+    job at a time: 'photos' reads Turo's issue options (/api/reservations/{id}/issue/options) and the trip photo list, sends Jared's
+    check-in/check-out and the guest's return photos to the claims-cleaning edge function, asks it for a free-AI read and reports back;
+    'file' re-checks that CLEANING_VIOLATION is still AVAILABLE, then posts POST /api/reservations/{id}/issue
+    {reservationIssueType: CLEANING_VIOLATION, message, selectedTripPhotos} (the same call Turo's own report-issue page makes) and re-reads
+    the options to confirm Turo saved it; 'verify' only re-reads. dry_run posts nothing. Wrapped so a failure never stops trip/inbox reading.
   - Every 2 minutes, or within ~15 s when the iPhone Turo shortcut pings (turo_reader_note returns poke).
   - Signed out: the tab goes to Turo's sign-in page and a LAN-only noVNC view starts on :6080 so Jared can
     sign in once from any browser at home; it stops by itself once signed in.
@@ -33,7 +39,7 @@ import asyncio, base64, json, os, subprocess, sys, tempfile, time, urllib.reques
 
 import websockets
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
 PUB = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"
 CDP = "http://127.0.0.1:9334"
@@ -483,6 +489,157 @@ async def ins_photos(tab):
             await img.close()
 
 
+# ---------------------------------------------------------------- Claims Closer: cleaning reports (1.5.0)
+CLEAN_READ_JS = """
+const id = %s;
+const o = await fetch('/api/reservations/' + id + '/issue/options', {credentials:'include'});
+if (o.status === 401 || o.status === 403) return {signed_out: o.status};
+if (!o.ok) throw new Error('issue options ' + o.status);
+const opt = ((await o.json()).options || []).find(x => x.issueType === 'CLEANING_VIOLATION') || null;
+const i = await fetch('/api/reservation/imagesV2?reservationId=' + id, {credentials:'include'});
+if (!i.ok) throw new Error('trip photos ' + i.status);
+const imgs = ((await i.json()).images || []).map(x => ({uuid: x.uuid || x.imageId, role: x.photographerDriverRole, step: x.step,
+  type: x.imageType, taken: (x.takenAtTime || x.createdTime || {}).epochMillis || null, description: x.description || null}));
+return {turo_status: opt ? opt.issueStatus : 'NO_OPTION', images: imgs};
+"""
+
+CLEAN_STATUS_JS = """
+const o = await fetch('/api/reservations/' + %s + '/issue/options', {credentials:'include'});
+if (o.status === 401 || o.status === 403) throw new Error('Turo is signed out on the Pi (' + o.status + ')');
+if (!o.ok) throw new Error('issue options ' + o.status);
+const opt = ((await o.json()).options || []).find(x => x.issueType === 'CLEANING_VIOLATION') || null;
+return {turo_status: opt ? opt.issueStatus : 'NO_OPTION'};
+"""
+
+CLEAN_FILE_JS = """
+const a = %s;
+const read = async () => {
+  const o = await fetch('/api/reservations/' + a.reservation_id + '/issue/options', {credentials:'include'});
+  if (o.status === 401 || o.status === 403) throw new Error('Turo is signed out on the Pi (' + o.status + ')');
+  if (!o.ok) throw new Error('issue options ' + o.status);
+  const opt = ((await o.json()).options || []).find(x => x.issueType === 'CLEANING_VIOLATION') || null;
+  return opt ? opt.issueStatus : 'NO_OPTION';
+};
+const before = await read();
+if (before === 'EXPIRED' || before === 'NO_OPTION') throw new Error('Turo no longer takes a cleaning report on this trip (' + before + ')');
+if (before !== 'AVAILABLE') return {posted: false, already: true, turo_status: before};
+const list = await (await fetch('/api/reservation/imagesV2?reservationId=' + a.reservation_id, {credentials:'include'})).json();
+const have = new Set(((list && list.images) || []).map(x => x.uuid || x.imageId));
+const ids = (a.photo_uuids || []).filter(u => have.has(u));
+if (!ids.length) throw new Error('none of the chosen photos are on the Turo trip');
+const message = String(a.message || '').slice(0, 500);
+const body = {reservationIssueType: 'CLEANING_VIOLATION', message: message, selectedTripPhotos: ids};
+if (a.dry_run) return {dry_run: true, would_post: body, turo_status: before};
+const r = await fetch('/api/reservations/' + a.reservation_id + '/issue', {method:'POST', credentials:'include',
+  headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+const t = await r.text();
+if (r.status === 401 || r.status === 403) throw new Error('Turo is signed out on the Pi (' + r.status + ')');
+if (!r.ok) throw new Error('report ' + r.status + ': ' + t.slice(0, 200));
+let after = before;
+for (let i = 0; i < 4 && after === 'AVAILABLE'; i++) { await new Promise(x => setTimeout(x, 2500)); try { after = await read(); } catch (e) {} }
+return {posted: true, http: r.status, turo_status: after, message: message, photo_uuids: ids, response: t.slice(0, 200)};
+"""
+
+
+def pick_cleaning_photos(images, trip_start_ms, trip_end_ms):
+    """Turo trip photos -> (pre, post, guest_post) lists of image dicts, inside Turo's windows:
+    check-in within 24h before the trip starts (pickups can run a few hours late), check-out from trip start to 24h after the end,
+    the guest's return photos the same. Odometer shots are left out: they show a screen, not the cabin."""
+    H = 3600 * 1000
+    pre, post, guest = [], [], []
+    for x in images or []:
+        if not x.get("uuid") or (x.get("type") or "") == "ODOMETER":
+            continue
+        t = x.get("taken")
+        role, step = x.get("role"), x.get("step")
+        if role == "HOST" and step == "OWNER_CHECK_IN" and t and trip_start_ms - 24 * H <= t <= trip_start_ms + 6 * H:
+            pre.append(x)
+        elif role == "HOST" and step == "OWNER_CHECK_OUT" and t and trip_start_ms <= t <= trip_end_ms + 24 * H:
+            post.append(x)
+        elif role == "GUEST" and step == "RENTER_CHECK_OUT" and t and trip_start_ms <= t <= trip_end_ms + 24 * H:
+            guest.append(x)
+    key = lambda x: x.get("taken") or 0
+    return sorted(pre, key=key), sorted(post, key=key), sorted(guest, key=key)
+
+
+def spread(xs, n):
+    if len(xs) <= n:
+        return list(xs)
+    return [xs[round(i * (len(xs) - 1) / (n - 1))] for i in range(n)]
+
+
+def iso_ms(s):
+    from datetime import datetime
+    return int(datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp() * 1000)
+
+
+def small_jpeg(raw):
+    """photo bytes -> JPEG at most 1280 px wide (the free AI reads these; full size is not needed)"""
+    with tempfile.TemporaryDirectory() as d:
+        src, dst = os.path.join(d, "in.bin"), os.path.join(d, "out.jpg")
+        open(src, "wb").write(raw)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-vf", "scale='min(1280,iw)':-2", "-q:v", "4", dst], check=True, timeout=60)
+        return open(dst, "rb").read()
+
+
+async def cleaning(tab):
+    """Claims Closer: one cleaning-report job per pass. Claimed first (claims_cleaning_take) so it never runs twice at once."""
+    j = (rpc("claims_cleaning_take", {"p_token": TOKEN}) or {}).get("job")
+    if not j:
+        return
+    res, kind = int(j["reservation_id"]), j["kind"]
+    img = None
+    try:
+        if kind == "verify":
+            out = await tab.js(CLEAN_STATUS_JS % res, timeout=60) or {}
+        elif kind == "file":
+            p = j.get("payload") or {}
+            arg = {"reservation_id": res, "message": p.get("message") or "", "photo_uuids": p.get("photo_uuids") or [], "dry_run": bool(j.get("dry_run"))}
+            out = await tab.js(CLEAN_FILE_JS % json.dumps(arg), timeout=90) or {}
+        else:
+            r = await tab.js(CLEAN_READ_JS % res, timeout=90) or {}
+            if r.get("signed_out"):
+                raise RuntimeError(f"Turo signed out ({r['signed_out']})")
+            pre, hpost, guest = pick_cleaning_photos(r.get("images"), iso_ms(j["trip_start"]), iso_ms(j["trip_end"]))
+            todo = [(x, "pre") for x in spread(pre, 20)] + [(x, "post") for x in hpost[:20]] + [(x, "guest_post") for x in spread(guest, 10)]
+            known = set(j.get("known") or [])
+            added, failed = 0, 0
+            for x, side in todo:
+                if x["uuid"] in known:
+                    continue
+                try:
+                    if img is None:
+                        img = ImgTab(); await img.open()
+                    raw = await img.photo(x["uuid"])
+                    if not raw:
+                        failed += 1; continue
+                    post_json = {"op": "put", "reservation_id": res, "uuid": x["uuid"], "side": side, "step": x.get("step"),
+                                 "taken_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(x["taken"] / 1000)) if x.get("taken") else None,
+                                 "jpeg_b64": base64.b64encode(small_jpeg(raw)).decode()}
+                    post(f"{SB}/functions/v1/claims-cleaning", post_json, {"x-tesla-worker": TOKEN}, timeout=90)
+                    known.add(x["uuid"]); added += 1
+                    await asyncio.sleep(1)
+                except Exception as e:
+                    failed += 1; log(f"cleaning photo {x['uuid']}: {e}")
+            out = {"turo_status": r.get("turo_status"), "pre_count": len(pre), "post_count": len(hpost) + len(guest),
+                   "counts": {"host_check_in": len(pre), "host_check_out": len(hpost), "guest_return": len(guest), "added": added, "failed": failed}}
+            if pre and (hpost or guest):
+                chk = post(f"{SB}/functions/v1/claims-cleaning", {"op": "check", "reservation_id": res}, {"x-tesla-worker": TOKEN}, timeout=150) or {}
+                if chk.get("ok"):
+                    out["check"] = {k: chk.get(k) for k in ("verdict", "confidence", "reasons", "support_uuids", "model")}
+                else:
+                    out["check_error"] = str(chk.get("error") or "no answer")[:300]
+        rpc("claims_cleaning_done", {"p_token": TOKEN, "p_res": res, "p_kind": kind, "p_ok": True, "p_result": out})
+        log(f"cleaning {kind} {res}: {str(out)[:220]}")
+    except Exception as e:
+        log(f"cleaning {kind} {res} failed: {e}")
+        try: rpc("claims_cleaning_done", {"p_token": TOKEN, "p_res": res, "p_kind": kind, "p_ok": False, "p_error": str(e)[:300]})
+        except Exception: pass
+    finally:
+        if img is not None:
+            await img.close()
+
+
 class NoVNC:
     """LAN-only sign-in view (noVNC -> wayvnc on 127.0.0.1:5911). Only runs while Turo is signed out."""
     def __init__(self):
@@ -566,6 +723,10 @@ async def main():
                         await ins_photos(tab)
                     except Exception as e:
                         log(f"insurance photos: {e}")
+                    try:
+                        await cleaning(tab)
+                    except Exception as e:
+                        log(f"cleaning: {e}")
                     if time.time() - last_sync >= (60 if poke else SYNC_EVERY):
                         last_sync = time.time()
                         try:
