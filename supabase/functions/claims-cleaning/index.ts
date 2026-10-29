@@ -4,9 +4,10 @@
 //
 //   {op:"put", reservation_id, uuid, side:"pre"|"post"|"guest_post", step?, taken_at?, jpeg_b64}
 //        -> claim-evidence bucket cleaning/<reservation>/<side>/<uuid>.jpg + a claim_cleaning_photos row (a known uuid is skipped)
-//   {op:"check", reservation_id}
-//        -> {ok, verdict:"abuse"|"normal"|"unclear", confidence, reasons, support_uuids, model}
-//        Free AI only (Groq vision for the photos, free text models for the call). Never paid.
+//   {op:"look_next", reservation_id}   (pg_cron claims_cleaning_look_tick, once a minute, service key)
+//        -> reads the next 3 unread photos with free vision and saves a note on each; when all are read, decides with a free text model
+//           and hands the result to claims_cleaning_verdict. Free AI only, never paid.
+//   {op:"urls", reservation_id}   (the Claims page, Jared's sign-in) -> signed photo links, 1 hour
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { llm, llmVision } from "../_shared/free-llm.ts";
 
@@ -61,37 +62,71 @@ async function load(p: Photo): Promise<{ b64: string; mime: string } | null> {
   return { b64: bytesToB64(new Uint8Array(await data.arrayBuffer())), mime: "image/jpeg" };
 }
 
-// Groq's free vision models take as few as 3 images per call (qwen3.8, 2026-10-29), so photos go 3 at a time and keep their own numbers.
+// Groq's free vision model (qwen3.8, 2026-10-29) takes at most 3 images a call and about 7,000 input tokens a minute, so the read is
+// paced: claims_cleaning_look_tick (pg_cron, every minute) asks for one 3-photo look, the notes are saved per photo, and the decision
+// is made once every chosen photo has notes.
 const PER_CALL = 3;
 
-let started = Date.now();
+type Noted = Photo & { note: string | null };
 
-async function look(photos: Photo[], label: string, res: number) {
-  const parts: string[] = [];
-  let model = "";
-  for (let k = 0; k < photos.length; k += PER_CALL) {
-    const group = photos.slice(k, k + PER_CALL);
-    const imgs = (await Promise.all(group.map(load))).filter(Boolean) as { b64: string; mime: string }[];
-    if (imgs.length !== group.length) {   // keep numbering honest: a missing download is noted, not shifted
-      parts.push(...group.map((_, i) => `${k + i + 1} | other | 0 | photo could not be loaded`));
-      continue;
-    }
-    let r: Awaited<ReturnType<typeof llmVision>> | null = null;
-    for (let attempt = 0; attempt < 4 && !r; attempt++) {
-      try {
-        r = await llmVision({ images: imgs, job: "claims-cleaning-look", ref: String(res), fn: "claims-cleaning", scope: "background",
-          paid: "never", maxTokens: 400, deadlineMs: 30_000,
-          prompt: `${LOOK}\n(These are ${label} photos ${k + 1} to ${k + group.length}. Number your lines ${k + 1} to ${k + group.length}.)` });
-      } catch (e) {
-        // Groq's free tier allows only a few image calls a minute: wait it out and try again, inside the time the reader allows.
-        if (attempt === 3 || Date.now() - started > 100_000) throw e;
-        await new Promise((x) => setTimeout(x, 15_000));
-      }
-    }
-    parts.push(r!.text.trim());
-    model = r!.model;
+/** the photos the check uses: Jared's check-out first, then the guest's return photos, plus check-in photos spread across the set */
+export function chosen<T extends { side: string }>(all: T[]): { pre: T[]; post: T[]; host: number } {
+  const pre = spread(all.filter((p) => p.side === "pre"), MAX_PRE);
+  const host = all.filter((p) => p.side === "post");
+  const guest = all.filter((p) => p.side === "guest_post");
+  const post = [...host, ...spread(guest, Math.max(0, MAX_POST - host.length))].slice(0, MAX_POST);
+  return { pre, post, host: Math.min(host.length, MAX_POST) };
+}
+
+/** "2 | interior | 3 | spilled drink" lines -> {2: "interior | 3 | spilled drink"} */
+export function parseLines(text: string): Record<number, string> {
+  const out: Record<number, string> = {};
+  for (const line of text.split("\n")) {
+    const m = /^\s*\**\s*(\d+)\s*[|.):-]\s*(.+)$/.exec(line);
+    if (m) out[Number(m[1])] = m[2].trim().slice(0, 300);
   }
-  return { notes: parts.join("\n"), model };
+  return out;
+}
+
+async function lookNext(res: number) {
+  const { data: rows, error } = await db.from("claim_cleaning_photos").select("uuid, side, taken_at, storage_path, note").eq("reservation_id", res).order("taken_at");
+  if (error) return { ok: false, error: error.message };
+  let { pre, post, host } = chosen((rows ?? []) as Noted[]);
+  if (!pre.length || !post.length) return { ok: false, error: `need photos on both sides (before ${pre.length}, after ${post.length})` };
+  const todo = [...post, ...pre].filter((p) => !p.note).slice(0, PER_CALL);
+  if (todo.length) {
+    const imgs = (await Promise.all(todo.map(load)));
+    const ok = imgs.map((x, i) => x ? i : -1).filter((i) => i >= 0);
+    for (const i of imgs.map((x, k) => x ? -1 : k).filter((k) => k >= 0)) {
+      await db.from("claim_cleaning_photos").update({ note: "other | 0 | photo could not be loaded", noted_at: new Date().toISOString() }).eq("uuid", todo[i].uuid);
+    }
+    if (!ok.length) return { ok: true, read: 0, left: [...post, ...pre].filter((p) => !p.note).length - todo.length };
+    const r = await llmVision({ images: ok.map((i) => imgs[i]!), job: "claims-cleaning-look", ref: String(res), fn: "claims-cleaning", scope: "background",
+      paid: "never", maxTokens: 400, deadlineMs: 40_000, prompt: `${LOOK}\n(Number your lines 1 to ${ok.length}.)` });
+    const lines = parseLines(r.text);
+    for (const [n, i] of ok.entries()) {
+      await db.from("claim_cleaning_photos").update({ note: lines[n + 1] ?? "other | 0 | no description returned", noted_at: new Date().toISOString() }).eq("uuid", todo[i].uuid);
+    }
+    const left = [...post, ...pre].filter((p) => !p.note && !todo.includes(p)).length;
+    if (left) return { ok: true, read: ok.length, left, model: r.model };
+  }
+  // every chosen photo has notes: re-read them and decide (free text model)
+  const { data: fresh } = await db.from("claim_cleaning_photos").select("uuid, side, taken_at, storage_path, note").eq("reservation_id", res).order("taken_at");
+  ({ pre, post, host } = chosen((fresh ?? []) as Noted[]));
+  const notes = (xs: Noted[]) => xs.map((p, i) => `${i + 1} | ${p.note ?? "no description"}`).join("\n");
+  const j = await llm({ task: "judge", system: JUDGE, json: true, maxTokens: 500, job: "claims-cleaning-judge", ref: String(res), fn: "claims-cleaning",
+    scope: "background", paid: "never", privacy: "private",
+    user: `BEFORE photos (${pre.length}):\n${notes(pre)}\n\nAFTER photos (${post.length}; 1 to ${host} are the host's check-out, the rest are the guest's own return photos):\n${notes(post)}`,
+    validate: (o) => ["abuse", "normal", "unclear"].includes(o?.verdict) ? null : "verdict must be abuse, normal or unclear" });
+  const o = j.json ?? {};
+  const conf = Math.max(0, Math.min(1, Number(o.confidence) || 0));
+  const support = (Array.isArray(o.support) ? o.support : []).map((n: unknown) => Number(n)).filter((n: number) => n >= 1 && n <= post.length)
+    .map((n: number) => post[n - 1].uuid);
+  const check = { verdict: o.verdict, confidence: conf, reasons: String(o.reasons ?? "").slice(0, 300),
+    support_uuids: support.length ? support : post.slice(0, host || post.length).map((p) => p.uuid), model: j.model, looked: { before: pre.length, after: post.length } };
+  const { data: v, error: ve } = await db.rpc("claims_cleaning_verdict", { p_res: res, p_check: check });
+  if (ve) return { ok: false, error: ve.message };
+  return { ok: true, decided: true, check, result: v };
 }
 
 Deno.serve(async (req) => {
@@ -140,32 +175,11 @@ Deno.serve(async (req) => {
     return J({ ok: true, path });
   }
 
-  if (b.op === "check") {
-    const { data: rows, error } = await db.from("claim_cleaning_photos").select("uuid, side, taken_at, storage_path").eq("reservation_id", res).order("taken_at");
-    if (error) return J({ ok: false, error: error.message }, 500);
-    const all = (rows ?? []) as Photo[];
-    const pre = spread(all.filter((p) => p.side === "pre"), MAX_PRE);
-    const host = all.filter((p) => p.side === "post");
-    const guest = all.filter((p) => p.side === "guest_post");
-    const post = [...host, ...spread(guest, Math.max(0, MAX_POST - host.length))].slice(0, MAX_POST);
-    if (!pre.length || !post.length) return J({ ok: false, error: `need photos on both sides (before ${pre.length}, after ${post.length})` });
+  if (b.op === "look_next") {
     try {
-      started = Date.now();
-      const a = await look(post, "AFTER (return)", res);   // one at a time: the free tier has a per-minute limit
-      const z = await look(pre, "BEFORE (check-in)", res);
-      if (!a.notes || !z.notes) return J({ ok: false, error: "the photo read came back empty" });
-      const j = await llm({ task: "judge", system: JUDGE, json: true, maxTokens: 500, job: "claims-cleaning-judge", ref: String(res), fn: "claims-cleaning",
-        scope: "background", paid: "never", privacy: "private",
-        user: `BEFORE photos (${pre.length}):\n${z.notes}\n\nAFTER photos (${post.length}; 1 to ${host.length} are the host's check-out, the rest are the guest's own return photos):\n${a.notes}`,
-        validate: (o) => ["abuse", "normal", "unclear"].includes(o?.verdict) ? null : "verdict must be abuse, normal or unclear" });
-      const o = j.json ?? {};
-      const conf = Math.max(0, Math.min(1, Number(o.confidence) || 0));
-      const support = (Array.isArray(o.support) ? o.support : []).map((n: unknown) => Number(n)).filter((n: number) => n >= 1 && n <= post.length)
-        .map((n: number) => post[n - 1].uuid);
-      return J({ ok: true, verdict: o.verdict, confidence: conf, reasons: String(o.reasons ?? "").slice(0, 300),
-        support_uuids: support.length ? support : host.map((p) => p.uuid), model: `${a.model} + ${j.model}`, looked: { before: pre.length, after: post.length } });
+      return J(await lookNext(res));
     } catch (e) {
-      return J({ ok: false, error: `free AI unavailable: ${(e as Error).message}`.slice(0, 300) });
+      return J({ ok: false, error: `free AI: ${(e as Error).message}`.slice(0, 300) });   // next minute's tick tries again
     }
   }
   return J({ ok: false, error: "unknown op" }, 400);

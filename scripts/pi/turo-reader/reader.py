@@ -29,6 +29,8 @@ Why this shape (2026-10-03, docs/pi-move-opusplan-2026-10-03.md):
     'file' re-checks that CLEANING_VIOLATION is still AVAILABLE, then posts POST /api/reservations/{id}/issue
     {reservationIssueType: CLEANING_VIOLATION, message, selectedTripPhotos} (the same call Turo's own report-issue page makes) and re-reads
     the options to confirm Turo saved it; 'verify' only re-reads. dry_run posts nothing. Wrapped so a failure never stops trip/inbox reading.
+  - 1.5.1 (2026-10-29): Groq's free vision allows about one 3-photo call a minute, so the read moved to the cloud (pg_cron
+    claims_cleaning_look_tick -> claims-cleaning look_next). 'photos' now only stores the photos (768 px) and reports pending_check.
   - Every 2 minutes, or within ~15 s when the iPhone Turo shortcut pings (turo_reader_note returns poke).
   - Signed out: the tab goes to Turo's sign-in page and a LAN-only noVNC view starts on :6080 so Jared can
     sign in once from any browser at home; it stops by itself once signed in.
@@ -39,7 +41,7 @@ import asyncio, base64, json, os, subprocess, sys, tempfile, time, urllib.reques
 
 import websockets
 
-VERSION = "1.5.0"
+VERSION = "1.5.1"
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
 PUB = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"
 CDP = "http://127.0.0.1:9334"
@@ -562,6 +564,11 @@ def pick_cleaning_photos(images, trip_start_ms, trip_end_ms):
     return sorted(pre, key=key), sorted(post, key=key), sorted(guest, key=key)
 
 
+def failed_all(added, failed, todo, known):
+    """True when photos were wanted, none are stored and every download failed (nothing for the read to look at)."""
+    return added == 0 and failed > 0 and not any(x["uuid"] in known for x, _ in todo)
+
+
 def spread(xs, n):
     if len(xs) <= n:
         return list(xs)
@@ -574,11 +581,11 @@ def iso_ms(s):
 
 
 def small_jpeg(raw):
-    """photo bytes -> JPEG at most 1280 px wide (the free AI reads these; full size is not needed)"""
+    """photo bytes -> JPEG at most 768 px wide (the free AI reads these; Groq's free vision counts pixels against a per-minute limit)"""
     with tempfile.TemporaryDirectory() as d:
         src, dst = os.path.join(d, "in.bin"), os.path.join(d, "out.jpg")
         open(src, "wb").write(raw)
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-vf", "scale='min(1280,iw)':-2", "-q:v", "4", dst], check=True, timeout=60)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-vf", "scale='min(768,iw)':-2", "-q:v", "4", dst], check=True, timeout=60)
         return open(dst, "rb").read()
 
 
@@ -623,12 +630,8 @@ async def cleaning(tab):
                     failed += 1; log(f"cleaning photo {x['uuid']}: {e}")
             out = {"turo_status": r.get("turo_status"), "pre_count": len(pre), "post_count": len(hpost) + len(guest),
                    "counts": {"host_check_in": len(pre), "host_check_out": len(hpost), "guest_return": len(guest), "added": added, "failed": failed}}
-            if pre and (hpost or guest):
-                chk = post(f"{SB}/functions/v1/claims-cleaning", {"op": "check", "reservation_id": res}, {"x-tesla-worker": TOKEN}, timeout=150) or {}
-                if chk.get("ok"):
-                    out["check"] = {k: chk.get(k) for k in ("verdict", "confidence", "reasons", "support_uuids", "model")}
-                else:
-                    out["check_error"] = str(chk.get("error") or "no answer")[:300]
+            # 1.5.1: the free-AI read runs in the cloud a few photos a minute (claims_cleaning_look_tick); the reader only stores them
+            out["pending_check"] = bool(pre and (hpost or guest) and not failed_all(added, failed, todo, known))
         rpc("claims_cleaning_done", {"p_token": TOKEN, "p_res": res, "p_kind": kind, "p_ok": True, "p_result": out})
         log(f"cleaning {kind} {res}: {str(out)[:220]}")
     except Exception as e:
