@@ -52,6 +52,11 @@ const autoDeny = (text: string) => {
   const hit = AUTO_DENY.find((d) => low.includes(d));
   return hit ? `'${hit}' is not allowed in automations Tinker installs` : null;
 };
+const FX_ENT_RE = /^[a-z_]+\.[a-z0-9_]+$/;
+const FX_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
+const FX_PKG_RE = /^[A-Za-z0-9][A-Za-z0-9_\-/]{1,95}$/;
+const FX_BAK_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,95}\.\d{8}-\d{6}(-\d+)?\.bak$/;
+const isoOk = (v: unknown) => typeof v === "string" && v.length <= 40 && !Number.isNaN(Date.parse(v));
 const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
   pihole: {
     enable: none,
@@ -128,6 +133,37 @@ const ALLOWED: Record<string, Record<string, (p: Payload) => string | null>> = {
       pkgName(p) ??
       (typeof p.yaml === "string" && p.yaml.trim().length > 0 && p.yaml.length <= 40_000 ? null : "package_put needs yaml (1-40000 characters)") ??
       autoDeny(p.yaml as string),
+    // agent >= 1.6.2: the Automation Fixer (Tinker reads and repairs EXISTING automations, docs/ha-fixer-opusplan.md).
+    // Reads are narrow; every write is checked against the fingerprint of what Tinker read, backed up on the Pi first, and the
+    // agent refuses to add shell/REST/secret plumbing (it compares against what is already in the file, so old content is untouched).
+    inventory: none,
+    evidence: (p) =>
+      Array.isArray(p.entity_ids) && p.entity_ids.length <= 12 && p.entity_ids.every((e) => typeof e === "string" && FX_ENT_RE.test(e)) &&
+      isoOk(p.start) && isoOk(p.end) && (p.focus === undefined || p.focus === null || (typeof p.focus === "string" && FX_ENT_RE.test(p.focus)))
+        ? null
+        : "evidence needs entity_ids (up to 12 like light.kitchen), start and end (ISO times)",
+    item_edit: (p) =>
+      typeof p.domain === "string" && ["automation", "script", "scene"].includes(p.domain) &&
+      typeof p.id === "string" && FX_ID_RE.test(p.id) &&
+      p.config && typeof p.config === "object" && !Array.isArray(p.config) && JSON.stringify(p.config).length <= 60_000 &&
+      (p.expect_hash === undefined || p.expect_hash === null || (typeof p.expect_hash === "string" && /^[0-9a-f]{16}$/.test(p.expect_hash)))
+        ? null
+        : "item_edit needs domain (automation, script or scene), id, config (an object under 60000 characters) and expect_hash",
+    package_patch: (p) =>
+      typeof p.name === "string" && FX_PKG_RE.test(p.name) && !p.name.includes("..") &&
+      typeof p.expect_sha256 === "string" && /^[0-9a-f]{64}$/.test(p.expect_sha256) &&
+      Array.isArray(p.edits) && p.edits.length >= 1 && p.edits.length <= 12 &&
+      p.edits.every((e) => e && typeof e === "object" && typeof (e as Payload).old === "string" && typeof (e as Payload).new === "string" &&
+        ((e as Payload).old as string).trim().length > 0 && ((e as Payload).old as string).length <= 8000 && ((e as Payload).new as string).length <= 8000)
+        ? null
+        : "package_patch needs name, expect_sha256 and 1 to 12 edits of {old, new}",
+    package_restore: (p) =>
+      typeof p.name === "string" && FX_PKG_RE.test(p.name) && !p.name.includes("..") &&
+      typeof p.backup === "string" && FX_BAK_RE.test(p.backup) &&
+      (p.expect_sha256 === undefined || p.expect_sha256 === null || (typeof p.expect_sha256 === "string" && /^[0-9a-f]{64}$/.test(p.expect_sha256))) &&
+      (p.reload_keys === undefined || (Array.isArray(p.reload_keys) && p.reload_keys.length <= 12 && p.reload_keys.every((k) => typeof k === "string" && /^([a-z_]+|\?)$/.test(k))))
+        ? null
+        : "package_restore needs name and backup (a Tinker backup file name)",
   },
   // agent >= 1.3.0: read-only diagnosis, and the same heal ladder the health loop uses.
   nextcloud: { status: none, restart: none },
