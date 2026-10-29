@@ -1,0 +1,8 @@
+venv/
+browsers/
+runs/
+inbox/
+__pycache__/
+*.pyc
+run.lock
+tests/fixtures/cody_*.json

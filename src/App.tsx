@@ -66,7 +66,7 @@ const HostGate = lazyPage(() => import("./pages/HostGate"));
 const TuroEntry = lazyPage(() => import("./pages/TuroEntry"));
 const DriverKey = lazyPage(() => import("./pages/DriverKey"));
 const ApproveDriver = lazyPage(() => import("./pages/ApproveDriver"));
-const AvaApprove = lazyPage(() => import("./pages/AvaApprove"));
+const ApproveByCode = lazyPage(() => import("./pages/ApproveByCode"));
 const CallboxTap = lazyPage(() => import("./pages/CallboxTap"));
 const EmailUnsubscribe = lazyPage(() => import("./pages/EmailUnsubscribe"));
 const PrivacyConfirm = lazyPage(() => import("./pages/PrivacyConfirm"));
@@ -251,8 +251,9 @@ const App = () => {
                 <Route path="/turo-lax" element={<TuroEntry kind="lax" />} />
                 <Route path="/d/:token" element={<DriverKey />} />
                 <Route path="/xa/:token" element={<ApproveDriver />} />
-                {/* Ava asked on a call; the approval is a Face ID tap here, in the signed-in admin (signed out goes to passkey login and back) */}
-                <Route path="/y/:code" element={<AdminRoute><AvaApprove /></AdminRoute>} />
+                {/* Ava asked on a call; the approval is a Face ID tap here, in the signed-in admin (signed out goes to passkey login and back).
+                    A code starting with "i" is Claims Closer's insurance claim: the same door opens the page that shows the filled-in claim or the email. */}
+                <Route path="/y/:code" element={<AdminRoute><ApproveByCode /></AdminRoute>} />
                 {/* Someone is at the building callbox and Ava is holding them; Jared taps Open or Send them off (signed out goes to login and back) */}
                 <Route path="/b/:code" element={<AdminRoute><CallboxTap /></AdminRoute>} />
                 <Route path="/lax/:slug" element={<LaxGuest />} />

@@ -19,6 +19,10 @@ Why this shape (2026-10-03, docs/pi-move-opusplan-2026-10-03.md):
     Turo's own "Create invoice" form makes). Re-reads the incident first (an invoice already there is never doubled, the amount may
     never exceed Turo's own maxAmountAllowedForResolveDirectlyInvoice) and verifies afterwards. payload.dry_run runs every check and
     posts nothing. Wrapped so a failure never stops trip/inbox reading.
+  - 1.4.0 (2026-10-29): Insurance Filer photo job (ins_pi_take -> ins_pi_done). For a guest's insurance claim, downloads the damage-report,
+    check-in and return photos the same way (signed-in Chromium, AVIF -> JPEG) and pushes each to the PRIVATE insurance-photos bucket through
+    the insurance-filer edge function (op photo_put). Tries every photo type Turo is known or likely to use, logs a count per type so the
+    first real run shows which ones exist, and never stops trip/inbox reading. Read-only in Turo.
   - Every 2 minutes, or within ~15 s when the iPhone Turo shortcut pings (turo_reader_note returns poke).
   - Signed out: the tab goes to Turo's sign-in page and a LAN-only noVNC view starts on :6080 so Jared can
     sign in once from any browser at home; it stops by itself once signed in.
@@ -29,7 +33,7 @@ import asyncio, base64, json, os, subprocess, sys, tempfile, time, urllib.reques
 
 import websockets
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
 PUB = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"
 CDP = "http://127.0.0.1:9334"
@@ -390,6 +394,95 @@ async def sync_claims(tab):
             await img.close()
 
 
+# ---------------------------------------------------------------- Insurance Filer: photos for a guest's insurance claim (read-only in Turo)
+# photoType -> where it lands. BEFORE_DAMAGE / AFTER_DAMAGE are verified; the others are tried and logged (an unknown type is just an empty list).
+INS_TYPES = {"BEFORE_DAMAGE": "before", "AFTER_DAMAGE": "after", "GUEST_DAMAGE": "guest_report", "GUEST_REPORTED_DAMAGE": "guest_report",
+             "GUEST_AFTER_DAMAGE": "guest_report", "CHECK_IN": "checkin", "CHECKIN": "checkin", "TRIP_START": "checkin",
+             "CHECK_OUT": "return", "CHECKOUT": "return", "RETURN": "return", "TRIP_END": "return"}
+INS_JS = """
+const c = %s; const types = %s;
+const out = {types: {}, errors: {}, incident_photo_paths: []};
+const sleep = ms => new Promise(x => setTimeout(x, ms));
+for (const t of types) {
+  try {
+    const p = await fetch('/api/claims/fnol/photos?photoType=' + t + '&reservationId=' + c.reservation_id, {credentials:'include'});
+    if (p.status === 401 || p.status === 403) return {signed_out: p.status};
+    if (p.ok) { const j = await p.json(); out.types[t] = (j.images || j.photos || []); } else { out.types[t] = []; out.errors[t] = p.status; }
+  } catch (e) { out.types[t] = []; out.errors[t] = String(e); }
+  await sleep(500);
+}
+// Photos Turo hangs on the incident itself (guest-submitted ones): walk the JSON for lists of objects that carry a uuid.
+try {
+  const i = await fetch('/api/v2/incidents/' + c.incident_id, {credentials:'include'});
+  if (i.ok) {
+    const j = await i.json(); const found = [];
+    const walk = (o, path, d) => { if (d > 6 || !o) return;
+      if (Array.isArray(o)) { if (o.length && o.every(x => x && typeof x === 'object' && (x.uuid || x.imageId)) && /photo|image|picture/i.test(path)) found.push({path, items: o}); else o.forEach((x, k) => walk(x, path + '[]', d + 1)); }
+      else if (typeof o === 'object') for (const k of Object.keys(o)) walk(o[k], path + '.' + k, d + 1); };
+    walk(j, '', 0);
+    out.incident_photo_paths = found.map(f => f.path + ' x' + f.items.length);
+    out.incident_photos = found.flatMap(f => f.items.map(x => ({uuid: x.uuid || x.imageId, path: f.path, description: x.description || null, step: x.step || null})));
+  }
+} catch (e) { out.errors.incident = String(e); }
+return out;
+"""
+
+
+async def ins_photos(tab):
+    """Insurance Filer: fetch the photos of one claim. Claimed first (ins_pi_take) so a job never runs twice at once."""
+    j = (rpc("ins_pi_take", {"p_token": TOKEN}) or {}).get("job")
+    if not j:
+        return
+    img = None
+    try:
+        known = set(j.get("known") or [])
+        arg = {"reservation_id": j["reservation_id"], "incident_id": j.get("incident_id")}
+        r = await tab.js(INS_JS % (json.dumps(arg), json.dumps(list(INS_TYPES))), timeout=150) or {}
+        if r.get("signed_out"):
+            raise RuntimeError(f"Turo signed out ({r['signed_out']})")
+        todo, seen = [], set()
+        for ptype, items in (r.get("types") or {}).items():
+            for p in items or []:
+                u = p.get("uuid") or p.get("imageId")
+                if u and u not in seen:
+                    seen.add(u); todo.append((u, INS_TYPES.get(ptype, "guest_report"), p, ptype))
+        for p in r.get("incident_photos") or []:
+            u = p.get("uuid")
+            if u and u not in seen:
+                seen.add(u); todo.append((u, "guest_report" if "guest" in (p.get("path") or "").lower() else "after", p, "incident"))
+        by_type, added, failed = {}, 0, 0
+        for u, source, p, ptype in todo:
+            by_type[ptype] = by_type.get(ptype, 0) + 1
+            if u in known:
+                continue
+            try:
+                if img is None:
+                    img = ImgTab(); await img.open()
+                raw = await img.photo(u)
+                if not raw:
+                    failed += 1; log(f"ins photo {u}: no bytes"); continue
+                jpg, w, h = to_jpeg(raw)
+                taken = ((p.get("takenAtTime") or {}).get("epochMillis"))
+                post(f"{SB}/functions/v1/insurance-filer", {"op": "photo_put", "oc_id": j["oc_id"], "source": source, "turo_uuid": u,
+                     "step": p.get("step"), "description": p.get("description"),
+                     "taken_at": (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(taken / 1000)) if taken else None),
+                     "width": w, "height": h, "jpeg_b64": base64.b64encode(jpg).decode()}, {"x-tesla-worker": TOKEN}, timeout=90)
+                known.add(u); added += 1
+                await asyncio.sleep(1.5)
+            except Exception as e:
+                failed += 1; log(f"ins photo {u}: {e}")
+        res = {"added": added, "failed": failed, "by_type": by_type, "errors": r.get("errors") or {}, "incident_photo_paths": r.get("incident_photo_paths") or []}
+        rpc("ins_pi_done", {"p_token": TOKEN, "p_job": j["id"], "p_status": "done", "p_result": res})
+        log(f"ins photos {j['reservation_id']}: {res}")
+    except Exception as e:
+        log(f"ins photos job {j.get('id')} failed: {e}")
+        try: rpc("ins_pi_done", {"p_token": TOKEN, "p_job": j["id"], "p_status": "failed", "p_error": str(e)[:300]})
+        except Exception: pass
+    finally:
+        if img is not None:
+            await img.close()
+
+
 class NoVNC:
     """LAN-only sign-in view (noVNC -> wayvnc on 127.0.0.1:5911). Only runs while Turo is signed out."""
     def __init__(self):
@@ -469,6 +562,10 @@ async def main():
                         await turo_actions(tab)
                     except Exception as e:
                         log(f"claims turo actions: {e}")
+                    try:
+                        await ins_photos(tab)
+                    except Exception as e:
+                        log(f"insurance photos: {e}")
                     if time.time() - last_sync >= (60 if poke else SYNC_EVERY):
                         last_sync = time.time()
                         try:

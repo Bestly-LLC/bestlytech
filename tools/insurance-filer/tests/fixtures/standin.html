@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Stand-in claims portal</title>
+<style>body{font:16px system-ui;margin:0;background:#f3f4f6}main{max-width:520px;margin:40px auto;background:#fff;padding:32px;border-radius:8px}
+button{min-height:44px;padding:8px 16px;margin:6px}input,textarea,select{display:block;width:100%;min-height:44px;margin:8px 0;font:inherit}.error{color:#b00020}</style></head>
+<body>
+<!--
+  A STAND-IN for Progressive's Assured claim app, used by selftest.py and for rehearsals. It is NOT Progressive's real form.
+  Steps 'everyoneOkay' and 'personalDetails' copy the markup seen live on fnol.progressive.com on 10/29/2026; every later step is a
+  plausible guess at what such a wizard asks (date, place, vehicle, story, injuries, police, photos, review, confirmation).
+  ?s=ok (default) | captcha | unknown | stuck | multiline
+  Counters the tests read: window.__consents, window.__submits, window.__files, window.__vals
+-->
+<div id="root"></div>
+<script>
+const scen = new URLSearchParams(location.search).get('s') || 'ok';
+window.__consents = 0; window.__submits = 0; window.__files = []; window.__vals = {};
+let step = 'everyoneOkay';
+const root = document.getElementById('root');
+const T = (key, title, inner) => '<main data-testid="background"><div class="step-renderer"><div data-testid="wf-step-key" style="display:none">' + key + '</div><h1 id="page-title">' + title + '</h1>' + inner + '</div></main>';
+const choice = (opts) => '<div role="group" aria-labelledby="page-title">' + opts.map(o => '<button class="select-btn" aria-label="' + o + '" data-v="' + o + '"><div>' + o + '</div></button>').join('') + '</div>';
+const txt = (id, label, type) => '<input id="' + id + '" aria-label="' + label + '" placeholder="' + label + '" type="' + (type || 'text') + '" class="textbox" aria-invalid="false">';
+const next = (s) => { step = s; render(); };
+const save = () => root.querySelectorAll('input,textarea,select').forEach(e => { if (e.type !== 'file') window.__vals[e.getAttribute('aria-label') || e.id] = e.value; });
+const screens = {
+  everyoneOkay: () => T('everyoneOkay', 'Is everyone currently safe?', choice(['Yes', 'No'])),
+  personalDetails: () => T('personalDetails', "Thank you. So we can get in touch, let's begin with your name and phone number.",
+    txt('name-field', 'Your full name') + txt('phone-number-field', 'Phone number', 'tel') + (scen === 'stuck' ? txt('claimant-id', 'Claimant ID (required)') : '') +
+    '<div data-testid="terms-widget-container"><p>By clicking "I Agree and Continue," you acknowledge the Assured Privacy Policy, agree to the Assured Terms of Service, including the arbitration provision. You also agree to receive automated texts at the phone number you provided above about the status of your online claim submission.</p></div>' +
+    '<div id="err" class="error" role="alert"></div><button type="button" id="consent">I Agree and Continue</button>'),
+  captcha: () => T('captcha', 'One more thing', '<div class="g-recaptcha" data-sitekey="x"></div><p>Please verify you are a human.</p>'),
+  pet: () => T('pet', "What is your pet's name?", choice(['Rex', 'Fido'])),
+  lossDate: () => T('lossDate', 'When did it happen?', txt('d', 'Date of loss', 'date') + txt('t', 'Time of loss') + '<button id="go">Continue</button>'),
+  lossPlace: () => T('lossPlace', 'Where did it happen?', txt('st', 'Street address') + txt('ci', 'City') +
+    '<select id="sa" aria-label="State"><option value="">Choose</option><option>Arizona</option><option>California</option><option>Colorado</option></select>' + txt('zi', 'ZIP code') + '<button id="go">Continue</button>'),
+  vehicle: () => T('vehicle', 'Tell us about the car', txt('v', 'VIN') + txt('p', 'License plate number') + txt('y', 'Year') + txt('m', 'Make') + txt('mo', 'Model') + txt('c', 'Color') + '<button id="go">Continue</button>'),
+  story: () => T('story', 'What happened?', '<textarea id="s1" aria-label="Please describe what happened"></textarea><textarea id="s2" aria-label="Anything else you would like to add?"></textarea><button id="go">Continue</button>'),
+  injured: () => T('injured', 'Was anyone injured?', choice(['Yes', 'No'])),
+  police: () => T('police', 'Was a police report filed?', choice(['Yes', 'No'])),
+  photos: () => T('photos', 'Add photos of the damage', '<input id="f" type="file" accept="image/*" multiple aria-label="Upload photos"><div id="n"></div><button id="go">Continue</button>'),
+  review: () => T('review', 'Review your claim', '<p>Check everything, then send it to Progressive.</p>' + '<pre id="rv"></pre><button id="submit">Submit claim</button>'),
+  done: () => T('done', 'Thank you', '<p>Your claim has been submitted.</p><p>Your claim number is 26-7654321.</p><p>Turo claim 1108308 is a different claim.</p>'),
+};
+const order = ['lossDate', 'lossPlace', 'vehicle', 'story', 'injured', 'police', 'photos', 'review'];
+function render() {
+  root.innerHTML = screens[step]();
+  if (step === 'review') document.getElementById('rv').textContent = JSON.stringify(window.__vals);
+  const go = document.getElementById('go');
+  if (go) go.onclick = () => { save(); const i = order.indexOf(step); next(order[i + 1]); };
+  if (step === 'photos') document.getElementById('f').onchange = e => { window.__files = [...e.target.files].map(f => f.name); document.getElementById('n').textContent = window.__files.length + ' files'; };
+  root.querySelectorAll('.select-btn').forEach(b => b.onclick = () => {
+    window.__vals[document.getElementById('page-title').textContent] = b.dataset.v;
+    if (step === 'everyoneOkay') next('personalDetails'); else if (step === 'pet') next('lossDate');
+    else { const i = order.indexOf(step); next(order[i + 1]); }
+  });
+  const c = document.getElementById('consent');
+  if (c) c.onclick = () => {
+    window.__consents++; save();
+    if (scen === 'stuck') { document.getElementById('err').textContent = 'Claimant ID is required.'; return; }
+    next(scen === 'captcha' ? 'captcha' : scen === 'unknown' ? 'pet' : 'lossDate');
+  };
+  const s = document.getElementById('submit');
+  if (s) s.onclick = () => { window.__submits++; next('done'); };
+}
+render();
+</script></body></html>

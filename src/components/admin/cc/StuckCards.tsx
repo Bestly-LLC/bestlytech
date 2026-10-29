@@ -10,6 +10,8 @@
  *                    plus "More": the other fix, "Prompt for Claude" (a copy-ready block; copied only when tapped), "Snooze 1 day".
  *   After a tap      the card shows working, then done or failed, with the reason, signed by the employee. Snooze has Undo.
  *   Waiting card     a claim we are waiting on someone else for: no buttons, just what was sent and what happens next.
+ *                    Claims Closer's insurance cases use it too: a YOUR CALL pill and one blue button when she needs a tap (read and send,
+ *                    or a bridge call, offered only while the insurer's lines are open), a paste-ready Tesla Service message, and a short timeline.
  *
  * Feed: the admin_stuck_items() RPC. If it is not deployed yet (or fails) this renders nothing, never an error.
  * House rules: 12-hour times (the RPC sends them already formatted), a number never splits from its unit,
@@ -17,7 +19,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ChevronDown, CircleAlert, KeyRound, Loader2, MessageSquare, RotateCw } from "lucide-react";
+import { Check, ChevronDown, CircleAlert, Copy, KeyRound, Loader2, MessageSquare, Phone, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/copyForClaude";
@@ -25,9 +27,11 @@ import { rpcArgs } from "@/components/admin/roofguard/AvaShared";
 import { errText, usePipelineRpc } from "@/components/admin/pipeline/lib";
 import { Pill, cardCls, focusRing, tint } from "@/components/admin/ui";
 import { openScoutThread } from "@/components/admin/scoutBus";
+import { DialerSheet } from "@/components/admin/roofguard/AvaDialer";
+import { requestDial } from "@/components/admin/roofguard/avaDial";
 import {
   NBSP, Nums, actionLine, buttonLabel, cap, fixAllLabel, initials, moreButtons, parseStuck, primaryLabel, spanText, word,
-  type FixButton, type StuckAction, type StuckItem, type StuckUndo,
+  type FixButton, type StuckAction, type StuckCopy, type StuckItem, type StuckNeed, type StuckTimelineRow, type StuckUndo,
 } from "./stuckLib";
 
 /* ───────── shared bits ───────── */
@@ -301,10 +305,96 @@ function FixedRow({ item, busy, onUndo }: { item: StuckItem; busy: string | null
 
 /* ───────── the waiting card ───────── */
 
-function WaitingCard({ item }: { item: StuckItem }) {
+const YourCallPill = () => (
+  <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#0A84FF] px-2.5 py-1 text-[12px] font-bold leading-4 text-[#fff] bento:bg-[#007AFF]">YOUR CALL</span>
+);
+
+/** The one thing Claims Closer needs from Jared: a tap to read and send, a call, or a contact. Never more than one at a time. */
+function NeedRow({ need }: { need: StuckNeed }) {
+  const call = need.kind === "call" ? need.call : null;
+  const linesOpen = need.open !== false;
   return (
-    <section aria-label={`Waiting on someone else: ${item.title}`} data-testid="waiting-card" className={cn(cardCls, cardPad, "gap-3")}>
-      <Header name={item.employee_name} title={item.title} subtitle={item.subtitle} pill={<Pill tone="neutral" className="px-2.5 py-1 font-bold">WAITING</Pill>} />
+    <div className="flex flex-col gap-2.5 rounded-[14px] bg-[#0A84FF]/[0.14] p-3 bento:bg-[#007AFF]/[0.1]" data-testid="waiting-need" data-kind={need.kind}>
+      <p className="text-[15px] font-semibold leading-[21px] text-white"><Nums text={need.label} /></p>
+      {call && linesOpen && (
+        <button type="button" className={cn(btnBlue, "w-full")}
+          onClick={() => requestDial({ mode: "bridge", phone: call.phone, name: "", company: call.company, purpose: call.purpose.slice(0, 600) })}>
+          <Phone className="h-4 w-4" aria-hidden />
+          <span className="whitespace-nowrap">Call now</span>
+        </button>
+      )}
+      {call && !linesOpen && (
+        <p className="text-[14px] leading-[20px] text-white/75"><Nums text={need.opens ? `The lines are closed right now. They open ${need.opens}.` : "The lines are closed right now."} /></p>
+      )}
+      {need.link && (
+        <Link to={need.link} className={cn(call ? btnGrey : btnBlue, "w-full")}>{need.link_label ?? "Open"}</Link>
+      )}
+    </div>
+  );
+}
+
+/** A message to paste somewhere else. Shut by default; nothing is copied until the Copy button is tapped. */
+function CopyBlock({ c }: { c: StuckCopy }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    const ok = await copyText(c.text);
+    if (ok === false) { toast.error("Couldn't copy. Select the text and copy it by hand."); return; }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <div className={cn(rowBg, "flex flex-col")}>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        className={cn("flex min-h-[44px] items-center justify-between gap-3 rounded-[14px] px-3 text-left text-[15px] font-semibold text-white", focusRing)}>
+        <span>{c.label}</span>
+        <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none", open && "rotate-180")} aria-hidden />
+      </button>
+      {open && (
+        <div className="flex flex-col gap-2.5 px-3 pb-3">
+          <pre tabIndex={0} className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-black/40 p-3 font-sans text-[14px] leading-[20px] text-white/90 bento:bg-[#F3F2EE] bento:text-[#1C1C1E]">{c.text}</pre>
+          {c.note && <p className="text-[13px] leading-[18px] text-white/60">{c.note}</p>}
+          <button type="button" onClick={() => void copy()} className={cn(btnBlue, "w-full")} aria-label={copied ? "Copied" : `Copy ${c.label}`}>
+            {copied ? <Check className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
+            <span className="whitespace-nowrap">{copied ? "Copied" : "Copy message"}</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** What has happened so far, newest last, in plain words. Shut by default so the card stays short. */
+function Timeline({ rows }: { rows: StuckTimelineRow[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={cn(rowBg, "flex flex-col")}>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        className={cn("flex min-h-[44px] items-center justify-between gap-3 rounded-[14px] px-3 text-left text-[15px] font-semibold text-white", focusRing)}>
+        <span>What has happened <span className="font-normal text-white/60">· {rows.length}</span></span>
+        <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none", open && "rotate-180")} aria-hidden />
+      </button>
+      {open && (
+        <ol className="flex flex-col gap-2.5 px-3 pb-3" data-testid="waiting-timeline">
+          {rows.map((r, i) => (
+            <li key={i} className="flex flex-col gap-0.5 text-[14px] leading-[20px]">
+              <span className="text-[12px] font-medium leading-4 text-white/60"><Nums text={r.when} />{r.tone === "settled" ? " · settled" : ""}</span>
+              <span className={r.tone === "settled" ? "text-white/70" : "text-white"}><Nums text={r.text} /></span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function WaitingCard({ item }: { item: StuckItem }) {
+  const yours = item.pill === "YOUR CALL" && !!item.needs_you;
+  return (
+    <section aria-label={yours ? `Your call: ${item.title}` : `Waiting on someone else: ${item.title}`} data-testid="waiting-card" data-pill={yours ? "your-call" : "waiting"} className={cn(cardCls, cardPad, "gap-3")}>
+      <Header name={item.employee_name} title={item.title} subtitle={item.subtitle}
+        pill={yours ? <YourCallPill /> : <Pill tone="neutral" className="px-2.5 py-1 font-bold">WAITING</Pill>} />
+      {yours && item.needs_you && <NeedRow need={item.needs_you} />}
       <dl className="flex flex-col gap-2 text-[15px] leading-[21px]">
         {item.blocks.map((b) => (
           <div key={b.id} className="flex items-start justify-between gap-3">
@@ -313,6 +403,8 @@ function WaitingCard({ item }: { item: StuckItem }) {
           </div>
         ))}
       </dl>
+      {(item.copy ?? []).map((c) => <CopyBlock key={c.id} c={c} />)}
+      {(item.timeline ?? []).length > 0 && <Timeline rows={item.timeline ?? []} />}
       {item.link && (
         <Link to={item.link} className={cn(btn44, "w-full bg-white/[0.12] text-white hover:bg-white/[0.18]", focusRing)}>{item.link_label ?? "Open"}</Link>
       )}
@@ -349,7 +441,9 @@ const POLL_MS = 3000;
 export function StuckSection() {
   const { data, missing, reload, hold } = usePipelineRpc<unknown>("admin_stuck_items", undefined, 60_000);
   const [busy, setBusy] = useState<string | null>(null);
+  const [dial, setDial] = useState(false);
   const items = useMemo(() => parseStuck(data), [data]);
+  const hasCall = items.some((i) => i.needs_you?.call);
 
   // The home page's "Refresh now" reaches this card too.
   useEffect(() => {
@@ -415,6 +509,7 @@ export function StuckSection() {
       )}
       {waiting.map((i) => <WaitingCard key={i.item_id} item={i} />)}
       {fixed.slice(0, 3).map((i) => <FixedRow key={i.item_id} item={i} busy={busy} onUndo={onUndo} />)}
+      {hasCall && <DialerSheet kinds={["bridge"]} open={dial} onOpenChange={setDial} onCalled={() => void reload()} />}
     </div>
   );
 }

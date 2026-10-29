@@ -33,6 +33,20 @@ export interface StuckAction {
   by: string | null;
 }
 
+/** What a Waiting card needs from Jared, when it does (Insurance Filer). Anything else about the card is just a status line. */
+export interface StuckNeed {
+  kind: "approval" | "call" | "contact" | "check";
+  label: string;
+  link: string | null;
+  link_label: string | null;
+  open: boolean | null;      // call only: are the insurer's lines open right now
+  opens: string | null;      // call only: when they open next, already formatted
+  call: { phone: string; name: string; company: string; purpose: string } | null;
+}
+/** A block of text to paste somewhere else, shown with a Copy button (the Tesla Service message). */
+export interface StuckCopy { id: string; label: string; text: string; note: string | null }
+export interface StuckTimelineRow { when: string; text: string; tone: "event" | "settled" }
+
 export interface StuckItem {
   kind: "stuck" | "waiting" | "fixed";
   item_id: string;
@@ -48,6 +62,10 @@ export interface StuckItem {
   action?: StuckAction | null;
   link?: string | null;
   link_label?: string | null;
+  pill?: string | null;
+  needs_you?: StuckNeed | null;
+  copy?: StuckCopy[];
+  timeline?: StuckTimelineRow[];
 }
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
@@ -74,6 +92,33 @@ function parseAction(raw: unknown): StuckAction | null {
   return { id: String(a.id), kind, status, note: str(a.note), thread_id: str(a.thread_id), auto: a.auto === true, by: str(a.by) };
 }
 
+function parseNeed(raw: unknown): StuckNeed | null {
+  const n = raw as Record<string, unknown> | null | undefined;
+  if (!n || typeof n !== "object" || !str(n.label)) return null;
+  const kind = n.kind === "call" || n.kind === "contact" || n.kind === "check" ? n.kind : n.kind === "approval" ? "approval" : null;
+  if (!kind) return null;
+  const c = n.call as Record<string, unknown> | null | undefined;
+  const phone = c && typeof c === "object" ? String(c.phone ?? "").replace(/\D/g, "").replace(/^1(?=\d{10})/, "") : "";
+  return {
+    kind, label: String(n.label), link: str(n.link), link_label: str(n.link_label),
+    open: typeof n.open === "boolean" ? n.open : null, opens: str(n.opens),
+    call: c && typeof c === "object" && phone.length === 10
+      ? { phone, name: str(c.name) ?? "", company: str(c.company) ?? "", purpose: str(c.purpose) ?? "" } : null,
+  };
+}
+
+function parseCopy(raw: unknown): StuckCopy[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as Record<string, unknown>[]).filter((c) => c && typeof c === "object" && str(c.id) && str(c.label) && str(c.text))
+    .map((c) => ({ id: String(c.id), label: String(c.label), text: String(c.text), note: str(c.note) }));
+}
+
+function parseTimeline(raw: unknown): StuckTimelineRow[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as Record<string, unknown>[]).filter((t) => t && typeof t === "object" && str(t.text))
+    .map((t) => ({ when: str(t.when) ?? "", text: String(t.text), tone: t.tone === "settled" ? "settled" as const : "event" as const }));
+}
+
 /** Defensive: anything that is not the shape we expect is dropped, so a bad feed can never throw inside the page. */
 export function parseStuck(raw: unknown): StuckItem[] {
   if (!Array.isArray(raw)) return [];
@@ -92,6 +137,7 @@ export function parseStuck(raw: unknown): StuckItem[] {
       undo: u && str(u.id) ? { id: String(u.id), label: str(u.label) ?? "the fix", until: str(u.until) ?? "", at: str(u.at) ?? "", kind: str(u.kind) } : null,
       fix: parseFix(x.fix), action: parseAction(x.action),
       link: str(x.link), link_label: str(x.link_label),
+      pill: str(x.pill), needs_you: parseNeed(x.needs_you), copy: parseCopy(x.copy), timeline: parseTimeline(x.timeline),
     });
   }
   return out;

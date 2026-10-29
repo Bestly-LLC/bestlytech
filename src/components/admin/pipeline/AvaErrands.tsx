@@ -49,6 +49,12 @@ export function AvaErrands() {
     const phone = digits10(e.phone ?? "");
     if (phone.length !== 10) return;
     calling.current = e.id;
+    // An insurance errand ("[bridge] ..." from Claims Closer) goes out as a bridge call: Ava gets a person on the main line, then hands the call to Jared.
+    if (e.details?.startsWith("[bridge]")) {
+      const company = /^Call (.+?) about /.exec(e.title)?.[1] ?? (e.who ?? "").split(",")[0] ?? "";
+      requestDial({ mode: "bridge", phone, name: "", company, purpose: e.details.replace(/^\[bridge\]\s*/, "").slice(0, 600) });
+      return;
+    }
     requestDial({ mode: "personal", phone, name: e.who ?? "", purpose: [e.title, e.details].filter(Boolean).join(". ") });
   };
 
@@ -113,7 +119,7 @@ export function AvaErrands() {
         {done.length > 0 && <p className="text-[13px] text-white/50">Recently done: {done.map((d) => d.title).join(", ")}</p>}
       </Gate>
 
-      <DialerSheet kinds={["personal"]} open={dialOpen} onOpenChange={setDialOpen}
+      <DialerSheet kinds={["personal", "bridge"]} open={dialOpen} onOpenChange={setDialOpen}
         onCalled={() => { const id = calling.current; calling.current = null; if (id) void run("ava_errand_set", { p_id: id, p_status: "calling" }, "Ava is calling"); }} />
     </Panel>
   );

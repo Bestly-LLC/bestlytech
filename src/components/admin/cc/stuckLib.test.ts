@@ -40,6 +40,36 @@ describe("StuckCards helpers", () => {
   });
 });
 
+describe("insurance Waiting items", () => {
+  const ins = (extra: Record<string, unknown> = {}) => ({
+    kind: "waiting", item_id: "ins:1", title: "Progressive claim for the Model 3", employee_name: "Claims Closer", pill: "YOUR CALL",
+    blocks: [{ id: "photos", label: "Photos", detail: "6 ready" }],
+    needs_you: { kind: "call", label: "Call Progressive", open: true, opens: "Tomorrow, 5:00 AM", call: { phone: "(800) 776-4737", name: "Maria", company: "Progressive", purpose: "Claim 26-1234567" }, link: "/admin/pipeline", link_label: "Open errands" },
+    copy: [{ id: "tesla", label: "Message for Tesla Service", text: "Hello Tesla Service,", note: "Paste it into the Tesla app." }, { id: "bad" }],
+    timeline: [{ when: "Today, 9:05 AM", text: "Progressive opened claim 26-1234567", tone: "event" }, { when: "Oct 28", text: "Supercharging paid", tone: "settled" }, { nope: true }],
+    ...extra,
+  });
+
+  it("reads the pill, the one thing needed, the paste-ready block and the timeline", () => {
+    const [it] = parseStuck([ins()]);
+    expect(it.pill).toBe("YOUR CALL");
+    expect(it.needs_you).toMatchObject({ kind: "call", open: true, call: { phone: "8007764737", company: "Progressive" } });
+    expect(it.copy).toEqual([{ id: "tesla", label: "Message for Tesla Service", text: "Hello Tesla Service,", note: "Paste it into the Tesla app." }]);
+    expect(it.timeline?.map((t) => t.tone)).toEqual(["event", "settled"]);
+  });
+
+  it("drops a call with no usable phone and an unknown kind of need, and still renders the card", () => {
+    const [a] = parseStuck([ins({ needs_you: { kind: "call", label: "Call Progressive", call: { phone: "555" } } })]);
+    expect(a.needs_you?.call).toBeNull();
+    const [b] = parseStuck([ins({ needs_you: { kind: "teleport", label: "x" } })]);
+    expect(b.needs_you).toBeNull();
+    const [c] = parseStuck([{ kind: "waiting", item_id: "claim:2", title: "Old style", blocks: [] }]);
+    expect(c.copy).toEqual([]);
+    expect(c.timeline).toEqual([]);
+    expect(c.pill).toBeNull();
+  });
+});
+
 const agent = (fix: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
   kind: "stuck", item_id: "agent:x", title: "Bank Feed", employee_name: "Bank Feed", blocks: [{ id: "beat", label: "Mercury's key stopped working", detail: "Paste a new one." }],
   fix: { kind: "auth", label: "Mercury's key stopped working", tail: "Paste a new one.", link: "/admin/cost-cutter#mercury-tokens", link_label: "Update key", retry: false, primary: "key", ...fix },
