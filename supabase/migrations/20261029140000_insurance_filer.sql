@@ -167,7 +167,7 @@ end $c$;
 create table if not exists public.ins_settings (
   id boolean primary key default true check (id),
   enabled boolean not null default false,                 -- the rollout switch: nothing opens, queues or pushes while false
-  consent_before_tap boolean not null default true,       -- true: the fill pass clicks the insurer's "I agree and continue" so later screens can be reached; the approval page shows the consent text
+  consent_before_tap boolean not null default false,   -- Jared 2026-10-29: never accept an insurer's terms before his tap; his tap accepts them and submits.        -- true: the fill pass clicks the insurer's "I agree and continue" so later screens can be reached; the approval page shows the consent text
   photo_wait_minutes integer not null default 30,         -- go ahead without the Pi's photos after this long
   nudge_business_days integer not null default 2,
   call_after_business_days integer not null default 2,    -- after a nudge goes unanswered this long, queue the bridge call
