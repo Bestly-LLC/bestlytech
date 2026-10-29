@@ -5,6 +5,8 @@ import { Ico } from "./Ico";
 import { RxPortal, call, table, type GroceryRow, type HandoffRow } from "./rx";
 import { GroceriesList } from "./Library";
 import { remainingText, type LiveTimer } from "./useTimers";
+import { isKitchen, walkInState, type HaStatus } from "@/lib/recipes/ha";
+import { enqueueCommand, waitForCommand } from "@/services/homeHubApi";
 
 /** "Cook Pineapple Tepache? Sent from iPhone." Slides in on the iPad or desktop when the iPhone sends a recipe or a link.
  *  It lives above the Pantry / Recipes switch, so it shows whichever side of Kitchen is open. */
@@ -54,6 +56,38 @@ export function HandoffWatcher() {
       return n;
     });
   }, [row, setSp]);
+
+  /* Walk-in: with "Open cook mode when you walk into the kitchen" on and the room sensor live, a recipe waiting from the iPhone
+     opens cook mode the moment the room sensor says Kitchen. It only runs while a cook handoff is waiting (10 minutes at most),
+     and it asks Home Assistant through the same command queue as everything else (one read every 20 seconds). */
+  const [walkIn, setWalkIn] = useState(false);
+  const cookWaiting = shown && row?.kind === "cook" && !!row.recipe_id;
+  useEffect(() => {
+    if (small || !cookWaiting) { setWalkIn(false); return; }
+    let live = true;
+    void call<HaStatus>("recipes_ha_status")
+      .then((st) => { if (live) setWalkIn(walkInState(st).available && st.settings?.kitchen_auto === true); })
+      .catch(() => { if (live) setWalkIn(false); });
+    return () => { live = false; };
+  }, [small, cookWaiting, row?.id]);
+  useEffect(() => {
+    if (small || !cookWaiting || !walkIn) return;
+    let live = true; let busy = false;
+    const look = async () => {
+      if (busy || document.hidden) return;
+      busy = true;
+      try {
+        const cmd = await enqueueCommand("homeassistant", "states", { entity_id: "sensor.jared_room" });
+        const done = await waitForCommand(cmd.id, { timeoutMs: 30_000, intervalMs: 2_500 });
+        const states = (done?.result as { states?: { state?: unknown }[] } | null | undefined)?.states;
+        if (live && done?.status === "done" && isKitchen(states?.[0]?.state)) { live = false; void answer(true); }
+      } catch { /* the next look tries again */ }
+      finally { busy = false; }
+    };
+    void look();
+    const iv = window.setInterval(() => void look(), 20_000);
+    return () => { live = false; window.clearInterval(iv); };
+  }, [small, cookWaiting, walkIn, answer]);
 
   if (small) return null;
   const isLink = row?.kind === "link";

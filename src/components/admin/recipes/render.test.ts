@@ -15,7 +15,7 @@ const rows: RecipeRow[] = (seed as unknown as { recipes: RecipeDoc[] }).recipes.
 }));
 const ov: Overview = {
   recipes: rows, legacy: [], ferments: [], groceries: [], timers: [], now: "2026-10-29T12:00:00Z",
-  settings: { speaker: true, timer_push: true, kitchen_auto: false, voice: true },
+  settings: { speaker: true, timer_push: true, kitchen_auto: false, voice: true, lights: true },
 };
 const noop = () => undefined;
 const asyncNoop = async () => undefined;
@@ -27,6 +27,18 @@ describe("recipes UI renders", () => {
     expect(html).toContain("Not available yet");
     expect(html).not.toContain("Nextcloud");
     expect(html).not.toMatch(/\.\.\.|…/);
+  });
+  it("enables both Home Assistant toggles when Home Assistant has the scene and a live room sensor", () => {
+    const ha = { catalog: true, fresh: true, scene_cooking: true, room_sensor: true, room_exists: true, kitchen_sensor_exists: true, kitchen_sensor_online: true };
+    const html = renderToString(h(Library, { ov, ha, photos: {}, onOpen: noop, onAdd: noop, onFerment: asyncNoop, onSetting: asyncNoop }));
+    expect(html).not.toContain("Not available yet");
+    expect(html).not.toContain("Nextcloud");
+  });
+  it("shows why the walk-in toggle is off when the Kitchen presence sensor is offline", () => {
+    const ha = { catalog: true, fresh: true, scene_cooking: true, room_sensor: false, room_exists: true, kitchen_sensor_exists: true, kitchen_sensor_online: false };
+    const html = renderToString(h(Library, { ov, ha, photos: {}, onOpen: noop, onAdd: noop, onFerment: asyncNoop, onSetting: asyncNoop }));
+    expect(html).toContain("Not available yet: the Kitchen presence sensor is offline.");
+    expect(html).not.toContain("no Cooking scene");
   });
   it.each(rows.map((r) => [r.doc.title, r] as const))("recipe page renders: %s", (_t, r) => {
     const html = renderToString(h(RecipePage, {

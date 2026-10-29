@@ -1,0 +1,17 @@
+# Cooking lights: Basil's Recipes tab turns this on when you tap Start Cooking.
+# Owner: Basil. Only the kitchen lights are listed, so nothing else in the home changes.
+# Live copy: HA packages folder on Hestia (installed 2026-10-29 via home_hub_commands package_put, name bestly_auto_cooking).
+# Also stored in public.recipe_settings key 'cooking_scene' so Basil's watchdog can put it back. Change both together.
+scene:
+  - id: bestly_cooking
+    name: Cooking
+    icon: mdi:chef-hat
+    entities:
+      light.kitchen:
+        state: "on"
+        brightness: 255
+        color_temp_kelvin: 4000
+      light.kitchen_bar:
+        state: "on"
+        brightness: 255
+        color_temp_kelvin: 4000

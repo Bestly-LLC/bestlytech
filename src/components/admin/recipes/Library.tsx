@@ -5,6 +5,7 @@ import { addDays, call, catOf, dayDiff, fmtDate, pacificDay, startLabel, todayPa
 import { pantryReport, listWords } from "@/lib/recipes/pantry";
 import { nowrapSegs, servesLine, timeBits } from "@/lib/recipes/scale";
 import { Segs } from "./rx";
+import { lightsState, walkInState, type HaStatus } from "@/lib/recipes/ha";
 
 /** Hero background for a recipe: its category gradient, or its photo when it has one. */
 export function heroStyle(r: Pick<RecipeRow, "doc">, photoUrl?: string) {
@@ -113,17 +114,17 @@ function FermentCard({ f, r, busy, onStep }: { f: FermentRow; r: RecipeRow | und
   );
 }
 
-interface HaRow { key: keyof HaSettings | "lights"; label: string; note?: string; off?: string }
+interface HaRow { key: keyof HaSettings; label: string; note?: string }
 const HA_ROWS: HaRow[] = [
   { key: "speaker", label: "Timers announce on the kitchen speakers", note: "Basil speaks on the HomePods through Home Assistant." },
   { key: "timer_push", label: "Basil sends a notification when a timer ends", note: "Signed Basil, so you see it even away from the kitchen." },
   { key: "voice", label: "Say next, back, repeat or timer to Hey Scout while cooking", note: "Works while cook mode is open." },
-  { key: "kitchen_auto", label: "Open cook mode when you walk into the kitchen", off: "Not available yet: the room sensor reports unknown." },
-  { key: "lights", label: "Turn on a Cooking lights scene", off: "Not available yet: Home Assistant has no Cooking scene." },
+  { key: "kitchen_auto", label: "Open cook mode when you walk into the kitchen", note: "Only when the iPad has a recipe from your iPhone waiting." },
+  { key: "lights", label: "Turn on a Cooking lights scene", note: "Start Cooking sets the kitchen lights to bright, neutral white." },
 ];
 
 export function Library(props: {
-  ov: Overview; photos: Record<string, string>; onOpen: (id: number) => void; onAdd: () => void;
+  ov: Overview; ha?: HaStatus | null; photos: Record<string, string>; onOpen: (id: number) => void; onAdd: () => void;
   onFerment: (id: string, step: "taste" | "bottle" | "burp" | "finish") => Promise<void>; onSetting: (k: keyof HaSettings, v: boolean) => Promise<void>;
 }) {
   const { ov, photos } = props;
@@ -173,11 +174,14 @@ export function Library(props: {
       <div className="card ha">
         <h3>Kitchen and Home Assistant</h3>
         {HA_ROWS.map((h) => {
-          const off = !!h.off;
-          const on = off ? false : !!ov.settings[h.key as keyof HaSettings];
+          // The two Home Assistant toggles follow what Home Assistant has right now, so they enable themselves and fall back by themselves.
+          const live = h.key === "lights" ? lightsState(props.ha) : h.key === "kitchen_auto" ? walkInState(props.ha) : null;
+          const off = !!live && !live.available;
+          const why = off ? live!.why : null;
+          const on = off ? false : !!ov.settings[h.key];
           return (
             <div key={h.key} className={"hrow" + (off ? " off" : "")}>
-              <span id={`lb-${h.key}`}>{h.label}<small>{off ? h.off : h.note}</small></span>
+              <span id={`lb-${h.key}`}>{h.label}<small>{why ?? h.note}</small></span>
               <button
                 className="hit" role="switch" aria-checked={on} aria-labelledby={`lb-${h.key}`} disabled={off}
                 onClick={() => void props.onSetting(h.key as keyof HaSettings, !on)}

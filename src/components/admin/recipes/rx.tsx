@@ -18,7 +18,7 @@ export interface FermentRow {
 }
 export interface GroceryRow { id: string; name: string; recipe_id: number | null; recipe_title: string | null; status: string; added_at: string }
 export interface TimerRow { id: string; recipe_id: number | null; label: string; total_sec: number; ends_at: string; status: "running" | "done" | "stopped" }
-export interface HaSettings { speaker: boolean; timer_push: boolean; kitchen_auto: boolean; voice: boolean }
+export interface HaSettings { speaker: boolean; timer_push: boolean; kitchen_auto: boolean; voice: boolean; lights: boolean }
 export interface LegacyIdea { name: string; how: string; minutes: number | null; serves: number | null; source: string | null; omni: boolean }
 export interface Overview {
   recipes: RecipeRow[]; legacy: LegacyIdea[]; ferments: FermentRow[]; groceries: GroceryRow[]; settings: HaSettings; timers: TimerRow[]; now: string;

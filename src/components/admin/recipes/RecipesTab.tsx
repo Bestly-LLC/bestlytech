@@ -13,14 +13,16 @@ import { unlockAudio, useTimers } from "./useTimers";
 import { call, newWork, type GroceryRow, type HaSettings, type Overview, type RecipeCommand, type WorkState } from "./rx";
 import { pantryReport } from "@/lib/recipes/pantry";
 import { planOf, servesLine } from "@/lib/recipes/scale";
+import type { HaStatus } from "@/lib/recipes/ha";
 
-const EMPTY_SETTINGS: HaSettings = { speaker: true, timer_push: true, kitchen_auto: false, voice: true };
+const EMPTY_SETTINGS: HaSettings = { speaker: true, timer_push: true, kitchen_auto: false, voice: true, lights: true };
 
 /** The Recipes side of Kitchen: library, one recipe, cook mode, Add (photo or link), ferments, groceries and timers. */
 export default function RecipesTab() {
   const [sp, setSp] = useSearchParams();
   const [ov, setOv] = useState<Overview | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [ha, setHa] = useState<HaStatus | null>(null);
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [works, setWorks] = useState<Record<number, WorkState>>({});
   const [cooking, setCooking] = useState(false);
@@ -41,6 +43,8 @@ export default function RecipesTab() {
       setOv(o); setErr(null);
       tm.hydrate(o.timers ?? [], o.now);
     } catch (e) { setErr((e as Error).message); }
+    // What Home Assistant really has right now. If this call fails the two Home Assistant toggles show "did not answer", never "on".
+    try { setHa(await call<HaStatus>("recipes_ha_status")); } catch { setHa(null); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     void load();
@@ -96,6 +100,11 @@ export default function RecipesTab() {
       setSp((prev) => { const n = new URLSearchParams(prev); n.delete("cook"); return n; }, { replace: true });
     }
   }, [sp, recipeId, ov, setSp]);
+  // Start Cooking (button, iPad handoff or walk-in) turns the Cooking lights scene on. The database checks the toggle and that the scene exists.
+  useEffect(() => {
+    if (!cooking) return;
+    void call("recipe_cook_lights").catch((e: Error) => toast.error(`The Cooking lights did not turn on. ${e.message}`));
+  }, [cooking]);
   useEffect(() => {
     document.body.classList.toggle("cooking", cooking);
     return () => document.body.classList.remove("cooking");
@@ -209,7 +218,7 @@ export default function RecipesTab() {
       {!ov && !err && <p className="muted" style={{ padding: "24px 4px" }}>Loading recipes</p>}
 
       {ov && !recipe && (
-        <Library ov={ov} photos={photos} onOpen={openRecipe} onAdd={() => setAddOpen(true)} onFerment={onFermentStep} onSetting={onSetting} />
+        <Library ov={ov} ha={ha} photos={photos} onOpen={openRecipe} onAdd={() => setAddOpen(true)} onFerment={onFermentStep} onSetting={onSetting} />
       )}
       {ov && recipeId && !recipe && (
         <p className="muted" style={{ padding: "24px 4px" }}>That recipe is not in the library. <button className="btn" onClick={() => openRecipe(null)}>Back to recipes</button></p>
