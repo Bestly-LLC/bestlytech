@@ -176,11 +176,20 @@ Deno.serve(async (req) => {
   }
 
   if (b.op === "look_next") {
+    let out: Record<string, unknown>;
     try {
-      return J(await lookNext(res));
+      out = await lookNext(res);
     } catch (e) {
-      return J({ ok: false, error: `free AI: ${(e as Error).message}`.slice(0, 300) });   // next minute's tick tries again
+      out = { ok: false, error: `free AI: ${(e as Error).message}`.slice(0, 300) };
     }
+    // Pace by progress (fix 3): next minute after a read, 30 minutes after a miss (Groq's daily cap refills slowly).
+    if (!out.decided) {
+      const wait = out.ok ? 0 : 30;
+      await db.from("claim_cleaning").update({ next_try_at: new Date(Date.now() + wait * 60_000).toISOString(),
+        ...(out.ok ? {} : { last_error: String(out.error ?? "free AI gave no answer").slice(0, 300) }) })
+        .eq("reservation_id", res).eq("status", "checking");
+    }
+    return J(out);
   }
   return J({ ok: false, error: "unknown op" }, 400);
 });
