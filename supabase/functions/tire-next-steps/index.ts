@@ -46,9 +46,10 @@ const save = (id: string, patch: Record<string, unknown>, log?: string) => db.rp
 const minsSince = (iso: string | null) => iso ? (Date.now() - Date.parse(iso)) / 60000 : 0;
 
 // ---------------- finding ----------------
-async function tomtom(key: string, lat: number, lon: number, q: string, radius: number): Promise<Place[] | null> {
+const tesla = (q: string) => /tesla/i.test(q);
+async function tomtom(key: string, lat: number, lon: number, q: string, radius: number, cats?: string): Promise<Place[] | null> {
   const u = `https://api.tomtom.com/search/2/search/${encodeURIComponent(q)}.json?key=${key}&lat=${lat}&lon=${lon}&radius=${radius}` +
-    `&limit=10&idxSet=POI&openingHours=nextSevenDays&countrySet=US`;
+    `&limit=10&idxSet=POI&openingHours=nextSevenDays&countrySet=US${cats ? `&categorySet=${cats}` : ""}`;
   const r = await fetch(u, { signal: AbortSignal.timeout(12_000) });
   if (r.status === 403 || r.status === 401) return null;            // key not allowed to search: fall back to OpenStreetMap
   if (!r.ok) throw new Error(`tomtom ${r.status}`);
@@ -58,7 +59,10 @@ async function tomtom(key: string, lat: number, lon: number, q: string, radius: 
   // deno-lint-ignore no-explicit-any
   const stamp = (t: any) => `${t.date} ${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}`;
   // deno-lint-ignore no-explicit-any
-  return (j.results ?? []).filter((x: any) => x.poi?.name).map((x: any) => {
+  // Only repair shops and shops: "tire shop" also matches restaurants named after one ("Tire Shop Taqueria", 2026-10-29 test).
+  const okKind = (x: any) => (x.poi?.classifications ?? []).some((c: any) => ["REPAIR_FACILITY", "SHOP", "CAR_DEALER"].includes(c.code))
+    && !/taquer|restaurant|grill|caf[eé]|kitchen|food|bakery|\bbar\b/i.test(x.poi?.name ?? "");
+  return (j.results ?? []).filter((x: any) => x.poi?.name && (tesla(q) || okKind(x))).map((x: any) => {
     const ranges = x.poi?.openingHours?.timeRanges ?? [];
     let open: boolean | null = ranges.length ? false : null;
     for (const t of ranges) if (t.startTime && t.endTime && now >= stamp(t.startTime) && now <= stamp(t.endTime)) open = true;
@@ -82,6 +86,7 @@ async function finding(i: Incident) {
     const { data: key } = await db.rpc("sky_tomtom_key");
     tt = key ? await tomtom(String(key), lat, lon, "tire shop", 12000) : null;
     if (tt === null) err = "TomTom search isn't switched on for the Bestly TomTom key";
+    else tt = tt.concat((await tomtom(String(key), lat, lon, "tires", 12000, "7310").catch(() => null)) ?? []);   // repair shops that sell tires
     else if (tt.length) {
       const ts = ((await tomtom(String(key), lat, lon, "Tesla Service Center", 40000)) ?? []).filter((p) => /tesla/i.test(p.name)).sort((a, b) => a.mi - b.mi)[0] ?? null;
       await save(i.id, { shops: dedupe(tt), tesla: ts, src: "tomtom", status: "calling" }, `Found ${tt.length} tire shops with TomTom`);
