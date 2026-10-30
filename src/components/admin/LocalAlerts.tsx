@@ -169,6 +169,7 @@ export const pausedOn = (snap: CitSnap, sw: AlertSw) => snap.cats.filter((c) => 
 export type CitLogRow = {
   key: string; cat: string; source: string; title: string; short: string | null; sub: string | null; address: string | null;
   level: CitInc["level"]; dist_ft: number | null; place: CitInc["place"]; first_seen: number; closed_at: number | null; pinged_at: number | null; n_updates: number;
+  lat: number | null; lng: number | null; updates: { t?: number | string; text?: string }[] | null;
 };
 
 const t12 = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -202,7 +203,7 @@ export function useAlertLog(days = 7) {
 }
 
 /** "Log": what happened, newest first, grouped by day. Ended alerts are dimmed; open ones say "Showing now". */
-export function AlertLogList({ snap, rows, err, now }: { snap: CitSnap | null; rows: CitLogRow[] | null; err: string | null; now: number }) {
+export function AlertLogList({ snap, rows, err, now, activeKey, onPick }: { snap: CitSnap | null; rows: CitLogRow[] | null; err: string | null; now: number; activeKey?: string | null; onPick?: (r: CitLogRow) => void }) {
   if (err) return <div className="px-4 py-3 text-[14px] leading-snug text-white/60">The log didn't load (citizen_admin_log: {err}).</div>;
   if (!rows) return <div className="px-4 py-3 text-[13px] text-white/50">Loading the log…</div>;
   if (rows.length === 0) return <div className="px-4 py-3 text-[14px] leading-snug text-white/50">No alerts in the last 7 days.</div>;
@@ -220,7 +221,9 @@ export function AlertLogList({ snap, rows, err, now }: { snap: CitSnap | null; r
         return (
           <div key={r.key}>
             {head && <div className="px-4 pb-1 pt-3 text-[12px] font-semibold text-white/45">{head}</div>}
-            <div className={cn("flex min-h-[48px] items-center gap-3 border-b border-white/[0.07] px-4 py-2", !open && "opacity-75")}>
+            <button type="button" onClick={() => onPick?.(r)} aria-pressed={activeKey === r.key}
+              className={cn("flex min-h-[48px] w-full items-center gap-3 border-b border-white/[0.07] px-4 py-2 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400",
+                !open && activeKey !== r.key && "opacity-75", activeKey === r.key && "bg-white/[0.08]")}>
               <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px]" style={{ background: open ? color : `rgba(${catRGB(color)},.22)` }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke={open ? iconInk(color) : color} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]" aria-hidden
                   dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />
@@ -235,11 +238,59 @@ export function AlertLogList({ snap, rows, err, now }: { snap: CitSnap | null; r
                   {r.pinged_at != null && <>{" · "}<span className="whitespace-nowrap">pinged you</span></>}
                 </span>
               </span>
-            </div>
+            </button>
           </div>
         );
       })}
     </>
+  );
+}
+
+const updT = (t: number | string | undefined) => {
+  if (t == null) return "";
+  const ms = typeof t === "number" ? (t < 1e12 ? t * 1000 : t) : Date.parse(t);
+  return Number.isFinite(ms) ? t12(ms) : String(t);
+};
+
+/** The tapped log entry, Citizen-style: what, where, when, how far, and its timeline of updates. */
+export function AlertDetail({ snap, row, now, onClose }: { snap: CitSnap | null; row: CitLogRow; now: number; onClose: () => void }) {
+  const cat = (snap?.cats ?? []).find((c) => c.id === row.cat);
+  const color = cat?.color ?? "#64D2FF";
+  const open = row.closed_at == null;
+  const dist = miText(row.dist_ft);
+  const ups = (row.updates ?? []).filter((u) => u && u.text);
+  return (
+    <div className="border-b border-white/10 px-4 py-3" aria-live="polite">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[11px]" style={{ background: color }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke={iconInk(color)} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden
+            dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[16px] font-semibold leading-tight text-white">{row.title}</div>
+          {(row.address || row.sub) && <div className="mt-0.5 text-[13px] leading-snug text-white/60">{row.address || row.sub}</div>}
+          <div className="mt-1 text-[13px] leading-snug text-white/50">
+            <span className="whitespace-nowrap">{dayLabel(row.first_seen, now)}, {t12(row.first_seen)}</span>
+            {dist && <>{" · "}<span className="whitespace-nowrap">{dist} from home</span></>}
+            {" · "}
+            {open ? <span style={{ color }}>Showing now</span> : <span className="whitespace-nowrap">ended {t12(row.closed_at!)}</span>}
+          </div>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close this alert" className="-mr-2 -mt-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-white/60 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-5 w-5" aria-hidden><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+      {ups.length > 0 && (
+        <ol className="mt-3 space-y-2 border-l border-white/15 pl-3">
+          {ups.slice().reverse().map((u, k) => (
+            <li key={k} className="text-[13px] leading-snug text-white/75">
+              {u.t != null && <span className="mr-1.5 whitespace-nowrap text-white/45">{updT(u.t)}</span>}{u.text}
+            </li>
+          ))}
+        </ol>
+      )}
+      {row.lat == null && <div className="mt-2 text-[13px] text-white/45">This alert has no map location.</div>}
+    </div>
   );
 }
 

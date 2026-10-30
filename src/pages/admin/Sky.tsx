@@ -27,7 +27,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Maximize2, Minimize2, Plane, RotateCw, Compass, LocateFixed, Loader2, Route, TrafficCone, Siren, Plus, Minus, Smartphone, Presentation, X as CloseX } from "lucide-react";
-import { AlertCategoryRows, AlertLogList, LEVEL_SCALE, catIsOn, citOpacity, countShowing, iconInk, iconMarkup, isNewInc, NearHomeList, pausedOn, useAlertLog, useAlertSwitches, useCitizen, type CitCat, type CitInc } from "@/components/admin/LocalAlerts";
+import { AlertCategoryRows, AlertDetail, AlertLogList, LEVEL_SCALE, catIsOn, citOpacity, countShowing, iconInk, iconMarkup, isNewInc, NearHomeList, pausedOn, useAlertLog, useAlertSwitches, useCitizen, type CitCat, type CitLogRow, type CitInc } from "@/components/admin/LocalAlerts";
 import { Switch } from "@/components/ui/switch";
 
 type Air = {
@@ -248,6 +248,15 @@ export default function Sky() {
   const { sw: alertSw, setMaster: setAlertMaster, setCat: setAlertCat } = useAlertSwitches();
   const [alertsOpen, setAlertsOpen] = useState(false);
   const { rows: alertLog, err: alertLogErr } = useAlertLog(7);
+  // Tap a Log row: show where it happened on the map (Citizen-style), zooming out if it is past the edge, plus its details and timeline.
+  const [logPick, setLogPick] = useState<CitLogRow | null>(null);
+  const pickLog = (r: CitLogRow) => {
+    setLogPick((p) => (p?.key === r.key ? null : r));
+    pickAlert(r.key);
+    const mi = (r.dist_ft ?? 0) / 5280;
+    const cur = zoomRef.current ?? feedRadius;
+    if (r.lat != null && mi > cur * 0.85) setZoomRadius(clampR(Math.ceil(mi * 1.2) + 1));
+  };
   const carFix = useRef<{ lat: number; lon: number; hd: number | null } | null>(null);
   const carOk = useRef<boolean | null>(null);
   useEffect(() => {
@@ -730,6 +739,23 @@ export default function Sky() {
             );
           })()}
 
+          {/* the Log entry Jared tapped: drawn even after it ended (hollow when over), with a soft white ring */}
+          {logPick && logPick.lat != null && logPick.lng != null && (() => {
+            const cat = cit?.cats.find((c) => c.id === logPick.cat);
+            const color = cat?.color ?? "#64D2FF";
+            const m = toMi(logPick.lat, logPick.lng, home);
+            if (!Number.isFinite(m.x) || !Number.isFinite(m.y)) return null;
+            const open = logPick.closed_at == null;
+            return (
+              <g aria-label="Selected alert" transform={`translate(${X(m.x)} ${Y(m.y)})`}>
+                <circle key={logPick.key} className="cit-ring" r={30 * u} fill="none" stroke="#FFFFFF" strokeWidth={5 * u} filter="url(#cit-soft)" />
+                <circle r={13 * u} fill={open ? color : "rgba(0,0,0,.55)"} stroke={color} strokeWidth={3 * u} />
+                <g transform={`translate(${-7.2 * u} ${-7.2 * u}) scale(${(14.4 * u) / 24})`} fill="none" stroke={open ? iconInk(color) : color} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"
+                  dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />
+              </g>
+            );
+          })()}
+
           {/* planes — all rotated to account for mapUp so aircraft face their true direction of travel */}
           {inView.map(({ a, d, i }) => {
             const x = X(d.x), y = Y(d.y);
@@ -862,10 +888,11 @@ export default function Sky() {
                 <button type="button" onClick={() => setAlertsOpen(false)} aria-label="Close" className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-white/70 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"><CloseX className="h-5 w-5" aria-hidden /></button>
               </div>
               <div className="overflow-y-auto">
+                {logPick && <AlertDetail snap={cit} row={logPick} now={now} onClose={() => setLogPick(null)} />}
                 <div className="px-4 pb-1 pt-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">Near home</div>
                 <NearHomeList snap={cit} sw={alertSw} now={now} activeKey={hi?.key ?? null} onPick={pickAlert} />
                 <div className="border-t border-white/10 px-4 pb-1 pt-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">Log, last 7 days</div>
-                <AlertLogList snap={cit} rows={alertLog} err={alertLogErr} now={now} />
+                <AlertLogList snap={cit} rows={alertLog} err={alertLogErr} now={now} activeKey={logPick?.key ?? null} onPick={pickLog} />
                 <div className="border-t border-white/10 px-4 pb-1 pt-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">Show these</div>
                 <AlertCategoryRows snap={cit} sw={alertSw} onCat={setAlertCat} idPrefix="sky-cat" />
               </div>
