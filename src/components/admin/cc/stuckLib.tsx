@@ -19,6 +19,9 @@ export interface StuckFix {
   retry: boolean;
   where: string | null;
   primary: FixPrimary;
+  /** A one-line fix only a person can run (a sign-in that needs an Allow tap). The card shows it to copy, instead of a button. */
+  command: string | null;
+  command_note: string | null;
 }
 
 /** The latest thing tapped on a card: working, then done, failed, or (Scout only) needs Jared's yes. */
@@ -81,6 +84,7 @@ function parseFix(raw: unknown): StuckFix | null {
   return {
     kind, service: str(f.service), label: str(f.label) ?? "Last check-in was not OK", tail: str(f.tail) ?? "",
     link: str(f.link) ?? "/admin/settings", link_label: str(f.link_label), retry, where: str(f.where), primary,
+    command: str(f.command), command_note: str(f.command_note),
   };
 }
 

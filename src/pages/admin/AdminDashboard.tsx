@@ -6,11 +6,11 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { LeadCards } from "@/components/admin/cc/LeadCards";
 import { SkillInboxTile } from "@/components/admin/cc/SkillInboxTile";
 import { WeatherCard } from "@/components/admin/cc/WeatherCard";
-import { StuckSection } from "@/components/admin/cc/StuckCards";
+import { StuckSection, useStuckFeed } from "@/components/admin/cc/StuckCards";
 import { DetailPanels, useWide } from "@/components/admin/cc/Details";
 import { CallNext, HealthDot, NeedsYouShort, QuickRow, loadNeeds, realNeeds } from "@/components/admin/cc/HomeParts";
 import { failingSystems, fetchSystemHealth, healthHeadlineStatus, type SystemHealth } from "@/lib/systemHealth";
-import { loadBundle, loadWeather, useLive, type CcBundle, type Wx } from "@/lib/commandCenter";
+import { loadBundle, loadWeather, loadWxEvents, useLive, type CcBundle, type Wx, type WxEventsPayload } from "@/lib/commandCenter";
 import { useNextMeeting } from "@/pages/partner/PartnerExtras";
 import { cn } from "@/lib/utils";
 import { focusRing, inset, tint } from "@/components/admin/ui";
@@ -34,9 +34,11 @@ const PT = { timeZone: "America/Los_Angeles" } as const;
 export default function AdminDashboard() {
   const cc = useLive<CcBundle>(loadBundle, 2 * 60_000);
   const wxs = useLive<Wx>(loadWeather, 10 * 60_000);
+  const evs = useLive<WxEventsPayload>(loadWxEvents, 5 * 60_000);
   const needs = useLive(loadNeeds, 60_000);
   const health = useLive<SystemHealth>(fetchSystemHealth, 60_000);
   const meetings = useNextMeeting();
+  const stuck = useStuckFeed();
   const wide = useWide();
 
   const needsCount = needs.data ? realNeeds(needs.data).length : null;
@@ -55,8 +57,8 @@ export default function AdminDashboard() {
   const today = new Intl.DateTimeFormat("en-US", { ...PT, weekday: "long", month: "long", day: "numeric" }).format(new Date());
 
   const refreshAll = async () => {
-    window.dispatchEvent(new Event("admin:refresh-now"));
-    await Promise.all([cc.reload(), wxs.reload(), needs.reload(), health.reload()]);
+    window.dispatchEvent(new Event("admin:refresh-now"));   // also reaches the Stuck feed (StuckSection listens)
+    await Promise.all([cc.reload(), wxs.reload(), evs.reload(), needs.reload(), health.reload()]);
   };
 
   return (
@@ -72,23 +74,23 @@ export default function AdminDashboard() {
         }
       />
 
-      <StuckSection />
+      <StuckSection feed={stuck} />
 
       <QuickRow />
 
-      <LeadCards cc={cc} wx={wxs.data} needs={needsCount} meetings={meetings} wide={wide} />
+      <LeadCards cc={cc} wx={wxs.data} evs={evs.data} needs={needsCount} stuck={stuck.data == null ? null : stuck.employeesStuck} meetings={meetings} wide={wide} />
 
       <SkillInboxTile />
 
       <div className="grid grid-cols-1 items-start gap-x-6 gap-y-8 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <WeatherCard wxs={wxs} />
+        <WeatherCard wxs={wxs} evs={evs} />
         <div className="space-y-8">
           <NeedsYouShort needs={needs} />
           <CallNext cc={cc} />
         </div>
       </div>
 
-      {wide && <DetailPanels cc={cc} wx={wxs.data} needs={needs} meetings={meetings} />}
+      {wide && <DetailPanels cc={cc} wx={wxs.data} meetings={meetings} />}
 
       <nav aria-label="More pages" className={cn("flex flex-wrap gap-x-5", inset)}>
         {[["/admin/overview", "Overview"], ["/admin/scout-day", "Scout's day"], ["/admin/needs-you", "All that needs you"]].map(([to, label]) => (

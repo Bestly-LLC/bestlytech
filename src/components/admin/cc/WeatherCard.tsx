@@ -24,8 +24,8 @@ import { Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, Cl
 import { cn } from "@/lib/utils";
 import { Disclosure, LoadError, Pill, cardCls, focusRing, hairline, inset, text } from "@/components/admin/ui";
 import {
-  HOME, TZ, agendaByDay, chips, clusterEvents, dayShort, evAt, eventsAt, headline, hour12, loadWxEvents, normalizeWxEvents, ptDateKey, rainPeak, stamp, time12, useLive,
-  type Cluster, type Live, type Wx, type WxAlert, type WxEvent, type WxHour,
+  HOME, TZ, agendaByDay, chips, clusterEvents, dayShort, evAt, eventsAt, headline, hour12, normalizeWxEvents, ptDateKey, rainPeak, stamp, time12, useLive,
+  type Cluster, type Live, type Wx, type WxAlert, type WxEvent, type WxEventsPayload, type WxHour,
 } from "@/lib/commandCenter";
 
 /* ───────── icons ───────── */
@@ -469,8 +469,8 @@ function HourScrub({ hours, events, suns }: { hours: WxHour[]; events: WxEvent[]
 
 /* ───────── the card ───────── */
 
-export function WeatherCard({ wxs }: { wxs: Live<Wx> }) {
-  const evs = useLive(loadWxEvents, 5 * 60_000);
+/** The calendar items come from the home page (it shares them with the My day card), so they load once. */
+export function WeatherCard({ wxs, evs }: { wxs: Live<Wx>; evs: Live<WxEventsPayload> }) {
   const [allAlerts, setAllAlerts] = useState(false);
   const wx = wxs.data;
 

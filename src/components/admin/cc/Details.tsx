@@ -15,7 +15,6 @@ import { Bot, CalendarClock, CarFront, ChevronRight, ExternalLink, Landmark, Vid
 import { cn } from "@/lib/utils";
 import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { LoadError, Pill, RowLink, SectionHeader, cardCls, divider, focusRing, hairline, inset, rowCls, text } from "@/components/admin/ui";
-import { realNeeds, type TodayRow } from "@/components/admin/cc/HomeParts";
 import { ageWords, dayShort, glue, monthDay, nextRun, stamp, usd, whenShort, type CcBundle, type Live, type Wx } from "@/lib/commandCenter";
 import type { NextEvent } from "@/pages/partner/PartnerExtras";
 
@@ -297,46 +296,13 @@ export function TuroDetail({ d }: { d: CcBundle | undefined }) {
   );
 }
 
-function NeedsGroup({ needs }: { needs: Live<TodayRow[]> }) {
-  const all = useMemo(() => realNeeds(needs.data), [needs.data]);
-  const top = all.slice(0, 3);
-  return (
-    <Group title="Needs you" aside={all.length > 0 ? <Link to="/admin/needs-you" className={cn("inline-flex min-h-[44px] items-center px-1 text-[15px] font-medium text-[#409CFF] bento:text-[#007AFF]", focusRing)}>All {all.length}</Link> : undefined}>
-      {needs.loading && !needs.data ? (
-        <div className={cn(rowCls, "py-4")} aria-hidden><div className="h-4 w-2/3 animate-pulse rounded bg-white/[0.06] motion-reduce:animate-none" /></div>
-      ) : !needs.data ? (
-        <div className={cn(rowCls, "py-3")}><LoadError label="what needs you" onRetry={() => needs.reload()} busy={needs.busy} detail={needs.error} /></div>
-      ) : top.length === 0 ? (
-        <ul className={divider}><Empty>You're clear.</Empty></ul>
-      ) : (
-        <ul className={divider} data-testid="panel-needs">
-          {top.map((n) => (
-            <li key={n.key}>
-              <RowLink href={n.url || "/admin/needs-you"}>
-                <div className="min-w-0 flex-1">
-                  <p className={cn(text.title, "flex flex-wrap items-center gap-x-2 gap-y-1")}>
-                    {["blocked", "critical", "error"].includes(n.severity) && <Pill tone="red">Urgent</Pill>}
-                    <span>{n.title.replace(/^Ares couldn't fix: /, "")}</span>
-                  </p>
-                  {n.detail && <p className={cn(text.detail, "mt-0.5")}>{glue(n.detail.split("\n")[0])}</p>}
-                </div>
-              </RowLink>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Group>
-  );
-}
-
-export function AiDetail({ d, lineup, needs }: { d: CcBundle | undefined; lineup: LineupRow[]; needs?: Live<TodayRow[]> }) {
+export function AiDetail({ d, lineup }: { d: CcBundle | undefined; lineup: LineupRow[] }) {
   const inline = useInline();
   const ai = d?.ai;
   const pct = ai && ai.cap > 0 ? (ai.spend_today / ai.cap) * 100 : 0;
   return (
     <>
       <Head id="ai" icon={Bot} title="AI team in detail" desc={`${ai?.employee_count ?? 0} employees on the roster.`} fresh={d ? stamp(d.at, 15) : null} />
-      {needs && <NeedsGroup needs={needs} />}
       <Group title="Lined up next">
         <ul className={divider}>
           {lineup.slice(0, inline ? 6 : 8).map((e) => <KV key={e.slug} k={e.name} sub={e.role} v={whenShort(e.at)} />)}
@@ -431,7 +397,7 @@ function Panel({ id, glow, children }: { id: PanelId; glow: number; children: Re
 }
 
 /** "In detail": the four panels, always on the page from lg up (see the file header). */
-export function DetailPanels({ cc, wx, needs, meetings }: { cc: Live<CcBundle>; wx: Wx | undefined; needs: Live<TodayRow[]>; meetings: Meetings }) {
+export function DetailPanels({ cc, wx, meetings }: { cc: Live<CcBundle>; wx: Wx | undefined; meetings: Meetings }) {
   const d = cc.data;
   const lineup = useLineup(d?.ai?.employees);
   const [glow, setGlow] = useState<{ id: PanelId; n: number } | null>(null);
@@ -458,7 +424,7 @@ export function DetailPanels({ cc, wx, needs, meetings }: { cc: Live<CcBundle>; 
         <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
           <div className="space-y-6">
             <Panel id="money" glow={g("money")}>{body("money", Landmark, "Money in detail", "Money", <MoneyDetail m={d?.money ?? null} />)}</Panel>
-            <Panel id="ai" glow={g("ai")}>{body("ai", Bot, "AI team in detail", "the AI team", <AiDetail d={d} lineup={lineup} needs={needs} />)}</Panel>
+            <Panel id="ai" glow={g("ai")}>{body("ai", Bot, "AI team in detail", "the AI team", <AiDetail d={d} lineup={lineup} />)}</Panel>
           </div>
           <div className="space-y-6">
             <Panel id="turo" glow={g("turo")}>{body("turo", CarFront, "Turo in detail", "Turo", <TuroDetail d={d} />)}</Panel>

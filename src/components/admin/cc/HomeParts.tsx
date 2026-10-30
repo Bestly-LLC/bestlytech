@@ -11,6 +11,9 @@ import { startEmergency } from "@/pages/admin/Emergency";
 import { openScout } from "@/components/admin/scoutBus";
 import { LoadError, Pill, RowLink, SectionHeader, cardCls, divider, focusRing, hairline, inset, rowCls, text, tint } from "@/components/admin/ui";
 import { ageWords, glue, type CcBundle, type Live } from "@/lib/commandCenter";
+import { SEV, realNeeds, type TodayRow } from "@/components/admin/cc/homeLogic";
+
+export { realNeeds, type TodayRow };
 
 /* ───────── quick actions ───────── */
 
@@ -70,27 +73,11 @@ export function QuickRow() {
 
 /* ───────── Needs you: the top three real items ───────── */
 
-export interface TodayRow {
-  key: string; source: string; severity: string; title: string; detail: string | null; action_label: string | null;
-  url: string | null; since: string | null; item_count: number | null; rank: number;
-}
-
 export async function loadNeeds(): Promise<TodayRow[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any).rpc("admin_today");
   if (error) throw new Error(error.message || "could not load what needs you");
   return (data ?? []) as TodayRow[];
-}
-
-const SEV: Record<string, number> = { blocked: 0, critical: 0, error: 0, warning: 1, todo: 2, info: 3 };
-
-/** Real items only (no FYI), same notice raised twice shown once, worst then oldest first. */
-export function realNeeds(rows: TodayRow[] | undefined): TodayRow[] {
-  const seen = new Set<string>();
-  return (rows ?? [])
-    .filter((r) => (SEV[r.severity] ?? 3) < 3)
-    .sort((a, b) => (SEV[a.severity] ?? 3) - (SEV[b.severity] ?? 3) || (a.since ?? "").localeCompare(b.since ?? ""))
-    .filter((r) => { const k = `${r.source}|${r.title.trim().toLowerCase()}`; if (seen.has(k)) return false; seen.add(k); return true; });
 }
 
 export function NeedsYouShort({ needs }: { needs: Live<TodayRow[]> }) {
@@ -116,7 +103,7 @@ export function NeedsYouShort({ needs }: { needs: Live<TodayRow[]> }) {
                       {(SEV[n.severity] ?? 3) === 0 && <Pill tone="red">Urgent</Pill>}
                       <span>{n.title.replace(/^Ares couldn't fix: /, "")}</span>
                     </p>
-                    {n.detail && <p className={cn(text.detail, "mt-0.5")}>{glue(n.detail.split("\n")[0])}</p>}
+                    {n.detail && <p className={cn(text.detail, "mt-0.5 [overflow-wrap:anywhere]")}>{glue(n.detail.split("\n")[0])}</p>}
                   </div>
                 </RowLink>
               </li>

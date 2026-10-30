@@ -9,9 +9,10 @@ import { cn } from "@/lib/utils";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { LoadError, Pill, cardCls, focusRing } from "@/components/admin/ui";
 import { SheetDetail, jumpToPanel, nowrap, useLineup, type Meetings } from "@/components/admin/cc/Details";
+import { upcoming } from "@/components/admin/cc/homeLogic";
 import {
   glue,
-  monthDay, rainPeak, stamp, time12, usd, whenShort, type CcBundle, type Live, type Wx,
+  monthDay, rainPeak, stamp, time12, usd, whenShort, type CcBundle, type Live, type Wx, type WxEventsPayload,
 } from "@/lib/commandCenter";
 
 type Open = null | "money" | "turo" | "ai" | "myday";
@@ -63,7 +64,9 @@ function LeadCard({ id, icon: Icon, label, big, sub, chip, foot, onOpen, state, 
 
 /* ───────── cards + sheets ───────── */
 
-export function LeadCards({ cc, wx, needs, meetings, wide }: { cc: Live<CcBundle>; wx: Wx | undefined; needs: number | null; meetings: Meetings; wide: boolean }) {
+export function LeadCards({ cc, wx, evs, needs, stuck, meetings, wide }: {
+  cc: Live<CcBundle>; wx: Wx | undefined; evs: WxEventsPayload | undefined; needs: number | null; stuck: number | null; meetings: Meetings; wide: boolean;
+}) {
   const [open, setOpen] = useState<Open>(null);
   /** lg and up: the panel is already on the page, so go to it. Phone: open it in the sheet. */
   const openIt = (id: Exclude<Open, null>) => () => { if (!(wide && jumpToPanel(id))) setOpen(id); };
@@ -102,7 +105,7 @@ export function LeadCards({ cc, wx, needs, meetings, wide }: { cc: Live<CcBundle
   // AI team
   const ai = d?.ai;
   const lineup = useLineup(ai?.employees);
-  const stuck = ai?.stuck ?? [];
+  const stuckN = stuck ?? (ai?.stuck ?? []).length;   // same count as the Stuck section above
   const aiBig = needs == null ? (loading ? "Checking" : "Needs you") : needs === 0 ? "Nothing needs you" : nowrap(`${needs} need you`);
   const aiSub = ai
     ? <>
@@ -112,15 +115,16 @@ export function LeadCards({ cc, wx, needs, meetings, wide }: { cc: Live<CcBundle
     : "Waiting for the team report.";
 
   // My day
-  const nm = meetings.next;
+  const ups = upcoming(meetings, evs);
+  const nm = ups[0] ?? (meetings.next === undefined && !evs ? undefined : null);
+  const after = ups.find((e, i) => i > 0 && e.title.toLowerCase() !== nm?.title.toLowerCase());
   const calls = d?.myday?.calls;
   const peak = wx ? rainPeak(wx.hours) : null;
   const rain = peak && peak.pct >= 50 ? { rain: peak.pct, t: peak.t } : null;   // same peak as the weather card's headline and chip
-  const after = meetings.events.find((e) => e !== nm);
-  const dayBig = nm ? nowrap(whenShort(nm.start)) : nm === undefined ? "Checking" : "No meetings";
+  const dayBig = nm ? nowrap(whenShort(nm.start)) : nm === undefined ? "Checking" : "Nothing booked";
   const daySub = (
     <>
-      {nm ? <>{nm.title}{after ? <>, then {after.title} {nowrap(whenShort(after.start))}</> : ""}. </> : nm === undefined ? "Reading your calendar. " : "Nothing on your calendar this week. "}
+      {nm ? <>{nm.title}{after ? <>, then {after.title} {nowrap(whenShort(after.start))}</> : ""}{/[.!?]$/.test(after?.title ?? nm.title) ? " " : ". "}</> : nm === undefined ? "Reading your calendar. " : "Nothing on your calendar this week. "}
       {calls ? (calls.count > 0 ? <>{nowrap(`${calls.count} ${calls.count === 1 ? "to-do" : "to-dos"}`)} from calls. </> : "No call to-dos. ") : null}
       {rain ? <>Rain {nowrap(`${rain.rain}%`)} around {nowrap(time12(rain.t))}.</> : wx ? "No rain today." : null}
     </>
@@ -145,7 +149,7 @@ export function LeadCards({ cc, wx, needs, meetings, wide }: { cc: Live<CcBundle
               chip={turoDays != null ? <Pill tone="blue">{inDays(turoDays)}</Pill> : undefined}
               foot={t?.widget?.observed_at ? stamp(t.widget.observed_at, 60) : d ? stamp(d.at, 30) : null} onOpen={openIt("turo")} wide={wide} />
             <LeadCard id="ai" icon={Bot} label="AI team" state={base} big={aiBig} sub={aiSub}
-              chip={stuck.length ? <Pill tone="orange">{stuck.length} stuck</Pill> : undefined}
+              chip={stuckN ? <Pill tone="orange"><span className="whitespace-nowrap">{stuckN}&nbsp;stuck</span></Pill> : undefined}
               foot={d ? stamp(d.at, 15) : null} onOpen={openIt("ai")} wide={wide} />
             <LeadCard id="myday" icon={CalendarClock} label="My day" state={base} big={dayBig} sub={daySub}
               chip={dayDays != null ? <Pill tone="blue">{inDays(dayDays)}</Pill> : undefined}
