@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { CheckCircle2, CircleAlert, Clock, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Lines } from "@/components/Lines";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { btnDestructivePlain, btnPlain, btnTinted, card, field, label, pill, secondary, separator, tint } from "../laxUi";
 import { ActivityRow, BookIt, Estimates, EvidenceRow, QuestionItem, Repair, SentRow } from "./CasePieces";
 import { DraftCard } from "./DraftCard";
@@ -15,6 +16,7 @@ export function CaseDetail({ row, reload, autonomy, shops }: { row: Row; reload:
   const [est, setEst] = useState(c.estimate_amount?.toString() ?? "");
   const [ins, setIns] = useState({ name: c.insurer?.name ?? "", policy: c.insurer?.policy_no ?? c.insurer?.policy ?? "", claim_no: c.insurer?.claim_no ?? "" });
   const [busy, setBusy] = useState("");
+  const [confirmClose, setConfirmClose] = useState(false);
   const outgoing = row.drafts.filter((d) => ["approved", "sending", "failed"].includes(d.status));
   const sent = row.drafts.filter((d) => d.status === "sent");
   const invoice = row.turo_actions.find((a) => a.kind === "create_invoice" && !a.payload?.dry_run);
@@ -123,7 +125,21 @@ export function CaseDetail({ row, reload, autonomy, shops }: { row: Row; reload:
             <p className={cn("mt-2 text-[13px] leading-snug", secondary)}>New draft asks Claims Closer to rewrite its next message to the guest.</p>
             <div className="mt-1 flex flex-wrap items-center gap-x-5">
               {c.status !== "paid" && <button type="button" className={btnPlain} onClick={() => save("paid", { p_status: "paid" })}>Mark paid</button>}
-              {c.status !== "closed" && <button type="button" className={btnDestructivePlain} onClick={() => save("closed", { p_status: "closed" })}>Close case</button>}
+              {c.status !== "closed" && <button type="button" className={btnDestructivePlain} onClick={() => setConfirmClose(true)}>Close case</button>}
+              <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Close {fullName(c)}&rsquo;s claim?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      <Lines>{`Claims Closer stops working it: no more messages to ${c.guest_first ?? "the guest"}, shops or Turo. It moves to History under Not followed through.`}</Lines>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep it open</AlertDialogCancel>
+                    <AlertDialogAction className="bg-[#FF453A] text-white hover:bg-[#FF453A]/90 bento:bg-[#FF3B30]" disabled={busy === "closed"} onClick={() => save("closed", { p_status: "closed" })}>Close claim</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
             <div className="mt-1">
               <Disclosure variant="inline" title="Edit estimate or insurer">
