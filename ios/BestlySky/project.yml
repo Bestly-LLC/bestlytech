@@ -1,5 +1,7 @@
-# Bestly Sky — Jared's personal iPhone app that hosts the wall's aircraft Live Activity (wall round 4, W6).
-# Isolated from the web app: nothing under ios/ is part of the Vite build. Build + install: scripts/build-install.sh (Mac mini).
+# Bestly Sky: Jared's personal iPhone app that hosts the wall's sky-alert Live Activity (news helicopters, police helicopters, planes).
+# Isolated from the web app: nothing under ios/ is part of the Vite build.
+# Dev build + install on the phone: scripts/build-install.sh. TestFlight: scripts/ship-sky.sh (Mac mini).
+# Debug uses aps-environment development; Release uses production (TestFlight tokens are production tokens).
 name: BestlySky
 options:
   bundleIdPrefix: tech.bestly
@@ -38,14 +40,17 @@ targets:
           - CFBundleURLName: tech.bestly.sky
             CFBundleURLSchemes: [bestlysky]
         ITSAppUsesNonExemptEncryption: false
-    entitlements:
-      path: BestlySky/BestlySky.entitlements
-      properties:
-        aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tech.bestly.sky
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: BestlySky/BestlySky.entitlements
+      configs:
+        Release:
+          CODE_SIGN_ENTITLEMENTS: BestlySky/BestlySky-Release.entitlements
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "Bestly Sky App Store"
     dependencies:
       - target: BestlySkyWidgets
   BestlySkyWidgets:
@@ -55,6 +60,7 @@ targets:
       - path: BestlySkyWidgets
         excludes: ["Info.plist"]
       - path: Shared
+      - path: BestlySky/Generated
     info:
       path: BestlySkyWidgets/Info.plist
       properties:
@@ -66,3 +72,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tech.bestly.sky.widgets
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "Bestly Sky Widgets App Store"

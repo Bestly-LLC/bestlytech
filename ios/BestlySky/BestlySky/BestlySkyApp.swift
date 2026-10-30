@@ -23,11 +23,23 @@ struct BestlySkyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                if CommandLine.arguments.contains("-turoPreview") { TuroPreviewGallery() } else { CompassView() }
-            }
+            root
                 .preferredColorScheme(.dark)
                 .onAppear { TokenSync.shared.start() }
         }
+    }
+
+    @ViewBuilder private var root: some View {
+        #if DEBUG
+        if CommandLine.arguments.contains("-skyShots") {
+            SkyShotsView()
+        } else if CommandLine.arguments.contains("-turoPreview") {
+            TuroPreviewGallery()
+        } else {
+            CompassView()
+        }
+        #else
+        CompassView()
+        #endif
     }
 }
