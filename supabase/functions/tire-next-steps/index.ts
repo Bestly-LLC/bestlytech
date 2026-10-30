@@ -20,7 +20,6 @@ const SECRETS: string[] = (() => {
 })();
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SECRETS[0] ?? "", { auth: { persistSession: false } });
 const J = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "content-type": "application/json" } });
-const UA = "BestlyCarGuard/1.0 (jared@bestly.tech)";
 
 type Place = { name: string; phone?: string; address?: string; hours?: string; open_now?: boolean | null; mi: number; mobile?: boolean; src: string };
 
@@ -63,10 +62,19 @@ async function osm(lat: number, lon: number, tesla: boolean): Promise<Place[]> {
   const q = tesla
     ? `[out:json][timeout:40];(nwr(around:40000,${lat},${lon})["name"~"Tesla",i]["shop"~"car|car_repair"];nwr(around:40000,${lat},${lon})["brand"="Tesla"]["service:vehicle:repair"="yes"];);out center tags;`
     : `[out:json][timeout:40];(nwr(around:12000,${lat},${lon})["shop"="tyres"];nwr(around:12000,${lat},${lon})["service:vehicle:tyres"="yes"];nwr(around:12000,${lat},${lon})["craft"="tyres"];);out center tags;`;
-  const r = await fetch("https://overpass-api.de/api/interpreter", { method: "POST", headers: { "user-agent": UA, "content-type": "application/x-www-form-urlencoded" },
-    body: "data=" + encodeURIComponent(q), signal: AbortSignal.timeout(60_000) });
-  if (!r.ok) throw new Error(`overpass ${r.status}`);
-  const j = await r.json();
+  // Overpass answers 406 to every edge-runtime request (hunter-osm finding, 2026-10-11), so ask through pg_net like hunter-run does:
+  // hunter_net_get queues the GET from the database, hunter_net_result is polled until the answer lands.
+  const { data: id, error } = await db.rpc("hunter_net_get", { p_url: "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(q), p_timeout_ms: 90000 });
+  if (error || id == null) throw new Error("overpass: could not queue (" + (error?.message ?? "no id") + ")");
+  let ans: { status?: number; body?: string; error?: string } | null = null;
+  for (let i = 0; i < 45 && !ans; i++) {
+    await new Promise((ok) => setTimeout(ok, 2000));
+    const { data } = await db.rpc("hunter_net_result", { p_id: Number(id) });
+    if (data && (data.status != null || data.error)) ans = data;
+  }
+  if (!ans) throw new Error("overpass: no answer in 90 s");
+  if (ans.status !== 200) throw new Error(`overpass ${ans.status ?? ans.error}`);
+  const j = JSON.parse(ans.body ?? "{}");
   return (j.elements ?? []).filter((e: any) => e.tags?.name).map((e: any) => {
     const t = e.tags, la = e.lat ?? e.center?.lat, lo = e.lon ?? e.center?.lon;
     const addr = [t["addr:housenumber"], t["addr:street"], t["addr:city"]].filter(Boolean).join(" ") || undefined;
@@ -116,11 +124,13 @@ Deno.serve(async (req) => {
       tesla = (await tomtom(String(key), lat, lon, "Tesla Service Center", 40000)) ?? [];
     } else tried.push("tomtom: key not allowed to search");
   } catch (e) { tried.push(`tomtom: ${(e as Error).message}`); }
-  if (!shops.length) {
-    src = "osm";
-    try { shops = await osm(lat, lon, false); } catch (e) { tried.push(`osm: ${(e as Error).message}`); }
-  }
-  if (!tesla.length) { try { tesla = await osm(lat, lon, true); } catch (e) { tried.push(`osm tesla: ${(e as Error).message}`); } }
+  // OpenStreetMap: both lookups at once (each can take 30-60 s through pg_net)
+  const [os, ot] = await Promise.all([
+    shops.length ? Promise.resolve(null) : osm(lat, lon, false).catch((e) => { tried.push(`osm: ${(e as Error).message}`); return null; }),
+    tesla.length ? Promise.resolve(null) : osm(lat, lon, true).catch((e) => { tried.push(`osm tesla: ${(e as Error).message}`); return null; }),
+  ]);
+  if (os) { shops = os; src = "osm"; }
+  if (ot) tesla = ot;
   const top = rank(shops).slice(0, 3);
   const ts = rank(tesla.filter((p) => /tesla/i.test(p.name))).sort((a, b) => a.mi - b.mi)[0]
     ?? (ctx.tesla_fallback ? { name: ctx.tesla_fallback, mi: NaN, src: "settings" } as Place : undefined);
