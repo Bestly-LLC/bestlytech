@@ -13,40 +13,44 @@ const ARES = /^Ares couldn't fix: /;
 const FOLD_OVER = 2;
 
 /**
- * Real items only (no FYI), same notice raised twice shown once, worst then oldest first.
  * Ares's unfixed findings fold into ONE row (2026-10-30: 40 DMARC/header/port rows made the AI team card read "48 need you"
  * and buried the three things that were actually his). The "N security problems need you" outage row repeats that same
  * pile, so it goes when the fold is there. Nothing is hidden: the folded row opens Security, which lists every finding.
+ * Order is kept: the fold sits where the first finding was. Scout's badge uses this too, so both count the same.
  */
-export function realNeeds(rows: TodayRow[] | undefined): TodayRow[] {
-  const seen = new Set<string>();
-  const sorted = (rows ?? [])
-    .filter((r) => (SEV[r.severity] ?? 3) < 3)
-    .sort((a, b) => (SEV[a.severity] ?? 3) - (SEV[b.severity] ?? 3) || (a.since ?? "").localeCompare(b.since ?? ""))
-    .filter((r) => { const k = `${r.source}|${r.title.trim().toLowerCase()}`; if (seen.has(k)) return false; seen.add(k); return true; });
-  const ares = sorted.filter((r) => ARES.test(r.title));
-  if (ares.length <= FOLD_OVER) return sorted;
+type Foldable = { key: string; title: string; since: string | null; rank: number };
+export function foldAres<T extends Foldable>(rows: T[]): T[] {
+  const ares = rows.filter((r) => ARES.test(r.title));
+  if (ares.length <= FOLD_OVER) return rows;
   const worst = ares[0];
-  const fold: TodayRow = {
+  const fold = {
+    ...worst,
     key: "fold:ares",
-    source: worst.source,
-    severity: worst.severity,
     title: `Ares couldn't fix ${ares.length} security findings`,
     detail: `Worst first: ${worst.title.replace(ARES, "")}. He keeps trying each night.`,
     action_label: "Open Security",
     url: "/admin/security",
     since: ares.map((r) => r.since).filter(Boolean).sort()[0] ?? worst.since,
     item_count: ares.length,
-    rank: worst.rank,
-  };
-  const out: TodayRow[] = [];
+    rank: Math.min(...ares.map((r) => r.rank)),
+  } as T;
+  const out: T[] = [];
   let placed = false;
-  for (const r of sorted) {
+  for (const r of rows) {
     if (ARES.test(r.title)) { if (!placed) { out.push(fold); placed = true; } continue; }
     if (/\bsecurity problems? need you\b/i.test(r.title)) continue;
     out.push(r);
   }
   return out;
+}
+
+/** Real items only (no FYI), same notice raised twice shown once, worst then oldest first, Ares's findings folded. */
+export function realNeeds(rows: TodayRow[] | undefined): TodayRow[] {
+  const seen = new Set<string>();
+  return foldAres((rows ?? [])
+    .filter((r) => (SEV[r.severity] ?? 3) < 3)
+    .sort((a, b) => (SEV[a.severity] ?? 3) - (SEV[b.severity] ?? 3) || (a.since ?? "").localeCompare(b.since ?? ""))
+    .filter((r) => { const k = `${r.source}|${r.title.trim().toLowerCase()}`; if (seen.has(k)) return false; seen.add(k); return true; }));
 }
 
 export interface Upcoming { title: string; start: string }

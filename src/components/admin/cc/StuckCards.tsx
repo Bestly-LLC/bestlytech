@@ -237,7 +237,8 @@ function StuckCard({ item, busy, onFix, onRun, onUndo }: { item: StuckItem; busy
         </button>
       )}
 
-      {item.action && !(fix?.command && item.action.status === "failed") && <ActionRow action={item.action} name={item.employee_name} />}
+      {/* When the fix is a line only he can run, an earlier Scout answer is noise (it guessed "a new API token"); the card says the real fix. */}
+      {item.action && !(fix?.command && item.action.status !== "working") && <ActionRow action={item.action} name={item.employee_name} />}
 
       {fix?.command && !working && <CommandBox command={fix.command} note={fix.command_note} />}
 

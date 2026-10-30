@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import {
@@ -15,6 +15,7 @@ import {
 import { openDebrief } from "./scoutBus";
 import { debriefIdFromRow } from "./debrief/link";
 import { HERMES_DECIDED, HermesAskButtons, hermesAskId } from "./HermesAsk";
+import { foldAres } from "./cc/homeLogic";
 
 /**
  * What the red badge on the Scout button is counting (2026-10-06, Jared: "I get these alerts but when I click
@@ -59,7 +60,9 @@ export function useNeedsYou(open: boolean) {
   useEffect(() => {
     refresh();
   }, [open, refresh]);
-  return { rows, urgent: (rows ?? []).filter((r) => r.rank <= 1), refresh };
+  // Ares's findings fold into one row, the same way the Command Center counts them (cc/homeLogic foldAres).
+  const folded = useMemo(() => (rows ? foldAres(rows) : null), [rows]);
+  return { rows: folded, urgent: (folded ?? []).filter((r) => r.rank <= 1), refresh };
 }
 
 function kindOf(r: TodayRow) {
