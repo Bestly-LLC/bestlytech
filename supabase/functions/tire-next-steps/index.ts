@@ -3,8 +3,10 @@
 // the host chooses where the car is towed, and a replacement tire needs the host's OK (equal or better quality).
 //
 //   {op:"step", id}   service (cron tire-desk, every minute, and tire_desk_open): moves one tire_incidents row forward
-//     finding    -> shops near the car: TomTom Search when Vault tomtom_api_key allows it, else OpenStreetMap through pg_net
-//                   (Overpass answers 406 to edge requests; hunter_net_get / hunter_net_result), plus the nearest Tesla Service
+//     finding    -> shops near the car with TomTom Search (Vault tomtom_api_key) plus the nearest Tesla Service. No OpenStreetMap:
+//                   through pg_net one Overpass lookup held every other pg_net request in the database for about 2 minutes
+//                   (measured 2026-10-29), and near the test spot it had 4 shops, 2 with a phone number. If TomTom refuses,
+//                   Jared is told plainly instead of getting a guess.
 //     calling    -> Ava calls up to 3 shops with a phone number (ava-assistant action "call"): 235/45R18 in stock? price
 //                   installed? can they take a tow-in now? Claimed first (tire_desk_claim) so a shop is never called twice.
 //     collecting -> each finished call (ava_calls) is read by free AI into a short answer; when all are in (or 12 minutes
@@ -23,12 +25,12 @@ const SECRETS: string[] = (() => {
 const SB = Deno.env.get("SUPABASE_URL")!;
 const db = createClient(SB, SECRETS[0] ?? "", { auth: { persistSession: false } });
 const J = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "content-type": "application/json" } });
-const MAX_CALLS = 3, COLLECT_MIN = 12, FIND_MIN = 8;
+const MAX_CALLS = 3, COLLECT_MIN = 12;
 
 type Result = { reached: boolean; in_stock: "yes" | "no" | "unknown"; brand?: string; price_each?: number | null; tow_in_now: "yes" | "no" | "unknown"; ready_in?: string; notes?: string };
 type Place = { name: string; phone?: string; address?: string; hours?: string; open_now?: boolean | null; mi: number; src: string; call_id?: string | null; call_error?: string; result?: Result; score?: number };
 type Incident = { id: string; reservation_id: number; guest_first: string | null; reason: string | null; status: string; lat: number | null; lon: number | null;
-  shops: Place[]; tesla: Place | null; net: Record<string, number | boolean>; src: string | null; calls_at: string | null; opened_at: string };
+  shops: Place[]; tesla: Place | null; src: string | null; calls_at: string | null; opened_at: string };
 
 function miles(a: number, b: number, c: number, d: number) {
   const r = (x: number) => x * Math.PI / 180;
@@ -65,28 +67,6 @@ async function tomtom(key: string, lat: number, lon: number, q: string, radius: 
   });
 }
 
-const osmQuery = (lat: number, lon: number, tesla: boolean) => tesla
-  ? `[out:json][timeout:60];(nwr(around:40000,${lat},${lon})["name"~"Tesla",i]["shop"~"car|car_repair"];nwr(around:40000,${lat},${lon})["brand"="Tesla"]["service:vehicle:repair"="yes"];);out center tags;`
-  : `[out:json][timeout:60];(nwr(around:12000,${lat},${lon})["shop"="tyres"];nwr(around:12000,${lat},${lon})["service:vehicle:tyres"="yes"];nwr(around:12000,${lat},${lon})["craft"="tyres"];);out center tags;`;
-async function osmQueue(q: string): Promise<number> {
-  const { data, error } = await db.rpc("hunter_net_get", { p_url: "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(q), p_timeout_ms: 120000 });
-  if (error || data == null) throw new Error("could not queue the OpenStreetMap request");
-  return Number(data);
-}
-/** null = not answered yet; [] = answered with nothing usable */
-async function osmRead(id: number, lat: number, lon: number): Promise<Place[] | null> {
-  const { data } = await db.rpc("hunter_net_result", { p_id: id });
-  if (!data || (data.status == null && !data.error)) return null;
-  if (data.status !== 200) throw new Error(`OpenStreetMap ${data.status ?? data.error}`);
-  const j = JSON.parse(data.body ?? "{}");
-  // deno-lint-ignore no-explicit-any
-  return (j.elements ?? []).filter((e: any) => e.tags?.name).map((e: any) => {
-    const t = e.tags, la = e.lat ?? e.center?.lat, lo = e.lon ?? e.center?.lon;
-    const addr = [t["addr:housenumber"], t["addr:street"], t["addr:city"]].filter(Boolean).join(" ") || undefined;
-    return { name: t.name, phone: phoneFmt(t.phone ?? t["contact:phone"]), address: addr, hours: t.opening_hours, open_now: null,
-      mi: miles(lat, lon, la, lo), src: "osm" } as Place;
-  });
-}
 function dedupe(xs: Place[]) {
   const seen = new Set<string>();
   return xs.filter((p) => { const k = p.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return p.open_now !== false; })
@@ -96,35 +76,21 @@ function dedupe(xs: Place[]) {
 
 async function finding(i: Incident) {
   if (i.lat == null || i.lon == null) return ready(i, [], null, "The car's location wasn't known, so I couldn't look up shops.");
-  const lat = i.lat, lon = i.lon, net = { ...(i.net ?? {}) };
-  if (!net.tomtom_tried) {
-    net.tomtom_tried = true;
-    try {
-      const { data: key } = await db.rpc("sky_tomtom_key");
-      const tt = key ? await tomtom(String(key), lat, lon, "tire shop", 12000) : null;
-      if (tt && tt.length) {
-        const ts = ((await tomtom(String(key), lat, lon, "Tesla Service Center", 40000)) ?? []).filter((p) => /tesla/i.test(p.name)).sort((a, b) => a.mi - b.mi)[0] ?? null;
-        await save(i.id, { shops: dedupe(tt), tesla: ts, src: "tomtom", net, status: "calling" }, `Found ${tt.length} tire shops with TomTom`);
-        return step(i.id);
-      }
-      net.tomtom = false;
-    } catch (_) { net.tomtom = false; }
-  }
-  if (!net.osm_shops) { net.osm_shops = await osmQueue(osmQuery(lat, lon, false)); net.osm_tesla = await osmQueue(osmQuery(lat, lon, true));
-    await save(i.id, { net }, "Looking up tire shops on OpenStreetMap"); return { ok: true, waiting: "osm" }; }
-  let shops: Place[] | null = null, tesla: Place[] | null = null, err = "";
-  try { shops = await osmRead(Number(net.osm_shops), lat, lon); } catch (e) { err = (e as Error).message; shops = []; }
-  try { tesla = await osmRead(Number(net.osm_tesla), lat, lon); } catch (_) { tesla = []; }
-  if (shops === null && minsSince(i.opened_at) < FIND_MIN) return { ok: true, waiting: "osm" };
-  if (shops === null && !net.osm_retry) {          // Overpass is often busy: one more try
-    net.osm_retry = true; net.osm_shops = await osmQueue(osmQuery(lat, lon, false));
-    await save(i.id, { net }, "OpenStreetMap was slow; asking again"); return { ok: true, waiting: "osm retry" };
-  }
-  const ts = (tesla ?? []).filter((p) => /tesla/i.test(p.name)).sort((a, b) => a.mi - b.mi)[0] ?? null;
-  const list = dedupe(shops ?? []);
-  if (!list.length) return ready(i, [], ts, `I couldn't find tire shops near the car${err ? ` (${err})` : ""}.`);
-  await save(i.id, { shops: list, tesla: ts, src: "osm", net, status: "calling" }, `Found ${list.length} tire shops on OpenStreetMap`);
-  return step(i.id);
+  const lat = i.lat, lon = i.lon;
+  let tt: Place[] | null = null, err = "";
+  try {
+    const { data: key } = await db.rpc("sky_tomtom_key");
+    tt = key ? await tomtom(String(key), lat, lon, "tire shop", 12000) : null;
+    if (tt === null) err = "TomTom search isn't switched on for the Bestly TomTom key";
+    else if (tt.length) {
+      const ts = ((await tomtom(String(key), lat, lon, "Tesla Service Center", 40000)) ?? []).filter((p) => /tesla/i.test(p.name)).sort((a, b) => a.mi - b.mi)[0] ?? null;
+      await save(i.id, { shops: dedupe(tt), tesla: ts, src: "tomtom", status: "calling" }, `Found ${tt.length} tire shops with TomTom`);
+      return step(i.id);
+    }
+  } catch (e) { err = (e as Error).message; }
+  const { data: set } = await db.from("car_tire_settings").select("tesla_fallback").eq("id", 1).single();
+  const ts = set?.tesla_fallback ? { name: set.tesla_fallback, mi: NaN, src: "settings" } as Place : null;
+  return ready(i, [], ts, `I couldn't look up tire shops near the car${err ? ` (${err})` : ""}.`);
 }
 
 // ---------------- calling ----------------
@@ -249,7 +215,7 @@ Deno.serve(async (req) => {
   const b = await req.json().catch(() => ({}));
   try {
     if (b.op === "step") return J(await step(String(b.id ?? "")));
-    if (b.op === "find") {   // lookup only, nothing saved (TomTom; OpenStreetMap is two-phase and only runs inside 'step')
+    if (b.op === "find") {   // lookup only, nothing saved
       const { data: key } = await db.rpc("sky_tomtom_key");
       const tt = key ? await tomtom(String(key), Number(b.lat), Number(b.lon), "tire shop", 12000) : null;
       return J({ ok: true, tomtom: tt === null ? "key not allowed to search" : dedupe(tt) });
