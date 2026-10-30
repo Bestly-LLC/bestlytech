@@ -619,7 +619,7 @@ begin
     where status = 'sending' and claimed_at < now() - interval '10 minutes';
   with a as (
     update claim_turo_actions t set status = 'sending', claimed_at = now(), attempts = attempts + 1
-    where t.id in (select x.id from claim_turo_actions x where x.status = 'queued' and x.attempts < 2 and x.kind = 'create_invoice' order by x.created_at limit 1)
+    where t.id in (select x.id from claim_turo_actions x where x.status = 'queued' and x.attempts < 2 and x.kind = 'create_invoice' and claims_send_ok(x.case_id) order by x.created_at limit 1)
     returning t.id, t.kind, t.payload, t.case_id)
   select coalesce(jsonb_agg(jsonb_build_object('id', a.id, 'kind', a.kind, 'payload', a.payload, 'case_id', a.case_id,
       'incident_id', c.turo_incident_id, 'reservation_id', c.reservation_id)), '[]'::jsonb) into out
