@@ -165,6 +165,84 @@ export const countShowing = (snap: CitSnap, sw: AlertSw, now: number) => {
 /** Categories that are switched on but whose feed isn't answering (they sit quiet on their switch). */
 export const pausedOn = (snap: CitSnap, sw: AlertSw) => snap.cats.filter((c) => c.state === "paused" && catIsOn(sw, c)).length;
 
+/** Log row from citizen_admin_log (every incident in the last N days, open or ended). Times are epoch ms. */
+export type CitLogRow = {
+  key: string; cat: string; source: string; title: string; short: string | null; sub: string | null; address: string | null;
+  level: CitInc["level"]; dist_ft: number | null; place: CitInc["place"]; first_seen: number; closed_at: number | null; pinged_at: number | null; n_updates: number;
+};
+
+const t12 = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+const dayLabel = (ms: number, now: number) => {
+  const d = new Date(ms), t = new Date(now), y = new Date(now - 86_400_000);
+  if (d.toDateString() === t.toDateString()) return "Today";
+  if (d.toDateString() === y.toDateString()) return "Yesterday";
+  return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+};
+const miText = (ft: number | null) => (ft == null || ft <= 0 ? null : ft < 528 ? `${Math.max(50, Math.round(ft / 50) * 50)} ft` : `${(ft / 5280).toFixed(1)} mi`);
+
+/** Every alert from the last week (admin only), refreshed every minute. */
+export function useAlertLog(days = 7) {
+  const [rows, setRows] = useState<CitLogRow[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let dead = false;
+    const get = async () => {
+      try {
+        const { data, error } = await rpcAny("citizen_admin_log", { p_days: days });
+        if (dead) return;
+        if (error) { setErr(error.message); return; }
+        setErr(null); setRows(Array.isArray(data) ? (data as CitLogRow[]) : []);
+      } catch (e) { if (!dead) setErr(String(e)); }
+    };
+    void get();
+    const t = window.setInterval(() => void get(), 60_000);
+    return () => { dead = true; window.clearInterval(t); };
+  }, [days]);
+  return { rows, err };
+}
+
+/** "Log": what happened, newest first, grouped by day. Ended alerts are dimmed; open ones say "Showing now". */
+export function AlertLogList({ snap, rows, err, now }: { snap: CitSnap | null; rows: CitLogRow[] | null; err: string | null; now: number }) {
+  if (err) return <div className="px-4 py-3 text-[14px] leading-snug text-white/60">The log didn't load (citizen_admin_log: {err}).</div>;
+  if (!rows) return <div className="px-4 py-3 text-[13px] text-white/50">Loading the log…</div>;
+  if (rows.length === 0) return <div className="px-4 py-3 text-[14px] leading-snug text-white/50">No alerts in the last 7 days.</div>;
+  const reg = new Map((snap?.cats ?? []).map((c) => [c.id, c] as const));
+  let lastDay = "";
+  return (
+    <>
+      {rows.map((r) => {
+        const cat = reg.get(r.cat);
+        const color = cat?.color ?? "#64D2FF";
+        const day = dayLabel(r.first_seen, now);
+        const head = day !== lastDay ? (lastDay = day) : null;
+        const open = r.closed_at == null;
+        const dist = miText(r.dist_ft);
+        return (
+          <div key={r.key}>
+            {head && <div className="px-4 pb-1 pt-3 text-[12px] font-semibold text-white/45">{head}</div>}
+            <div className={cn("flex min-h-[48px] items-center gap-3 border-b border-white/[0.07] px-4 py-2", !open && "opacity-75")}>
+              <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px]" style={{ background: open ? color : `rgba(${catRGB(color)},.22)` }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke={open ? iconInk(color) : color} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]" aria-hidden
+                  dangerouslySetInnerHTML={{ __html: iconMarkup(cat) }} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] leading-tight text-white">{r.short || r.title}</span>
+                <span className="block text-[13px] leading-snug text-white/50">
+                  <span className="whitespace-nowrap">{t12(r.first_seen)}</span>
+                  {dist && <>{" · "}<span className="whitespace-nowrap">{dist}</span></>}
+                  {" · "}
+                  {open ? <span style={{ color }}>Showing now</span> : <span className="whitespace-nowrap">ended {t12(r.closed_at!)}</span>}
+                  {r.pinged_at != null && <>{" · "}<span className="whitespace-nowrap">pinged you</span></>}
+                </span>
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 /** "Near home": the incidents the map is drawing right now (category on, not faded out), new first, then nearest. Tap a row to flash its dot. */
 export function NearHomeList({ snap, sw, now, activeKey, onPick }: { snap: CitSnap | null; sw: AlertSw; now: number; activeKey: string | null; onPick: (key: string) => void }) {
   if (!snap) return <div className="px-4 py-3 text-[13px] text-white/50">Loading alerts…</div>;

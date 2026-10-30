@@ -27,7 +27,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Maximize2, Minimize2, Plane, RotateCw, Compass, LocateFixed, Loader2, Route, TrafficCone, Siren, Plus, Minus, Smartphone, Presentation, X as CloseX } from "lucide-react";
-import { AlertCategoryRows, LEVEL_SCALE, catIsOn, citOpacity, countShowing, iconInk, iconMarkup, isNewInc, NearHomeList, pausedOn, useAlertSwitches, useCitizen, type CitCat, type CitInc } from "@/components/admin/LocalAlerts";
+import { AlertCategoryRows, AlertLogList, LEVEL_SCALE, catIsOn, citOpacity, countShowing, iconInk, iconMarkup, isNewInc, NearHomeList, pausedOn, useAlertLog, useAlertSwitches, useCitizen, type CitCat, type CitInc } from "@/components/admin/LocalAlerts";
 import { Switch } from "@/components/ui/switch";
 
 type Air = {
@@ -247,6 +247,7 @@ export default function Sky() {
   const { snap: cit, fresh: citFresh } = useCitizen();
   const { sw: alertSw, setMaster: setAlertMaster, setCat: setAlertCat } = useAlertSwitches();
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const { rows: alertLog, err: alertLogErr } = useAlertLog(7);
   const carFix = useRef<{ lat: number; lon: number; hd: number | null } | null>(null);
   const carOk = useRef<boolean | null>(null);
   useEffect(() => {
@@ -863,6 +864,8 @@ export default function Sky() {
               <div className="overflow-y-auto">
                 <div className="px-4 pb-1 pt-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">Near home</div>
                 <NearHomeList snap={cit} sw={alertSw} now={now} activeKey={hi?.key ?? null} onPick={pickAlert} />
+                <div className="border-t border-white/10 px-4 pb-1 pt-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">Log, last 7 days</div>
+                <AlertLogList snap={cit} rows={alertLog} err={alertLogErr} now={now} />
                 <div className="border-t border-white/10 px-4 pb-1 pt-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">Show these</div>
                 <AlertCategoryRows snap={cit} sw={alertSw} onCat={setAlertCat} idPrefix="sky-cat" />
               </div>
