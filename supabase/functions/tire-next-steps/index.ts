@@ -125,7 +125,12 @@ async function calling(i: Incident) {
       if (j?.ok) { p.call_id = j.call_id ?? null; placed++; } else p.call_error = String(j?.error ?? `HTTP ${r.status}`).slice(0, 160);
     } catch (e) { p.call_error = (e as Error).message.slice(0, 160); }
   }
-  if (!placed) return ready({ ...i, shops }, shops, i.tesla, "Ava couldn't reach any shop by phone, so here's the list to call yourself.");
+  if (!placed) {
+    const allClosed = shops.length > 0 && shops.every((p) => p.open_now === false);
+    return ready({ ...i, shops }, shops, i.tesla, allClosed
+      ? "Every tire shop near the car is closed right now, so Ava didn't call. The car can be towed to one for the morning, or to Tesla Service."
+      : "Ava couldn't reach any shop by phone, so here's the list to call yourself.");
+  }
   await save(i.id, { shops, calls_at: new Date().toISOString() }, `Ava is calling ${placed} shop${placed > 1 ? "s" : ""}`);
   return { ok: true, calling: placed };
 }
