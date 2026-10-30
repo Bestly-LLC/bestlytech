@@ -87,7 +87,7 @@ async function finding(i: Incident) {
     tt = key ? await tomtom(String(key), lat, lon, "tire shop", 12000) : null;
     if (tt === null) err = "TomTom search isn't switched on for the Bestly TomTom key";
     else tt = tt.concat((await tomtom(String(key), lat, lon, "tires", 12000, "7310").catch(() => null)) ?? []);   // repair shops that sell tires
-    else if (tt.length) {
+    if (tt && tt.length) {
       const ts = ((await tomtom(String(key), lat, lon, "Tesla Service Center", 40000)) ?? []).filter((p) => /tesla/i.test(p.name)).sort((a, b) => a.mi - b.mi)[0] ?? null;
       await save(i.id, { shops: dedupe(tt), tesla: ts, src: "tomtom", status: "calling" }, `Found ${tt.length} tire shops with TomTom`);
       return step(i.id);
