@@ -135,3 +135,12 @@ export async function startSignIn(): Promise<string> {
 export async function finishSignIn(code: string, state: string): Promise<{ token: string; me: any }> {
   return fn("family-auth", { op: "exchange", code, state });
 }
+
+/* ===== sign in with a link (no account, no password) ===== */
+/** Jared or Mariah makes a one-time link for someone; they tap it and they are in. */
+export async function createInvite(role: string): Promise<{ url: string; name: string; days: number }> {
+  return fn("family-auth", { op: "invite", token: getToken(), role });
+}
+export async function redeemLink(t: string): Promise<{ token: string; me: any }> {
+  return fn("family-auth", { op: "link", t });
+}

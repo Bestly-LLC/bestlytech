@@ -14,7 +14,8 @@ const SB: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERV
 const db = createClient(Deno.env.get("SUPABASE_URL")!, SB, { auth: { persistSession: false } });
 
 const IDP = "https://cloud.bestly.tech";
-const REDIRECT = "https://www.bestly.tech/cookbook/callback";
+const SITE = "https://www.bestly.tech";
+const REDIRECT = `${SITE}/cookbook/callback`;
 const ORIGINS = new Set(["https://www.bestly.tech", "https://bestly.tech", "http://localhost:4173", "http://localhost:5173", "http://127.0.0.1:4173"]);
 const cors = (req: Request) => ({
   "Access-Control-Allow-Origin": ORIGINS.has(req.headers.get("origin") ?? "") ? req.headers.get("origin")! : "https://www.bestly.tech",
@@ -122,5 +123,47 @@ Deno.serve(async (req) => {
     const { data: me } = await db.rpc("family_me", { p_token: token });
     return J(req, { ok: true, token, me });
   }
+  // A reviewer makes a one-time link for someone, so that person never needs a Bestly Cloud account or a password.
+  if (body.op === "invite") {
+    const caller = String(body.token ?? ""), role = String(body.role ?? "");
+    if (!["mom", "jared", "mariah"].includes(role)) return J(req, { ok: false, error: "unknown person" }, 400);
+    const { data: me } = await db.rpc("family_me", { p_token: caller });
+    if (!me || !(me as { reviewer?: boolean }).reviewer) return J(req, { ok: false, error: "Only Jared or Mariah can make a sign-in link." }, 403);
+    const { data: mine } = await db.from("family_members").select("id").eq("role", (me as { id?: string }).id ?? "").maybeSingle();
+    const { data: m } = await db.from("family_members").select("id, name, status").eq("role", role).maybeSingle();
+    if (!m || m.status === "paused") return J(req, { ok: false, error: "That person is not on the family list." }, 404);
+    const t = rand(32);
+    const { error } = await db.from("family_invites").insert({ token_hash: await sha256hex(t), member_id: m.id, created_by: mine?.id ?? null });
+    if (error) { await log(false, "invite", error.message, m.id); return J(req, { ok: false, error: "Could not make that link. Try again." }, 500); }
+    await db.from("family_invites").delete().lt("expires_at", new Date().toISOString());
+    if (m.status === "pending") await db.from("family_members").update({ status: "invited", invited_at: new Date().toISOString() }).eq("id", m.id);
+    await log(true, "invite", `link for ${role}`, m.id);
+    return J(req, { ok: true, url: `${SITE}/cookbook/join?t=${t}`, name: m.name, days: 7 });
+  }
+
+  // Tapping that link: one use, then it is spent.
+  if (body.op === "link") {
+    const t = String(body.t ?? "");
+    if (!/^[0-9a-f]{64}$/.test(t)) return J(req, { ok: false, error: "That link is not valid. Ask Jared for a new one." }, 400);
+    const { count } = await db.from("family_auth_log").select("id", { count: "exact", head: true }).eq("ok", false).gte("at", new Date(Date.now() - 600_000).toISOString());
+    if ((count ?? 0) >= 30) return J(req, { ok: false, error: "Too many tries. Wait a few minutes." }, 429);
+    // claiming the invite and checking it is unused happen in one update, so a link can never be spent twice
+    const { data: inv } = await db.from("family_invites").update({ used_at: new Date().toISOString() })
+      .eq("token_hash", await sha256hex(t)).is("used_at", null).gt("expires_at", new Date().toISOString())
+      .select("member_id").maybeSingle();
+    if (!inv) { await log(false, "link", "unknown, used or expired link"); return J(req, { ok: false, error: "That link was already used or has expired. Ask Jared for a new one." }, 400); }
+    const { data: m } = await db.from("family_members").select("id, status, first_sign_in_at").eq("id", inv.member_id).maybeSingle();
+    if (!m || m.status === "paused") { await log(false, "link", "no seat", inv.member_id); return J(req, { ok: false, error: "That person is not on the family list." }, 403); }
+    const token = rand(32);
+    const { error } = await db.from("family_sessions").insert({ token_hash: await sha256hex(token), member_id: m.id, via: "link" });
+    if (error) { await log(false, "session", error.message, m.id); return J(req, { ok: false, error: "Could not finish signing in. Try again." }, 500); }
+    const now = new Date().toISOString();
+    await db.from("family_members").update({ status: "active", last_sign_in_at: now, ...(m.first_sign_in_at ? {} : { first_sign_in_at: now }) }).eq("id", m.id);
+    await db.from("family_sessions").delete().eq("member_id", m.id).lt("expires_at", now);
+    await log(true, "session", "signed in with a link", m.id);
+    const { data: me } = await db.rpc("family_me", { p_token: token });
+    return J(req, { ok: true, token, me });
+  }
+
   return J(req, { ok: false, error: "unknown op" }, 400);
 });

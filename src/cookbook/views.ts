@@ -2,7 +2,7 @@
 // Rendering is plain strings into #view; clicks are caught once on the document (data-act) and routed to ACT.
 
 import { $, $$, IC, addDays, appIcon, clock, DAY, deep, esc, fd, ic, lineify, nowrapDom, nowrapify, nwx, words } from "./dom";
-import { ApiError, fn as _fn, forgetPhotos, getToken, hydratePhotos, plainError, rpc, setToken, startSignIn } from "./api";
+import { ApiError, createInvite, fn as _fn, forgetPhotos, getToken, hydratePhotos, plainError, rpc, setToken, startSignIn } from "./api";
 import { ACT, FORM, S, hooks, resetState, type Cap, type Photo, type Row } from "./state";
 import { PEOPLE, appTitle, bookTitle, canSeeId, manifestFor, otherReviewers, type Role } from "./people";
 import { acceptAll, finishedDoc, ingLine, parseAmountText, plainName, replaceWord, rt, setCtx, unsureList } from "./text";
@@ -30,7 +30,7 @@ function V_signin() {
     + '<button class="hero-btn" data-act="signin"' + (S.busy ? " disabled" : "") + ">" + ic("lock") + "<span>" + (S.busy ? "One moment" : "Sign in with Bestly Cloud") + "</span></button>"
     + '<p class="msg" id="signin-msg" role="alert"' + (S.msg ? "" : " hidden") + ">" + esc(S.msg) + "</p>"
     + '<p class="fine">Use your own Bestly Cloud account. After that, this phone stays signed in.</p>'
-    + '<details class="more first"><summary><span>First time here?</span>' + ic("down", 22) + '</summary><div class="inner"><p>Jared sent you a note with your username and how to choose a password. You only do that once.</p><p>Having trouble? Ask Jared.</p></div></details></div>';
+    + '<details class="more first"><summary><span>First time here?</span>' + ic("down", 22) + '</summary><div class="inner"><p>Ask Jared to text you your link. Tap it on your phone and you are in: no account to make, nothing to remember.</p><p>The button above is for anyone who already has a Bestly Cloud account.</p></div></details></div>';
 }
 
 /* ===== home ===== */
@@ -349,9 +349,39 @@ Object.assign(ACT, {
   async menu() {
     await Promise.race([loadDeleted().catch(() => {}), new Promise((r) => setTimeout(r, 700))]);
     openSheet('<h2>' + esc(bookTitle(S.me)) + '</h2><p class="muted">Signed in as ' + esc(S.me!.name) + '.</p><div class="menu-list"><button class="btn" data-act="deleted" data-autofocus><span class="row">' + ic("trash", 22) + 'Recently Deleted</span><span class="cnt">' + S.deleted.length + '</span></button>'
+      + (isReviewer() ? '<button class="btn" data-act="invite"><span class="row">' + ic("people", 22) + "Invite someone</span></button>" : "")
       + '<button class="btn" data-act="signout"><span class="row">' + ic("out", 22) + "Sign out</span></button></div><button class=\"btn ghost block\" data-act=\"close-sheet\">Close</button>", "Menu");
   },
   async deleted() { closeSheet(true); await loadDeleted().catch(() => {}); go("deleted"); },
+  invite() {
+    const others = (["mom", "jared", "mariah"] as Role[]).filter((id) => id !== S.me!.id);
+    openSheet("<h2>Invite someone</h2><p>Pick a person and send them the link. They tap it on their phone and they are in: no account, no password.</p>"
+      + '<div class="menu-list">' + others.map((id, i) => '<button class="btn" data-act="invite-make" data-id="' + id + '"' + (i === 0 ? " data-autofocus" : "") + "><span class=\"row\">" + av(id, true) + esc(PEOPLE[id].name) + "</span>" + ic("right", 22) + "</button>").join("") + "</div>"
+      + '<button class="btn ghost block" data-act="close-sheet">Close</button>', "Invite someone");
+  },
+  async "invite-make"(t: HTMLElement) {
+    const id = t.dataset.id as Role;
+    await working(t, async () => {
+      const r = await createInvite(id);
+      const who = PEOPLE[id].name;
+      openSheet("<h2>" + esc(who) + "'s link</h2><p>Send this to " + esc(who) + ". It works once and lasts " + nwx(r.days + " days") + '.</p><p class="linkbox" id="invlink">' + esc(r.url) + "</p>"
+        + '<button class="btn primary big block" data-act="invite-share" data-url="' + esc(r.url) + '" data-who="' + esc(who) + '" data-autofocus>' + ic("share", 22) + "Send the link</button>"
+        + '<button class="btn big block" data-act="invite-copy" data-url="' + esc(r.url) + '">Copy the link</button>'
+        + '<button class="btn ghost block" data-act="close-sheet">Done</button>', who + "'s link");
+    });
+  },
+  async "invite-share"(t: HTMLElement) {
+    const url = t.dataset.url as string, who = t.dataset.who as string;
+    const text = "Here is your link to our Family Cookbook, " + who + ". Tap it on your phone.";
+    const nav = navigator as Navigator & { share?: (d: { title?: string; text?: string; url?: string }) => Promise<void> };
+    if (nav.share) { try { await nav.share({ title: "Family Cookbook", text, url }); return; } catch { /* they changed their mind */ return; } }
+    ACT["invite-copy"](t, new Event("click"));
+  },
+  async "invite-copy"(t: HTMLElement) {
+    const url = t.dataset.url as string;
+    try { await navigator.clipboard.writeText(url); toast("Link copied."); }
+    catch { toast("Press and hold the link above to copy it."); }
+  },
   async signout() {
     try { await rpc("family_logout"); } catch { /* the token is dropped here either way */ }
     signOutLocal();

@@ -1,10 +1,11 @@
-// Family Cookbook: start-up. Three ways in:
+// Family Cookbook: start-up. Four ways in:
+//   /cookbook/join?t=...                   the link Jared texted: trade it for this app's own session, no password
 //   /cookbook/callback?code=...&state=...  coming back from Bestly Cloud: trade the code for this app's own session
 //   a saved session token                  open straight to the cookbook
 //   nothing                                the sign-in screen
 
 import "./cookbook.css";
-import { ApiError, finishSignIn, getToken, rpc, setToken } from "./api";
+import { ApiError, finishSignIn, getToken, redeemLink, rpc, setToken } from "./api";
 import { ic } from "./dom";
 import { S } from "./state";
 import "./camera";
@@ -17,6 +18,22 @@ const path = location.pathname.replace(/\/+$/, "");
 async function boot() {
   const play = document.getElementById("actionbar")!.querySelector(".btn")!;
   play.insertAdjacentHTML("afterbegin", ic("play", 24));
+
+  if (path === "/cookbook/join") {
+    const t = new URLSearchParams(location.search).get("t") || "";
+    history.replaceState(null, "", "/cookbook");
+    S.busy = true; S.msg = ""; render(true);
+    try {
+      const r = await redeemLink(t);
+      setToken(r.token); S.busy = false;
+      await enter(r.me);
+      return;
+    } catch (e) {
+      S.busy = false;
+      S.msg = e instanceof ApiError && e.message && /\s/.test(e.message) ? e.message : "That link did not work. Ask Jared for a new one.";
+      render(true); syncChrome(); return;
+    }
+  }
 
   if (path === "/cookbook/callback") {
     const q = new URLSearchParams(location.search);

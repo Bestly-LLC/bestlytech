@@ -21,18 +21,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--no-sandbox"] });
 
-async function open(size, who, { dark = false, token = true, reduced = false, ua } = {}) {
+async function open(size, who, { dark = false, token = true, reduced = false, ua, srv: shared } = {}) {
   const [, w, h] = size;
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, hasTouch: w < 800, isMobile: w < 800, colorScheme: dark ? "dark" : "light", reducedMotion: reduced ? "reduce" : "no-preference", permissions: ["camera"], locale: "en-US", timezoneId: "America/Los_Angeles", ...(ua ? { userAgent: ua } : {}) });
   const page = await ctx.newPage();
-  const srv = makeServer();
+  const srv = shared || makeServer();
   const errors = [], failed = [];
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("requestfailed", (r) => failed.push(r.method() + " " + r.url() + " " + (r.failure()?.errorText || "")));
   await srv.install(page, who);
   // the callback path is a server-side rewrite in production (vercel.json); mirror it here
-  await page.route(/\/cookbook(\/callback)?(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: "text/html", body: html }));
+  await page.route(/\/cookbook(\/(callback|join))?(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: "text/html", body: html }));
   if (token && who) await page.addInitScript((t) => { try { localStorage.setItem("fc_token", t); localStorage.setItem("fc_tip_" + "seen", "1"); } catch { /* none */ } }, TOKENS[who]);
   return { ctx, page, srv, errors, failed };
 }
@@ -417,6 +417,68 @@ for (const size of SIZES) {
   await j2.page.waitForSelector('[data-act="get-shortcut"]');
   check("first tap ever offers to connect Apple Health", /Connect Apple Health/.test(await text(j2.page)));
   await j2.ctx.close();
+}
+
+/* ---------- 11. sign in with a link: no account, no password ---------- */
+{
+  console.log("\n== sign in with a link (phone 390)");
+  // one server for the whole journey: the link Jared mints has to be the link Mom taps
+  const srv = makeServer();
+  const j = await open(SIZES[0], "jared", { srv });
+  await j.page.goto(BASE + "/cookbook.html", { waitUntil: "networkidle" });
+  await dismissTip(j.page);
+  await j.page.locator('[data-act="menu"]').click();
+  await j.page.waitForSelector('[data-act="invite"]');
+  await j.page.locator('[data-act="invite"]').click();
+  await j.page.waitForSelector('[data-act="invite-make"]');
+  check("invite sheet offers the other two, never yourself", !/Jared/.test(await j.page.locator("#l-sheet").innerText()));
+  await j.page.locator('[data-act="invite-make"][data-id="mom"]').click();
+  await j.page.waitForSelector("#invlink");
+  const url = (await j.page.locator("#invlink").innerText()).trim();
+  check("the link is a one-tap /cookbook/join link", /\/cookbook\/join\?t=[0-9a-f]{64}$/.test(url), url);
+  check("the sheet says how long it lasts", /7 days/.test(await j.page.locator("#l-sheet").innerText()));
+  await shot(j.page, "invite-link");
+  await j.ctx.close();
+
+  // Mom taps it on a phone that has never signed in: no sign-in screen, no password
+  const m = await open(SIZES[0], "mom", { token: false, srv });
+  const joinPath = new URL(url).pathname + new URL(url).search;
+  await m.page.goto(BASE + joinPath, { waitUntil: "networkidle" });
+  await m.page.waitForSelector('[data-act="open"]', { timeout: 10000 });
+  const t = await text(m.page);
+  check("the link signs Mom straight in", /Banana Bread/.test(t) && !/Sign in with Bestly Cloud/.test(t));
+  check("the link never asks for a password", !/password/i.test(t));
+  check("the URL is cleaned back to /cookbook", new URL(m.page.url()).pathname === "/cookbook" && !m.page.url().includes("t="), m.page.url());
+  check("the session is saved for next time", (await m.page.evaluate(() => localStorage.getItem("fc_token"))) === TOKENS.mom);
+  check("no console errors", m.errors.length === 0, m.errors.slice(0, 3).join(" | "));
+  await m.ctx.close();
+
+  // the same link a second time is spent
+  const m2 = await open(SIZES[0], "mom", { token: false, srv });
+  await m2.page.goto(BASE + joinPath, { waitUntil: "networkidle" });
+  await m2.page.waitForSelector('[data-act="signin"]', { timeout: 10000 });
+  check("a used link cannot be used twice", /already used|expired/i.test(await text(m2.page)), (await text(m2.page)).slice(0, 160));
+  await m2.ctx.close();
+
+  // Mom cannot mint links
+  const m3 = await open(SIZES[0], "mom", { srv });
+  await m3.page.goto(BASE + "/cookbook.html", { waitUntil: "networkidle" });
+  await dismissTip(m3.page);
+  await m3.page.locator('[data-act="menu"]').click();
+  await m3.page.waitForSelector('[data-act="signout"]');
+  check("Mom is not offered Invite someone", (await m3.page.locator('[data-act="invite"]').count()) === 0);
+  await m3.ctx.close();
+
+  // the sign-in screen no longer tells anyone to choose a password
+  const s = await open(SIZES[0], null, { token: false });
+  await s.page.goto(BASE + "/cookbook.html", { waitUntil: "networkidle" });
+  await s.page.locator("details.more summary").click();
+  await sleep(150);
+  const st = await text(s.page);
+  check("sign-in screen never mentions a password", !/password/i.test(st), st.slice(0, 200));
+  check("sign-in screen points at the link instead", /text you your link|your link/i.test(st));
+  await shot(s.page, "signin-passwordless");
+  await s.ctx.close();
 }
 
 await browser.close();

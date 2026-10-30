@@ -48,6 +48,7 @@ export function makeServer() {
   add("jared", { ...k, omnicook_capacity: { bowl_l: 2.2, max_dough_oz: 40, base_dough_oz: 22 } }, { daysAgo: 4 });
   add("jared", { ...bananaBread, id: "secret-jared", title: "SECRETJARED Stew" }, { daysAgo: 5 });
   const caps = [];
+  const invites = []; // one-time sign-in links: [{ t, role, used }]
   const log = [];     // every call the app made: [name, role, args]
   const uploads = [];
   let nextPhoto = 500;
@@ -136,6 +137,21 @@ export function makeServer() {
       let b = {}; try { b = JSON.parse(route.request().postData() || "{}"); } catch { /* none */ }
       const h = { "access-control-allow-origin": "*" };
       if (b.op === "start") return route.fulfill({ status: 200, contentType: "application/json", headers: h, body: JSON.stringify({ ok: true, url: new URL("/cookbook/callback?code=abcdef123456&state=" + "a".repeat(48), page.url()).toString() }) });
+      // one-time sign-in links: a reviewer mints one, and it only works once
+      if (b.op === "invite") {
+        const by = roleOf(b.token);
+        if (!by || by === "mom") return route.fulfill({ status: 403, contentType: "application/json", headers: h, body: JSON.stringify({ ok: false, error: "Only Jared or Mariah can make a sign-in link." }) });
+        const t = String(++seq).padStart(64, "f");
+        invites.push({ t, role: b.role, used: false });
+        return route.fulfill({ status: 200, contentType: "application/json", headers: h, body: JSON.stringify({ ok: true, url: new URL("/cookbook/join?t=" + t, page.url()).toString(), name: NAMES[b.role][0], days: 7 }) });
+      }
+      if (b.op === "link") {
+        const inv = invites.find((x) => x.t === b.t && !x.used);
+        if (!inv) return route.fulfill({ status: 400, contentType: "application/json", headers: h, body: JSON.stringify({ ok: false, error: "That link was already used or has expired. Ask Jared for a new one." }) });
+        inv.used = true;
+        const me = NAMES[inv.role];
+        return route.fulfill({ status: 200, contentType: "application/json", headers: h, body: JSON.stringify({ ok: true, token: TOKENS[inv.role], me: { id: inv.role, name: me[0], last: me[1], reviewer: me[2], activeRoles: [] } }) });
+      }
       const role = who || "mom";
       const me = NAMES[role];
       return route.fulfill({ status: 200, contentType: "application/json", headers: h, body: JSON.stringify({ ok: true, token: TOKENS[role], me: { id: role, name: me[0], last: me[1], reviewer: me[2], activeRoles: [] } }) });
@@ -146,5 +162,5 @@ export function makeServer() {
       return route.fallback();
     });
   }
-  return { install, recs, caps, log, uploads, mb };
+  return { install, recs, caps, invites, log, uploads, mb };
 }
