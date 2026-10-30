@@ -11,7 +11,7 @@ import { Radar, Binoculars, Inbox, BadgeDollarSign, Brush, FileWarning, Scissors
   Car,
   Mic,
   Handshake,
-  House, Wand2, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, ShieldAlert, Siren, Flower2, PhoneCall, Headset, Crosshair, Gauge, ConciergeBell,
+  House, Wand2, Boxes, KeyRound, BookMarked, ShoppingBag, ExternalLink, ShieldCheck, ShieldAlert, Siren, Flower2, PhoneCall, Headset, Crosshair, Gauge, ConciergeBell, LifeBuoy,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -86,6 +86,7 @@ const homeHubItems = [
 const turoItems = [
   { title: "Turo Watch", url: "/admin/turo", icon: Car },
   { title: "Claims", url: "/admin/claims", icon: FileWarning },
+  { title: "Tire Desk", url: "/admin/tires", icon: LifeBuoy },
   { title: "Street Sweeping", url: "/admin/street-sweeping", icon: Brush },
 ];
 

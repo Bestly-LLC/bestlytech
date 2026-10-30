@@ -127,6 +127,7 @@ const AgentDesk = lazyPage(() => import("./pages/admin/AgentDesk"));
 const Pipeline = lazyPage(() => import("./pages/admin/Pipeline"));
 const AgentNew = lazyPage(() => import("./pages/admin/AgentNew"));
 const ClaimsCloser = lazyPage(() => import("./pages/admin/ClaimsCloser"));
+const TireDesk = lazyPage(() => import("./pages/admin/TireDesk"));
 const Settlements = lazyPage(() => import("./pages/admin/Settlements"));
 const CostCutter = lazyPage(() => import("./pages/admin/CostCutter"));
 const SkillInbox = lazyPage(() => import("./pages/admin/SkillInbox"));
@@ -335,6 +336,7 @@ const App = () => {
                   <Route path="scout-lab" element={<ScoutLab />} />
                   <Route path="turo" element={<AdminTuro />} />
                   <Route path="claims" element={<ClaimsCloser />} />
+                  <Route path="tires" element={<TireDesk />} />
                   <Route path="settlements" element={<Settlements />} />
                   <Route path="cost-cutter" element={<CostCutter />} />
                   <Route path="skill-inbox" element={<SkillInbox />} />
