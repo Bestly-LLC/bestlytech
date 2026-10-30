@@ -27,7 +27,7 @@ const MAX_CALLS = 3, COLLECT_MIN = 12, FIND_MIN = 8;
 
 type Result = { reached: boolean; in_stock: "yes" | "no" | "unknown"; brand?: string; price_each?: number | null; tow_in_now: "yes" | "no" | "unknown"; ready_in?: string; notes?: string };
 type Place = { name: string; phone?: string; address?: string; hours?: string; open_now?: boolean | null; mi: number; src: string; call_id?: string | null; call_error?: string; result?: Result; score?: number };
-type Incident = { id: string; reservation_id: number; guest_first: string | null; status: string; lat: number | null; lon: number | null;
+type Incident = { id: string; reservation_id: number; guest_first: string | null; reason: string | null; status: string; lat: number | null; lon: number | null;
   shops: Place[]; tesla: Place | null; net: Record<string, number | boolean>; src: string | null; calls_at: string | null; opened_at: string };
 
 function miles(a: number, b: number, c: number, d: number) {
@@ -134,9 +134,11 @@ async function calling(i: Incident) {
   const size = set?.tire_size ?? "235/45R18";
   const shops = [...i.shops];
   let placed = 0;
+  const test = /^\[test\]/i.test(i.reason ?? "");   // a test incident: the real lookup and ranking, no calls, no push
   for (const p of shops) {
     if (placed >= MAX_CALLS) break;
     if (!p.phone || p.call_id) continue;
+    if (test) { p.call_error = "test run: Ava did not call"; continue; }
     const purpose = `You're calling ${p.name}, a tire shop, for Jared. His rental Tesla Model 3 has a flat and may be towed to a shop. ` +
       `Ask three things: 1) do they have a ${size} tire in stock today, and which brand; 2) the price per tire, installed; ` +
       `3) can they take the car if it's towed in now, and how long until it's done. Don't book, commit, or give any payment or personal details. ` +
@@ -220,6 +222,7 @@ async function ready(i: Incident, shops: Place[], tesla: Place | null, why: stri
   const body = ranked.length
     ? `${why ? why + " " : ""}${ranked.slice(0, 3).map((p, n) => short(p, n + 1)).join(". ")}. Tap one on the Tire Desk and I'll send ${who} the tow plan in the Turo chat.`
     : `${why ?? "No shops found near the car."} Message ${who} in the Turo chat where to tow it${tesla ? `, or use ${tesla.name}` : ""}.`;
+  if (/^\[test\]/i.test(i.reason ?? "")) return { ok: true, ready: ranked.length, test: true, body };
   await db.rpc("scout_notify", { p_title: `Car Guard: pick a tire shop for ${who}`, p_body: body.slice(0, 900), p_severity: "warning",
     p_push: true, p_url: "/admin/tires", p_dedupe: `tire-ready-${i.id}` });
   return { ok: true, ready: ranked.length };
