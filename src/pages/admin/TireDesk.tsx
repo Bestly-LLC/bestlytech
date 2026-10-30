@@ -47,6 +47,7 @@ function stage(i: Incident): { text: string; tone: keyof typeof pill } {
 
 function said(s: Shop): string {
   const r = s.result;
+  if (s.call_error === "closed now" || (s.open_now === false && !s.call_id)) return "Closed now";
   if (s.call_error) return "Ava couldn't call";
   if (!s.call_id) return s.phone ? "Not called" : "No phone number";
   if (!r) return "On the phone";

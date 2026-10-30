@@ -73,7 +73,7 @@ async function tomtom(key: string, lat: number, lon: number, q: string, radius: 
 
 function dedupe(xs: Place[]) {
   const seen = new Set<string>();
-  return xs.filter((p) => { const k = p.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return p.open_now !== false; })
+  return xs.filter((p) => { const k = p.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })   // closed ones stay, ranked lower
     .sort((a, b) => (Number(!!b.phone) - Number(!!a.phone)) || (Number(b.open_now === true) - Number(a.open_now === true)) || a.mi - b.mi)
     .slice(0, 8);
 }
@@ -109,6 +109,7 @@ async function calling(i: Incident) {
   for (const p of shops) {
     if (placed >= MAX_CALLS) break;
     if (!p.phone || p.call_id) continue;
+    if (p.open_now === false) { p.call_error = "closed now"; continue; }   // nobody would answer
     if (test) { p.call_error = "test run: Ava did not call"; continue; }
     const purpose = `You're calling ${p.name}, a tire shop, for Jared. His rental Tesla Model 3 has a flat and may be towed to a shop. ` +
       `Ask three things: 1) do they have a ${size} tire in stock today, and which brand; 2) the price per tire, installed; ` +
@@ -175,12 +176,13 @@ function score(p: Place) {
   if (r?.in_stock === "yes") s += 40; if (r?.in_stock === "no") s -= 40;
   if (r?.tow_in_now === "yes") s += 20; if (r?.tow_in_now === "no") s -= 20;
   if (r?.reached) s += 5; if (p.phone) s += 2;
+  if (p.open_now === false) s -= 15; if (p.open_now === true) s += 3;
   if (r?.price_each) s -= r.price_each / 50;
   return Math.round(s * 10) / 10;
 }
 function short(p: Place, n: number) {
   const r = p.result;
-  const said = !r ? "not called" : !r.reached ? "no answer" :
+  const said = p.open_now === false ? "closed now" : !r ? "not called" : !r.reached ? "no answer" :
     [r.in_stock === "yes" ? `in stock${r.brand ? ` (${r.brand})` : ""}` : r.in_stock === "no" ? "no tire in stock" : "stock unclear",
       r.price_each ? `$${Math.round(r.price_each)} installed` : null, r.tow_in_now === "yes" ? "can take it now" : r.tow_in_now === "no" ? "can't take it now" : null,
       r.ready_in || null].filter(Boolean).join(", ");
