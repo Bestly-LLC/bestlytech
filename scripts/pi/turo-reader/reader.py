@@ -41,7 +41,7 @@ import asyncio, base64, json, os, subprocess, sys, tempfile, time, urllib.reques
 
 import websockets
 
-VERSION = "1.5.1"
+VERSION = "1.6.0"
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
 PUB = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"
 CDP = "http://127.0.0.1:9334"
@@ -160,6 +160,26 @@ async def send_claims(tab):
         except Exception as e:
             log(f"claims: send {j['id']} failed: {e}")
             try: rpc("claims_send_done", {"p_token": TOKEN, "p_id": j["id"], "p_ok": False, "p_error": str(e)[:300]})
+            except Exception: pass
+
+
+async def send_out_msgs(tab):
+    """1.6.0 (2026-10-29) Car Guard safety messages (tire warnings, trip-start tire check) queued in turo_out_msgs.
+    The database writes every word; each row is claimed first (turo_out_claim) so it can never go out twice."""
+    jobs = rpc("turo_out_claim", {"p_token": TOKEN}) or []
+    for j in jobs:
+        try:
+            await tab.js(SEND_JS % (json.dumps(j["body"]), json.dumps(str(j["reservation_id"]))))
+            await asyncio.sleep(2)
+            ok = False
+            if j.get("snippet"):
+                try: ok = bool(await tab.js(VERIFY_JS % (int(j["reservation_id"]), json.dumps(j["snippet"]))))
+                except Exception as e: log(f"out verify {j['id']}: {e}")
+            rpc("turo_out_done", {"p_token": TOKEN, "p_id": j["id"], "p_ok": True, "p_verified": ok, "p_error": None})
+            log(f"out: {j.get('kind')} sent to {j['reservation_id']} (verified={ok})")
+        except Exception as e:
+            log(f"out: send {j['id']} failed: {e}")
+            try: rpc("turo_out_done", {"p_token": TOKEN, "p_id": j["id"], "p_ok": False, "p_verified": False, "p_error": str(e)[:300]})
             except Exception: pass
 
 
@@ -714,6 +734,10 @@ async def main():
                     rpc("turo_reader_note", {"p_token": TOKEN, "p_signed_in": True, "p_error": None,
                                              "p_trips": isinstance(trips, list), "p_inbox": isinstance(conv, list), "p_version": VERSION})
                     log(f"read: {len(trips or [])} trip items -> {res}; {len(conv or [])} conversations -> {inbox}{' (ping)' if poke else ''}")
+                    try:
+                        await send_out_msgs(tab)          # safety messages first: a guest may be driving on a flat
+                    except Exception as e:
+                        log(f"out: {e}")
                     try:
                         await send_claims(tab)
                     except Exception as e:

@@ -29,7 +29,7 @@ services:
 
   fwd:
     build: ./fwd
-    image: car-telemetry-fwd:1.0.1
+    image: car-telemetry-fwd:1.1.0
     restart: always
     user: "65532:65532"
     cap_drop: [ALL]
