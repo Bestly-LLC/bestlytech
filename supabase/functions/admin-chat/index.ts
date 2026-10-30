@@ -1599,6 +1599,19 @@ const FREE_DESC: Record<string, string> = {
 };
 const ALWAYS_TOOLS = new Set(["today", "incidents", "run_sql", "list_files", "read_file", "search_code", "ask_user"]);
 
+/** 2026-10-29: the same tools with one-line descriptions and short parameter notes, for Groq-size windows. */
+function leanToolDefs(tools: any[]) {
+  const cut = (d: unknown, n: number) => { const t = String(d ?? "").replace(/\s+/g, " ").trim(); const s1 = t.split(/(?<=\.)\s/)[0]; return (s1.length <= n ? s1 : t.slice(0, n)); };
+  const shrink = (p: any): any => {
+    if (Array.isArray(p)) return p.map(shrink);
+    if (!p || typeof p !== "object") return p;
+    const o: any = {};
+    for (const [k, v] of Object.entries(p)) o[k] = k === "description" && typeof v === "string" ? cut(v, 80) : shrink(v);
+    return o;
+  };
+  return tools.map((t) => ({ type: "function", function: { name: t.function.name, description: cut(t.function.description, 160), parameters: shrink(t.function.parameters) } }));
+}
+
 function freeToolDefs(autopilot: boolean, convo: string, forceReach = false) {
   const want = new Set(ALWAYS_TOOLS);
   if (forceReach && !autopilot) want.add("web_reach");   // a pre-fetch ran: keep the tool (and its rules) for the follow-up
@@ -1645,9 +1658,11 @@ function trimForBudget(msgs: Msg[], maxTokens = 6400, toolsChars = 0) {
 /** The message holding his current request: trimming never drops it. */
 const KEEP = new WeakSet<Msg>();
 /** v41: llmChat calls this per rung with that rung's window; it trims a COPY, so a later, bigger rung still sees the full conversation. */
-function rungTrimmer(src: Msg[]) {
+function rungTrimmer(src: Msg[], leanSys?: string) {
   return (_ignored: Record<string, unknown>[], target: number) => {
     const copy: Msg[] = src.map((m) => { const c = { ...m }; if (KEEP.has(m)) KEEP.add(c); return c; });
+    // 2026-10-29: a small-window rung (Groq) gets the short system prompt; the full one alone was ~4K tokens.
+    if (leanSys && target < 10_000 && copy[0]?.role === "system") copy[0] = { role: "system", content: leanSys };
     trimForBudget(copy, target);
     return copy;
   };
@@ -1899,6 +1914,14 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
 
   const tools = freeToolDefs(autopilot, msgs.slice(1).map((m) => String(m.content ?? "")).join("\n").slice(-6000), !!reachBlock);
   const allowed = new Set(tools.map((t) => t.function.name));
+  const leanTools = leanToolDefs(tools as any[]);
+  const leanSys = (ledgerFree ? ledgerFree.slice(-1500) + "\n" : "") + `You are Scout, the assistant inside Jared's Bestly admin. You run on a free model WITH real tools: do the work yourself.
+- Read before you answer or act (run_sql, today, incidents, read_file, search_mail + read_email). Never invent numbers, names, files or results.
+- run_sql is one SELECT/WITH on the public schema. Wrong table or column: look it up in information_schema.columns, then retry.
+- Times in the data are UTC: show Pacific time, 12-hour (3:05 PM). US units.
+- ${yesRule}
+- Only say something is done if a tool result shows ok:true. If a tool fails, change approach.${vm ? "" : " If the ask is unclear, call ask_user."}
+${vm ? "Reply under 90 words, then ONE last line: FIXED: <what> | NEEDS_YES: <action> | STUCK: <blocker> (pick one)." : "Reply: plain text, under 90 words, lead with the answer. When he must choose, end with OPTIONS: <2-4 choices separated by |>."}`;
   if (allowed.has("web_reach")) msgs[0].content += "\n\n" + webReachRules("Jared");   // the untrusted-content rules ride along whenever the tool is offered
   // 2026-10-17: measure the first request the way llmChat does (chars / 3.8 + the reply budget). Groq's gate is 7,000
   // tokens per minute; over it, every Groq rung is skipped as skipped_size and the run dies in 400 ms with no provider
@@ -1993,7 +2016,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
     if (codeStep && until - Date.now() < 30_000) break;   // not enough of this round left for a coding call: the next hop does it with a fresh budget
     let r: ChatResult;
     try {
-      r = await llmChat({ messages: msgs, tools, trim: rungTrimmer(msgs), toolChoice: forceAnswer ? "none" : "auto", maxTokens: codeStep ? 4000 : 1200, deadlineMs: Math.min(until - Date.now() - 2000, codeStep ? 60_000 : 45_000), task: codeStep ? "code" : "chat", job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
+      r = await llmChat({ messages: msgs, tools, trim: rungTrimmer(msgs, leanSys), leanTools, toolChoice: forceAnswer ? "none" : "auto", maxTokens: codeStep ? 4000 : 1200, deadlineMs: Math.min(until - Date.now() - 2000, codeStep ? 60_000 : 45_000), task: codeStep ? "code" : "chat", job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
     } catch (e) {
       // 2026-10-17: say WHY no free rung answered. "Isn't answering right now" with no cause hid a size/cooldown skip
       // for weeks and made a capacity problem look like a stuck job.
@@ -2205,7 +2228,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   if (used.length || cachedHits) {
     try {
       msgs.push({ role: "user", content: "Stop using tools now. In under 90 words, tell Jared what you found so far and what is left, using only the tool results above. Start with one short sentence (under 20 words) that says where you are. No options line." });
-      const s = await llmChat({ messages: msgs, tools, trim: rungTrimmer(msgs), toolChoice: "none", maxTokens: 700, deadlineMs: Math.min(20_000, Math.max(6_000, reqStartedAt + REQ_HARD_MS - Date.now() - 6_000)), job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
+      const s = await llmChat({ messages: msgs, tools, trim: rungTrimmer(msgs, leanSys), leanTools, toolChoice: "none", maxTokens: 700, deadlineMs: Math.min(20_000, Math.max(6_000, reqStartedAt + REQ_HARD_MS - Date.now() - 6_000)), job: "chat-agent", ref: threadId, fn: "admin-chat", scope: "chat" });
       const sum = s.content.replace(/^\s*OPTIONS:.*$/m, "").trim();
       if (sum && !s.toolCalls.length && !rawToolJson(sum) && !narratesStep(sum)) {
         return autopilot

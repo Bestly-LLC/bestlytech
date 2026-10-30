@@ -470,7 +470,7 @@ export async function outOfRoomMessage(input: { tried: LlmResult["tried"]; noPai
   try {
     const need = rows.filter((r) => INCIDENT_WORDS[r.name] && !String(r.outage_note ?? "").trim()).map((r) => r.name);
     if (need.length) {
-      const since = new Date(Date.now() - 3 * 86_400_000).toISOString();
+      const since = new Date(Date.now() - 6 * 3_600_000).toISOString();   // 2026-10-29: was 3 days; quoted long-resolved notes
       const { data } = await db().from("bestly_memory").select("title, key, updated_at").eq("active", true).like("key", "incident/%").gte("updated_at", since)
         .order("updated_at", { ascending: false }).limit(30);
       for (const n of need) {
@@ -1044,6 +1044,9 @@ export interface ChatRequest {
   /** v4: called per rung with that rung's window (tokens for messages); returns the messages to send. Lets a 120K-window rung see
    *  more than an 8K-window Groq rung. Must not mutate `messages`. */
   trim?: (messages: Record<string, unknown>[], targetTokens: number) => Record<string, unknown>[];
+  /** 2026-10-29: short-description tool list for small-window rungs (Groq, local: ~7K tokens per request). Without it the full
+   *  tool list alone filled Groq's window and every agent step was skipped as skipped_size ("bigger than the free per-request limit"). */
+  leanTools?: Record<string, unknown>[];
   /** v4: when true the reply must be a plain answer (toolChoice none); tool syntax in it is stripped. */
 }
 export interface ChatResult { content: string; toolCalls: ChatToolCall[]; provider: Provider; model: string; tried: LlmResult["tried"]; rescued?: boolean; inTokens?: number; outTokens?: number }
@@ -1159,8 +1162,12 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
     // wasted round trip on every step (16 straight 429s in 40 minutes on Oct 6 before this).
     if (!lastChance && p?.cooldown_until && Date.parse(p.cooldown_until) > Date.now() && /^Daily free cap/i.test(String((p as any).cooldown_reason ?? ""))) { holdIt(); skip("skipped_budget"); continue; }
     // v4: size the context to THIS rung's window (Groq 8K tokens/min keeps the old small budget; big windows see much more).
-    const toolTok = estTokens(JSON.stringify(input.tools ?? []));
-    const window = rung.provider === "groq" ? 3800 : 24_000;
+    // 2026-10-29: a small-window rung (Groq / local, ~7K tokens per request) gets the lean tool list and a message budget sized
+    // to what is left after the tools and the reply, so the step fits instead of being skipped as skipped_size.
+    const small = rung.maxIn <= 8000;
+    const rungTools = small && input.leanTools?.length ? input.leanTools : input.tools;
+    const toolTok = estTokens(JSON.stringify(rungTools ?? []));
+    const window = small ? Math.max(2000, rung.maxIn - toolTok - maxTokens + 1200 - 250) : 24_000;
     const sendMsgs = input.trim ? input.trim(messages, window) : messages;
     const need = estTokens(JSON.stringify(sendMsgs)) + toolTok + maxTokens;
     if (need > rung.maxIn) { skip("skipped_size", { need, max: rung.maxIn }); continue; }
@@ -1173,7 +1180,7 @@ async function llmChatOnce(input: ChatRequest): Promise<ChatResult> {
       max_tokens: maxTokens,
       ...(gptOss ? { reasoning_effort: rung.provider === "freellm" ? "medium" : "low" } : {}),   // v4: FreeLLM has room to think; Groq/Cloudflare stay "low"
     };
-    if (input.tools?.length) { body.tools = input.tools; body.tool_choice = input.toolChoice ?? "auto"; }
+    if (rungTools?.length) { body.tools = rungTools; body.tool_choice = input.toolChoice ?? "auto"; }
 
     if (lastChance) lastChanceAt.set(rung.provider, Date.now());   // stamped only when a request really goes out
     const t0 = Date.now();
