@@ -20,6 +20,7 @@ const iso = (daysAgo, h = 9) => new Date(Date.now() - daysAgo * 864e5 + (h - 12)
 
 export const bananaBread = {
   id: "banana-bread", title: "Banana Bread", category: "Baking", yield: { amount: 10, unit: "slices" }, time: { prep_min: 15, bake_min: 55 }, omnicook: "none",
+  nutrition: { per_serving: { kcal: 150, protein_g: 6, carbs_g: 19, fat_g: 5, fiber_g: 1, sugar_g: 7, sodium_mg: 225 }, servings: 10, serving_label: "slice", source: "estimate", low_confidence: false, skipped: [] },
   ingredients: [I("ban", "ripe banana, mashed", 3, "count"), I("butter", "butter, melted", 1 / 3, "cup"), I("sugar", "sugar", 0.75, "cup"), I("egg", "egg, beaten", 1, "egg"), I("vanilla", "vanilla", 1, "tsp"), I("soda", "baking soda", 1, "tsp"), I("salt", "salt", 0.25, "tsp"), I("flour", "flour", 1.5, "cup")],
   steps: [S("Heat the oven", "Heat the oven to 350°F. Grease a loaf pan."), S("Mix the wet part", "Mash {ban} ripe bananas in a big bowl. Stir in {butter} melted butter, {sugar} sugar, {egg} and {vanilla} vanilla."),
     S("Add the dry part", "Sprinkle {soda} baking soda and {salt} salt over the bowl. Stir in {flour} flour until just mixed."),

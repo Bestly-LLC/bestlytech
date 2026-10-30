@@ -9,6 +9,7 @@
   --fg: #f1f5f2; --muted: rgba(241,245,242,.64); --line: rgba(255,255,255,.13);
   --accent: #55c98a; --accent-ink: #05160c; --accent-soft: rgba(85,201,138,.17); --amt: #7fe0a8;
   --warn: #f0b35c; --warn-soft: rgba(240,179,92,.17); --danger: #ff8a80;
+  --info: #7fb4f0; --info-soft: rgba(127,180,240,.17);
   --glass: rgba(24,32,27,.78); --frost: rgba(255,255,255,.22); --frost-line: rgba(255,255,255,.32);
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 34px rgba(0,0,0,.4); --scrim: rgba(0,0,0,.6);
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -21,6 +22,7 @@ body.admin-bento .rx {
   --fg: #101a14; --muted: #56655b; --line: rgba(16,26,20,.12);
   --accent: #1a7f4e; --accent-ink: #ffffff; --accent-soft: rgba(26,127,78,.12); --amt: #14663f;
   --warn: #8f5200; --warn-soft: rgba(190,110,0,.14); --danger: #b3261e;
+  --info: #1a5fb4; --info-soft: rgba(26,95,180,.12);
   --glass: rgba(250,252,250,.8); --shadow: 0 1px 2px rgba(16,26,20,.06), 0 10px 30px rgba(16,26,20,.10); --scrim: rgba(8,14,10,.42); color-scheme: light;
 }
 .rx, .rx *, .rx *::before, .rx *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -96,6 +98,8 @@ body.admin-bento .rx {
 .rx .cbody .blurb{font-size:14.5px;color:var(--muted)}
 .rx .mrow{display:flex;flex-wrap:wrap;gap:6px}
 .rx .tag{font-size:12.5px;padding:3px 9px;border-radius:99px;background:var(--surface2);color:var(--muted);white-space:nowrap}
+.rx .tag.est{background:var(--info-soft);color:var(--info)}
+.rx .tag.card{background:var(--accent-soft);color:var(--amt)}
 .rx .pchip{display:inline-flex;align-items:flex-start;gap:6px;font-size:13.5px;font-weight:600;padding:6px 11px;border-radius:12px;align-self:flex-start}
 .rx .pchip svg.i{width:17px;height:17px;margin-top:1px}
 .rx .pchip.ok{background:var(--accent-soft);color:var(--amt)}
@@ -288,8 +292,31 @@ body.cooking .rx .timers{bottom:calc(196px + env(safe-area-inset-bottom,0px))}
 .rx .cdone{display:flex;flex-direction:column;gap:16px;align-items:flex-start}
 @media (min-width:1000px){.rx .cmain{grid-template-columns:minmax(0,1fr) 360px;gap:36px}}
 .rx .cfoot{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;max-width:1100px;margin:6px auto 0;font-size:13px;color:var(--muted)}
-.rx .cfoot button{min-height:44px;padding:0 12px;border-radius:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.rx .cfoot button{min-height:52px;padding:0 24px;border-radius:999px;background:var(--surface2);color:var(--fg);font-weight:650;font-size:15px;display:inline-flex;align-items:center;gap:10px;box-shadow:inset 0 0 0 1px var(--line);transition:transform .12s ease-out}
+.rx .cfoot button:active{transform:scale(.96)}
 .rx .cfoot button[aria-pressed="true"]{color:var(--amt);background:var(--accent-soft)}
+.rx .nut-panel{gap:14px}
+.rx .nut-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.rx .nut-per{font-size:14.5px}
+.rx .nut-cal{display:flex;align-items:baseline;gap:8px}
+.rx .nut-cal b{font-family:var(--font-num);font-size:40px;font-weight:720;letter-spacing:-.02em}
+.rx .nut-cal span{font-size:14.5px;color:var(--muted)}
+.rx .nut-rows{display:grid;gap:10px}
+.rx .nut-row{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center}
+.rx .nut-row .lb{font-size:15.5px}
+.rx .nut-row .val{font-family:var(--font-num);font-weight:650;font-size:15.5px}
+.rx .nut-row .bar{grid-column:1/-1}
+.rx .nut-more{background:none;min-height:44px;padding:4px 0 0;font-weight:650;color:var(--amt);align-self:flex-start}
+.rx .nut-foot{font-size:14px;color:var(--muted)}
+.rx .nut-foot.warn{color:var(--warn)}
+.rx .ate-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface2);border-radius:16px;padding:8px 8px 8px 16px}
+.rx .ate-row b{font-size:17px}
+.rx .nut-sum{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:15px}
+.rx .nut-sum b{color:var(--fg);font-family:var(--font-num)}
+.rx .nut-setup{margin:0;padding:0;list-style:none;border-top:1px solid var(--line)}
+.rx .nut-setup li{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);font-size:15.5px;line-height:1.4}
+.rx .nut-setup .n{width:24px;height:24px;border-radius:12px;background:var(--accent-soft);color:var(--amt);display:grid;place-items:center;font:700 12px var(--font-num)}
+
 @media (prefers-reduced-motion:reduce){.rx *,.rx *::before,.rx *::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 @media (prefers-reduced-transparency:reduce){.rx .handoff,.rx .pill,.rx .tbar{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--surface-solid)}}
 /* overrides that must come after the ported rules */

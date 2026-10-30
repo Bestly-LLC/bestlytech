@@ -8,6 +8,7 @@ import {
 } from "@/lib/recipes/scale";
 import { bestLabel, listWords, pantryReport } from "@/lib/recipes/pantry";
 import type { LiveTimer } from "./useTimers";
+import { NutritionPanel } from "./Nutrition";
 
 export interface RecipePageProps {
   r: RecipeRow; photo?: string; work: WorkState; setWork: (patch: Partial<WorkState>) => void;
@@ -17,6 +18,7 @@ export interface RecipePageProps {
   onFermentStart: () => Promise<void>; onAddToGroceries: (names: string[]) => Promise<void>; onSendToIpad: () => Promise<void>;
   startTimer: (key: string, label: string, sec: number, max: number | null | undefined, recipeId: number) => void;
   timers: LiveTimer[];
+  onHealth: () => void;
 }
 
 export function RecipePage(p: RecipePageProps) {
@@ -125,6 +127,8 @@ export function RecipePage(p: RecipePageProps) {
               </div>
             )}
           </div>
+
+          <NutritionPanel n={doc.nutrition} onHealth={p.onHealth} />
 
           <div className="panel">
             <h2>Pantry <small>Basil's inventory</small></h2>

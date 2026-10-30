@@ -7,6 +7,8 @@ import { GroceriesList } from "./Library";
 import { remainingText, type LiveTimer } from "./useTimers";
 import { isKitchen, walkInState, type HaStatus } from "@/lib/recipes/ha";
 import { enqueueCommand, waitForCommand } from "@/services/homeHubApi";
+import type { Nutrition } from "@/lib/recipes/types";
+import { HEALTH_SHORTCUT_URL, buildHealthShortcutUrl, markHealthShortcutDone, pluralizeLabel } from "./health";
 
 /** "Cook Pineapple Tepache? Sent from iPhone." Slides in on the iPad or desktop when the iPhone sends a recipe or a link.
  *  It lives above the Pantry / Recipes switch, so it shows whichever side of Kitchen is open. */
@@ -126,6 +128,67 @@ export function TimersBar({ timers, remaining, onPlus, onStop }: {
             <button className="pb" onClick={() => onStop(t.id)} aria-label={`${t.done ? "Dismiss" : "Stop"} the ${t.label} timer`}>{t.done ? "Dismiss" : <Ico n="x" size={18} />}</button>
           </div>
         ))}
+      </div>
+    </RxPortal>
+  );
+}
+
+/* ---------- Log to Health ---------- */
+export function HealthSetupSheet({ open, onClose, onGetShortcut }: { open: boolean; onClose: () => void; onGetShortcut: () => void }) {
+  if (!open) return null;
+  return (
+    <RxPortal>
+      <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
+        <div className="sheet" role="dialog" aria-modal="true" aria-label="Connect Apple Health">
+          <h2>Connect Apple Health</h2>
+          <p className="muted">One-time setup, about a minute. After this, logging is one tap.</p>
+          <ol className="nut-setup">
+            <li><span className="n">1</span><span>Tap <b>Get the shortcut</b> below.</span></li>
+            <li><span className="n">2</span><span>Tap <b>Add Shortcut</b> on the screen that opens.</span></li>
+            <li><span className="n">3</span><span>The first time it runs, tap <b>Allow</b> so it can save to Health.</span></li>
+          </ol>
+          <button className="btn primary big" onClick={() => { markHealthShortcutDone(); window.open(HEALTH_SHORTCUT_URL, "_blank"); onGetShortcut(); }}>Get the shortcut</button>
+          <button className="btn" onClick={onClose}>Not now</button>
+        </div>
+      </div>
+    </RxPortal>
+  );
+}
+
+export function HealthLogSheet({ open, n, title, onClose, onLogged }: { open: boolean; n: Nutrition | null; title: string; onClose: () => void; onLogged: (msg: string) => void }) {
+  const [amount, setAmount] = useState(1);
+  useEffect(() => { if (open) setAmount(1); }, [open]);
+  if (!open || !n) return null;
+  const p = n.per_serving, r = (v: number) => Math.round(v * amount);
+  const logIt = () => {
+    const url = buildHealthShortcutUrl(n, amount, title), label = pluralizeLabel(n.serving_label, amount);
+    onClose();
+    window.location.href = url;
+    onLogged(`Logged ${amount} ${label} to Health`);
+  };
+  return (
+    <RxPortal>
+      <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
+        <div className="sheet" role="dialog" aria-modal="true" aria-label="Log to Health">
+          <h2>Log to Health</h2>
+          <p className="muted">How much did you eat?</p>
+          <div className="ate-row">
+            <b className="nw">{amount} {pluralizeLabel(n.serving_label, amount)}</b>
+            <div className="stepper">
+              <button className="iconbtn" aria-label="Less" onClick={() => setAmount((a) => Math.max(1, a - 1))}><Ico n="minus" /></button>
+              <div className="sval">{amount}</div>
+              <button className="iconbtn" aria-label="More" onClick={() => setAmount((a) => Math.min(12, a + 1))}><Ico n="plus" /></button>
+            </div>
+          </div>
+          <div className="nut-sum muted">
+            <span>Calories <b>{r(p.kcal)}</b></span>
+            <span>Protein <b>{r(p.protein_g)} g</b></span>
+            <span>Carbs <b>{r(p.carbs_g)} g</b></span>
+            <span>Fat <b>{r(p.fat_g)} g</b></span>
+          </div>
+          <button className="btn primary big" onClick={logIt}>Log it</button>
+          <button className="btn" onClick={onClose}>Not now</button>
+        </div>
       </div>
     </RxPortal>
   );

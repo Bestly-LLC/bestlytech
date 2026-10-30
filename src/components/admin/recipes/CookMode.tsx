@@ -247,7 +247,7 @@ export function CookMode(p: CookProps) {
           </div>
         )}
         <div className="cfoot">
-          <button onClick={readAloud}><Ico n="repeat" size={18} />Read it aloud</button>
+          <button onClick={readAloud}><Ico n="speaker" size={22} />Read it aloud</button>
           <span className="nw" style={{ alignSelf: "center" }}>{wake ? "Screen stays on" : ""}</span>
         </div>
       </div>

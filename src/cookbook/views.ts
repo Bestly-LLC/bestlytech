@@ -7,6 +7,7 @@ import { ACT, FORM, S, hooks, resetState, type Cap, type Photo, type Row } from 
 import { PEOPLE, appTitle, bookTitle, canSeeId, manifestFor, otherReviewers, type Role } from "./people";
 import { acceptAll, finishedDoc, ingLine, parseAmountText, plainName, replaceWord, rt, setCtx, unsureList } from "./text";
 import { closeSheet, hideToast, openSheet, toast } from "./ui";
+import { nutritionHtml } from "./nutrition";
 import { isReviewer, loadAll, loadCaps, loadDeleted, loadRows, loadReview, fetchRec, startPolling, stopPolling } from "./data";
 import { V_recipe, recipeMounted, recipeLeft, closeCook, renderTimers } from "./recipe";
 import { closeCam, openCam, paintCam, resend } from "./camera";
@@ -154,6 +155,7 @@ export function curCheck(): any {
 function typedCheck(r: any) {
   const ul = unsureList(r);
   let h = '<h2 class="hdr-r">' + esc(r.title) + "</h2>";
+  h += nutritionHtml(r.nutrition, { compact: true });
   h += ul.length
     ? '<div class="uchips" id="uchips"><p><b>' + words(ul.length) + ' to check.</b> Yellow words might be wrong. Tap one to fix it.</p><div class="row">'
       + ul.map((u) => '<button class="chip u2" data-act="fix" data-uid="' + u.uid + '"><span>' + esc(u.label) + "</span></button>").join("") + "</div></div>"

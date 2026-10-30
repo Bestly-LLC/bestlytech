@@ -8,7 +8,8 @@ import { Library } from "./Library";
 import { RecipePage } from "./RecipePage";
 import { CookMode } from "./CookMode";
 import { AddRecipeSheet } from "./AddRecipeSheet";
-import { GroceriesSheet, TimersBar } from "./Overlays";
+import { GroceriesSheet, HealthLogSheet, HealthSetupSheet, TimersBar } from "./Overlays";
+import { hasHealthShortcut } from "./health";
 import { unlockAudio, useTimers } from "./useTimers";
 import { call, newWork, type GroceryRow, type HaSettings, type Overview, type RecipeCommand, type WorkState } from "./rx";
 import { pantryReport } from "@/lib/recipes/pantry";
@@ -29,6 +30,7 @@ export default function RecipesTab() {
   const [addOpen, setAddOpen] = useState(false);
   const [presetLink, setPresetLink] = useState<string | null>(null);
   const [grocOpen, setGrocOpen] = useState(false);
+  const [healthStage, setHealthStage] = useState<"closed" | "setup" | "log">("closed");
   const [phone, setPhone] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches);
   const cmdRef = useRef<((c: RecipeCommand) => void) | null>(null);
   const signing = useRef<Set<string>>(new Set());
@@ -192,6 +194,7 @@ export default function RecipesTab() {
   const sendLinkToIpad = async (url: string) => {
     await call("recipe_handoff_send", { p_kind: "link", p_recipe_id: null, p_url: url, p_source: "iPhone" });
   };
+  const onHealth = () => setHealthStage(hasHealthShortcut() ? "log" : "setup");
 
   /* ---------- render ---------- */
   const groceryCount = ov?.groceries.length ?? 0;
@@ -231,6 +234,7 @@ export default function RecipesTab() {
           onPhoto={(f) => void onPhoto(f)} onNotes={onNotes} onLog={onLog}
           onFermentStart={onFermentStart} onAddToGroceries={onAddToGroceries} onSendToIpad={onSendToIpad}
           startTimer={(k, l, s, m, id) => void tm.start(k, l, s, m, id)} timers={tm.timers}
+          onHealth={onHealth}
         />
       )}
 
@@ -251,6 +255,11 @@ export default function RecipesTab() {
         onSendLinkToIpad={sendLinkToIpad}
       />
       <GroceriesSheet open={grocOpen} items={ov?.groceries ?? []} onClose={() => setGrocOpen(false)} onDone={(g) => void onGroceryDone(g)} />
+      <HealthSetupSheet open={healthStage === "setup"} onClose={() => setHealthStage("closed")} onGetShortcut={() => setHealthStage("log")} />
+      <HealthLogSheet
+        open={healthStage === "log"} n={recipe?.doc.nutrition ?? null} title={recipe?.doc.title ?? ""}
+        onClose={() => setHealthStage("closed")} onLogged={(msg) => toast(msg)}
+      />
     </div>
   );
 }

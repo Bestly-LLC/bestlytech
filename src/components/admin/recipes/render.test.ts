@@ -44,9 +44,27 @@ describe("recipes UI renders", () => {
     const html = renderToString(h(RecipePage, {
       r, work: newWork(), setWork: noop, phone: false, onlyOnList: false, fermenting: false, onBack: noop, onCook: noop, onPhoto: noop,
       onNotes: noop, onLog: asyncNoop, onFermentStart: asyncNoop, onAddToGroceries: asyncNoop, onSendToIpad: asyncNoop, startTimer: noop, timers: [],
+      onHealth: noop,
     }));
     expect(html).toContain("Start Cooking");
     expect(html).toContain("Ingredients");
     expect(html).not.toMatch(/\.\.\.|…/);
+  });
+  it("nutrition panel renders when present, Show more is collapsed by default, and it is hidden when absent", () => {
+    const withNutrition: RecipeRow = {
+      ...rows[0], doc: { ...rows[0].doc, nutrition: {
+        per_serving: { kcal: 150, protein_g: 6, carbs_g: 19, fat_g: 5, fiber_g: 1, sugar_g: 7, sodium_mg: 225 },
+        servings: 10, serving_label: "slice", source: "estimate",
+      } },
+    };
+    const base = { work: newWork(), setWork: noop, phone: false, onlyOnList: false, fermenting: false, onBack: noop, onCook: noop, onPhoto: noop,
+      onNotes: noop, onLog: asyncNoop, onFermentStart: asyncNoop, onAddToGroceries: asyncNoop, onSendToIpad: asyncNoop, startTimer: noop, timers: [], onHealth: noop };
+    const htmlWith = renderToString(h(RecipePage, { ...base, r: withNutrition }));
+    expect(htmlWith).toContain("Nutrition");
+    expect(htmlWith).toContain("Estimated");
+    expect(htmlWith).toContain("Show more");
+    expect(htmlWith).not.toContain("Fiber");
+    const htmlWithout = renderToString(h(RecipePage, { ...base, r: rows[0] }));
+    expect(htmlWithout).not.toContain("Nutrition");
   });
 });

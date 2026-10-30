@@ -9,6 +9,7 @@ import { ic } from "./dom";
 import { S } from "./state";
 import "./camera";
 import "./recipe";
+import "./nutrition";
 import { enter, go, render, syncChrome } from "./views";
 
 const path = location.pathname.replace(/\/+$/, "");

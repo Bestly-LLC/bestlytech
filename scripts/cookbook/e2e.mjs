@@ -13,6 +13,7 @@ const CHROME = process.env.CHROME || ["/opt/pw-browsers/chromium-1243/chrome-lin
 const html = fs.readFileSync(new URL("../../dist/cookbook.html", import.meta.url), "utf8");
 
 const SIZES = [["phone-390", 390, 844], ["phone-412", 412, 915], ["tablet-744", 744, 1133], ["landscape-1133", 1133, 744]];
+const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 let pass = 0, fail = 0;
 const fails = [];
 const check = (name, ok, detail = "") => { if (ok) pass++; else { fail++; fails.push(name + (detail ? " :: " + detail : "")); } console.log((ok ? "  ok   " : "  FAIL ") + name + (ok || !detail ? "" : "  -> " + detail)); };
@@ -20,9 +21,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--no-sandbox"] });
 
-async function open(size, who, { dark = false, token = true, reduced = false } = {}) {
+async function open(size, who, { dark = false, token = true, reduced = false, ua } = {}) {
   const [, w, h] = size;
-  const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, hasTouch: w < 800, isMobile: w < 800, colorScheme: dark ? "dark" : "light", reducedMotion: reduced ? "reduce" : "no-preference", permissions: ["camera"], locale: "en-US", timezoneId: "America/Los_Angeles" });
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, hasTouch: w < 800, isMobile: w < 800, colorScheme: dark ? "dark" : "light", reducedMotion: reduced ? "reduce" : "no-preference", permissions: ["camera"], locale: "en-US", timezoneId: "America/Los_Angeles", ...(ua ? { userAgent: ua } : {}) });
   const page = await ctx.newPage();
   const srv = makeServer();
   const errors = [], failed = [];
@@ -359,6 +360,63 @@ for (const size of SIZES) {
   check("approve called once", srv.log.filter((l) => l[0] === "family_approve").length === 1);
   check("no console errors", errors.length === 0, errors.slice(0, 3).join(" | "));
   await ctx.close();
+}
+
+/* ---------- 9. nutrition panel and Log to Health (Jared, phone 390) ---------- */
+{
+  console.log("\n== nutrition panel and Log to Health (Jared, phone 390)");
+  const { ctx, page, errors } = await open(SIZES[0], "jared", { ua: IPHONE_UA });
+  await page.addInitScript(() => { try { localStorage.setItem("cb.healthShortcut", "1"); } catch { /* none */ } });
+  await page.goto(BASE + "/cookbook.html", { waitUntil: "networkidle" });
+  await dismissTip(page);
+  await page.locator('[data-act="open"]', { hasText: "Banana Bread" }).first().click();
+  await page.waitForSelector(".nut-panel");
+  const t1 = await text(page);
+  check("panel renders from a fixture with nutrition", /Nutrition/.test(t1) && /150/.test(t1) && /Estimated/.test(t1), t1.slice(0, 10));
+  check("extra rows start collapsed", !/Fiber/.test(t1));
+  await page.locator('[data-act="nut-more"]').click();
+  await sleep(150);
+  check("Show more reveals Fiber, Sugar, Sodium", /Fiber/.test(await text(page)) && /Sugar/.test(await text(page)) && /Sodium/.test(await text(page)));
+  await shot(page, "nutrition-panel");
+  await page.locator('[data-act="health"]').click();
+  await page.waitForSelector('[data-act="log-it"]');
+  await page.locator('[data-act="ate-inc"]').click();
+  await sleep(100);
+  const sum = await page.locator("#ate-sum").innerText();
+  check("sheet math: 2 x 150 = 300 kcal", /Calories\s*300/.test(sum), sum);
+  await shot(page, "log-to-health-sheet");
+  check("no console errors before logging", errors.length === 0, errors.slice(0, 3).join(" | "));
+  const urlP = page.evaluate(() => new Promise((resolve) => document.addEventListener("cb:health-log", (e) => resolve(e.detail.url), { once: true })));
+  await page.locator('[data-act="log-it"]').click();
+  const url = await urlP;
+  const payload = JSON.parse(decodeURIComponent(new URL(url).searchParams.get("text")));
+  check("the shortcut URL is built correctly", url.startsWith("shortcuts://x-callback-url/run-shortcut?name=Log%20to%20Health") && url.includes("x-success="), url);
+  check("shortcut payload doubles the per-serving amounts", payload.kcal === 300 && payload.protein_g === 12 && payload.title === "Banana Bread", JSON.stringify(payload));
+  await sleep(200);
+  check("toast confirms what was logged", /Logged 2 slices to Health/.test(await text(page)));
+  await ctx.close();
+}
+
+/* ---------- 10. the panel is hidden when there's no nutrition; first tap offers Health setup ---------- */
+{
+  console.log("\n== nutrition hidden / Health first-tap setup (Jared, phone 390)");
+  const { ctx, page } = await open(SIZES[0], "jared");
+  await page.goto(BASE + "/cookbook.html", { waitUntil: "networkidle" });
+  await dismissTip(page);
+  await page.locator('[data-act="open"]', { hasText: "Sunday Pot Roast" }).first().click();
+  await page.waitForSelector("#hero");
+  await sleep(300);
+  check("the panel is hidden when there's no nutrition", (await page.locator(".nut-panel").count()) === 0 && !/Nutrition/.test(await text(page)));
+  await ctx.close();
+  const j2 = await open(SIZES[0], "jared", { ua: IPHONE_UA });
+  await j2.page.goto(BASE + "/cookbook.html", { waitUntil: "networkidle" });
+  await dismissTip(j2.page);
+  await j2.page.locator('[data-act="open"]', { hasText: "Banana Bread" }).first().click();
+  await j2.page.waitForSelector('[data-act="health"]');
+  await j2.page.locator('[data-act="health"]').click();
+  await j2.page.waitForSelector('[data-act="get-shortcut"]');
+  check("first tap ever offers to connect Apple Health", /Connect Apple Health/.test(await text(j2.page)));
+  await j2.ctx.close();
 }
 
 await browser.close();

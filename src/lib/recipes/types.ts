@@ -36,6 +36,16 @@ export interface RStep {
 
 export interface OmniCapacity { bowl_l?: number; max_dough_oz: number; base_dough_oz?: number; note?: string }
 
+/** Per-serving nutrition, filled by Basil's hestia job within about 2 minutes of a card being read. */
+export interface Nutrition {
+  per_serving: { kcal: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number; sugar_g: number; sodium_mg: number };
+  servings: number;
+  serving_label: string;
+  source: "estimate" | "card";
+  low_confidence?: boolean;
+  skipped?: string[];
+}
+
 export interface RecipeDoc {
   id: string;
   title: string;
@@ -56,6 +66,7 @@ export interface RecipeDoc {
   vessel?: string;
   oven_f?: number;
   ferment?: { temp_f: [number, number]; check_from_day: number; ready_days: [number, number]; after_bottling: { burp: string; drink_within_days: [number, number] } };
+  nutrition?: Nutrition;
 }
 
 /** What the scaler remembers per recipe while you work on it. */

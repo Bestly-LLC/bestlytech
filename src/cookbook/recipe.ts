@@ -13,6 +13,7 @@ import { amt2, noteHtml, rt, unsureList } from "./text";
 import { photoHtml, hueOf } from "./pics";
 import { rsFor } from "./data";
 import { toast } from "./ui";
+import { nutritionHtml } from "./nutrition";
 
 const recOf = () => S.recs[S.vp.id as string];
 const isJared = () => showsOmniCook(S.me && S.me.id);
@@ -66,6 +67,7 @@ export function V_recipe(): string {
       ? '<div class="have" id="have"><h3>I only have…</h3><div class="frow"><select class="fld" id="haveIng" aria-label="Ingredient you have"></select><input class="fld" id="haveAmt" inputmode="decimal" placeholder="Amount" aria-label="Amount you have" autocomplete="off"><select class="fld" id="haveUnit" aria-label="Unit"></select></div><div class="hout" id="haveOut" role="status"></div>'
         + '<button class="chip" data-act="haveex">Try: have ' + esc(ex.label) + "</button></div>" : "")
     + '<div id="r-omni"></div></div>'
+    + nutritionHtml(r.nutrition, { health: true, recipeId: r.id })
     + '<div id="r-banners" class="rp-col"></div>'
     + '<div class="rp-panel" id="r-ing-panel"><h2>Ingredients <small id="r-ing-cap"></small></h2><ul class="rp-ing" id="r-ing"></ul></div>'
     + '<div class="rp-panel" id="r-steps-panel"><h2>Steps <small id="r-steps-cap"></small></h2><div id="r-batch"></div><ol class="rp-steps" id="r-steps"></ol></div>'
@@ -352,7 +354,7 @@ function renderCook(dir?: string, first?: boolean) {
   const last = !C.done && C.i === n - 1;
   el.innerHTML = top + main + '<div class="cline" id="cline" aria-live="polite">' + cookLine() + "</div>"
     + (C.done ? "" : '<div class="cnav"><button class="btn" data-act="cook-back"' + (C.i === 0 ? " disabled" : "") + ">" + ic("left") + 'Back</button><button class="btn primary" data-act="cook-next" data-autofocus>' + (last ? "Finish" : "Next") + ic(last ? "check" : "right") + "</button></div>")
-    + '<div class="cfoot"><button data-act="cook-repeat">' + ic("restore", 20) + "Read it aloud</button></div>";
+    + '<div class="cfoot"><button data-act="cook-repeat">' + ic("speaker", 22) + "Read it aloud</button></div>";
   nowrapDom(el); bindSwipe(el);
   if (keep && keep.a) { const q = el.querySelector('[data-act="' + keep.a + '"]' + (keep.id ? '[data-id="' + keep.id + '"]' : "")); if (q && !q.disabled) { q.focus({ preventScroll: true }); return; } }
   const af = el.querySelector("[data-autofocus]");
