@@ -47,3 +47,7 @@ while the A/C stayed off. Now:
   `car.climate_blocked` opens on a refusal and resolves on the next climate command that works.
 
 `min_worker_version` = 1.8.1. Backup of 1.8.0: `worker.py.bak-1.8.0`.
+
+## 2026-10-31
+
+The worker now runs on Hestia at `/opt/bestly/tesla-worker/worker.py` (systemd `bestly-tesla-worker`, restored 2026-10-26). `telemetry_check` now records Tesla's last error entry as `check.last_error` (with its `created_at`); `car_telemetry_watchdog` ignores a stream error older than the car's last successful stream and treats a stream error on Standard Connectivity as an FYI (migration `20261031225000_car_telemetry_stale_error.sql`). Backup on Hestia: `worker.py.bak-20261031-lasterr`.

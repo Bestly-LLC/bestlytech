@@ -29,7 +29,10 @@ ANON = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"      # publishable key, 
 FREELLM = os.environ.get("FREELLM_BASE", "http://192.168.1.211:3001")   # the Pi (FreeLLMAPI moved there 2026-10-03)
 HOME = os.path.expanduser("~")
 LOG = os.path.join(HOME, "logs", "code-worker.log")
-CODE_MODELS = ["qwen3-coder-480b", "gpt-oss-120b", "deepseek-v4-flash", "nemotron-3-super-120b", "gemini-3.8-flash", "qwen3-coder-30b-a3b-instruct"]
+# Order = who gets the first try. 2026-10-31: gpt-oss-120b was "prompt too large / lacks tool-calling / rate-limited" on every
+# job and nemotron-3-super-120b was removed upstream (404), so three tries burned with no change. Tool-calling models with
+# a large context go first; the list is still filtered by what FreeLLM actually serves (usable_models).
+CODE_MODELS = ["gemini-3.8-flash", "deepseek-v4-flash", "qwen3-coder-480b", "minimax-m3", "gpt-oss-120b", "qwen3-coder-30b-a3b-instruct"]
 TRIES = 3
 JOB_MAX_S = 20 * 60
 AGENT_MAX_S = 7 * 60
@@ -117,12 +120,25 @@ def new_site_files(slug, title, goal):
 def freellm_key():
     if os.environ.get("FREELLM_KEY"):
         return os.environ["FREELLM_KEY"]
-    r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "bestly-pi",
-                        "cd /opt/bestly/cron && python3 -c 'import lib;print(lib.rpc(\"pi_secret\",p_name=\"Scout-FreeLLM\"))'"],
-                       capture_output=True, text=True, timeout=30)
-    k = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else ""
+    # Hestia (the Pi) holds the key in Vault. Try the ssh aliases in turn (the alias list survived the 2026-10-26 rebuild,
+    # the host key did not), and say what ssh said when every route fails instead of a bare "could not get".
+    k, why = "", []
+    for host in ("bestly-pi", "hestia", "pi@192.168.1.211"):
+        try:
+            r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "-o", "StrictHostKeyChecking=accept-new", host,
+                                "cd /opt/bestly/cron && python3 -c 'import lib;print(lib.rpc(\"pi_secret\",p_name=\"Scout-FreeLLM\"))'"],
+                               capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError) as e:
+            why.append("%s: %s" % (host, type(e).__name__))
+            continue
+        out = r.stdout.strip()
+        k = out.splitlines()[-1].strip() if out else ""
+        if k and not k.lower().startswith(("none", "traceback", "error")):
+            break
+        k = ""
+        why.append("%s: %s" % (host, (r.stderr or "no output").strip().splitlines()[-1][:120] if (r.stderr or "").strip() else "no output"))
     if not k:
-        raise RuntimeError("could not get the FreeLLM key from the Pi")
+        raise RuntimeError("could not get the FreeLLM key from the Pi (%s)" % "; ".join(why)[:300])
     os.environ["FREELLM_KEY"] = k
     return k
 

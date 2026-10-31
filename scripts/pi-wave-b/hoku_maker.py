@@ -296,8 +296,18 @@ def _check(fmt, layout, p, past, rec=None):
         e.append("the title must end with a period (house style)")
     paras = [x for x in re.split(r"\n\s*\n", cap) if x.strip()]
     ask = None
-    if rec and hv and rec.get("question") and paras and paras[-1].rstrip().endswith("?"):
-        ask = paras.pop()
+    # The prompt asks for the question as the LAST LINE of the caption; the model usually writes it as the last
+    # line of the final paragraph, not as a paragraph of its own. Judge the last line, however it is separated
+    # (2026-10-31: every nightly post had failed this check 4x since Oct 28).
+    last_line = cap.rstrip().splitlines()[-1].strip() if cap.strip() else ""
+    if rec and hv and rec.get("question") and last_line.endswith("?"):
+        ask = last_line
+        if paras and paras[-1].rstrip().endswith("?"):
+            tail = paras[-1].rstrip()
+            rest = tail[: len(tail) - len(last_line)].rstrip() if tail.endswith(last_line) else ""
+            paras.pop()
+            if rest:
+                paras.append(rest)
         if not hv.question_ok(ask):
             e.append("the closing question must be ONE short specific question (3 to 18 words, no 'comment below' or 'tag a friend')")
     elif rec and rec.get("question"):
@@ -598,9 +608,25 @@ def _make(dry):
                 out.append(rr)
     failed = [l for l in out if "FAILED" in l]
     stranded = [l for l in failed if not any(l[:10] in x and "re-run" in x for x in out)]
-    if failed and not dry:
-        lib.notify("HOKU post maker had trouble", "\n".join(out)[:1200], severity="warning" if stranded else "info",
-                   push=bool(stranded), url="/admin", dedupe="hoku-maker-" + time.strftime("%Y%m%d"))
+    # Signed card instead of an anonymous notify (2026-10-31): house.gate.* belongs to Spark's House Gate. A stranded day
+    # opens the card; a clean make closes it. (pi_jobs could not see this: `stats` runs under the same job name each
+    # evening and reset the failure count, so three failed nights in a row never showed.)
+    if not dry:
+        try:
+            if stranded:
+                lib.rpc("bestly_raise", p_key="house.gate.hoku-maker", p_kind="problem", p_severity="warning",
+                        p_title="HOKU post maker could not make a post", p_body="\n".join(out)[:1200], p_area="studio",
+                        p_needs_jared=None, p_healed=False)
+            elif failed:
+                lib.rpc("bestly_raise", p_key="house.gate.hoku-maker", p_kind="problem", p_severity="info",
+                        p_title="HOKU post maker had trouble but recovered", p_body="\n".join(out)[:1200], p_area="studio",
+                        p_needs_jared=None, p_healed=True)
+            else:
+                lib.rpc("bestly_raise", p_key="house.gate.hoku-maker", p_kind="resolved", p_severity="info",
+                        p_title="HOKU post maker is making posts again", p_body=None, p_area="studio",
+                        p_needs_jared=None, p_healed=False)
+        except Exception as e:  # noqa: BLE001
+            lib.log(f"hoku_maker: could not file the card: {e}") if hasattr(lib, "log") else None
     if stranded and not dry:
         raise RuntimeError(" | ".join(out)[:1500])
     return ("dry:\n" if dry else "ok ") + ("\n" if dry else " | ").join(out)[:3500]
