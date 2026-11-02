@@ -1,9 +1,11 @@
-// family-auth — "Sign in with Bestly Cloud" for the Family Cookbook (bestly.tech/cookbook). Owner: Basil.
-// Bestly Cloud (cloud.bestly.tech) is the identity provider. This function does the OpenID Connect code exchange on the
-// server (the client secret never reaches a phone), asks Bestly Cloud who signed in, matches that account to a
-// family_members row, and mints the cookbook's OWN session. We never see or store a Bestly Cloud password or passkey.
-//   POST { op: "start" }                 -> { url }  where to send the phone (PKCE + state are kept server-side)
-//   POST { op: "exchange", code, state } -> { token, me }  token is random, only its sha-256 is stored (family_sessions)
+// family-auth — the way in to the Family Cookbook (bestly.tech/cookbook). Owner: Basil.
+// Two doors, both ending in the cookbook's OWN session (family_sessions, token random, only its sha-256 stored):
+//   POST { op: "start" }                 -> { url }  Bestly Cloud (OIDC), PKCE + state kept server-side
+//   POST { op: "exchange", code, state } -> { token, me }
+//   POST { op: "invite", token, role }   -> { url }  a reviewer mints a one-time link for someone
+//   POST { op: "link", t }               -> { token, me }  that link, spent on use: no account, no password
+// Bestly Cloud (cloud.bestly.tech) is the identity provider for the OIDC door; the code exchange happens here so the
+// client secret never reaches a phone. We never see or store a Bestly Cloud password or passkey.
 // A phone that returns from Bestly Cloud inside the home-screen app may not share Safari's storage, so nothing the sign-in
 // needs lives in the browser: state and the PKCE verifier are rows in family_oauth_states.
 
