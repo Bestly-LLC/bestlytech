@@ -181,18 +181,24 @@ import { chefCook, chefMarkdown } from "../_shared/chef.ts";
 import { sendAsJared } from "../_shared/bestly-signature.ts";
 // 2026-10-19: web_reach, the web-reading tool (Agent Reach queue on the Pi). Fetched text is untrusted data; see _shared/web-reach.ts.
 import { webReach, WEB_REACH_TOOL, WEB_REACH_FREE_DESC, webReachRules, prefetchReach, plainReachTalk, AUTO_FREE_CHARS, AUTO_PAID_CHARS } from "../_shared/web-reach.ts";
+// v91: Scout's per-thread working-memory brief (item A), the FOLLOW_UP nudge rewrite (B), the OPTIONS de-dupe (F).
+import { type ChatBrief, isFollowUpPhrase, followUpRewrite, briefBlock, resultDigest, stripOptions, CHECK_EXISTS_RULE } from "../_shared/chat-memory.ts";
 
 const MODEL = Deno.env.get("ADMIN_CHAT_MODEL") ?? "claude-sonnet-4-6";
 const MAX_TURNS = 10;
 const AUTO_HOPS = 8;             // v41 set 4; 2026-10-17 (Jared: "stop asking me to keep going") a TASK carries on up to 8 rounds, and only while each round adds a write or a new finding; a QUESTION never carries on
 const STOP_MARK = "[Stopped]";   // v34: his Stop button; the window draws it as a divider, the models read it as "he stopped you"
 
-/** v34: has he written (or tapped Stop) since `since`? Then the run answering the older message stops. */
+/** v34: has he written (or tapped Stop) since `since`? Then the run answering the older message stops.
+ * v91 (item C, thread d42608b1: "continue" tripped this and dropped an 8-step run): a newer row that is ONLY a
+ * follow-up nudge ("continue", "try now", ...) does not count - the run keeps going. A real new ask, or Stop, still does. */
 async function supersededSince(threadId: string, since: string | null): Promise<boolean> {
   if (!since) return false;
-  const { data } = await db.from("admin_chat_messages").select("id").eq("thread_id", threadId).eq("role", "user")
-    .gt("created_at", since).limit(1);
-  return !!data?.length;
+  const { data } = await db.from("admin_chat_messages").select("body").eq("thread_id", threadId).eq("role", "user")
+    .gt("created_at", since).limit(10);
+  const rows = (data ?? []) as { body: string }[];
+  if (!rows.length) return false;
+  return rows.some((r) => r.body === STOP_MARK || !isFollowUp(r.body));
 }
 const BUILD_POLLS = 10;          // ~65s of watching; builds here take ~35s
 const PI_WAIT_MS = 60_000;       // how long to wait for the Pi to report back inside one turn
@@ -824,9 +830,10 @@ async function adhdShape(reply: string, ask: string, threadId: string): Promise<
   reply = plainReachTalk(reply);   // 2026-10-19: never web_reach / job ids / markers to Jared
   try {
     if (!reply || /^\s*QUESTIONS:/m.test(reply)) return reply;
-    const m = reply.match(/^\s*OPTIONS:\s*(.+)$/m);
-    const hadAll = m ? m[1].split("|").map(cleanOption).filter(Boolean) : [];
-    let body = stripMarkdown(reply.replace(/^\s*OPTIONS:.*$/m, "").trim());
+    // v91 (item F): every OPTIONS: fragment, anywhere in the text (even mid-sentence, even a 2nd one) - not just a line-start match.
+    const stripped = stripOptions(reply, cleanOption);
+    const hadAll = stripped.options;
+    let body = stripMarkdown(stripped.body);
     // v44 (audit Oct 10): the last gate before Jared sees it. Raw tool JSON or "We need to... Let's read X" is not an answer.
     let leaked = false;
     if (rawToolJson(body) || narratesStep(body)) { body = NOT_AN_ANSWER; leaked = true; }
@@ -860,9 +867,8 @@ options: ${needOpts ? `2 or 3 quick replies Jared would most likely tap next, wr
   } catch {
     // never block a reply on formatting - but never let a leak through either
     if (rawToolJson(reply) || narratesStep(reply)) return NOT_AN_ANSWER;
-    const mm = reply.match(/^\s*OPTIONS:\s*(.+)$/m);
-    const keep = mm ? mm[1].split("|").map(cleanOption).filter((o) => o && o.length <= OPTION_MAX_CHARS && !GENERIC_OPTION.test(o)) : [];
-    const bare = reply.replace(/^\s*OPTIONS:.*$/m, "").trim();
+    const { body: bare, options: optsCatch } = stripOptions(reply, cleanOption);
+    const keep = optsCatch.filter((o) => o && o.length <= OPTION_MAX_CHARS && !GENERIC_OPTION.test(o));
     return keep.length >= 2 ? `${bare}\n\nOPTIONS: ${keep.join(" | ")}` : bare;
   }
 }
@@ -1677,6 +1683,14 @@ function classifyAsk(text: string): "question" | "task" {
   if (QUESTION_LEAD.test(t) || /\?\s*$/.test(t)) return "question";
   return t.length < 140 ? "question" : "task";
 }
+/** v91 (item B, thread d42608b1: "continue" and "try now" each lost an 8-step run): a continuation nudge, never a fresh task. */
+function isFollowUp(text: string): boolean {
+  const t = String(text ?? "").trim();
+  if (!t) return false;
+  if (isFollowUpPhrase(t)) return true;
+  // short, no task verb, no question, not a plain yes/no: a nudge with nothing new to track, not a fresh ask.
+  return t.length <= 16 && !TASK_VERB.test(t) && !QUESTION_LEAD.test(t) && !/\?/.test(t) && !PLAIN_YES.test(t) && !/^no\b/i.test(t);
+}
 const QUESTION_CALLS = 8, TASK_CALLS = 25;
 const FREE_INPUT_CEILING = 250_000;   // input tokens one free request may use before it must answer with what it has
 /** The next model call must answer, not look. */
@@ -1809,14 +1823,20 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
   };
 
   const noPaidP = saidNoPaid(threadId);
-  const [{ data: histRaw }, { data: today }, { data: lessonRows }] = await Promise.all([
+  const [{ data: histRaw }, { data: today }, { data: lessonRows }, briefObj] = await Promise.all([
     db.from("admin_chat_messages").select("role, body").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(10),
     db.rpc("admin_today"),
     // v44 (audit Oct 10): paid Scout got the top 30 lessons in its prompt; free Scout saw one only after a tool failed.
     // 2026-10-17: 15 here, not 30. The 30-lesson block is what pushed the free prompt past Groq's 7K gate.
     db.from("scout_lessons").select("scope, title, do_text, wins, losses").eq("active", true)
       .order("wins", { ascending: false }).order("updated_at", { ascending: false }).limit(15),
+    loadBrief(threadId),
   ]);
+  // v91 (item B, thread d42608b1: the free agent only sees 10 messages, so "try now" lost the task): a follow-up
+  // nudge is rewritten to the live goal before the model ever sees it. His raw words (rawAsk) are untouched in storage.
+  const rawAsk = text;
+  const followUp = isFollowUp(rawAsk);
+  if (followUp) text = followUpRewrite(rawAsk, briefObj);
   const hist = cleanHistory((histRaw ?? []) as { role: string; body: string }[], { stripOptions: true });   // 2026-10-28: no status notes in a model's context
   // 2026-10-17: 30 lessons (4.2K chars) plus a 12-item queue pushed the free prompt past Groq's 7K-token gate, so every
   // Groq rung was skipped as "skipped_size" and the run failed in 400 ms with no provider ever called. 15 + 8 leaves room
@@ -1836,7 +1856,7 @@ async function freeAgent(threadId: string, text: string, page: unknown, opts: { 
         : "He has not said yes yet: before any action that needs confirmed:true, say what it will do and end with OPTIONS: Do it | Not now.";
 
   const ledgerFree = await actionLedger(threadId).catch(() => "");
-  let system = ledgerFree + "\n" + `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You run on a free model WITH real tools: do the work yourself, don't tell Jared what someone else should do.
+  let system = briefBlock(briefObj) + CHECK_EXISTS_RULE + ledgerFree + "\n" + `You are Scout, the assistant inside Jared's Bestly admin (bestly.tech/admin). You run on a free model WITH real tools: do the work yourself, don't tell Jared what someone else should do.
 How to work:
 - Read before you answer or act: search_mail + read_email (any email or person), run_sql, today, incidents, read_file, meeting_transcript. Anything about a person, an email, an invoice, a task or a call is answered from what you read THIS turn: after search_mail, read_email the 2 or 3 best matches (newest first) before you answer, and give the concrete answer (names, amounts, dates) with where it came from. Never invent numbers, names, files or results. Never use placeholders like X or [Name].
 - Debrief a call (or make its to-dos): call_debrief first, then answer from it. "Who owes what" = who has to do what, not money. To-dos: add_todo, never db_write SQL.
@@ -1907,7 +1927,7 @@ Page he is on: ${JSON.stringify(page ?? null).slice(0, 300)}`;
   if (prior) {
     const note = continuationNote(prior);
     const last = msgs[msgs.length - 1];
-    if (/^\s*keep going\b/i.test(text)) last.content = note;
+    if (followUp) last.content = note;   // v91: "continue"/"try now" etc, same as the old literal "keep going" check
     else last.content += `\n\n${note}`;
   }
   KEEP.add(msgs[msgs.length - 1]);
@@ -2302,9 +2322,21 @@ let autopilotRun = false;
 const UNSAFE_AUTO_SCRIPT = /\b(?:sudo|doas|mkfs|shutdown|halt|reboot|launchctl\s+(?:unload|bootout|remove))\b|\bdd\s+if=|\brm\s+-rf\s+(?:\/|~|\$HOME)(?:\s|$)|\bgit\s+push\s+(?:-f|--force)\b|\bgit\s+reset\s+--hard\s+origin|\bcurl[^|\n]*\|\s*(?:sh|bash)\b|\bwget[^|\n]*\|\s*(?:sh|bash)\b|>\s*\/dev\/(?:sd|disk)/i;
 let paidUntil: string | null = null; // v30: when the Paid AI switch turns itself off (null = until he turns it off)
 
+const CACHEABLE_READS = new Set(["read_file", "search_code", "run_sql"]);
 async function runTool(name: string, args: Record<string, any>, threadId: string): Promise<Record<string, unknown>> {
   let out: Record<string, unknown>;
   const repo = REPOS[args.repo ?? "site"] ?? REPOS.site;
+
+  // v91 (item D, thread d42608b1: llm_providers and improver_ideas each read 2-3x): the same read within 30 min on
+  // this thread is served from the ledger instead of running again.
+  if (CACHEABLE_READS.has(name)) {
+    const h = argsHash(name, args);
+    const { data: recent } = await db.from("admin_chat_actions").select("args, result, ok")
+      .eq("thread_id", threadId).eq("tool", name).gte("created_at", new Date(Date.now() - 30 * 60_000).toISOString())
+      .order("created_at", { ascending: false }).limit(25);
+    const hit = ((recent ?? []) as any[]).find((r) => r.ok !== false && argsHash(name, r.args ?? {}) === h);
+    if (hit) return { ...(hit.result as Record<string, unknown>), cached: true, cached_note: "Same read within the last 30 min - served from the ledger, not re-run." };
+  }
 
   switch (name) {
     case "delegate": {
@@ -2741,6 +2773,55 @@ const AUTOPILOT_REPAIRS = new Set(["mac_run", "commit_files", "code_job", "db_wr
 const autopilotBlocked = (name: string) => AUTOPILOT_NEVER.has(name) || (AUTOPILOT_REPAIRS.has(name) && !autoRunOn);
 
 
+// v91 (item A): the per-thread working-memory brief (admin_chat_threads.brief). Built at the end of every run and
+// put first in every system prompt so a "continue"/"try now" picks up the goal instead of starting over.
+// ChatBrief/briefBlock/resultDigest/CHECK_EXISTS_RULE live in _shared/chat-memory.ts (import above) so they're unit
+// tested the way the rest of _shared/ is; loadBrief/updateBrief stay here because they touch the DB.
+async function loadBrief(threadId: string): Promise<ChatBrief | null> {
+  try {
+    const { data } = await db.from("admin_chat_threads").select("brief").eq("id", threadId).maybeSingle();
+    const b = (data as any)?.brief;
+    return b && typeof b === "object" ? (b as ChatBrief) : null;
+  } catch { return null; }
+}
+/** Deterministic from the ledger, then one smallest-free-rung JSON merge (never paid); kept deterministic if that
+ * fails. Called at the end of every run - paid, free, autopilot and runs supersededSince drops (item A). */
+async function updateBrief(threadId: string, latestAsk?: string): Promise<void> {
+  try {
+    const [{ data: threadRow }, { data: actionRows }] = await Promise.all([
+      db.from("admin_chat_threads").select("brief").eq("id", threadId).maybeSingle(),
+      db.from("admin_chat_actions").select("tool, args, result, ok, created_at").eq("thread_id", threadId).order("created_at", { ascending: false }).limit(25),
+    ]);
+    const prior = (threadRow as any)?.brief && typeof (threadRow as any).brief === "object" ? ((threadRow as any).brief as ChatBrief) : null;
+    const rows = ((actionRows ?? []) as any[]).reverse();
+    const doneNow = rows.filter((r) => r.ok && ["db_write", "commit_files", "send_email", "mac_run", "code_job", "add_todo"].includes(r.tool))
+      .map((r) => `${r.tool}: ${resultDigest(r.tool, r.result) || JSON.stringify(r.args ?? {}).slice(0, 80)}`);
+    const deterministic: ChatBrief = {
+      goal: prior?.goal || (latestAsk ?? "").replace(/\s+/g, " ").trim().slice(0, 200),
+      facts: prior?.facts ?? [], open: prior?.open ?? [], decisions: prior?.decisions ?? [], avoid: prior?.avoid ?? [],
+      done: [...new Set([...(prior?.done ?? []), ...doneNow])].slice(-10),
+    };
+    let next = deterministic;
+    try {
+      const r = await llm({
+        task: "summarize", json: true, paid: "never", maxTokens: 500, deadlineMs: 8_000,
+        job: "chat-brief", ref: threadId, fn: "admin-chat", scope: "chat",
+        system: `Compress this thread's working memory into JSON only: {"goal": string, "facts": string[] (<=12), "done": string[] (<=10), "open": string[] (<=4), "decisions": string[] (<=6), "avoid": string[] (<=4)}. Short plain strings, no speculation; keep what is still true, drop what is finished or stale.`,
+        user: JSON.stringify({ prior: prior ?? {}, recent_actions: rows.slice(-15).map((r) => ({ tool: r.tool, ok: r.ok, digest: resultDigest(r.tool, r.result) })) }).slice(0, 4000),
+        validate: (j: any) => (j && typeof j === "object" ? null : "needs an object"),
+      });
+      if (r?.json && typeof r.json === "object") next = r.json as ChatBrief;
+    } catch { /* free rung failed or timed out: keep the deterministic version, never block on this */ }
+    await db.from("admin_chat_threads").update({ brief: next, brief_at: new Date().toISOString() }).eq("id", threadId);
+  } catch { /* brief bookkeeping never blocks a reply */ }
+}
+/** Fires updateBrief in the background (EdgeRuntime.waitUntil) so it never adds latency to a reply. */
+function bgUpdateBrief(threadId: string, latestAsk?: string): void {
+  const p = updateBrief(threadId, latestAsk).catch(() => {});
+  const er = (globalThis as any).EdgeRuntime;
+  if (er?.waitUntil) er.waitUntil(p);
+}
+
 // v66 (2026-10-12): Scout denied sending emails he really sent. Chat history is rebuilt from admin_chat_messages
 // (text only), but tool runs live in admin_chat_actions and were never shown back to the model. Next turn he saw only
 // his own prose, no send_email call, and "Only say something is done if a tool result in THIS turn shows ok:true"
@@ -2757,9 +2838,11 @@ async function actionLedger(threadId: string): Promise<string> {
     const what = r.tool === "send_email"
       ? `send_email to ${brief(a.to ?? a.recipient ?? a.name, 80)} subject ${brief(a.subject, 80)}`
       : `${r.tool} ${brief(a, 140)}`;
-    return `- ${t(r.created_at)} ${what} -> ${r.ok ? "OK (it happened)" : `FAILED ${brief(r.result?.error ?? r.result, 120)}`}`;
+    const digest = r.ok ? resultDigest(r.tool, r.result) : "";
+    return `- ${t(r.created_at)} ${what} -> ${r.ok ? `OK${digest ? `: ${digest}` : " (it happened)"}` : `FAILED ${brief(r.result?.error ?? r.result, 120)}`}`;
   });
-  return `\n\n# What you already did in this chat (the real tool log, oldest first)\nThis log is the truth about your past actions. Anything marked OK really happened, even if your earlier replies don't show the tool call. Never deny it; if Jared says he sees something sent, check this log (and admin_chat_actions) and own it plainly.\n${lines.join("\n")}`;
+  // v91 (item D): cap 2,000 chars and tell the model to use this instead of repeating a read.
+  return `\n\n# What you already did in this chat (the real tool log, oldest first)\nThis log is the truth about your past actions. Check it before any read; never repeat one it already shows. Anything marked OK really happened, even if your earlier replies don't show the tool call. Never deny it; if Jared says he sees something sent, check this log (and admin_chat_actions) and own it plainly.\n${lines.join("\n")}`.slice(-2000);
 }
 
 // ---------------------------------------------------------------- v35 send_email: mail as Jared with his Bestly signature
@@ -3150,7 +3233,8 @@ Deno.serve(async (req) => {
   // v33: a self-call that carries on a free-AI job (auto_continue = hop number). It acts as his "keep going".
   const autoHop = !autopilot && Number.isInteger(body.auto_continue) ? Math.max(0, Number(body.auto_continue)) : 0;
   if (autoHop) body.body = "keep going";
-  const keepGoing = !autopilot && /^\s*keep going\b/i.test(String(body.body ?? ""));
+  // v91 (item B/C): "continue", "try now", "try again", etc are the same signal as "keep going" - resume, don't wipe.
+  const keepGoing = !autopilot && isFollowUp(String(body.body ?? ""));
   // v43 (2026-10-10 audit): "keep going" means CONTINUE, never yes. It used to switch auto-run on for the turn, so the generic
   // "Keep going" button approved actions he never saw. And when Scout's last reply asked him something (Yes | No, Do it | Not now),
   // a "keep going" is not an answer: that turn runs without auto-run, so the action waits for a real yes (Oct 10: Scout asked
@@ -3192,19 +3276,35 @@ Deno.serve(async (req) => {
     if (error) return J({ ok: false, error: error.message }, 500);
     threadId = data.id;
   }
+
+  // v91 (item E): "Let's do this improvement from The Improver: <title>" - look the idea up server-side and seed
+  // the brief from it, so Scout doesn't have to rediscover it with search_code/read_file every time.
+  const improverMatch = text.match(/^Let'?s do this improvement from The Improver:\s*(.+)$/i);
+  if (improverMatch) {
+    const ideaTitle = improverMatch[1].trim().replace(/^"|"$/g, "");
+    const { data: idea } = await db.from("improver_ideas").select("title, why, change").ilike("title", ideaTitle).limit(1).maybeSingle();
+    if (idea) {
+      const facts = [(idea as any).why, (idea as any).change].filter(Boolean).map((s: unknown) => String(s).slice(0, 300));
+      await db.from("admin_chat_threads").update({
+        brief: { goal: `Improver idea: ${(idea as any).title}`, facts, done: [], open: [], decisions: [], avoid: [] } as ChatBrief,
+        brief_at: new Date().toISOString(),
+      }).eq("id", threadId);
+    }
+  }
   // v34: the moment this run's message landed. Anything he sends (or a Stop) after it interrupts this run.
   let runSince: string | null = null;
   if (autoHop || paidHandoff) {
     // He wrote something since the job started (or stopped it): his message wins, this hop ends quietly.
     runSince = String(body.chain_from ?? new Date(0).toISOString());
-    if (await supersededSince(threadId, runSince)) return J({ ok: true, thread_id: threadId, stopped: "he wrote since" });
+    if (await supersededSince(threadId, runSince)) { bgUpdateBrief(threadId, text); return J({ ok: true, thread_id: threadId, stopped: "he wrote since" }); }
   } else {
     const { data: mine } = await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "user", body: text })
       .select("created_at").single();
     runSince = autopilot ? null : ((mine as any)?.created_at ?? new Date().toISOString());
   }
   const interrupted = () => supersededSince(threadId, runSince);
-  const stoppedReply = () => J({ ok: true, thread_id: threadId, stopped: true });
+  // v91 (item A): a dropped run still updates the brief from whatever the ledger has, so the next message isn't blind.
+  const stoppedReply = () => { bgUpdateBrief(threadId, text); return J({ ok: true, thread_id: threadId, stopped: true }); };
 
   // v18: moving call to-dos between people needs no AI.
   if (!autopilot && !paidHandoff) {
@@ -3251,6 +3351,7 @@ Deno.serve(async (req) => {
       const { data: ins } = await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply }).select("id").single();
       sayId = (ins as any)?.id ?? null;
       await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
+      bgUpdateBrief(threadId, text);   // v91 (item A): end of this free/autopilot run
       return J({ ok: true, thread_id: threadId, reply, tools: [], ...extra });
     };
     if (!paidOk) {
@@ -3310,6 +3411,11 @@ Deno.serve(async (req) => {
         const askFirst = ASKS_FOR_QUESTIONS.test(text);
         // v36: working memory for a free run. A new message starts clean; a hop (or a hand-typed "keep going" within the
         // hour) picks up what the run already did, so it never re-reads the same things.
+        // ponytail: v91 widened keepGoing to any follow-up ("continue", "try now", ...) and made supersededSince tolerate
+        // one too, so a live follow-up and an in-flight background hop can now both resume the same run_state instead of
+        // one of them wiping it. No lock exists on the free path (only the paid path has busy_until) - whichever finishes
+        // last wins the row, which can waste one redundant hop but never corrupts state. Add a busy_until-style lock here
+        // if that redundant hop becomes a real cost problem.
         let runIn: RunState | null = null;
         if (autoHop > 0) {
           const st = await loadRunState(threadId).catch(() => null);
@@ -3557,6 +3663,7 @@ Deno.serve(async (req) => {
     system += `\n\n# The free AI already worked on this\nIt had the same tools as you.${handed.goal ? ` The job: ${handed.goal}` : ""}${tl ? `\nIts failed tries:\n${tl}\nDo not repeat those; work out why they failed, then fix the real cause.` : ""}${nl ? `\nWhat it found:\n${nl}` : ""}`;
   }
   if (handed) await saveRunState(threadId, null).catch(() => {});
+  system = briefBlock(await loadBrief(threadId).catch(() => null)) + CHECK_EXISTS_RULE + system;   // v91 (items A, E)
   system += await actionLedger(threadId).catch(() => "");
 
   // Daily chat cap: a runaway guard, even with the Paid AI switch on.
@@ -3674,6 +3781,7 @@ Deno.serve(async (req) => {
     if (err?.name === "TimeoutError" || err?.name === "AbortError") {
       const why = `I ran long on that (${used.length} steps). Say "keep going" and I will pick it up, or ask for a smaller piece.`;
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
+      bgUpdateBrief(threadId, text);   // v91 (item A): a dropped paid run
       await unlock();
       return J({ ok: true, thread_id: threadId, reply: why, tools: used, partial: true });
     }
@@ -3687,11 +3795,13 @@ Deno.serve(async (req) => {
       });
       await db.from("llm_providers").update({ last_error: `${new Date().toISOString()} out_of_credit: credit balance too low`, updated_at: new Date().toISOString() }).eq("name", "anthropic");
       await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
+      bgUpdateBrief(threadId, text);
       await unlock();
       return J({ ok: false, error: "out_of_credit", thread_id: threadId, reply: why }, 200);
     }
     const why = `I could not reach the model: ${(e as Error).message}`.replace(/sk-ant-[A-Za-z0-9_\-]+/g, "sk-ant-…");
     await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: why });
+    bgUpdateBrief(threadId, text);
     await unlock();
     return J({ ok: false, error: (e as Error).message, thread_id: threadId, reply: why }, 200);
   }
@@ -3705,6 +3815,7 @@ Deno.serve(async (req) => {
   if (!autopilot) reply = await adhdShape(reply, text, threadId);   // v40: ADHD format + quick replies, enforced
   await db.from("admin_chat_messages").insert({ thread_id: threadId, role: "assistant", body: reply });
   await db.from("admin_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
+  bgUpdateBrief(threadId, text);   // v91 (item A): end of this paid run
 
   const { data: proposed } = await db.from("mac_jobs").select("id").eq("thread_id", threadId).eq("status", "proposed").limit(1);
   await unlock();
