@@ -21,7 +21,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--no-sandbox"] });
 
-async function open(size, who, { dark = false, token = true, reduced = false, ua, srv: shared } = {}) {
+async function open(size, who, { dark = false, token = true, reduced = false, ua, srv: shared, offerPasskey = false } = {}) {
   const [, w, h] = size;
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, hasTouch: w < 800, isMobile: w < 800, colorScheme: dark ? "dark" : "light", reducedMotion: reduced ? "reduce" : "no-preference", permissions: ["camera"], locale: "en-US", timezoneId: "America/Los_Angeles", ...(ua ? { userAgent: ua } : {}) });
   const page = await ctx.newPage();
@@ -33,13 +33,18 @@ async function open(size, who, { dark = false, token = true, reduced = false, ua
   await srv.install(page, who);
   // the callback path is a server-side rewrite in production (vercel.json); mirror it here
   await page.route(/\/cookbook(\/(callback|join))?(\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: "text/html", body: html }));
-  if (token && who) await page.addInitScript((t) => { try { localStorage.setItem("fc_token", t); localStorage.setItem("fc_tip_" + "seen", "1"); } catch { /* none */ } }, TOKENS[who]);
+  await page.addInitScript((o) => { try { if (o.t) localStorage.setItem("fc_token", o.t); if (o.pk) localStorage.setItem("fc_pk", "1"); } catch { /* none */ } }, { t: token && who ? TOKENS[who] : "", pk: !offerPasskey });
   return { ctx, page, srv, errors, failed };
 }
 const noOverflow = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 const text = (page) => page.evaluate(() => document.body.innerText);
 const shot = (page, name) => page.screenshot({ path: path.join(OUT, name + ".png") });
-async function dismissTip(page) { const b = page.locator('[data-act="tip-ok"]'); if (await b.count()) { await b.first().click(); await sleep(150); } }
+async function dismissTip(page) {
+  for (const a of ["passkey-later", "tip-ok"]) {
+    const b = page.locator(`[data-act="${a}"]`);
+    if (await b.count()) { await b.first().click(); await sleep(150); }
+  }
+}
 const bigEnough = (page, sel) => page.evaluate((s) => [...document.querySelectorAll(s)].filter((e) => e.offsetParent && e.getBoundingClientRect().width).map((e) => { const r = e.getBoundingClientRect(); return [r.width, r.height, (e.getAttribute("aria-label") || e.textContent || "").trim().slice(0, 30)]; }).filter(([w, h]) => w < 44 || h < 44), sel);
 
 /* ---------- 1. every size: sign-in, home as each person, recipe page, no overflow ---------- */
@@ -50,7 +55,7 @@ for (const size of SIZES) {
     const { ctx, page, errors, failed } = await open(size, null, { token: false });
     await page.goto(BASE + "/cookbook.html", { waitUntil: "networkidle" });
     const t = await text(page);
-    check(size[0] + " sign-in screen offers Bestly Cloud", /Sign in with Bestly Cloud/.test(t));
+    check(size[0] + " sign-in screen offers Face ID, not a password", /Sign in with Face ID/.test(t) && !/Bestly Cloud/.test(t) && !/choose a password/i.test(t));
     check(size[0] + " sign-in never says Nextcloud", !/nextcloud/i.test(t));
     check(size[0] + " generic title before sign-in", (await page.title()) === "Family Cookbook", await page.title());
     check(size[0] + " generic manifest before sign-in", (await page.locator('link[rel="manifest"]').getAttribute("href")) === "/cookbook.webmanifest");
@@ -137,13 +142,13 @@ for (const size of SIZES) {
   await ctx.close();
 }
 
-/* ---------- 3. the callback: Bestly Cloud brings Mom back ---------- */
+/* ---------- 3. break-glass: the Bestly Cloud callback still works, with no button pointing at it ---------- */
 {
-  console.log("\n== sign-in round trip (phone 390)");
+  console.log("\n== Bestly Cloud callback, break-glass (phone 390)");
   const { ctx, page, srv, errors } = await open(SIZES[0], "mom", { token: false });
   await page.goto(BASE + "/cookbook.html", { waitUntil: "networkidle" });
-  await page.locator('[data-act="signin"]').click();
-  await page.waitForURL(/\/cookbook\/callback\?code=/);
+  check("no password door on the sign-in screen", (await page.locator('[data-act="signin"]').count()) === 0 && !/Bestly Cloud/.test(await text(page)));
+  await page.goto(BASE + "/cookbook/callback?code=abcdef123456&state=" + "a".repeat(48), { waitUntil: "networkidle" });
   await page.waitForSelector('[data-act="open"]');
   const tok = await page.evaluate(() => localStorage.getItem("fc_token"));
   check("callback: session saved", tok === TOKENS.mom);
@@ -155,7 +160,7 @@ for (const size of SIZES) {
   await dismissTip(page);
   await page.locator('[data-act="menu"]').click();
   await page.locator('[data-act="signout"]').click();
-  await page.waitForSelector('[data-act="signin"]');
+  await page.waitForSelector('[data-act="passkey-in"]');
   check("sign out: token gone and generic title back", (await page.evaluate(() => localStorage.getItem("fc_token"))) !== TOKENS.mom && (await page.title()) === "Family Cookbook");
   await ctx.close();
 }
@@ -446,7 +451,7 @@ for (const size of SIZES) {
   await m.page.goto(BASE + joinPath, { waitUntil: "networkidle" });
   await m.page.waitForSelector('[data-act="open"]', { timeout: 10000 });
   const t = await text(m.page);
-  check("the link signs Mom straight in", /Banana Bread/.test(t) && !/Sign in with Bestly Cloud/.test(t));
+  check("the link signs Mom straight in", /Banana Bread/.test(t) && !/Sign in with Face ID/.test(t));
   check("the link never asks for a password", !/password/i.test(t));
   check("the URL is cleaned back to /cookbook", new URL(m.page.url()).pathname === "/cookbook" && !m.page.url().includes("t="), m.page.url());
   check("the session is saved for next time", (await m.page.evaluate(() => localStorage.getItem("fc_token"))) === TOKENS.mom);
@@ -456,7 +461,7 @@ for (const size of SIZES) {
   // the same link a second time is spent
   const m2 = await open(SIZES[0], "mom", { token: false, srv });
   await m2.page.goto(BASE + joinPath, { waitUntil: "networkidle" });
-  await m2.page.waitForSelector('[data-act="signin"]', { timeout: 10000 });
+  await m2.page.waitForSelector('[data-act="passkey-in"]', { timeout: 10000 });
   check("a used link cannot be used twice", /already used|expired/i.test(await text(m2.page)), (await text(m2.page)).slice(0, 160));
   await m2.ctx.close();
 
@@ -475,10 +480,62 @@ for (const size of SIZES) {
   await s.page.locator("details.more summary").click();
   await sleep(150);
   const st = await text(s.page);
-  check("sign-in screen never mentions a password", !/password/i.test(st), st.slice(0, 200));
+  check("sign-in screen never asks anyone to make a password", !/choose a password/i.test(st) && !/Bestly Cloud/.test(st), st.slice(0, 200));
+  check("sign-in screen says there is no password at all", /no password here/i.test(st));
   check("sign-in screen points at the link instead", /text you your link|your link/i.test(st));
   await shot(s.page, "signin-passwordless");
   await s.ctx.close();
+}
+
+/* ---------- 12. passkeys: set up Face ID, then sign in with it ---------- */
+{
+  console.log("\n== passkeys (phone 390)");
+  // RP id is bestly.tech, so the page has to be on that origin for a real ceremony
+  const srv = makeServer();
+  const { ctx, page, errors } = await open(SIZES[0], "mom", { offerPasskey: true, srv });
+  await page.route(/^https:\/\/www\.bestly\.tech\/cookbook/, (route) => route.fulfill({ status: 200, contentType: "text/html", body: html }));
+  await page.route(/^https:\/\/www\.bestly\.tech\/assets\//, async (route) => {
+    const r = await fetch(BASE + new URL(route.request().url()).pathname);
+    await route.fulfill({ status: 200, contentType: r.headers.get("content-type") || "text/plain", body: Buffer.from(await r.arrayBuffer()) });
+  });
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
+  });
+
+  await page.goto("https://www.bestly.tech/cookbook", { waitUntil: "networkidle" });
+  await page.waitForSelector('[data-act="passkey-add"]', { timeout: 10000 });
+  check("after the link, the phone offers Face ID", /Set up Face ID/.test(await text(page)));
+  await shot(page, "passkey-offer");
+  await page.locator('[data-act="passkey-add"]').first().click();
+  await page.waitForFunction(() => !document.querySelector('[data-act="passkey-add"]'), null, { timeout: 15000 });
+  check("the passkey is registered", srv.passkeys.length === 1 && srv.passkeys[0].role === "mom", JSON.stringify(srv.passkeys.map((p) => [p.role, p.alg])));
+  check("this phone remembers it has one", (await page.evaluate(() => localStorage.getItem("fc_pk"))) === "1");
+
+  // sign out, then back in with Face ID alone
+  await page.locator('[data-act="menu"]').click();
+  await page.locator('[data-act="signout"]').click();
+  await page.waitForSelector('[data-act="passkey-in"]');
+  check("signed out, and the only door is Face ID", (await page.locator('[data-act="signin"]').count()) === 0);
+  await shot(page, "passkey-signin");
+  await page.locator('[data-act="passkey-in"]').click();
+  await page.waitForSelector('[data-act="open"]', { timeout: 15000 });
+  check("Face ID signs Mom back in", /Banana Bread/.test(await text(page)));
+  check("the session is back", (await page.evaluate(() => localStorage.getItem("fc_token"))) === TOKENS.mom);
+  check("no console errors", errors.length === 0, errors.slice(0, 3).join(" | "));
+
+  // a passkey the server has never seen is refused
+  await dismissTip(page);
+  await page.locator('[data-act="menu"]').click();
+  await page.locator('[data-act="signout"]').click();
+  await page.waitForSelector('[data-act="passkey-in"]');
+  srv.passkeys.length = 0;
+  await page.locator('[data-act="passkey-in"]').click();
+  await sleep(1200);
+  check("an unknown passkey cannot get in", (await page.locator('[data-act="open"]').count()) === 0 && /did not check out|not set up/i.test(await text(page)), (await text(page)).slice(0, 160));
+  await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId });
+  await ctx.close();
 }
 
 await browser.close();

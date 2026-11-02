@@ -2,7 +2,8 @@
 // Rendering is plain strings into #view; clicks are caught once on the document (data-act) and routed to ACT.
 
 import { $, $$, IC, addDays, appIcon, clock, DAY, deep, esc, fd, ic, lineify, nowrapDom, nowrapify, nwx, words } from "./dom";
-import { ApiError, createInvite, fn as _fn, forgetPhotos, getToken, hydratePhotos, plainError, rpc, setToken, startSignIn } from "./api";
+import { ApiError, createInvite, fn as _fn, forgetPhotos, getToken, hydratePhotos, plainError, rpc, setToken } from "./api";
+import { PasskeyOff, addPasskey, canPasskey, hasPasskeyHere, signInWithPasskey } from "./passkeys";
 import { ACT, FORM, S, hooks, resetState, type Cap, type Photo, type Row } from "./state";
 import { PEOPLE, appTitle, bookTitle, canSeeId, manifestFor, otherReviewers, type Role } from "./people";
 import { acceptAll, finishedDoc, ingLine, parseAmountText, plainName, replaceWord, rt, setCtx, unsureList } from "./text";
@@ -27,10 +28,12 @@ function V_signin() {
   return '<div class="page signin enter">' + appIcon(92)
     + '<h1 id="h1" class="book" tabindex="-1">Family Cookbook</h1>'
     + '<p class="lead">Our family\'s recipe cards, kept safe. Only family can open it.</p>'
-    + '<button class="hero-btn" data-act="signin"' + (S.busy ? " disabled" : "") + ">" + ic("lock") + "<span>" + (S.busy ? "One moment" : "Sign in with Bestly Cloud") + "</span></button>"
+    + (canPasskey()
+      ? '<button class="hero-btn" data-act="passkey-in"' + (S.busy ? " disabled" : "") + ">" + ic("faceid") + "<span>" + (S.busy ? "One moment" : "Sign in with Face ID") + "</span></button>"
+      : '<p class="fine">This browser cannot do Face ID. Open the cookbook on your iPhone or iPad.</p>')
     + '<p class="msg" id="signin-msg" role="alert"' + (S.msg ? "" : " hidden") + ">" + esc(S.msg) + "</p>"
-    + '<p class="fine">Use your own Bestly Cloud account. After that, this phone stays signed in.</p>'
-    + '<details class="more first"><summary><span>First time here?</span>' + ic("down", 22) + '</summary><div class="inner"><p>Ask Jared to text you your link. Tap it on your phone and you are in: no account to make, nothing to remember.</p><p>The button above is for anyone who already has a Bestly Cloud account.</p></div></details></div>';
+    + '<p class="fine">There is no password here, and never will be.</p>'
+    + '<details class="more first"><summary><span>First time here?</span>' + ic("down", 22) + '</summary><div class="inner"><p>Ask Jared to text you your link. Tap it on your phone and you are in: no account to make, nothing to remember.</p><p>That phone then sets up Face ID on its own, so next time it is one tap.</p></div></details></div>';
 }
 
 /* ===== home ===== */
@@ -250,6 +253,16 @@ function tipSheet() {
     + '<ol class="tip-steps"><li><span class="ico">' + ic("share", 26) + "</span><span>Tap the Share button.</span></li><li><span class=\"ico\">" + ic("addsq", 26) + '</span><span>Tap "Add to Home Screen".</span></li><li><span class="ico">' + ic("check", 26) + '</span><span>Tap "Add".</span></li></ol>'
     + '<button class="btn primary big" data-act="tip-ok" data-autofocus>Got it</button></div>';
 }
+/** Straight after the link: this phone offers to set up Face ID, so that link is the last one it ever needs. */
+function maybePasskey(): boolean {
+  if (!canPasskey() || hasPasskeyHere()) return false;
+  openSheet('<div class="center"><p class="eyebrow">One time only</p><h2>Set up Face ID</h2>'
+    + '<p class="muted">Then this phone opens the cookbook with a look. No link, no password, nothing to remember.</p>'
+    + '<button class="btn primary big block" data-act="passkey-add" data-autofocus>' + ic("faceid", 26) + "Set up Face ID</button>"
+    + '<button class="btn ghost block" data-act="passkey-later">Not now</button></div>', "Set up Face ID");
+  return true;
+}
+
 function maybeTip() {
   const id = S.me!.id;
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || (navigator as any).standalone === true;
@@ -335,20 +348,37 @@ async function finishNew(t: HTMLElement, kind: "approved" | "review") {
 }
 
 Object.assign(ACT, {
-  async signin(t: HTMLElement) {
+  async "passkey-in"() {
     if (S.busy) return;
     S.busy = true; S.msg = ""; render(false);
-    try { location.assign(await startSignIn()); return; }
-    catch (e: any) { S.msg = (e instanceof ApiError && e.message && /\s/.test(e.message)) ? e.message : "Sign-in is not available right now. Please try again in a few minutes."; }
-    S.busy = false; render(false);
-    const b = $("#signin-msg"); if (b) b.focus?.();
+    try {
+      const r = await signInWithPasskey();
+      setToken(r.token); S.busy = false;
+      await enter(r.me);
+      return;
+    } catch (e) {
+      S.busy = false;
+      S.msg = e instanceof PasskeyOff ? ""
+        : e instanceof ApiError && e.message && /\s/.test(e.message) ? e.message
+          : "Face ID did not work. Ask Jared to text you a new link.";
+    }
+    render(false);
+    const b = $("#signin-msg"); if (b && S.msg) b.focus?.();
   },
+  async "passkey-add"(t: HTMLElement) {
+    await working(t, async () => {
+      try { await addPasskey(); closeSheet(true); toast("Face ID is set up on this phone."); }
+      catch (e) { if (!(e instanceof PasskeyOff)) throw e; }
+    });
+  },
+  "passkey-later"() { closeSheet(); },
   "close-sheet"() { closeSheet(); },
   scrim(t: HTMLElement, e: Event) { if (e.target === t) closeSheet(); },
   "tip-ok"() { closeSheet(); const h = $("#h1"); if (h) h.focus({ preventScroll: true }); },
   async menu() {
     await Promise.race([loadDeleted().catch(() => {}), new Promise((r) => setTimeout(r, 700))]);
     openSheet('<h2>' + esc(bookTitle(S.me)) + '</h2><p class="muted">Signed in as ' + esc(S.me!.name) + '.</p><div class="menu-list"><button class="btn" data-act="deleted" data-autofocus><span class="row">' + ic("trash", 22) + 'Recently Deleted</span><span class="cnt">' + S.deleted.length + '</span></button>'
+      + (canPasskey() && !hasPasskeyHere() ? '<button class="btn" data-act="passkey-add"><span class="row">' + ic("faceid", 22) + "Set up Face ID on this phone</span></button>" : "")
       + (isReviewer() ? '<button class="btn" data-act="invite"><span class="row">' + ic("people", 22) + "Invite someone</span></button>" : "")
       + '<button class="btn" data-act="signout"><span class="row">' + ic("out", 22) + "Sign out</span></button></div><button class=\"btn ghost block\" data-act=\"close-sheet\">Close</button>", "Menu");
   },
@@ -549,6 +579,6 @@ export async function enter(me: any) {
   await loadAll().catch((e: any) => { if (e && e.code === "not_signed_in") throw e; });
   startPolling();
   go("home");
-  maybeTip();
+  if (!maybePasskey()) maybeTip();
 }
 export { loadCaps };

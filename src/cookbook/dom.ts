@@ -53,6 +53,7 @@ export const IC: Record<string, string> = {
   note: '<path d="M6 4h9l4 4v12H6z"/><path d="M14.5 4v4.5H19"/>',
   image: '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10.5" r="1.8"/><path d="m4 17 5-4.5 3.5 3L15 13l5 4.5"/>',
   speaker: '<path d="M5 9.5h3l4-3.5v12l-4-3.5H5z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6M18 6.5a7 7 0 0 1 0 11"/>',
+  faceid: '<path d="M4 9V6.5A2.5 2.5 0 0 1 6.5 4H9M15 4h2.5A2.5 2.5 0 0 1 20 6.5V9M20 15v2.5a2.5 2.5 0 0 1-2.5 2.5H15M9 20H6.5A2.5 2.5 0 0 1 4 17.5V15"/><path d="M9 10v1.5M15 10v1.5M12 10v3.5h-1"/><path d="M9.5 16a4 4 0 0 0 5 0"/>',
 };
 export const ic = (n: string, s?: number) =>
   '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"' + (s ? ' style="width:' + s + "px;height:" + s + 'px"' : "") + ">" + IC[n] + "</svg>";

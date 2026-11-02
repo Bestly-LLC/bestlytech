@@ -10,6 +10,46 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const kitchen = JSON.parse(fs.readFileSync(path.join(here, "kitchen-fixture.json"), "utf8"));
 
 const NAMES = { mom: ["Mom", "Harris", false], jared: ["Jared", "Best", true], mariah: ["Mariah", "Best", true] };
+
+/* ---- passkeys: the same checks family-auth does, so the test exercises a real ceremony ---- */
+export const RP_ID = "bestly.tech";
+const b64url = (b) => Buffer.from(b).toString("base64url");
+const unb64url = (s) => new Uint8Array(Buffer.from(String(s || ""), "base64url"));
+const readClientData = (raw) => { try { return JSON.parse(Buffer.from(String(raw || ""), "base64url").toString("utf8")); } catch { return null; } };
+const sha256 = async (b) => new Uint8Array(await crypto.subtle.digest("SHA-256", b));
+/** WebAuthn signs with DER; Web Crypto verifies raw r||s. */
+function derToRaw(sig) {
+  if (sig[0] !== 0x30) return sig;
+  let i = 2;
+  if (sig[1] & 0x80) i = 2 + (sig[1] & 0x7f);
+  const read = () => {
+    if (sig[i++] !== 0x02) throw new Error("bad signature");
+    const len = sig[i++];
+    let v = sig.slice(i, i + len);
+    i += len;
+    while (v.length > 32 && v[0] === 0) v = v.slice(1);
+    const out = new Uint8Array(32);
+    out.set(v, 32 - v.length);
+    return out;
+  };
+  const r = read(), s = read();
+  return new Uint8Array([...r, ...s]);
+}
+async function verifyAssertion(pk, authenticatorData, clientDataJSON, signature) {
+  const authData = unb64url(authenticatorData), sig = unb64url(signature);
+  if (authData.length < 37) return false;
+  const rpHash = await sha256(new TextEncoder().encode(RP_ID));
+  if (!authData.slice(0, 32).every((x, n) => x === rpHash[n])) return false;
+  if ((authData[32] & 0x01) !== 0x01 || (authData[32] & 0x04) !== 0x04) return false;
+  const signed = new Uint8Array([...authData, ...(await sha256(unb64url(clientDataJSON)))]);
+  const spki = unb64url(pk.publicKey);
+  if (pk.alg === -7) {
+    const key = await crypto.subtle.importKey("spki", spki, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+    return crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, key, derToRaw(sig), signed);
+  }
+  const key = await crypto.subtle.importKey("spki", spki, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+  return crypto.subtle.verify({ name: "RSASSA-PKCS1-v1_5" }, key, sig, signed);
+}
 export const TOKENS = { mom: "m".repeat(64), jared: "j".repeat(64), mariah: "a".repeat(64) };
 const roleOf = (t) => Object.keys(TOKENS).find((k) => TOKENS[k] === t) || null;
 const can = (viewer, owner) => owner === "mom" || viewer !== "mom";
@@ -49,6 +89,8 @@ export function makeServer() {
   add("jared", { ...bananaBread, id: "secret-jared", title: "SECRETJARED Stew" }, { daysAgo: 5 });
   const caps = [];
   const invites = []; // one-time sign-in links: [{ t, role, used }]
+  const passkeys = [];    // registered passkeys: [{ id, role, publicKey, alg }]
+  const challenges = [];  // live WebAuthn challenges: [{ challenge, kind, role }]
   const log = [];     // every call the app made: [name, role, args]
   const uploads = [];
   let nextPhoto = 500;
@@ -145,6 +187,44 @@ export function makeServer() {
         invites.push({ t, role: b.role, used: false });
         return route.fulfill({ status: 200, contentType: "application/json", headers: h, body: JSON.stringify({ ok: true, url: new URL("/cookbook/join?t=" + t, page.url()).toString(), name: NAMES[b.role][0], days: 7 }) });
       }
+      // passkeys. The signature is checked for real here (same steps as family-auth), so the virtual
+      // authenticator in the test exercises the whole ceremony, DER signature and all.
+      if (b.op === "passkey_new") {
+        const role = roleOf(b.token);
+        if (!role) return route.fulfill({ status: 401, contentType: "application/json", headers: h, body: JSON.stringify({ ok: false, error: "not_signed_in" }) });
+        const challenge = b64url(crypto.getRandomValues(new Uint8Array(32)));
+        challenges.push({ challenge, kind: "register", role });
+        return route.fulfill({ status: 200, contentType: "application/json", headers: h, body: JSON.stringify({
+          ok: true, challenge, rpId: RP_ID, rpName: "Family Cookbook",
+          userId: b64url(new Uint8Array(16).fill(role.charCodeAt(0))), userName: NAMES[role][0] + " " + NAMES[role][1],
+          userDisplayName: NAMES[role][0], exclude: passkeys.filter((p) => p.role === role).map((p) => p.id), label: NAMES[role][0],
+        }) });
+      }
+      if (b.op === "passkey_save") {
+        const role = roleOf(b.token);
+        const cd = readClientData(b.clientDataJSON);
+        const i = challenges.findIndex((c) => c.challenge === cd?.challenge && c.kind === "register" && c.role === role);
+        if (!role || !cd || cd.type !== "webauthn.create" || i < 0) return route.fulfill({ status: 400, contentType: "application/json", headers: h, body: JSON.stringify({ ok: false, error: "That took too long. Try again." }) });
+        challenges.splice(i, 1);
+        passkeys.push({ id: b.id, role, publicKey: b.publicKey, alg: b.alg });
+        return route.fulfill({ status: 200, contentType: "application/json", headers: h, body: JSON.stringify({ ok: true }) });
+      }
+      if (b.op === "passkey_start") {
+        const challenge = b64url(crypto.getRandomValues(new Uint8Array(32)));
+        challenges.push({ challenge, kind: "login", role: null });
+        return route.fulfill({ status: 200, contentType: "application/json", headers: h, body: JSON.stringify({ ok: true, challenge, rpId: RP_ID }) });
+      }
+      if (b.op === "passkey_finish") {
+        const pk = passkeys.find((p) => p.id === b.id);
+        const cd = readClientData(b.clientDataJSON);
+        const i = challenges.findIndex((c) => c.challenge === cd?.challenge && c.kind === "login");
+        const bad = (error) => route.fulfill({ status: 403, contentType: "application/json", headers: h, body: JSON.stringify({ ok: false, error }) });
+        if (!pk || !cd || cd.type !== "webauthn.get" || i < 0) return bad("That did not check out. Try again.");
+        challenges.splice(i, 1);
+        if (!(await verifyAssertion(pk, b.authenticatorData, b.clientDataJSON, b.signature))) return bad("That did not check out. Try again.");
+        const me = NAMES[pk.role];
+        return route.fulfill({ status: 200, contentType: "application/json", headers: h, body: JSON.stringify({ ok: true, token: TOKENS[pk.role], me: { id: pk.role, name: me[0], last: me[1], reviewer: me[2], activeRoles: [] } }) });
+      }
       if (b.op === "link") {
         const inv = invites.find((x) => x.t === b.t && !x.used);
         if (!inv) return route.fulfill({ status: 400, contentType: "application/json", headers: h, body: JSON.stringify({ ok: false, error: "That link was already used or has expired. Ask Jared for a new one." }) });
@@ -162,5 +242,5 @@ export function makeServer() {
       return route.fallback();
     });
   }
-  return { install, recs, caps, invites, log, uploads, mb };
+  return { install, recs, caps, invites, passkeys, log, uploads, mb };
 }
