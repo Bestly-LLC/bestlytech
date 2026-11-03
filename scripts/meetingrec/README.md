@@ -141,3 +141,16 @@ it, and stops, transcribes and ingests it when the call empties. Every other roo
   `touch ~/MeetingRec/.auto-off` and the agent keeps working as 1.9 did. Backup of the 1.9.0 files: `~/MeetingRec/.backup-1.9.0-2026-10-18/`.
   1.10.3 alone: `git revert` its commit (it touches `agent.py`, `notetaker/notetaker.js`, the tests and this file only); the Mac keeps
   `agent.py.last-good` and `notetaker/notetaker.js.last-good` from the sync, and a failed boot self-test restores them by itself.
+
+## Google Meet (meet/, 2026-11-03)
+
+Scout Notetaker also records Google Meet calls. Files (live copies in `~/MeetingRec/meet/`, launchd job `tech.bestly.meetwatch`):
+
+- `meetwatch.py` - the watcher. Every 5 min it reads Meet invites out of `bestly_mail` (via the `meeting-recorder` edge function ops `meet_mail` / `meet_upsert`; parser `meetparse.py`) and Jared's own Google calendar (`meet-invite` edge function, action `sync`) into the `meet_watch` table.
+  About a minute before a call it starts `meetbot.js`. It also builds the transcript, files it (`meeting_recordings`, `source='google-meet'`, `room` = the meet code, `client_slug` 'centering-you' when the title says so; the existing debrief and to-do pipeline fires on the insert), uploads the audio to Nextcloud with `upload.sh` and deletes the local audio after a verified upload.
+- `meetbot.js` - a real (headed) Chrome driven over CDP joins as the guest "Scout Notetaker (recording)", mic and camera off, posts the recording notice in the Meet chat, turns on captions, mixes every remote audio track into one recording and scrapes the captions (speaker + text + time). Meet turns a headless or Playwright-launched Chrome away, hence the plain Chrome + CDP.
+- Speaker names: `talkscribe` transcribes the audio; each line takes the name of the caption utterance showing at that time. Captions-only transcript if the audio is empty.
+- IMPORTANT limit: Meet declines an anonymous guest unless the host allows "anyone with the link can ask to join" (the default for Calendar invites is off). The bot then exits 6 and the watcher asks `agent.py` (`~/MeetingRec/.start-request.json`) to record this Mac's audio instead (Start Recording.app, system audio + mic). That works when Jared is on the call from this Mac.
+- Watchdog: pi_jobs `meet_watch` heartbeat, alerts `recorder.meet.*` (owner Scout Notetaker; they ride the 7 AM digest): bot not in the call 3 min after start (relaunched once first), bot crashed (relaunched), no `meeting_recordings` row 45 min after the end (re-ingest from the saved files first), invite sync stale over 2 h.
+- Switches: `touch ~/MeetingRec/.meet-off` (all), `touch ~/MeetingRec/.meet-skip-<abc-defg-hij>` (one call), `meet_watch.skip = true`.
+- Tests: `python3 -m unittest tests.test_meetparse tests.test_meetwatch`.

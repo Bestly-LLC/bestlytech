@@ -14,7 +14,7 @@ Standard library only: it runs on the system python3.
 import base64, glob, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
 
-VERSION = "1.10.4"  # 1.10.4: Start Recording.app is fetched back from iCloud before every open (the full disk evicted it on 2026-10-18 and macOS answered "Resource deadlock avoided"); an open that still fails is reported to Scout at once. 1.10.3: the first audio of a call reaches the notetaker sooner (8 s hold, the notetaker starts early and in parallel with the recorder, faster looks at Talk). 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
+VERSION = "1.11.0"  # 1.11.0: the daily self-test never rings Jared (call notifications switched off for his seat in the test room; if that cannot be done it is skipped in quiet hours) and only runs 10 AM-8 PM; the Google Meet watcher (meet/meetwatch.py) can ask this agent to record locally (~/MeetingRec/.start-request.json / .stop-request); ingest passes source + client_slug from the recording meta. 1.10.4: Start Recording.app is fetched back from iCloud before every open (the full disk evicted it on 2026-10-18 and macOS answered "Resource deadlock avoided"); an open that still fails is reported to Scout at once. 1.10.3: the first audio of a call reaches the notetaker sooner (8 s hold, the notetaker starts early and in parallel with the recorder, faster looks at Talk). 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -744,6 +744,15 @@ def rollback():
 selftest_lock = threading.Lock()
 
 
+def selftest_hour_ok(hour):
+    """The daily self-test only runs 10 AM - 8 PM local (PT) time: never at night (the 2026-11-03 4 AM ring)."""
+    return 10 <= hour < 20
+
+
+def daily_selftest_window():
+    return selftest_hour_ok(datetime.now().hour)
+
+
 def run_selftest(reason, quiet=False):
     """One at a time: if a self-test is already running, wait for it and use its answer."""
     if not selftest_lock.acquire(blocking=False):
@@ -767,6 +776,14 @@ def _run_selftest(reason, quiet=False):
             subprocess.run([f"{HOME}/bin/ffmpeg", "-loglevel", "error", "-y", "-i", "/tmp/canary.aiff", "-ar", "48000", "-ac", "1", wav], check=True)
         token = talk("POST", "/room", {"roomType": 3, "roomName": "Scout self-test"})["token"]
         heal["test_room"] = token
+        # The room is created by Jared's own Talk account, so a call in it rings his devices (the 2026-11-03 4 AM ring). Switch call
+        # notifications off for his seat first; if that cannot be done, do not test during quiet hours (11 PM - 7 AM) at all.
+        try:
+            talk("POST", f"/room/{token}/notify-calls", {"level": 0})
+        except Exception as e:  # noqa: BLE001
+            log("self-test: could not switch call notifications off", e)
+            if datetime.now().hour >= 23 or datetime.now().hour < 7:
+                raise RuntimeError("could not silence Jared's call notifications and it is quiet hours, so the self-test was skipped")
         talk("POST", f"/room/{token}/participants", {"newParticipant": BOT_USER, "source": "users"})
         step = "test guest starts a call"
         tlog = open(f"{out}-tester.log", "w")
@@ -1023,10 +1040,10 @@ def heal_tick():
         heal["next_upkeep"] = now + 3600
         threading.Thread(target=upkeep_checks, daemon=True).start()
     last = (heal["selftest"] or {}).get("at")
-    if not reason and datetime.now().hour == 4 and (not last or now - datetime.fromisoformat(last).timestamp() > 20 * 3600):
+    if not reason and daily_selftest_window() and (not last or now - datetime.fromisoformat(last).timestamp() > 20 * 3600):
         reason = "daily check"
     if reason:
-        threading.Thread(target=run_selftest, args=(reason,), daemon=True).start()
+        threading.Thread(target=run_selftest, args=(reason, reason == "daily check"), daemon=True).start()
 
 
 # ── Auto-record: what to do ──────────────────────────────────────────────────
@@ -1763,6 +1780,11 @@ def ingest(name):
     room = recording_room(name)
     if room:
         body["room"] = room         # the database turns the room into the client (approval_clients.talk_room)
+    m_ = read_meta(name)
+    if m_.get("client_slug"):
+        body["client_slug"] = m_["client_slug"]     # a Google Meet fallback recording: no Talk room, the watcher knew the client
+    if m_.get("source") == "google-meet":
+        body["source"] = "google-meet"
     r = call(body, timeout=60)
     return bool(r.get("ok"))
 
@@ -1850,6 +1872,57 @@ def do_stop(cmd_id):
         notify("Recording stopped", "Transcript is ready in Bestly admin." if ok else (err or "Stop failed."),
                name, "Glass" if ok else "Basso")
     log("stop", name, "ok" if ok else err)
+
+
+LOCAL_REQ = f"{HOME}/.start-request.json"
+LOCAL_STOP = f"{HOME}/.stop-request"
+LOCAL_RES = f"{HOME}/.start-result.json"
+
+
+def parse_local_request(text):
+    """The Meet watcher's ask: {"roster": [...], "title": str, "client_slug": str|None, "source": "google-meet"|None}. None if unusable."""
+    try:
+        d = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(d, dict):
+        return None
+    roster = [r for r in (d.get("roster") or []) if isinstance(r, str) and re.fullmatch(r"[a-z0-9-]{1,32}", r)]
+    cs = d.get("client_slug")
+    cs = cs if isinstance(cs, str) and re.fullmatch(r"[a-z0-9-]{2,40}", cs) else None
+    return {"roster": roster, "title": str(d.get("title") or "")[:200], "client_slug": cs, "source": "google-meet" if d.get("source") == "google-meet" else None}
+
+
+def local_request_tick():
+    """Google Meet watcher fallback (meet/meetwatch.py): record this Mac's audio for a Meet call the notetaker could not join."""
+    if os.path.exists(LOCAL_REQ) and not recording_pid() and not busy["stage"] and not stop_running_elsewhere():
+        req = parse_local_request(read(LOCAL_REQ))
+        try:
+            os.remove(LOCAL_REQ)
+        except OSError:
+            pass
+        if req:
+            def go():
+                try:
+                    ok, result, err = do_start({"roster": req["roster"], "title": req["title"]})
+                except Exception as e:  # noqa: BLE001
+                    ok, result, err = False, None, str(e)
+                if ok:
+                    kv = {k: v for k, v in (("client_slug", req["client_slug"]), ("source", req["source"])) if v}
+                    if kv:
+                        write_meta((result or {}).get("name") or read(f"{HOME}/.current"), **kv)
+                with open(LOCAL_RES, "w") as f:
+                    json.dump({"ok": bool(ok), "name": (result or {}).get("name"), "error": err, "at": time.time()}, f)
+                log("local start request:", "ok" if ok else f"failed: {err}")
+            threading.Thread(target=go, daemon=True).start()
+    if os.path.exists(LOCAL_STOP):
+        try:
+            os.remove(LOCAL_STOP)
+        except OSError:
+            pass
+        if recording_pid() and not busy["stage"]:
+            log("local stop request")
+            threading.Thread(target=do_stop, args=(None,), daemon=True).start()
 
 
 def handle(cmd):
@@ -2045,6 +2118,10 @@ def main():
                 if auto.get("tick_err") != str(e):
                     auto["tick_err"] = str(e)
                     log("auto-record tick failed", traceback.format_exc()[-600:])
+            try:
+                local_request_tick()
+            except Exception as e:  # noqa: BLE001
+                log("local request tick failed", e)
             try:
                 notetaker_tick()
                 heal_tick()

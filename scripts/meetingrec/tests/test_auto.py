@@ -21,6 +21,7 @@ with open(f"{TMP}/MeetingRec/.agent-key", "w") as _f:
     _f.write("test-key")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import agent  # noqa: E402
+agent.daily_selftest_window = lambda: False      # the real hour must not decide whether a test run starts a daily self-test
 
 H = agent.HOME
 REC = agent.REC
@@ -1514,6 +1515,29 @@ class StartAppTests(unittest.TestCase):
         W.cat_works = False
         agent.check_start_app()
         self.assertTrue([t for (k, kd, t, _s) in W.health if k == "start_app" and kd == "problem" and "stuck in iCloud" in (t or "")])
+
+
+
+class MeetFallbackTests(unittest.TestCase):
+    """1.11.0: the daily self-test window, and the Meet watcher's ask for a local recording."""
+
+    def test_daily_self_test_only_between_ten_am_and_eight_pm(self):
+        self.assertFalse(agent.selftest_hour_ok(4))
+        self.assertFalse(agent.selftest_hour_ok(9))
+        self.assertTrue(agent.selftest_hour_ok(10))
+        self.assertTrue(agent.selftest_hour_ok(19))
+        self.assertFalse(agent.selftest_hour_ok(20))
+        self.assertFalse(agent.selftest_hour_ok(23))
+
+    def test_parse_local_request(self):
+        r = agent.parse_local_request(json.dumps({"roster": ["eli-cooper", "Bad Name", "sam-cauthon"], "title": "Intro", "client_slug": "centering-you", "source": "google-meet"}))
+        self.assertEqual(r["roster"], ["eli-cooper", "sam-cauthon"])
+        self.assertEqual(r["client_slug"], "centering-you")
+        self.assertEqual(r["source"], "google-meet")
+        self.assertIsNone(agent.parse_local_request("not json"))
+        self.assertIsNone(agent.parse_local_request("[1]"))
+        self.assertIsNone(agent.parse_local_request(json.dumps({"client_slug": "Bad Slug!"}))["client_slug"])
+
 
 if __name__ == "__main__":
     unittest.main()
