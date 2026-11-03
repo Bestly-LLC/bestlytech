@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PartnerMark } from "@/components/PartnerMark";
+import { AgendaPanel } from "@/pages/partner/PartnerLabs";
 
 interface Row {
   id: string; name: string; email: string; roster_name: string; link_sent_at: string | null; meetings: number;
@@ -121,6 +122,8 @@ export default function AdminPartners() {
                 <p className="mt-2 text-xs text-white/45">Good for 7 days, and it can be opened more than once. On first open they choose a password. Making a new link replaces this one.</p>
               </div>
             )}
+
+            <AgendaPanel roster={p.roster_name} me="jared" admin labs={null} className="mt-4" />
           </section>
         );
       })}
