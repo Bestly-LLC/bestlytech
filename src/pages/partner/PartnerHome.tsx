@@ -40,7 +40,6 @@ import { BellButton, BellSheet, ConnectClaude, useNextMeeting, usePartnerNotifs,
 import { SCOUT_IDEAS, PartnerScout, ScoutAlert, usePartnerScout, type ScoutState } from "./PartnerScout";
 import { ProjectSheet, ProjectsButton, ProjectsNav } from "./PartnerProjects";
 import { AvaDemoSheet } from "./PartnerAva";
-import { useCallDock, roomOf, type CallUi } from "./useCallDock";
 import { TodoContextSheet, callLabel } from "@/components/TodoContextSheet";
 import { AgendaPanel, LabsSheet, openLabs, useLabs, type LabsItem } from "./PartnerLabs";
 
@@ -266,9 +265,6 @@ export function PartnerHome({ session }: { session: Session }) {
   const callUrl = partner?.call_url ?? "https://cloud.bestly.tech/call/sm33w3fu";
   // The next meeting on the calendar with Eli, if there is one; else his standing room.
   const joinUrl = nextMtg?.join_url ?? callUrl;
-  // The call window (BestlyDock) opens right here instead of a new tab. A meeting booked in a different room keeps its own link.
-  const call = useCallDock({ on: partner !== undefined, isJared: admin, callUrl });
-  const docked = call.enabled && (!nextMtg || roomOf(nextMtg.join_url) === roomOf(callUrl));
   const savePlace = useCallback((p: Place) => {
     supabase.rpc("partner_set_place" as never, { p_lat: p.lat, p_lon: p.lon, p_label: p.label, p_precise: !p.approx } as never).then(() => {});
   }, []);
@@ -361,11 +357,11 @@ export function PartnerHome({ session }: { session: Session }) {
           </div>
         </div>
         <div className="border-t border-white/[0.06] pt-4 bento:border-white/5">
-          <CallLink docked={docked} call={call} href={joinUrl}
-            className="flex min-h-11 w-full flex-col items-center justify-center rounded-xl bg-emerald-500 px-3 py-2 text-center text-[0.95rem] font-semibold text-[#052E1F] transition hover:bg-emerald-400 active:scale-[0.98]">
-            <span className="flex items-center gap-2"><Video className="h-[18px] w-[18px]" /> {docked && call.text ? call.text : nextMtg ? "Join next meeting" : docked ? "Start the call" : "Join our call"}</span>
-            {nextMtg && !(docked && call.text) && <span className="text-xs font-medium opacity-85">{whenLabel(nextMtg.start)}</span>}
-          </CallLink>
+          <a href={joinUrl} target="_blank" rel="noreferrer"
+            className="flex min-h-11 flex-col items-center justify-center rounded-xl bg-emerald-500 px-3 py-2 text-center text-[0.95rem] font-semibold text-[#052E1F] transition hover:bg-emerald-400 active:scale-[0.98]">
+            <span className="flex items-center gap-2"><Video className="h-[18px] w-[18px]" /> {nextMtg ? "Join next meeting" : "Join our call"}</span>
+            {nextMtg && <span className="text-xs font-medium opacity-85">{whenLabel(nextMtg.start)}</span>}
+          </a>
         </div>
       </aside>
 
@@ -378,10 +374,10 @@ export function PartnerHome({ session }: { session: Session }) {
           <div className="flex items-center gap-1">
             <ProjectsButton />
             <BellButton notifs={notifs} onClick={() => setBellOpen(true)} />
-            <CallLink docked={docked} call={call} href={joinUrl} aria-label={nextMtg ? `Join next meeting, ${whenLabel(nextMtg.start)}` : "Join our call"}
+            <a href={joinUrl} target="_blank" rel="noreferrer" aria-label={nextMtg ? `Join next meeting, ${whenLabel(nextMtg.start)}` : "Join our call"}
               className="inline-flex h-9 items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 text-sm font-semibold text-[#052E1F] active:scale-95">
               <Video className="h-4 w-4" /> Call
-            </CallLink>
+            </a>
             <button onClick={toggleTheme} aria-label={bento ? "Switch to dark mode" : "Switch to light mode"} className="grid h-10 w-10 place-items-center rounded-full text-white/60 hover:bg-white/[0.06]">
               {bento ? <Moon className="h-[18px] w-[18px]" /> : <Sun className="h-[18px] w-[18px]" />}
             </button>
@@ -408,7 +404,7 @@ export function PartnerHome({ session }: { session: Session }) {
           )}
 
           {tab === "home" && (
-            <HomeTab reload={load} openShortcut={openShortcut} shortcutBadge={(id) => (id === "studio" ? notifs.unread : id === "talk" ? talkUnread : 0)} roster={partner?.roster_name ?? "eli"} labs={labs.items} canCheck={!!partner && !viewAs} first={first} company={partner?.company ?? null} wxFixed={wxFixed} wxNote={wxNote} onWxPlace={viewAs || !partner ? undefined : savePlace} callUrl={callUrl} joinUrl={joinUrl} call={call} docked={docked} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} openCloud={setCloud} talkUnread={talkUnread} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
+            <HomeTab reload={load} openShortcut={openShortcut} shortcutBadge={(id) => (id === "studio" ? notifs.unread : id === "talk" ? talkUnread : 0)} roster={partner?.roster_name ?? "eli"} labs={labs.items} admin={admin && !viewAs} canCheck={!!partner && !viewAs} first={first} company={partner?.company ?? null} wxFixed={wxFixed} wxNote={wxNote} onWxPlace={viewAs || !partner ? undefined : savePlace} callUrl={callUrl} joinUrl={joinUrl} nextMtg={nextMtg ?? null} studioUnread={notifs.unread} onConnect={() => setConnectOpen(true)} openCloud={setCloud} talkUnread={talkUnread} mine={mine} done={done} jareds={jareds} me={me} tick={tick} meetings={meetings} mail={mail}
               files={files} pipe={pipe} go={setTab} openCall={(m) => { setTab("calls"); setOpenCall(m); }}
               openMail={(m) => { setTab("mail"); setOpenMail(m); }} ask={askScout} scout={scout} />
           )}
@@ -451,21 +447,15 @@ export function PartnerHome({ session }: { session: Session }) {
 
 /* ───────── Home ───────── */
 
-/** The Join buttons: the call window when it is ready, else the plain Nextcloud link in a new tab (the old behaviour). */
-function CallLink({ docked, call, href, className, children, ...rest }: { docked: boolean; call: CallUi; href: string; className: string; children: ReactNode; "aria-label"?: string }) {
-  if (docked) return <button type="button" onClick={call.open} className={className} aria-label={call.aria}>{children}</button>;
-  return <a href={href} target="_blank" rel="noreferrer" className={className} aria-label={rest["aria-label"]}>{children}</a>;
-}
-
 function HomeTab(props: {
-  reload: () => void | Promise<void>; canCheck: boolean; roster: string; labs: LabsItem[] | null;
+  reload: () => void | Promise<void>; canCheck: boolean; roster: string; labs: LabsItem[] | null; admin: boolean;
   openShortcut: (sc: Shortcut) => void; shortcutBadge: (id: string) => number;
   wxFixed: Place | null; wxNote?: string; onWxPlace?: (p: Place) => void;
-  first: string; company: string | null; callUrl: string; joinUrl: string; call: CallUi; docked: boolean; nextMtg: NextEvent | null; studioUnread: number; onConnect: () => void; openCloud: (v: CloudView) => void; talkUnread: number; mine: Todo[]; done: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
+  first: string; company: string | null; callUrl: string; joinUrl: string; nextMtg: NextEvent | null; studioUnread: number; onConnect: () => void; openCloud: (v: CloudView) => void; talkUnread: number; mine: Todo[]; done: Todo[]; jareds: Todo[]; me: string; tick: (t: Todo, s: "done" | "open") => void;
   meetings: Meeting[] | null; mail: MailRow[] | null; files: (Att & { mail: MailRow })[]; pipe: { deals: any[]; leads: any[] } | null;
   go: (t: Tab) => void; openCall: (m: Meeting) => void; openMail: (m: MailRow) => void; ask: (q?: string) => void; scout: ScoutState;
 }) {
-  const { reload, canCheck, roster, labs, openShortcut, shortcutBadge, wxFixed, wxNote, onWxPlace, first, company, callUrl, joinUrl, call, docked, nextMtg, studioUnread, onConnect, openCloud, talkUnread, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
+  const { reload, canCheck, roster, labs, admin, openShortcut, shortcutBadge, wxFixed, wxNote, onWxPlace, first, company, callUrl, joinUrl, nextMtg, studioUnread, onConnect, openCloud, talkUnread, mine, done, jareds, tick, meetings, mail, files, pipe, go, openCall, openMail, ask, scout } = props;
   // "Check if it's done" for his own to-dos: check only, never closes anything for him
   const pc = usePartnerCheck(reload, mine as CheckRow[]);
   // Tapping a to-do opens where it came from: the call, and the moment it was said.
@@ -508,26 +498,17 @@ function HomeTab(props: {
 
         {/* Two actions, one height, capsules: full width stacked on a phone, side by side above that */}
         <div className="relative mt-6 flex flex-col gap-2 sm:flex-row">
-          <CallLink docked={docked} call={call} href={joinUrl}
+          <a href={joinUrl} target="_blank" rel="noreferrer"
             className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-emerald-500 px-6 text-[1rem] font-semibold text-[#052E1F] shadow-[0_8px_24px_-10px_rgba(16,185,129,0.7)] transition hover:bg-emerald-400 active:scale-[0.97]">
             <Video className="h-5 w-5 shrink-0" />
-            {docked && call.text
-              ? <span className="whitespace-nowrap">{call.text}</span>
-              : <>
-                <span className="whitespace-nowrap">{nextMtg ? <>Join <span className="hidden sm:inline">next </span>meeting</> : docked ? "Start the call" : "Join our call"}</span>
-                {nextMtg && <span className="whitespace-nowrap font-medium opacity-75">· {whenLabel(nextMtg.start)}</span>}
-              </>}
-          </CallLink>
+            <span className="whitespace-nowrap">{nextMtg ? <>Join <span className="hidden sm:inline">next </span>meeting</> : "Join our call"}</span>
+            {nextMtg && <span className="whitespace-nowrap font-medium opacity-75">· {whenLabel(nextMtg.start)}</span>}
+          </a>
           <button onClick={() => ask()}
             className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-white/[0.09] px-6 text-[1rem] font-semibold text-white transition hover:bg-white/[0.14] active:scale-[0.97] bento:bg-[#111114] bento:text-[#fff] bento:hover:bg-[#2a2a2e]">
             <Binoculars className="h-5 w-5" /> Ask Scout
           </button>
         </div>
-        {docked && (
-          <p className="mt-2 px-1 text-sm text-white/60 bento:text-black/60">
-            Having trouble? <a href={joinUrl} target="_blank" rel="noreferrer" className="font-medium underline underline-offset-2">Open the call in Bestly Cloud</a>
-          </p>
-        )}
         <div className="relative mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {stats.map(({ label, value, icon: Icon, tab }) => {
             const body = (<>
@@ -673,7 +654,7 @@ function HomeTab(props: {
         </div>
         <div className="contents lg:col-span-1 lg:flex lg:flex-col lg:gap-5">
         {/* Agenda: tops the right column (next to Join), right under the to-dos on a phone */}
-        <AgendaPanel roster={roster} me={props.me || "jared"} labs={labs} className="order-2 lg:order-none"
+        <AgendaPanel roster={roster} me={props.me || "jared"} labs={labs} admin={admin} className="order-2 lg:order-none"
           when={nextMtg ? `Next meeting: ${whenLabel(nextMtg.start)}` : null} />
         <Panel title="Ask Scout" icon={Binoculars} tone="order-2 lg:order-none bg-gradient-to-br from-[#0A84FF]/15 to-transparent">
           {(scout.thinking || scout.unread > 0) && (

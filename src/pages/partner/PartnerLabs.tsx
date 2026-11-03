@@ -22,7 +22,15 @@ import { Check, ChevronDown, ChevronRight, ExternalLink, FlaskConical, ListCheck
 
 export type Stage = "idea" | "testing" | "building" | "ready";
 export interface LabsItem { id: string; name: string; tagline: string; detail: string; stage: Stage; links: { label: string; href: string }[]; sort: number; active: boolean }
-export interface AgendaItem { id: string; roster: string; title: string; note: string; labs_id: string | null; added_by: string; status: "open" | "discussed" | "removed"; created_at: string; discussed_at: string | null }
+export type AgendaKind = "shipped" | "decide" | "question" | "fyi";
+export interface AgendaItem {
+  id: string; roster: string; title: string; note: string; labs_id: string | null; added_by: string;
+  status: "prep" | "open" | "discussed" | "removed"; created_at: string; discussed_at: string | null;
+  source: "manual" | "auto"; kind: AgendaKind | null; project: string | null;
+}
+
+const KIND_LABEL: Record<AgendaKind, string> = { shipped: "Shipped", decide: "Needs a decision", question: "Question", fyi: "FYI" };
+const KIND_DOT: Record<AgendaKind, string> = { shipped: "bg-emerald-400", decide: "bg-amber-400", question: "bg-sky-400", fyi: "bg-white/40" };
 
 const STAGES: { id: Stage; label: string; dot: string }[] = [
   { id: "idea", label: "Idea", dot: "bg-white/40" },
@@ -54,8 +62,8 @@ export function useLabs() {
 
 const card = "rounded-[1.5rem] border border-white/[0.07] bg-white/[0.035] bento:border-transparent bento:bg-[#fff] bento:shadow-[0_1px_2px_rgba(17,17,20,0.04)]";
 
-export function AgendaPanel({ roster, me, when, labs, className }: {
-  roster: string; me: string; when?: string | null; labs: LabsItem[] | null; className?: string;
+export function AgendaPanel({ roster, me, when, labs, admin, className }: {
+  roster: string; me: string; when?: string | null; labs: LabsItem[] | null; admin: boolean; className?: string;
 }) {
   const [rows, setRows] = useState<AgendaItem[] | null>(null);
   const [adding, setAdding] = useState(false);
@@ -64,7 +72,8 @@ export function AgendaPanel({ roster, me, when, labs, className }: {
   const [showDone, setShowDone] = useState(false);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from("partner_agenda" as never).select("id, roster, title, note, labs_id, added_by, status, created_at, discussed_at")
+    const { data, error } = await supabase.from("partner_agenda" as never)
+      .select("id, roster, title, note, labs_id, added_by, status, created_at, discussed_at, source, kind, project")
       .eq("roster" as never, roster as never).neq("status" as never, "removed" as never)
       .order("sort").order("created_at");
     if (error) { reportToScout("partner-agenda", `Agenda list failed: ${error.message}`); setRows([]); return; }
@@ -95,6 +104,8 @@ export function AgendaPanel({ roster, me, when, labs, className }: {
     setTitle(""); setAdding(false); load();
   };
 
+  const prep = (rows ?? []).filter((r) => r.status === "prep")
+    .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
   const open = (rows ?? []).filter((r) => r.status === "open");
   const done = (rows ?? []).filter((r) => r.status === "discussed")
     .sort((a, b) => String(b.discussed_at ?? "").localeCompare(String(a.discussed_at ?? "")));
@@ -103,6 +114,44 @@ export function AgendaPanel({ roster, me, when, labs, className }: {
 
   return (
     <section className={cn(card, "p-5", className)}>
+      {admin && prep.length > 0 && (
+        <div className="mb-4 border-b border-white/[0.06] pb-4 bento:border-white/5">
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-white/90">
+            <ListChecks className="h-4 w-4 text-[#0A84FF]" />Your prep
+          </h2>
+          <ul className="-mx-1 flex max-h-80 flex-col gap-2 overflow-y-auto px-1 pb-2
+            [mask-image:linear-gradient(to_bottom,black_calc(100%-24px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {prep.map((a) => {
+              const k = a.kind ?? "fyi";
+              return (
+                <li key={a.id} className="rounded-2xl bg-white/[0.04] p-3.5 ring-1 ring-white/[0.06] bento:bg-[#F3F2EE] bento:ring-transparent">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="flex flex-wrap items-center gap-1.5 text-xs text-white/60">
+                        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", KIND_DOT[k])} />{KIND_LABEL[k]}
+                        {a.project && <span className="whitespace-nowrap">· {a.project}</span>}
+                      </p>
+                      <p className="mt-1 text-[0.95rem] leading-snug">{a.title}</p>
+                      {a.note && <p className="mt-0.5 text-sm text-white/60">{a.note}</p>}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button type="button" onClick={() => set(a, "open")}
+                        className="inline-flex h-8 items-center whitespace-nowrap rounded-full bg-[#0A84FF] px-3 text-xs font-semibold text-[#fff] transition hover:bg-[#0A84FF]/90 active:scale-95">
+                        Add to agenda
+                      </button>
+                      <button type="button" aria-label={`Skip “${a.title}”`} onClick={() => set(a, "removed")}
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-white/40 transition hover:bg-white/[0.06] hover:text-white active:scale-90">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
       <div className="mb-1 flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold"><ListChecks className="h-4 w-4 text-white/60" />For our next call</h2>
         <button type="button" onClick={() => setAdding((v) => !v)} aria-expanded={adding}
