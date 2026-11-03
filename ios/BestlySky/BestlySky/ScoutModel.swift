@@ -290,7 +290,7 @@ final class ScoutModel: ObservableObject {
         do {
             let rows = try await ScoutREST.get("admin_chat_messages?select=id,role,body,created_at&thread_id=eq.\(t)&order=created_at.asc&limit=500")
             guard t == threadId else { return }
-            let parsed: [ScoutMsg] = rows.compactMap { r in
+            let parsed: [ScoutMsg] = rows.compactMap { r -> ScoutMsg? in
                 guard let id = r.str("id"), let role = r.str("role"), let body = r.str("body"),
                       let at = AdminFmt.date(r.str("created_at")) else { return nil }
                 return ScoutMsg.make(id: id, role: role, body: body, created: at)
