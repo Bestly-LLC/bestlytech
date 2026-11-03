@@ -299,12 +299,12 @@ body.cooking .rx .timers{bottom:calc(196px + env(safe-area-inset-bottom,0px))}
 .rx .nut-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .rx .nut-per{font-size:14.5px}
 .rx .nut-cal{display:flex;align-items:baseline;gap:8px}
-.rx .nut-cal b{font-family:var(--font-num);font-size:40px;font-weight:720;letter-spacing:-.02em}
+.rx .nut-cal b{font-family:var(--font-num);font-size:40px;font-weight:720;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .rx .nut-cal span{font-size:14.5px;color:var(--muted)}
 .rx .nut-rows{display:grid;gap:10px}
 .rx .nut-row{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center}
 .rx .nut-row .lb{font-size:15.5px}
-.rx .nut-row .val{font-family:var(--font-num);font-weight:650;font-size:15.5px}
+.rx .nut-row .val{font-family:var(--font-num);font-weight:650;font-size:15.5px;font-variant-numeric:tabular-nums}
 .rx .nut-row .bar{grid-column:1/-1}
 .rx .nut-more{background:none;min-height:44px;padding:4px 0 0;font-weight:650;color:var(--amt);align-self:flex-start}
 .rx .nut-foot{font-size:14px;color:var(--muted)}
@@ -312,7 +312,7 @@ body.cooking .rx .timers{bottom:calc(196px + env(safe-area-inset-bottom,0px))}
 .rx .ate-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface2);border-radius:16px;padding:8px 8px 8px 16px}
 .rx .ate-row b{font-size:17px}
 .rx .nut-sum{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:15px}
-.rx .nut-sum b{color:var(--fg);font-family:var(--font-num)}
+.rx .nut-sum b{color:var(--fg);font-family:var(--font-num);font-variant-numeric:tabular-nums}
 .rx .nut-setup{margin:0;padding:0;list-style:none;border-top:1px solid var(--line)}
 .rx .nut-setup li{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);font-size:15.5px;line-height:1.4}
 .rx .nut-setup .n{width:24px;height:24px;border-radius:12px;background:var(--accent-soft);color:var(--amt);display:grid;place-items:center;font:700 12px var(--font-num)}

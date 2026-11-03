@@ -439,6 +439,8 @@ for (const size of SIZES) {
   check("invite sheet offers the other two, never yourself", !/Jared/.test(await j.page.locator("#l-sheet").innerText()));
   await j.page.locator('[data-act="invite-make"][data-id="mom"]').click();
   await j.page.waitForSelector("#invlink");
+  const smallSheet = await bigEnough(j.page, "#l-sheet button, #l-sheet a, #l-sheet input");
+  check("invite sheet targets are 44px or more", smallSheet.length === 0, JSON.stringify(smallSheet.slice(0, 5)));
   const url = (await j.page.locator("#invlink").innerText()).trim();
   check("the link is a one-tap /cookbook/join link", /\/cookbook\/join\?t=[0-9a-f]{64}$/.test(url), url);
   check("the sheet says how long it lasts", /7 days/.test(await j.page.locator("#l-sheet").innerText()));
@@ -507,6 +509,8 @@ for (const size of SIZES) {
   await page.goto("https://www.bestly.tech/cookbook", { waitUntil: "networkidle" });
   await page.waitForSelector('[data-act="passkey-add"]', { timeout: 10000 });
   check("after the link, the phone offers Face ID", /Set up Face ID/.test(await text(page)));
+  const smallPk = await bigEnough(page, "#l-sheet button, #l-sheet a");
+  check("Face ID sheet targets are 44px or more", smallPk.length === 0, JSON.stringify(smallPk.slice(0, 5)));
   await shot(page, "passkey-offer");
   await page.locator('[data-act="passkey-add"]').first().click();
   await page.waitForFunction(() => !document.querySelector('[data-act="passkey-add"]'), null, { timeout: 15000 });

@@ -1,16 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Nutrition } from "@/lib/recipes/types";
 
 const DV = { protein_g: 50, carbs_g: 275, fat_g: 78, fiber_g: 28, sugar_g: 50, sodium_mg: 2300 } as const;
 const pct = (v: number, dv: number) => Math.max(0, Math.min(100, Math.round((v / dv) * 100)));
 const isIOS = () => typeof navigator !== "undefined" && (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
 
+/** The bar fills once, on the frame after it mounts, so the width transition has something to travel. */
 function Row({ label, v, unit, dv }: { label: string; v: number; unit: string; dv: number }) {
+  const [w, setW] = useState(0);
+  useEffect(() => { const f = requestAnimationFrame(() => setW(pct(v, dv))); return () => cancelAnimationFrame(f); }, [v, dv]);
   return (
     <div className="nut-row">
       <span className="lb">{label}</span>
       <span className="val nw">{Math.round(v)} {unit}</span>
-      <div className="bar"><i style={{ width: pct(v, dv) + "%" }} /></div>
+      <div className="bar"><i style={{ width: w + "%" }} /></div>
     </div>
   );
 }

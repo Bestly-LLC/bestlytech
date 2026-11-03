@@ -8,7 +8,7 @@ import { ACT, FORM, S, hooks, resetState, type Cap, type Photo, type Row } from 
 import { PEOPLE, appTitle, bookTitle, canSeeId, manifestFor, otherReviewers, type Role } from "./people";
 import { acceptAll, finishedDoc, ingLine, parseAmountText, plainName, replaceWord, rt, setCtx, unsureList } from "./text";
 import { closeSheet, hideToast, openSheet, toast } from "./ui";
-import { nutritionHtml } from "./nutrition";
+import { nutritionHtml, paintNutritionBars } from "./nutrition";
 import { isReviewer, loadAll, loadCaps, loadDeleted, loadRows, loadReview, fetchRec, startPolling, stopPolling } from "./data";
 import { V_recipe, recipeMounted, recipeLeft, closeCook, renderTimers } from "./recipe";
 import { closeCam, openCam, paintCam, resend } from "./camera";
@@ -206,6 +206,7 @@ export function render(enter?: boolean) {
   hydratePhotos(v);
   if (S.view === "home") paintList();
   if (S.view === "recipe") recipeMounted();
+  paintNutritionBars(v);
   syncChrome();
 }
 export function go(view: typeof S.view, vp?: typeof S.vp) {
@@ -219,7 +220,7 @@ export function go(view: typeof S.view, vp?: typeof S.vp) {
   const h = $("#h1");
   if (h) h.focus({ preventScroll: true });
 }
-function paintTyped() { const c = curCheck(); if (!c) return; const t = $("#typed"); t.innerHTML = typedCheck(c.r); nowrapDom(t); }
+function paintTyped() { const c = curCheck(); if (!c) return; const t = $("#typed"); t.innerHTML = typedCheck(c.r); nowrapDom(t); paintNutritionBars(t); }
 export function paintPhoto() {
   let photos: Photo[] | undefined, capId: string | undefined, title = "";
   if (S.view === "check") { const c = curCheck(); if (!c) return; photos = c.photos; capId = c.capId; title = c.r.title; }

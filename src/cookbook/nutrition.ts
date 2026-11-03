@@ -1,7 +1,7 @@
 // Family Cookbook: the Nutrition card (Recipe screen + compact on Check) and "Log to Health".
 // Per-serving numbers never change with the servings stepper, so this reads straight off the doc/draft, no scaler involved.
 
-import { $, esc, ic, nwx } from "./dom";
+import { $, $$, esc, ic, nwx } from "./dom";
 import { ACT, S } from "./state";
 import { closeSheet, openSheet, toast } from "./ui";
 import type { Nutrition } from "@/lib/recipes/types";
@@ -21,7 +21,14 @@ function pluralLabel(label: string, n: number): string {
 }
 const pct = (v: number, dv: number) => Math.max(0, Math.min(100, Math.round((v / dv) * 100)));
 const row = (label: string, v: number, unit: string, dv: number) =>
-  '<div class="nut-row"><span class="lb">' + label + '</span><span class="val">' + nwx(Math.round(v) + " " + unit) + '</span><div class="nut-bar"><i style="width:' + pct(v, dv) + '%"></i></div></div>';
+  '<div class="nut-row"><span class="lb">' + label + '</span><span class="val">' + nwx(Math.round(v) + " " + unit) + '</span><div class="nut-bar"><i data-w="' + pct(v, dv) + '"></i></div></div>';
+
+/** The bars fill once, on the frame after the screen is drawn. Reduced motion turns the travel off, not the bar. */
+export function paintNutritionBars(root?: ParentNode | null) {
+  const bars = $$(".nut-bar i[data-w]", root || document) as HTMLElement[];
+  if (!bars.length) return;
+  requestAnimationFrame(() => bars.forEach((b) => { b.style.width = (b.dataset.w || "0") + "%"; }));
+}
 
 /** `compact` is the Check screen (quiet "Working out nutrition…" placeholder when missing); the Recipe screen hides the card until it exists. */
 export function nutritionHtml(n: Nutrition | null | undefined, opts: { compact?: boolean; health?: boolean; recipeId?: string } = {}): string {
@@ -38,7 +45,7 @@ export function nutritionHtml(n: Nutrition | null | undefined, opts: { compact?:
     + '<p class="nut-per">' + per + "</p>"
     + '<div class="nut-cal"><b>' + Math.round(p.kcal) + "</b><span>Calories</span></div>"
     + '<div class="nut-rows">' + rows + "</div>"
-    + (opts.compact ? "" : '<button class="nut-more" type="button" data-act="nut-more" aria-expanded="false">Show more</button><div class="nut-extra" id="nut-extra">' + extra + "</div>")
+    + (opts.compact ? "" : '<button class="nut-more" type="button" data-act="nut-more" aria-expanded="false" aria-controls="nut-extra">Show more</button><div class="nut-extra" id="nut-extra">' + extra + "</div>")
     + '<p class="nut-foot">' + foot + "</p>"
     + (n.low_confidence ? '<p class="nut-foot warn">Rough estimate: some ingredients were hard to read.</p>' : "")
     + (showHealth ? '<button class="btn primary block nut-health" type="button" data-act="health" data-id="' + esc(opts.recipeId || "") + '">' + HEART + "Log to Health</button>" : "")
@@ -123,5 +130,6 @@ Object.assign(ACT, {
     const on = extra.classList.toggle("on");
     t.textContent = on ? "Show less" : "Show more";
     t.setAttribute("aria-expanded", String(on));
+    if (on) paintNutritionBars(extra); // they were display:none, so they have not filled yet
   },
 });

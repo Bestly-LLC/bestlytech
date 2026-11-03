@@ -17,6 +17,8 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, SB, { auth: { persistSess
 
 const IDP = "https://cloud.bestly.tech";
 const SITE = "https://www.bestly.tech";
+// A link sits in a text message until someone has a quiet evening. Seven days was a developer's idea of "soon".
+const INVITE_DAYS = 30;
 const REDIRECT = `${SITE}/cookbook/callback`;
 const ORIGINS = new Set(["https://www.bestly.tech", "https://bestly.tech", "http://localhost:4173", "http://localhost:5173", "http://127.0.0.1:4173"]);
 const cors = (req: Request) => ({
@@ -205,12 +207,13 @@ Deno.serve(async (req) => {
     const { data: m } = await db.from("family_members").select("id, name, status").eq("role", role).maybeSingle();
     if (!m || m.status === "paused") return J(req, { ok: false, error: "That person is not on the family list." }, 404);
     const t = rand(32);
-    const { error } = await db.from("family_invites").insert({ token_hash: await sha256hex(t), member_id: m.id, created_by: mine?.id ?? null });
+    const expires = new Date(Date.now() + INVITE_DAYS * 864e5).toISOString();
+    const { error } = await db.from("family_invites").insert({ token_hash: await sha256hex(t), member_id: m.id, created_by: mine?.id ?? null, expires_at: expires });
     if (error) { await log(false, "invite", error.message, m.id); return J(req, { ok: false, error: "Could not make that link. Try again." }, 500); }
     await db.from("family_invites").delete().lt("expires_at", new Date().toISOString());
     if (m.status === "pending") await db.from("family_members").update({ status: "invited", invited_at: new Date().toISOString() }).eq("id", m.id);
     await log(true, "invite", `link for ${role}`, m.id);
-    return J(req, { ok: true, url: `${SITE}/cookbook/join?t=${t}`, name: m.name, days: 7 });
+    return J(req, { ok: true, url: `${SITE}/cookbook/join?t=${t}`, name: m.name, days: INVITE_DAYS });
   }
 
   // Tapping that link: one use, then it is spent.
