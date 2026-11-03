@@ -37,8 +37,16 @@ type Air = {
   model?: string | null; maker?: string | null; area?: string | null; close?: boolean;
   from?: string | { iata?: string; city?: string } | null; to?: string | { iata?: string; city?: string } | null;
   news?: { station?: string; call?: string } | null; police?: string | null;
+  sq?: string | null; v2?: V2 | null;   // FLIGHTV2: label ladder from the wall's enrichment (Hestia), shared with the Sky tab
 };
-type Feed = { list: Air[]; at: number; home: [number, number]; radius: number; source: "wall" | "feed"; focus: string | null; error: string | null; fetchedAt: number };
+/** Compact enrichment the wall shares: l label, s sublabel, t tier, n notable[], e emergency, ty type code, tn type name, rg registration, ag age, fr/to route, fc/tc cities, ph photo thumb, pc photo credit. */
+type V2 = { l?: string; s?: string; t?: string; n?: string[]; e?: string | { squawk?: string } | null; ty?: string; tn?: string; rg?: string; ag?: number; fr?: string; to?: string; fc?: string; tc?: string; ph?: string; pc?: string; hel?: boolean };
+/** A plane the 15 mi poller sees beyond the drawn radius (off-map edge pills). */
+type Far = { h: string; l?: string | null; lat: number; lon: number; alt?: number | null; d?: number | null; hd?: number | null; e?: unknown; t?: string };
+const v2Em = (a: Air) => { const e = a.v2?.e; const sq = typeof e === "string" ? e : e?.squawk ?? ""; return a.v2?.e ? (/^\d{4}$/.test(String(sq)) ? String(sq) : "EMERGENCY") : ["7700", "7600", "7500"].includes(String(a.sq)) ? String(a.sq) : ""; };
+/** Height cue: 1 = low (big, bright), 0 = high (small, faint); smooth over 0 to 45,000 ft. */
+const hz = (alt?: number | null) => 1 - Math.pow(Math.min(1, Math.max(0, (alt ?? 8000) / 45000)), 0.62);
+type Feed = { far?: Far[]; list: Air[]; at: number; home: [number, number]; radius: number; source: "wall" | "feed"; focus: string | null; error: string | null; fetchedAt: number };
 
 const HOME: [number, number] = [34.0835, -118.3698];
 const NB = " ";
@@ -170,6 +178,7 @@ export default function Sky() {
   const [, setFrame] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const disp = useRef<Map<string, Disp>>(new Map());
+  const trails = useRef<Map<string, { t: number; x: number; y: number }[]>>(new Map());   // FLIGHTV2: fading trail samples
   // Heading self-check (Jared 2026-10-13): each plane's real direction of travel, measured from its own positions
   // (>= 0.15 mi apart). Used when the feed has no track, and to catch a nose that disagrees with where it actually moves.
   const moved = useRef<Map<string, { lat: number; lon: number; brg: number | null }>>(new Map());
@@ -212,6 +221,7 @@ export default function Sky() {
         setFeed({
           list: d.data.list ?? [], at: (d.data.at ?? Date.now() / 1000) * 1000, home: d.data.home ?? HOME,
           radius: d.radius_mi ?? d.data.radius_mi ?? 15, source: "wall", error: null, fetchedAt: Date.now(),
+          far: (d.data as unknown as { far?: Far[] }).far ?? [],
           focus: f?.hex && (!f.until || f.until > Date.now()) ? f.hex : null,
         });
         setErr(null);
@@ -442,6 +452,12 @@ export default function Sky() {
     return { a, d, i: info(a) };
   });
   for (const k of disp.current.keys()) if (!seen.has(k)) disp.current.delete(k);
+  for (const { a, d } of drawn) {   // FLIGHTV2: one trail sample every 1.5 s, last 40
+    const arr = trails.current.get(a.hex) ?? [];
+    if (!arr.length || now - arr[arr.length - 1].t > 1500) { arr.push({ t: now, x: d.x, y: d.y }); if (arr.length > 40) arr.shift(); }
+    trails.current.set(a.hex, arr);
+  }
+  for (const k of trails.current.keys()) if (!seen.has(k)) trails.current.delete(k);
   const inView = drawn.filter(({ d }) => Math.hypot(d.x, d.y) <= radius * 1.08);
   const closest = [...inView].sort((p, q) => Math.hypot(p.d.x, p.d.y) - Math.hypot(q.d.x, q.d.y))[0];
   const focusHex = (pick && inView.some((p) => p.a.hex === pick) ? pick : null) ?? (feed?.focus && inView.some((p) => p.a.hex === feed.focus) ? feed.focus : null) ?? closest?.a.hex ?? null;
@@ -515,7 +531,7 @@ export default function Sky() {
   const homeShown = Math.hypot(homeMi.x, homeMi.y) <= radius * 1.04;
 
   // Name tags: the focus plane first, then nearest first; each tries four spots and skips if all collide.
-  type Tag = { hex: string; x: number; y: number; w: number; h: number; text: string; sub: string | null; col: string; isF: boolean };
+  type Tag = { hex: string; x: number; y: number; w: number; h: number; text: string; sub: string | null; col: string; isF: boolean; nt: boolean; em: string; hz: number };
   const tags: Tag[] = [];
   {
     const order = [...inView].sort((p, q) => (p.a.hex === focusHex ? -1 : q.a.hex === focusHex ? 1 : Math.hypot(p.d.x, p.d.y) - Math.hypot(q.d.x, q.d.y)));
@@ -524,14 +540,16 @@ export default function Sky() {
       Math.hypot(r.x + r.w / 2 - 500, r.y + r.h / 2 - 505) < 30 * u;
     for (const { a, d, i } of order) {
       const isF = a.hex === focusHex;
-      const text = `${i.who}${flightNo(a) && i.kind === "airline" ? " " + (flightNo(a) ?? "").replace(/^[A-Z0-9]{2}/, "") : ""}`;
-      const sub = isF ? [fmtAlt(a.alt), mph(a.gs)].filter(Boolean).join(" · ") : null;
-      const w = Math.max(text.length * fs * 0.6, (sub?.length ?? 0) * fs * 0.52) + fs * 1.3;
-      const h = fs * (isF ? 2.9 : 1.65);
+      const v = a.v2, em = v2Em(a), nt = !em && !!(v?.n && v.n.length);
+      const text = v?.l ?? `${i.who}${flightNo(a) && i.kind === "airline" ? " " + (flightNo(a) ?? "").replace(/^[A-Z0-9]{2}/, "") : ""}`;
+      const ty = v ? (v.t === "airline" ? v.ty || v.tn : v.tn || v.ty) : "";
+      const sub = v ? (em ? `${/^\d{4}$/.test(em) ? "SQUAWK " + em : "EMERGENCY"} · ${fmtAlt(a.alt)}` : [ty, fmtAlt(a.alt)].filter(Boolean).join(" · ")) : isF ? [fmtAlt(a.alt), mph(a.gs)].filter(Boolean).join(" · ") : null;
+      const w = Math.max((text.length + (nt ? 9 : 0)) * fs * 0.6, (sub?.length ?? 0) * fs * 0.5) + fs * 1.6;
+      const h = fs * (v || isF ? 2.9 : 1.65);
       const x = X(d.x), y = Y(d.y), gap = 16 * u;
       const spots = [[x + gap, y - h / 2], [x - gap - w, y - h / 2], [x - w / 2, y + gap], [x - w / 2, y - gap - h]];
       const spot = spots.find(([sx, sy]) => sx > 4 && sx + w < 996 && sy > 4 && sy + h < 996 && !hit({ x: sx, y: sy, w, h })) ?? (isF ? spots[0] : null);
-      if (spot) tags.push({ hex: a.hex, x: spot[0], y: spot[1], w, h, text, sub, col: KINDS[i.kind]?.[1] ?? "#fff", isF });
+      if (spot) tags.push({ hex: a.hex, x: spot[0], y: spot[1], w, h, text, sub, col: KINDS[i.kind]?.[1] ?? "#fff", isF, nt, em, hz: hz(a.alt) });
     }
   }
 
@@ -760,14 +778,25 @@ export default function Sky() {
           {inView.map(({ a, d, i }) => {
             const x = X(d.x), y = Y(d.y);
             const col = KINDS[i.kind]?.[1] ?? "#fff";
-            const low = a.alt == null ? 0.5 : Math.min(1, Math.max(0, 1 - a.alt / 14000));
-            const sc = (0.9 + low * 0.9) * Math.max(1, u * 0.7);
+            const hzv = hz(a.alt);
+            const sc = (0.55 + hzv * 0.95) * Math.max(1, u * 0.7);
+            const mps = ((a.gs ?? 0) * 1.15078) / 3600;
+            const ahead = Array.from({ length: 9 }, (_, n) => { const sec = (120 * (n + 1)) / 9; return { x: X(d.x + Math.sin((d.hdg * Math.PI) / 180) * mps * sec), y: Y(d.y + Math.cos((d.hdg * Math.PI) / 180) * mps * sec), f: 1 - n / 9 }; });
+            const tr = trails.current.get(a.hex) ?? [];
+            const trPts = [...tr.map((q) => [X(q.x), Y(q.y)] as const), [x, y] as const];
             const isF = a.hex === focusHex;
             // Drawn inside the map's rotate(mapUp) group, so the plain compass heading already points the right way on
             // screen (adding mapUp here again double-rotated every plane; fixed 2026-10-13).
             const screenHdg = d.hdg;
             return (
-              <g key={a.hex} onClick={() => setPick(a.hex)} style={{ cursor: "pointer" }}>
+              <g key={a.hex} onClick={() => setPick(a.hex)} style={{ cursor: "pointer" }} opacity={0.5 + 0.5 * hzv}>
+                {trPts.length > 3 && (
+                  <>
+                    <defs><linearGradient id={`tr-${a.hex}`} gradientUnits="userSpaceOnUse" x1={trPts[0][0]} y1={trPts[0][1]} x2={x} y2={y}><stop offset="0" stopColor={col} stopOpacity={0} /><stop offset="1" stopColor={col} stopOpacity={0.55} /></linearGradient></defs>
+                    <polyline points={trPts.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(" ")} fill="none" stroke={`url(#tr-${a.hex})`} strokeWidth={3 * sc} strokeLinecap="round" strokeLinejoin="round" />
+                  </>
+                )}
+                {(a.gs ?? 0) > 40 && ahead.map((q, n) => <circle key={n} cx={q.x} cy={q.y} r={Math.max(1.4, 2.6 * sc * (0.45 + q.f * 0.55))} fill={col} fillOpacity={0.7 * q.f} />)}
                 {isF && (
                   <g>
                     <circle cx={x} cy={y} r={24 * sc} fill="none" stroke={col} strokeOpacity={0.5} strokeWidth={2}>
@@ -802,9 +831,28 @@ export default function Sky() {
             const tcx = t.x + t.w / 2, tcy = t.y + t.h / 2;
             return (
               <g key={`tag-${t.hex}`} onClick={() => setPick(t.hex)} style={{ cursor: "pointer" }} transform={`rotate(${-mapUp} ${tcx} ${tcy})`}>
-                <rect x={t.x} y={t.y} rx={t.h / (t.isF ? 3.2 : 2)} height={t.h} width={t.w} fill="#0b1530" fillOpacity={0.96} stroke={t.col} strokeOpacity={t.isF ? 0.9 : 0.45} strokeWidth={t.isF ? 1.8 : 1.2} />
-                <text x={t.x + fs * 0.65} y={t.y + fs * 1.15} fontSize={fs} fontWeight={700} filter="url(#tag-shadow)" style={{ fill: '#ffffff', fontSize: fs, fontWeight: 700 }}>{t.text}</text>
-                {t.sub && <text x={t.x + fs * 0.65} y={t.y + fs * 2.4} fontSize={fs * 0.88} fontWeight={500} filter="url(#tag-shadow)" style={{ fill: '#c8deff', fontSize: fs * 0.88, fontWeight: 500 }}>{t.sub}</text>}
+                <rect x={t.x} y={t.y} rx={t.h / 2.1} height={t.h} width={t.w} fill={t.em ? "#c4281f" : "#0e1524"} fillOpacity={(t.em ? 0.94 : 0.8) * (0.6 + 0.4 * t.hz)}
+                  stroke={t.nt ? "#ffc43d" : t.em ? "#ff6a5e" : "#ffffff"} strokeOpacity={t.nt || t.em ? 0.95 : t.isF ? 0.8 : 0.28} strokeWidth={t.nt ? 3 : t.isF ? 1.8 : 1.2}
+                  style={{ filter: t.em ? "drop-shadow(0 0 10px rgba(255,69,58,.8))" : t.nt ? "drop-shadow(0 0 9px rgba(255,196,64,.6))" : `drop-shadow(0 0 ${4 + 8 * t.hz}px rgba(120,170,255,${0.18 + 0.3 * t.hz}))` }}>
+                  {t.em && <animate attributeName="fill-opacity" values=".94;.62;.94" dur="2.6s" repeatCount="indefinite" />}
+                </rect>
+                <text x={t.x + fs * 0.8} y={t.y + fs * 1.3} fontSize={fs} fontWeight={800} style={{ fill: "#ffffff", fontSize: fs, fontWeight: 800 }}>
+                  {t.text}{t.nt && <tspan dx={fs * 0.6} fontSize={fs * 0.6} fontWeight={800} style={{ fill: "#ffd666", fontSize: fs * 0.6 }}>NOTABLE</tspan>}
+                </text>
+                {t.sub && <text x={t.x + fs * 0.8} y={t.y + fs * 2.45} fontSize={fs * 0.82} fontWeight={700} style={{ fill: "#ffffff", fontSize: fs * 0.82, fontWeight: 700 }}>{t.sub}</text>}
+              </g>
+            );
+          })}
+          {/* FLIGHTV2: planes the 15 mi poller sees beyond the drawn radius, pinned at the edge with an arrow and the distance */}
+          {(feed?.far ?? []).filter((f) => f.d != null && f.d > radius * 1.04 && f.d <= 15.5 && !drawn.some((q) => q.a.hex === f.h)).slice(0, 4).map((f) => {
+            const p = toMi(f.lat, f.lon, home), dist = Math.hypot(p.x, p.y) || 1, k = (radius * 0.9) / dist;
+            const cx = X(p.x * k), cy = Y(p.y * k), ang = (Math.atan2(-p.y, p.x) * 180) / Math.PI;
+            const txt = `${f.l ?? "Aircraft"} · ${(f.d ?? 0).toFixed(1)}${NB}mi`, w = txt.length * fs * 0.58 + fs * 3.2, h = fs * 2;
+            return (
+              <g key={`far-${f.h}`} transform={`rotate(${-mapUp} ${cx} ${cy})`}>
+                <rect x={cx - w / 2} y={cy - h / 2} width={w} height={h} rx={h / 2} fill="#0e1524" fillOpacity={0.8} stroke="#78aaff" strokeOpacity={0.5} strokeWidth={1.2} style={{ filter: "drop-shadow(0 0 8px rgba(120,170,255,.4))" }} />
+                <text x={cx - w / 2 + fs * 0.9} y={cy + fs * 0.36} fontSize={fs * 0.9} fontWeight={800} style={{ fill: "#ffffff", fontSize: fs * 0.9, fontWeight: 800 }}>{txt}</text>
+                <path d="M-4 -6 L4 0 L-4 6" fill="none" stroke="#fff" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" transform={`translate(${cx + w / 2 - fs * 1.1} ${cy}) rotate(${ang + mapUp}) scale(${fs / 12})`} />
               </g>
             );
           })}
@@ -923,7 +971,11 @@ export default function Sky() {
                 {KINDS[fi.kind]?.[0]}{flightNo(fa) ? ` · Flight ${flightNo(fa)}` : fa.reg ? ` · ${fa.reg}` : ""}
                 {feed?.focus === fa.hex && <span className="ml-auto rounded-full bg-[#FF453A]/20 px-2 py-0.5 text-[11px] text-[#FF8A80]">On the wall</span>}
               </div>
-              <div className="mt-1 text-[22px] font-bold leading-tight text-white">{fi.who}</div>
+              {fa.v2?.ph && <div className="relative mt-2 h-24 w-full overflow-hidden rounded-2xl"><img src={fa.v2.ph} alt="" className="h-full w-full object-cover" /><div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-1.5 pt-5 text-[12px] font-semibold text-white">Photo: {fa.v2.pc ?? "planespotters.net"}</div></div>}
+              {(v2Em(fa) || (fa.v2?.n && fa.v2.n.length > 0)) && <div className={cn("mt-2 inline-block rounded-full px-3 py-1 text-[12px] font-extrabold tracking-[0.1em]", v2Em(fa) ? "bg-[#d62b21] text-white" : "bg-[#ffc43d] text-[#2a1c00]")}>{v2Em(fa) ? (/^\d{4}$/.test(v2Em(fa)) ? `EMERGENCY ${v2Em(fa)}` : "EMERGENCY") : "NOTABLE"}</div>}
+              <div className="mt-1 text-[22px] font-bold leading-tight text-white">{fa.v2?.l ?? fi.who}</div>
+              {fa.v2 && <div className="mt-0.5 text-[14px] font-semibold text-white">{[fa.v2.tn ?? fa.v2.ty, fa.v2.rg, fa.v2.ag != null ? `${Math.round(fa.v2.ag)}${NB}yrs` : ""].filter(Boolean).join(" · ")}</div>}
+              {(v2Em(fa) || (fa.v2?.n && fa.v2.n.length > 0)) && <div className="mt-1 text-right text-[12px] font-semibold text-white">Sky Sync</div>}
               {route && <div className="mt-0.5 text-[15px] text-white/80">{route}</div>}
               <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                 {((): [string, string][] => {
@@ -944,7 +996,7 @@ export default function Sky() {
                   </div>
                 ))}
               </div>
-              {(fa.model || fa.t || fa.area) && <div className="mt-2 truncate text-[13px] text-white/55">{[fa.maker && fa.model ? `${fa.maker} ${fa.model}` : fa.model || fa.t, fa.area ? `over ${fa.area}` : ""].filter(Boolean).join(" · ")}</div>}
+              {(fa.model || fa.t || fa.area) && <div className="mt-2 text-[13px] text-white">{[fa.maker && fa.model ? `${fa.maker} ${fa.model}` : fa.model || fa.t, fa.area ? `over ${fa.area}` : ""].filter(Boolean).join(" · ")}</div>}
             </div>
           ) : (
             <div className="pointer-events-auto rounded-2xl bg-black/45 px-4 py-3 text-[15px] text-white/75 ring-1 ring-white/10">
@@ -954,7 +1006,9 @@ export default function Sky() {
           )}
           {/* key, desktop only */}
           <div className="pointer-events-auto hidden rounded-2xl bg-black/45 px-3.5 py-2.5 text-[12px] text-white/70 ring-1 ring-white/10 lg:block">
-            <div className="mb-1 font-semibold text-white/85">Key · bigger = flying lower</div>
+            <div className="mb-1 font-semibold text-white">Key · bigger and brighter = flying lower</div>
+            <div className="mb-1 flex items-end gap-3 text-white"><span className="flex items-end gap-1"><Plane className="h-5 w-5" aria-hidden />Low</span><span className="flex items-end gap-1 opacity-75"><Plane className="h-4 w-4" aria-hidden />Mid</span><span className="flex items-end gap-1 opacity-50"><Plane className="h-3 w-3" aria-hidden />High</span><span>· dotted line = next 2 min</span></div>
+            <div className="mb-1 flex flex-wrap items-center gap-2"><span className="rounded-full bg-[#ffc43d] px-2 py-0.5 text-[10px] font-extrabold tracking-wider text-[#2a1c00]">NOTABLE</span><span className="rounded-full bg-[#d62b21] px-2 py-0.5 text-[10px] font-extrabold text-white">7700</span><span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold text-white">Edge pill = off the map ›</span></div>
             {Object.entries(KINDS).filter(([k]) => k !== "unknown").map(([k, [name, col]]) => (
               <div key={k} className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ background: col }} aria-hidden />{name}</div>
             ))}

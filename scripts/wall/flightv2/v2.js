@@ -88,10 +88,10 @@ function v2Key(){ const kEl=$('#wingKey'); if(!kEl) return; const ph=Math.floor(
   kEl.innerHTML=h; }
 const _rk=renderKey; renderKey=function(){ const on=_rk(); try{ if(on) v2Key(); }catch(e){ V2.errs++; } return on; };
 // ----- 8: buses (Metro 10, 4, 210, DASH Fairfax, WeHo CityLine) -----
-const V2BL=[['10','Metro 10'],['4','Metro 4'],['210','Metro 210'],['FAIRFAX','DASH Fairfax'],['CITYLINE','WeHo CityLine']];
-function v2LineKey(r){ const s=(String(r.line||'')+' '+String(r.name||'')).toUpperCase(); if(/CITY/.test(s)) return 'CITYLINE'; if(/DASH|FAIRFAX/.test(s)) return 'FAIRFAX'; const m=String(r.line||r.name||'').match(/\b(210|10|4)\b/); return m?m[1]:null; }
+const V2BL=[['10','Metro 10'],['4','Metro 4'],['105','Metro 105'],['FAIRFAX','DASH Fairfax'],['CITYLINE','WeHo CityLine']];
+function v2LineKey(r){ const s=(String(r.line||'')+' '+String(r.name||'')).toUpperCase(); if(/CITY/.test(s)) return 'CITYLINE'; if(/DASH|FAIRFAX/.test(s)) return 'FAIRFAX'; const m=String(r.line||r.name||'').match(/\b(105|10|4)\b/); return m?m[1]:null; }
 function v2BusRows(){ const b=V2.bus; if(!b||!b.lines) return []; const now=Date.now(), by={};
-  b.lines.forEach(r=>{ const k=v2LineKey(r); if(!k) return; if(k==='210'&&!/LAX/i.test((r.toward||'')+' '+(r.direction||'')+' '+(r.headsign||''))) return;
+  b.lines.forEach(r=>{ const k=v2LineKey(r); if(!k) return; if(k==='105'&&!/LAX/i.test((r.toward||'')+' '+(r.direction||'')+' '+(r.headsign||''))) return;
     const arr=(r.arrivals||[]).filter(a=>a.eta>now-30000); const first=arr.length?arr[0].eta:Infinity; if(!by[k]||first<by[k].first) by[k]={r,k,arr,first}; });
   return Object.values(by).sort((a,b)=>a.first-b.first); }
 function v2BusHtml(){ const rows=v2BusRows(), now=Date.now(); if(!rows.length) return '';
@@ -99,7 +99,7 @@ function v2BusHtml(){ const rows=v2BusRows(), now=Date.now(); if(!rows.length) r
   const badge=x=>x.k==='CITYLINE'?`<div class="rb" style="--c:#E63540"><img src="${CITY_LOGO}" alt=""></div>`:`<div class="rb" style="--c:${x.k==='FAIRFAX'?'#8A2528':'#E16710'}">${x.k==='FAIRFAX'?'DASH':x.k}</div>`;
   full.slice(0,4).forEach(x=>{ const r=x.r, m0=Math.max(0,Math.round((x.arr[0].eta-now)/60000)), m1=x.arr[1]?Math.max(0,Math.round((x.arr[1].eta-now)/60000)):null, live=!!x.arr[0].live;
     let lv=''; if(r.walk_min!=null&&r.walk_min<=20){ const c=x.arr.find(a=>a.eta-r.walk_min*60000>now-30000); lv=c?(c.eta-r.walk_min*60000<=now+30000?'Leave now':'Leave by '+v2t12(c.eta-r.walk_min*60000)):''; } else if(r.walk_min!=null) lv=r.walk_min+NBP+'min away';
-    out.push(`<div class="br">${badge(x)}<div class="st"><b>${esc(r.stop||'')}</b><span>${esc(x.k==='210'?'Toward LAX':(r.direction||''))}${x.k==='CITYLINE'?' · Schedule':''}</span></div><div class="et"><b>${m0<1?'Now':m0+NBP+'min'}</b><span>${m1!=null?'then '+m1+NBP+'min':(live?'Live':'Schedule')}</span></div><div class="lv"><i class="${live?'':'s'}"></i>${esc(lv)}</div></div>`); });
+    out.push(`<div class="br">${badge(x)}<div class="st"><b>${esc(r.stop||'')}</b><span>${esc(x.k==='105'?(r.toward||r.direction||'Toward LAX'):(r.direction||''))}${x.k==='CITYLINE'?' · Schedule':''}</span></div><div class="et"><b>${m0<1?'Now':m0+NBP+'min'}</b><span>${m1!=null?'then '+m1+NBP+'min':(live?'Live':'Schedule')}</span></div><div class="lv"><i class="${live?'':'s'}"></i>${esc(lv)}</div></div>`); });
   quiet.slice(0,Math.max(0,5-out.length)).forEach(x=>{ out.push(`<div class="br q">${badge(x)}<div class="st"><b>${esc(x.r.name||'')}</b></div><div class="et">${x.arr[0]?'Next '+v2t12(x.arr[0].eta):'No bus soon'}</div></div>`); });
   return `<div class="v2bus"><div class="bh"><span>Buses near you</span><small>${V2.bus.metro_live?'Live':'Schedule'}</small></div>${out.join('')}<div class="v2sign">Sky Sync</div></div>`; }
 function pinBus(){ const el=$('#wingBus'); if(!el||!S.wing||S.wing.length!==4) return; const g=homo(WW,WH,S.wing);
