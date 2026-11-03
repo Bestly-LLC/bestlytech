@@ -1,0 +1,5 @@
+(async()=>{ document.body.classList.remove('fx-hw','fx-hs','fx-hk','w2-fxi','black'); const wait=ms=>new Promise(r=>setTimeout(r,ms));
+ const set=window.__PLSET||['Channel Islands Aviation','Channel Islands Aviation INC']; window.__S3L=set; await wait(9000); window.__mnOff=true; window.__scHold('flight'); await wait(4000);
+ const wf=document.getElementById('wingFlight'), c=wf.firstElementChild, r=c.getBoundingClientRect(), fl=wf.querySelector('.v2fl'), sub=wf.querySelector('.v2sub'), mt=wf.querySelector('.v2mt'), top=wf.querySelector('.v2top');
+ const st=wf.querySelector('.ft-st'); const sr=st&&st.getBoundingClientRect();
+ return JSON.stringify({bbn:wf.classList.contains('bbn'),s3n:wf.classList.contains('s3n'),s3b:top&&top.classList.contains('s3b'),fl:fl&&fl.textContent,fs:fl&&getComputedStyle(fl).fontSize,lines:fl&&Math.round(fl.scrollHeight/parseFloat(getComputedStyle(fl).lineHeight)),sub:sub&&[sub.textContent,getComputedStyle(sub).display],mt:mt&&mt.textContent,card:[r.left,r.top,r.right,r.bottom].map(Math.round),ch:[c.clientHeight,c.scrollHeight],bb:window.__bb(),wingHit:window.__tgb().wingHit,errs:window.__s3pl(),v2:window.__v2().errs,s:wf._s3}); })()
