@@ -9,7 +9,8 @@ def rep(old,new,cnt=1):
     global s
     assert s.count(old)==cnt,(old[:70],s.count(old))
     s=s.replace(old,new)
-rep('</style></head>', css+'\n</style></head>')
+m=re.search(r'</style>\s*</head>',s); assert m, 'no style/head'
+s=s[:m.start()]+css+'\n'+s[m.start():]
 rep('  (function airPoll(){ Promise.resolve().then(pullAir)', js+'\n  (function airPoll(){ Promise.resolve().then(pullAir)')
 rep('txt=I.short, feat=o===featNow','txt=v2Tag(o,I,I.short), hh=o._v2?60:34, feat=o===featNow')
 rep('      if(o.tagEl.textContent!==txt) o.tagEl.textContent=txt;\n','')
