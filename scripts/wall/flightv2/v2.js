@@ -50,7 +50,7 @@ function v2Card(d,o,v){ const a=o.a, t=d.t, rt=v.route||{}, em=v2em(v), nt=!em&&
   t.sign=(em||nt)?'Sky Sync':'';
   t.fl2=v.label;
   t.meta=[v.type_name||v.type_code,v.registration,(v.age_years!=null?Math.round(v.age_years)+NBP+'yrs':'')].filter(Boolean).join(' · ');
-  if(v.photo&&v.photo.thumb) d.ph={src:v.photo.thumb,cap:'Photo: '+(v.photo.credit||'planespotters.net')};
+  if(v.photo&&v.photo.thumb) d.ph={src:v.photo.thumb,cap:/^photo/i.test(v.photo.credit||'')?v.photo.credit:'Photo: '+(v.photo.credit||'planespotters.net')};
   if(!(d.shape==='route')&&rt.from&&rt.to){ d.shape='route'; t.from=rt.from; t.to=rt.to; t.fromN=rt.from_city||''; t.toN=rt.to_city||''; d.p=.5; }
   else if(d.shape==='route'){ t.fromN=t.fromN||rt.from_city||''; t.toN=t.toN||rt.to_city||''; }
   let lands='';
