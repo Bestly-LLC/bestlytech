@@ -5,5 +5,5 @@
     ]
   },
   "appclips": { "apps": ["PV65ABS5W9.app.arrivekey.host.Clip"] },
-  "webcredentials": { "apps": ["PV65ABS5W9.app.arrivekey.host"] }
+  "webcredentials": { "apps": ["PV65ABS5W9.app.arrivekey.host", "PV65ABS5W9.tech.bestly.sky"] }
 }

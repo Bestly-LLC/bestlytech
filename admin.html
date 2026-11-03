@@ -82,6 +82,8 @@
           }
           return;
         }
+        // The Bestly Admin iPhone app loads admin pages top-level on www (its web views set this user agent).
+        if (/BestlyAdminApp/.test(navigator.userAgent || "")) return;
         if (loc.hostname !== "www.bestly.tech") return;
         var q = new URLSearchParams(loc.search);
         // ?direct=1 sticks for this tab (the sign-in page drops the query), so reloads stay on www.
