@@ -1,0 +1,1 @@
+(async()=>{ let n=0; const t0=performance.now(); await new Promise(r=>{ function f(){ n++; if(performance.now()-t0<3000) requestAnimationFrame(f); else r(); } requestAnimationFrame(f); }); return JSON.stringify({fps:+(n/3).toFixed(1),v2:window.__v2&&window.__v2(),sc:window.__sc()}); })()
