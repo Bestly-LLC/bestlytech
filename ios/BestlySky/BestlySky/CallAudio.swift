@@ -17,16 +17,22 @@ final class CallAudioModel: ObservableObject {
     func toggle(fn: String, callId: String) async {
         if player == nil {
             state = .loading
-            do {
-                let data = try await TKit.postBytes(fn, ["action": "audio", "call_id": callId])
-                try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
-                try? AVAudioSession.sharedInstance().setActive(true)
-                let p = try AVAudioPlayer(data: data)
-                p.prepareToPlay()
-                player = p; duration = p.duration; state = .ready
-            } catch {
-                state = .missing; Haptics.fail(); return
-            }
+            var missing = false
+            let ok = await Action.run("agents.audio", attempt: {
+                do {
+                    let data = try await TKit.postBytes(fn, ["action": "audio", "call_id": callId])
+                    try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+                    try? AVAudioSession.sharedInstance().setActive(true)
+                    let p = try AVAudioPlayer(data: data)
+                    p.prepareToPlay()
+                    self.player = p; self.duration = p.duration; self.state = .ready
+                } catch let e as AdminAPIError where e.status == 404 {
+                    missing = true          // no recording yet: say so on the card, no alarm
+                }
+                return ["ok": true]
+            })
+            if missing { state = .missing; Haptics.fail(); return }
+            if !ok { state = .idle; return }
         }
         guard let p = player else { return }
         if p.isPlaying { p.pause(); playing = false; ticker?.cancel() }

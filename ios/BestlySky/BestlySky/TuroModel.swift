@@ -31,6 +31,7 @@ final class TuroModel: ObservableObject {
     @Published var cleaning: [JSON] = []
     @Published var claimsLoaded = false
     @Published var loadFailed = false
+    @Published var loadedOnce = false
     @Published var cmd: TuroCmdState = .idle
     @Published var toast: String?
 
@@ -53,6 +54,7 @@ final class TuroModel: ObservableObject {
             claimsLoaded = true
         }
         if clv != nil { cleaning = TKit.rows(clv) }
+        loadedOnce = true
     }
 
     // MARK: car
@@ -128,18 +130,18 @@ final class TuroModel: ObservableObject {
 
     func saveCode(payload: String, month: String, note: String) async -> String? {
         guard await FaceIDGate.confirm(reason: "Save the LAX garage code") else { return "Face ID didn't match. The code was not saved." }
-        do {
-            let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
-            let noteValue: Any = n.isEmpty ? (NSNull() as Any) : (n as Any)
-            _ = try await AdminAPI.rpc("lax_pass_set", ["p_payload": payload, "p_month": month, "p_note": noteValue])
-            Haptics.ok()
-            toast = "Code saved. Guests get it now."
-            await load()
-            return nil
-        } catch {
-            Haptics.fail()
-            return "Couldn't save the code. \(error.localizedDescription)"
-        }
+        let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let noteValue: Any = n.isEmpty ? (NSNull() as Any) : (n as Any)
+        let ok = await Action.run("turo.lax_code", idempotent: false, okSay: "Code saved. Guests get it now.", attempt: {
+            try await AdminAPI.rpc("lax_pass_set", ["p_payload": payload, "p_month": month, "p_note": noteValue])
+        }, verify: {
+            // the new code shows up in the saved list for that month
+            guard let st = try? await AdminAPI.rpc("lax_pass_admin_state") as? JSON else { return false }
+            let rows = st.arr("history") + (st.obj("current").map { [$0] } ?? [])
+            return rows.contains { $0.str("payload") == payload && ($0.str("valid_month") ?? "").hasPrefix(String(month.prefix(7))) }
+        })
+        await load()
+        return ok ? nil : "The code didn't save. Scout has it."
     }
 
     // MARK: claims
@@ -169,31 +171,31 @@ final class TuroModel: ObservableObject {
         }
         cmd = .working("Sending \(c.label) to the car")
         Haptics.thunk()
-        let id: Int
-        do {
-            let r = try await AdminAPI.rpc("tesla_admin_command", ["p_action": c.rawValue]) as? JSON
-            guard r?.bool("ok") != false, let i = r?.int("id") else {
-                cmd = .failed("\(c.failTitle). \(r?.str("error") ?? "The car did not take the request.")")
-                Haptics.fail(); return
-            }
-            id = i
-        } catch {
-            cmd = .failed("\(c.failTitle). \(error.localizedDescription)")
-            Haptics.fail(); return
+        // One try only: a car command must never fire twice. The attempt includes waiting for the Mac mini helper's answer
+        // (tesla_admin_job), so the job result is the effect check.
+        let ok = await Action.run("turo.\(c.rawValue)", idempotent: false, attempt: { [self] in try await self.runCar(c) })
+        if ok { await load() } else if case .working = cmd { cmd = .failed("\(c.failTitle). Scout has it.") }
+    }
+
+    private func fail(_ c: TuroCmd, _ why: String) -> AdminAPIError {
+        cmd = .failed("\(c.failTitle). \(why)")
+        return AdminAPIError(status: 0, message: why)
+    }
+
+    private func runCar(_ c: TuroCmd) async throws -> Any? {
+        let r = try await AdminAPI.rpc("tesla_admin_command", ["p_action": c.rawValue]) as? JSON
+        guard r?.bool("ok") != false, let id = r?.int("id") else {
+            throw fail(c, r?.str("error") ?? "The car did not take the request.")
         }
         cmd = .working("\(c.label) sent. Waiting for the car")
         for _ in 0..<40 {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
-            if Task.isCancelled { return }
+            if Task.isCancelled { throw fail(c, "Cancelled.") }
             guard let job = try? await AdminAPI.rpc("tesla_admin_job", ["p_id": id]) as? JSON else { continue }
             let status = (job.str("status") ?? "").lowercased()
             let result = job.obj("result")
             if status == "failed" || (status == "done" && result?.bool("ok") == false) {
-                let why = result?.str("error") ?? result?.str("msg") ?? "The car said no."
-                cmd = .failed("\(c.failTitle). \(why)")
-                Haptics.fail()
-                await load()
-                return
+                throw fail(c, result?.str("error") ?? result?.str("msg") ?? "The car said no.")
             }
             if status == "done" {
                 let msg = (result?.str("msg") ?? "").lowercased()
@@ -204,12 +206,9 @@ final class TuroModel: ObservableObject {
                     if let v = result?.str("via"), !v.isEmpty { via = ", via " + (v.lowercased() == "tezlab" ? "TezLab" : TKit.titleCase(v)) }
                     cmd = .ok("\(c.label): done\(via), \(TKit.clock(Date()))")
                 }
-                Haptics.ok()
-                await load()
-                return
+                return ["ok": true]
             }
         }
-        cmd = .failed("No answer after 2 minutes. The Mac mini helper may be offline.")
-        Haptics.fail()
+        throw fail(c, "No answer after 2 minutes. The Mac mini helper may be offline.")
     }
 }

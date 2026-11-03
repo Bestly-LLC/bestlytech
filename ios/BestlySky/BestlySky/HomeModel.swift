@@ -86,19 +86,40 @@ final class HomeModel: ObservableObject {
         }
     }
 
-    /// Partial patch to the callbox. Reloads after; on error the old state comes back and the toast says why.
+    /// Does the server's callbox state show every key we just sent?
+    private static func matches(_ st: JSON, _ p: JSON) -> Bool {
+        for (k, v) in p {
+            switch k {
+            case "enabled": if st.bool("enabled") != (v as? Bool) { return false }
+            case "mode": if st.str("mode") != (v as? String) { return false }
+            case "party_until":
+                let want = v as? String ?? ""
+                if want.isEmpty { if st.str("party_until") != nil { return false } }
+                else {
+                    guard let a = AdminFmt.date(st.str("party_until")), let b = AdminFmt.date(want), abs(a.timeIntervalSince(b)) < 2 else { return false }
+                }
+            default: break
+            }
+        }
+        return true
+    }
+
+    private func readCallbox() async -> JSON? {
+        (try? await AdminAPI.rpc("callbox_admin_state")) as? JSON
+    }
+
+    /// Partial patch to the callbox. Checks the server took it; on failure the old state comes back (Action shows the toast).
     func patch(_ p: JSON, optimistic: ((inout JSON) -> Void)? = nil) async {
         let before = settings
         if let optimistic, var s = settings { optimistic(&s); settings = s }
-        do {
-            let r = try await AdminAPI.rpc("callbox_settings_set", ["p": p]) as? JSON
-            if r?.bool("ok") == false { throw AdminAPIError(status: 400, message: r?.str("error") ?? "The callbox said no.") }
-            Haptics.ok()
-        } catch {
-            settings = before
-            Haptics.fail()
-            toast = "Couldn't change the callbox. \(error.localizedDescription)"
-        }
+        let id = "home.callbox_" + p.keys.sorted().joined(separator: "_")
+        let ok = await Action.run(id, attempt: {
+            try await AdminAPI.rpc("callbox_settings_set", ["p": p])
+        }, verify: { [self] in
+            guard let st = await readCallbox()?.obj("settings") else { return false }
+            return Self.matches(st, p)
+        })
+        if !ok { settings = before }
         await load()
     }
 
@@ -110,9 +131,17 @@ final class HomeModel: ObservableObject {
 
     func cancelExpected(_ e: JSON) async {
         guard let id = e.str("id") else { return }
+        let before = expected
         expected.removeAll { $0.str("id") == id }
-        do { _ = try await AdminAPI.rpc("callbox_expect_cancel", ["p_id": id]); toast = "Cancelled \(e.str("label") ?? "that")" }
-        catch { toast = "Couldn't cancel. \(error.localizedDescription)" }
+        let ok = await Action.run("home.expect_cancel", okSay: "Cancelled \(e.str("label") ?? "that")", attempt: {
+            // {ok:false} here only means it was already cancelled, which is the result we want
+            _ = try await AdminAPI.rpc("callbox_expect_cancel", ["p_id": id])
+            return ["ok": true]
+        }, verify: { [self] in
+            guard let st = await readCallbox() else { return false }
+            return !st.arr("expected").contains { $0.str("id") == id }
+        })
+        if !ok { expected = before }
         await load()
     }
 
@@ -124,19 +153,18 @@ final class HomeModel: ObservableObject {
             end = c.date(bySettingHour: 23, minute: 59, second: 0, of: start) ?? start.addingTimeInterval(3600)
             if end.timeIntervalSince(start) < 300 { end = start.addingTimeInterval(3600) }
         }
-        do {
-            let p: JSON = ["p_label": label, "p_kind": kind, "p_start": AdminFmt.iso.string(from: start), "p_end": AdminFmt.iso.string(from: end),
-                           "p_keywords": keywords, "p_source": "manual", "p_source_ref": NSNull(), "p_note": NSNull(), "p_max_uses": NSNull()]
-            let r = try await AdminAPI.rpc("callbox_expect_add", p) as? JSON
-            if r?.bool("ok") == false { return r?.str("error") ?? "The callbox said no." }
-            Haptics.ok()
-            toast = "Expecting \(label) until \(TKit.clock(end))"
-            await load()
-            return nil
-        } catch {
-            Haptics.fail()
-            return "Couldn't add \(label). \(error.localizedDescription)"
-        }
+        let p: JSON = ["p_label": label, "p_kind": kind, "p_start": AdminFmt.iso.string(from: start), "p_end": AdminFmt.iso.string(from: end),
+                       "p_keywords": keywords, "p_source": "manual", "p_source_ref": NSNull(), "p_note": NSNull(), "p_max_uses": NSNull()]
+        // Adding twice would expect the same person twice, so no automatic retry.
+        let ok = await Action.run("home.expect_add", idempotent: false, okSay: "Expecting \(label) until \(TKit.clock(end))", attempt: {
+            try await AdminAPI.rpc("callbox_expect_add", p)
+        }, verify: { [self] in
+            guard let st = await readCallbox() else { return false }
+            let want = String(label.prefix(80)).trimmingCharacters(in: .whitespaces)
+            return st.arr("expected").contains { $0.str("label") == want && $0.str("cancelled_at") == nil && (AdminFmt.date($0.str("created_at")).map { Date().timeIntervalSince($0) < 180 } ?? true) }
+        })
+        await load()
+        return ok ? nil : "Couldn't add \(label). Scout has it."
     }
 
     static func doorWords(_ e: JSON) -> String {
@@ -155,26 +183,38 @@ final class HomeModel: ObservableObject {
 
     func isOn(_ a: HomeAuto) -> Bool { overrides[a.id] ?? a.on }
 
+    private func inventoryState(_ id: String) async -> String? {
+        guard let row = TKit.rows(try? await TKit.restGet("ha_inventory?select=view&id=eq.true")).first else { return nil }
+        return row.arr("view").first { $0.str("entity_id") == id }?.str("state")
+    }
+
     func toggle(_ a: HomeAuto, to on: Bool) async {
         overrides[a.id] = on
         notice = nil
-        do {
+        var pending = false
+        var serverError: String?
+        let ok = await Action.run("home.auto_toggle", attempt: {
             let r = try await AdminAPI.invoke("ha-fixer", ["op": "toggle", "entity_id": a.id, "enabled": on]) as? JSON
-            if r?.bool("ok") == false {
-                overrides[a.id] = nil
-                Haptics.fail()
-                notice = r?.str("error") ?? "Home Assistant didn't take that."
-                return
-            }
-            Haptics.ok()
-            if r?.bool("pending") == true { notice = "Sent to Home Assistant. It can take a moment to show." }
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
-            await load()
-        } catch {
+            serverError = r?.bool("ok") == false ? r?.str("error") : nil
+            pending = r?.bool("pending") == true
+            return r
+        }, verify: { [self] in
+            // ha-fixer writes the new state into its list once Home Assistant says done. If the Pi was slow, wait longer for it.
+            let deadline = Date().addingTimeInterval(pending ? 25 : 0)
+            repeat {
+                if await inventoryState(a.id) == (on ? "on" : "off") { return true }
+                if pending { try? await Task.sleep(nanoseconds: 2_000_000_000) }
+            } while Date() < deadline
+            return false
+        })
+        if !ok {
             overrides[a.id] = nil
-            Haptics.fail()
-            notice = "Couldn't switch \(a.name). \(error.localizedDescription)"
+            notice = serverError ?? "Home Assistant didn't take that. \(a.name) is back where it was."
+            await load()
+            return
         }
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        await load()
     }
 
     static func ranText(_ d: Date?) -> String {

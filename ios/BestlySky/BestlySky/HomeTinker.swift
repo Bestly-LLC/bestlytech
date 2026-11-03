@@ -68,14 +68,13 @@ final class HomeTinkerModel: ObservableObject {
 
     // MARK: calls
 
-    private func call(_ fn: String, _ body: JSON) async -> (JSON?, String?) {
-        do {
-            let r = try await AdminAPI.invoke(fn, body) as? JSON
-            if r?.bool("ok") == false { return (nil, r?.str("error") ?? "Tinker couldn't do that.") }
-            return (r, nil)
-        } catch {
-            return (nil, error.localizedDescription)
-        }
+    /// Did the row move (new status or newer update) after the call? Used as the effect check for every Tinker button.
+    private func rowMoved(_ table: String, _ cols: String, id: String, before: JSON?, wantStatus: Set<String>? = nil) async -> Bool {
+        guard let row = TKit.rows(try? await TKit.restGet("\(table)?select=\(cols)&id=eq.\(id)")).first else { return false }
+        let st = row.str("status") ?? ""
+        if let wantStatus { return wantStatus.contains(st) }
+        guard let before else { return true }
+        return st != (before.str("status") ?? "") || row.str("updated_at") != before.str("updated_at")
     }
 
     /// Make tab ops. Returns true when it worked.
@@ -84,15 +83,28 @@ final class HomeTinkerModel: ObservableObject {
         busy = true; error = nil
         defer { busy = false }
         var body = extra; body["op"] = op
-        if op != "generate", let id = maker?.str("id") { body["id"] = id }
-        let (r, err) = await call("ha-automator", body)
-        if let err { error = err; Haptics.fail(); return false }
-        Haptics.ok()
-        if op == "discard" { if let id = maker?.str("id") { dismissed.insert(id) }; maker = nil; return true }
-        if let row = r?.obj("row") {
-            // the function may answer a partial row; merge it onto what we have and re-read the full row
-            maker = row
-        }
+        let rowId = maker?.str("id")
+        if op != "generate", let rowId { body["id"] = rowId }
+        let before = maker
+        var serverError: String?
+        var answered: JSON?
+        let idem = (op == "discard")
+        let ok = await Action.run("home.tinker_\(op)", idempotent: idem, attempt: {
+            let r = try await AdminAPI.invoke("ha-automator", body) as? JSON
+            serverError = r?.bool("ok") == false ? (r?.str("error") ?? "Tinker couldn't do that.") : nil
+            answered = r
+            return r
+        }, verify: { [self] in
+            guard let id = answered?.obj("row")?.str("id") ?? rowId else { return false }
+            switch op {
+            case "generate": return await rowMoved("ha_automations", makerCols, id: id, before: nil)
+            case "discard": return await rowMoved("ha_automations", makerCols, id: id, before: nil, wantStatus: ["discarded"])
+            default: return await rowMoved("ha_automations", makerCols, id: id, before: before)
+            }
+        })
+        if !ok { error = serverError ?? "That didn't go through. Scout has it."; return false }
+        if op == "discard" { if let id = rowId { dismissed.insert(id) }; maker = nil; return true }
+        if let row = answered?.obj("row") { maker = row }
         if let id = maker?.str("id"), let full = TKit.rows(try? await TKit.restGet("ha_automations?select=\(makerCols)&id=eq.\(id)")).first { maker = full }
         watchMaker()
         return true
@@ -104,12 +116,27 @@ final class HomeTinkerModel: ObservableObject {
         busy = true; fixError = nil
         defer { busy = false }
         var body = extra; body["op"] = op
-        if op != "diagnose", let id = fix?.str("id") { body["id"] = id }
-        let (r, err) = await call("ha-fixer", body)
-        if let err { fixError = err; Haptics.fail(); return }
-        Haptics.ok()
-        if op == "discard" { if let id = fix?.str("id") { dismissed.insert(id) }; fix = nil; return }
-        if let row = r?.obj("row") { fix = row }
+        let rowId = fix?.str("id")
+        if op != "diagnose", let rowId { body["id"] = rowId }
+        let before = fix
+        var serverError: String?
+        var answered: JSON?
+        let ok = await Action.run("home.fix_\(op)", idempotent: op == "discard", attempt: {
+            let r = try await AdminAPI.invoke("ha-fixer", body) as? JSON
+            serverError = r?.bool("ok") == false ? (r?.str("error") ?? "Tinker couldn't do that.") : nil
+            answered = r
+            return r
+        }, verify: { [self] in
+            guard let id = answered?.obj("row")?.str("id") ?? rowId else { return false }
+            switch op {
+            case "diagnose": return await rowMoved("ha_fixes", fixCols, id: id, before: nil)
+            case "discard": return await rowMoved("ha_fixes", fixCols, id: id, before: nil, wantStatus: ["discarded"])
+            default: return await rowMoved("ha_fixes", fixCols, id: id, before: before)
+            }
+        })
+        if !ok { fixError = serverError ?? "That didn't go through. Scout has it."; return }
+        if op == "discard" { if let id = rowId { dismissed.insert(id) }; fix = nil; return }
+        if let row = answered?.obj("row") { fix = row }
         if let id = fix?.str("id"), let full = TKit.rows(try? await TKit.restGet("ha_fixes?select=\(fixCols)&id=eq.\(id)")).first { fix = full }
         watchFix()
     }

@@ -185,7 +185,7 @@ struct TuroScreen: View {
                     }
                     if !m.laxLive { TSub("Add the new code so guests get the right one.", color: AT.orange) }
                 } else {
-                    TSub("Loading the garage code status")
+                    TSub(m.loadedOnce ? "Couldn't load the garage code status. Pull down to try again." : "Loading the garage code status", color: m.loadedOnce ? AT.orange : AT.secondary)
                 }
                 HStack(spacing: 8) {
                     Button { showCode = true } label: { Text("Update code") }.buttonStyle(.tbtn)

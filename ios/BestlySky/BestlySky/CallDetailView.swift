@@ -37,33 +37,73 @@ final class CallDetailModel: ObservableObject {
         if unread { await markRead(call) }
     }
 
+    // MARK: effect checks (read the call back from the server)
+
+    /// Template-agent call row as the server has it now (nil if gone or unreadable).
+    private func serverRow(_ call: AgentCall) async -> JSON? {
+        (try? await AdminAPI.rpc("admin_agent_call", ["p_id": call.id])) as? JSON
+    }
+
+    /// Is the call still in the agent's lists (all + archived)? Used to confirm a delete without provoking an error.
+    private func stillListed(_ call: AgentCall, slug: String) async -> Bool? {
+        guard let all = try? await AdminAPI.rpc("admin_agent_calls", ["p_slug": slug, "p_view": "all", "p_lim": 200]),
+              let arc = try? await AdminAPI.rpc("admin_agent_calls", ["p_slug": slug, "p_view": "archived", "p_lim": 200]) else { return nil }
+        return (TKit.rows(all) + TKit.rows(arc)).contains { $0.str("id") == call.id }
+    }
+
+    private func reeseRow(_ call: AgentCall) async -> JSON?? {
+        guard let any = try? await AdminAPI.rpc("rg_inbound_calls", ["p_limit": 300]) else { return nil }
+        return .some(TKit.rows(any).first { $0.str("id") == call.id })
+    }
+
     private func markRead(_ call: AgentCall) async {
-        do {
-            if call.isReese { _ = try await AdminAPI.rpc("rg_mark_read", ["p_id": call.id]) }
-            else { _ = try await AdminAPI.rpc("admin_agent_call_set", ["p_id": call.id, "p_action": "read"]) }
-            unread = false
-        } catch { /* stays unread; the list shows it */ }
+        let ok = await Action.run("agents.mark_read", attempt: {
+            if call.isReese { return try await AdminAPI.rpc("rg_mark_read", ["p_id": call.id]) }
+            return try await AdminAPI.rpc("admin_agent_call_set", ["p_id": call.id, "p_action": "read"])
+        }, verify: { [self] in
+            if call.isReese { if let r = await reeseRow(call) { return r?.str("read_at") != nil }; return false }
+            return await serverRow(call)?.str("read_at") != nil
+        })
+        if ok { unread = false }
     }
 
-    func markUnread(_ call: AgentCall) async -> Bool {
-        do { _ = try await AdminAPI.rpc("admin_agent_call_set", ["p_id": call.id, "p_action": "unread"]); unread = true; Haptics.ok(); return true }
-        catch { self.error = "Couldn't mark it unread. \(error.localizedDescription)"; Haptics.fail(); return false }
+    func markUnread(_ call: AgentCall, slug: String) async -> Bool {
+        let ok = await Action.run("agents.mark_unread", attempt: {
+            try await AdminAPI.rpc("admin_agent_call_set", ["p_id": call.id, "p_action": "unread"])
+        }, verify: { [self] in
+            guard let r = await serverRow(call) else { return false }
+            return r.str("read_at") == nil
+        })
+        if ok { unread = true } else { error = "Couldn't mark it unread. Scout has it." }
+        return ok
     }
 
-    func archive(_ call: AgentCall) async -> Bool {
-        do {
-            if call.isReese { _ = try await AdminAPI.rpc("rg_archive_call", ["p_id": call.id, "p_archive": true]) }
-            else { _ = try await AdminAPI.rpc("admin_agent_call_set", ["p_id": call.id, "p_action": archived ? "unarchive" : "archive"]) }
-            Haptics.ok(); return true
-        } catch { self.error = "Couldn't archive it. \(error.localizedDescription)"; Haptics.fail(); return false }
+    func archive(_ call: AgentCall, slug: String) async -> Bool {
+        let want = !archived
+        let ok = await Action.run(want ? "agents.archive" : "agents.unarchive", attempt: {
+            if call.isReese { return try await AdminAPI.rpc("rg_archive_call", ["p_id": call.id, "p_archive": true]) }
+            return try await AdminAPI.rpc("admin_agent_call_set", ["p_id": call.id, "p_action": want ? "archive" : "unarchive"])
+        }, verify: { [self] in
+            if call.isReese { if let r = await reeseRow(call) { return r == nil }; return false }   // archived Reese calls leave her list
+            guard let r = await serverRow(call) else { return false }
+            return (r.str("archived_at") != nil) == want
+        })
+        if !ok { error = "Couldn't \(want ? "archive" : "unarchive") it. Scout has it." }
+        return ok
     }
 
-    func delete(_ call: AgentCall) async -> Bool {
-        do {
-            if call.isReese { _ = try await AdminAPI.rpc("rg_delete_call", ["p_id": call.id]) }
-            else { _ = try await AdminAPI.rpc("admin_agent_call_set", ["p_id": call.id, "p_action": "delete"]) }
-            Haptics.ok(); return true
-        } catch { self.error = "Couldn't delete it. \(error.localizedDescription)"; Haptics.fail(); return false }
+    func delete(_ call: AgentCall, slug: String) async -> Bool {
+        // A delete can't be repeated safely, so it runs once.
+        let ok = await Action.run("agents.delete", idempotent: false, attempt: {
+            if call.isReese { return try await AdminAPI.rpc("rg_delete_call", ["p_id": call.id]) }
+            return try await AdminAPI.rpc("admin_agent_call_set", ["p_id": call.id, "p_action": "delete"])
+        }, verify: { [self] in
+            if call.isReese { if let r = await reeseRow(call) { return r == nil }; return false }
+            if let listed = await stillListed(call, slug: slug) { return !listed }
+            return false
+        })
+        if !ok { error = "Couldn't delete it. Scout has it." }
+        return ok
     }
 
     // MARK: derived
@@ -119,7 +159,7 @@ struct CallDetailView: View {
         .task { await d.load(call) }
         .onDisappear { onChange() }
         .confirmationDialog("Delete this call?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete call", role: .destructive) { Task { if await d.delete(call) { dismiss() } } }
+            Button("Delete call", role: .destructive) { Task { if await d.delete(call, slug: agent.slug) { dismiss() } } }
             Button("Cancel", role: .cancel) {}
         } message: { Text("The call log entry is removed for good.") }
         .screenView("call")
@@ -230,11 +270,11 @@ struct CallDetailView: View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
                 if !call.isReese {
-                    Button { Task { if await d.markUnread(call) { dismiss() } } } label: { Text("Mark unread") }.buttonStyle(.tbtn)
+                    Button { Task { if await d.markUnread(call, slug: agent.slug) { dismiss() } } } label: { Text("Mark unread") }.buttonStyle(.tbtn)
                 }
-                Button { Task { if await d.archive(call) { dismiss() } } } label: { Text(d.archived ? "Unarchive" : "Archive") }.buttonStyle(.tbtn)
+                Button { Task { if await d.archive(call, slug: agent.slug) { dismiss() } } } label: { Text(d.archived ? "Unarchive" : "Archive") }.buttonStyle(.tbtn)
             }
-            CallHoldToDelete(title: "Hold to delete call", onConfirm: { Task { if await d.delete(call) { dismiss() } } }, onAccessible: { confirmDelete = true })
+            CallHoldToDelete(title: "Hold to delete call", onConfirm: { Task { if await d.delete(call, slug: agent.slug) { dismiss() } } }, onAccessible: { confirmDelete = true })
                 .padding(.top, 18)
         }
         .padding(.top, 4)
