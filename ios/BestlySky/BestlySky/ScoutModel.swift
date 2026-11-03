@@ -293,7 +293,7 @@ final class ScoutModel: ObservableObject {
             let parsed: [ScoutMsg] = rows.compactMap { r -> ScoutMsg? in
                 guard let id = r.str("id"), let role = r.str("role"), let body = r.str("body"),
                       let at = AdminFmt.date(r.str("created_at")) else { return nil }
-                return ScoutMsg.make(id: id, role: role, body: body, created: at)
+                return ScoutParse.make(id: id, role: role, body: body, created: at)
             }
             if parsed != messages { messages = parsed }
             scheduleMarkRead()
