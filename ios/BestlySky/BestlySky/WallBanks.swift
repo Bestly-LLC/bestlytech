@@ -229,7 +229,7 @@ struct WallDoor: View {
         t.append(tg("skyTraffic", "Live traffic", needs: planes))
         t.append(tg("skyCars", "Cars", needs: planes))
         let carsBlocked = !model.flag("airShow", true) || !model.flag("skyCars", true)
-        let labelsOn = model.flag("skyCarLabels", false)
+        let labelsOn = model.flag("skyCarLabels", true)
         t.append(BKToggle(label: "Car names", on: labelsOn, needs: model.flag("airShow", true) ? "Needs Cars" : "Needs Planes", blocked: carsBlocked) {
             if carsBlocked { Haptics.nope(); return }
             model.setPatch(["skyCarLabels": !labelsOn])
@@ -245,12 +245,12 @@ struct WallDoor: View {
         let labels = ("airLabels", "labels")
         var t: [BKToggle] = []
         t.append(tg("airCard", "Nearest-plane card"))
-        t.append(tg("airCardPin", "Keep the card up", needs: card))
+        t.append(tg("airCardPin", "Keep the card up", def: false, needs: card))
         t.append(tg("airCardHeli", "Helicopters in the card", needs: card))
         t.append(tg("airLabels", "Plane labels"))
         t.append(tg("airLabelsSmall", "Tags on small planes", needs: labels))
-        t.append(tg("airKey", "Sky key"))
-        t.append(tg("issTag", "Space Station name", def: false))
+        t.append(tg("airKey", "Sky key", def: false))
+        t.append(tg("issTag", "Space Station name"))
         return BKBank(id: "flights", label: "FLIGHTS", title: "Flights", note: "What the plane layer shows.", blocks: [.toggles(t)])
     }
 
@@ -258,8 +258,8 @@ struct WallDoor: View {
         let stars = ("skyStars", "Stars")
         var t: [BKToggle] = []
         t.append(tg("skyStars", "Stars"))
-        t.append(tg("skyStarLabels", "Star names", def: false, needs: stars))
-        t.append(tg("skyGrid", "Sky grid", def: false, needs: stars))
+        t.append(tg("skyStarLabels", "Star names", needs: stars))
+        t.append(tg("skyGrid", "Sky grid", needs: stars))
         t.append(tg("skyMoon", "Moon"))
         t.append(tg("skySun", "Sun"))
         t.append(tg("skyPlanets", "Planets"))
@@ -487,14 +487,13 @@ struct WallDoor: View {
 
     private func clearWall() {
         Task {
-            do {
-                _ = try await AdminAPI.rpc("wall_admin_sign_action", ["p_action": "clear"])
-                Haptics.ok()
-                model.say("WALL CLEARED", "Names are hidden, not deleted.")
-            } catch {
-                Haptics.fail()
-                model.say("DIDN'T CLEAR", "Try again in a moment.")
-            }
+            let ok = await Action.run("wall.sign_clear", attempt: {
+                try await AdminAPI.rpc("wall_admin_sign_action", ["p_action": "clear"])
+            }, verify: {
+                guard let r = try? await AdminAPI.rpc("wall_admin_signs"), let arr = r as? [Any] else { return false }
+                return !arr.compactMap { $0 as? JSON }.contains { $0.bool("hidden") != true }
+            })
+            if ok { model.say("WALL CLEARED", "Names are hidden, not deleted.") }
         }
     }
 
@@ -516,7 +515,7 @@ struct WallDoor: View {
         for (i, n) in names.enumerated() {
             faces.append(BKOption(label: n, swatch: nil, on: nearest == i) {
                 Haptics.select()
-                model.setPatch(["airBearing": i * 45])
+                model.setPatch(["airBearing": i * 45], say: "WALL FACES|The sky now faces \(n).")
             })
         }
         let busy = model.status.obj("focus")?.bool("busy") ?? false

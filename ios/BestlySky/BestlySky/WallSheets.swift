@@ -340,14 +340,24 @@ struct WallSignsSheet: View {
     }
 
     private func act(_ action: String, _ id: Int) async {
-        do {
-            _ = try await AdminAPI.rpc("wall_admin_sign_action", ["p_action": action, "p_id": id])
-            Haptics.ok()
+        let ok = await Action.run("wall.sign_\(action)", attempt: {
+            try await AdminAPI.rpc("wall_admin_sign_action", ["p_action": action, "p_id": id])
+        }, verify: {
+            guard let r = try? await AdminAPI.rpc("wall_admin_signs"), let arr = r as? [Any] else { return false }
+            let row = arr.compactMap { $0 as? JSON }.first { $0.int("id") == id }
+            switch action {
+            case "delete": return row == nil
+            case "hide": return row?.bool("hidden") == true
+            case "show": return row?.bool("hidden") == false
+            default: return true
+            }
+        })
+        if ok {
             if action == "delete" { sigs.removeAll { $0.id == id } }
+            error = nil
             await load()
-        } catch {
-            Haptics.fail()
-            self.error = "Didn't go through. Try again."
+        } else {
+            self.error = "The wall didn't take that. Nothing changed."
         }
     }
 }
@@ -469,14 +479,19 @@ struct WallPackagesSheet: View {
 
     private func mark(_ p: WallPackage, done: Bool) async {
         if let i = list.firstIndex(where: { $0.id == p.id }) { list[i].done = done }
-        do {
-            _ = try await AdminAPI.rpc("wall_package_done", ["p_id": p.id, "p_done": done])
-            Haptics.ok()
+        let ok = await Action.run(done ? "wall.package_done" : "wall.package_undo", attempt: {
+            try await AdminAPI.rpc("wall_package_done", ["p_id": p.id, "p_done": done])
+        }, verify: {
+            guard let r = try? await AdminAPI.rpc("wall_admin_packages"), let arr = r as? [Any] else { return false }
+            let row = arr.compactMap { $0 as? JSON }.first { $0.int("id") == p.id }
+            return row?.bool("done") == done
+        })
+        if ok {
+            error = nil
             await load()
-        } catch {
+        } else {
             if let i = list.firstIndex(where: { $0.id == p.id }) { list[i].done = !done }
-            Haptics.fail()
-            self.error = "Didn't go through. Try again."
+            self.error = "The wall didn't take that. Nothing changed."
         }
     }
 }
@@ -489,6 +504,8 @@ struct WallDemoSheet: View {
     @State private var left = ""
     @State private var middle = ""
     @State private var right = ""
+    @State private var saving = false
+    @State private var saveError: String?
 
     var body: some View {
         ScrollView {
@@ -498,12 +515,21 @@ struct WallDemoSheet: View {
                 field("Left", lines: 2, text: $left)
                 field("Middle", lines: 1, text: $middle)
                 field("Right", lines: 2, text: $right)
+                if let e = saveError {
+                    Text(e).font(.system(size: 13)).foregroundStyle(AT.orange).fixedSize(horizontal: false, vertical: true)
+                }
                 Button {
-                    model.setPatch(["demoLeft": clean(left, 2), "demoNames": clean(middle, 1), "demoRight": clean(right, 2)],
-                                   say: "DEMO TEXT|Saved. Press 4 to see it.")
-                    close()
+                    guard !saving else { return }
+                    saving = true
+                    saveError = nil
+                    Task {
+                        let ok = await model.savePatch(["demoLeft": clean(left, 2), "demoNames": clean(middle, 1), "demoRight": clean(right, 2)],
+                                                       say: "DEMO TEXT|Saved. Press 4 to see it.", id: "wall.demo_text")
+                        saving = false
+                        if ok { close() } else { saveError = "The wall didn't take that text. Try again." }
+                    }
                 } label: {
-                    Text("Save").font(.system(size: 16, weight: .bold)).frame(maxWidth: .infinity, minHeight: 52)
+                    Text(saving ? "Saving" : "Save").font(.system(size: 16, weight: .bold)).frame(maxWidth: .infinity, minHeight: 52)
                 }
                 .buttonStyle(RemoteKey(face: .selected))
                 .accessibilityLabel("Save demo text")

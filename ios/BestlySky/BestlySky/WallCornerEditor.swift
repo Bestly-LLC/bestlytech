@@ -34,6 +34,8 @@ struct WallCornerEditor: View {
     @State private var drafts: [String: [CGPoint]] = [:]
     @State private var dirty: Set<String> = []
     @State private var removeMask = false
+    @State private var saving = false
+    @State private var saveError: String?
 
     private let pad: CGFloat = 72
 
@@ -214,6 +216,10 @@ struct WallCornerEditor: View {
                 .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
 
             if quad == .mask { maskControls }
+            if let e = saveError {
+                Text(e).font(.system(size: 13)).foregroundStyle(AT.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack(spacing: 10) {
                 editKey("Reset") { resetCurrent() }
@@ -222,7 +228,7 @@ struct WallCornerEditor: View {
                     Text("Save").font(.system(size: 15, weight: .bold)).frame(maxWidth: .infinity, minHeight: 50)
                 }
                 .buttonStyle(RemoteKey(face: .selected))
-                .opacity(dirty.isEmpty ? 0.5 : 1)
+                .opacity(dirty.isEmpty || saving ? 0.5 : 1)
                 .accessibilityLabel("Save layout")
             }
         }
@@ -307,8 +313,13 @@ struct WallCornerEditor: View {
             }
         }
         guard !patch.isEmpty else { Haptics.nope(); return }
-        model.setPatch(patch, say: "LAYOUT|Saved. Undo is in the Align bank.")
-        dismiss()
+        guard !saving else { return }
+        saving = true
+        Task {
+            let ok = await model.savePatch(patch, say: "LAYOUT|Saved. Undo is in the Align bank.", id: "wall.layout")
+            saving = false
+            if ok { dismiss() } else { saveError = "The wall didn't take that layout. Nothing changed. Try again." }
+        }
     }
 
     private func encode(_ list: [CGPoint]) -> [[Double]] {

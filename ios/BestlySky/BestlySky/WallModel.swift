@@ -81,6 +81,7 @@ final class WallModel: ObservableObject {
     @Published private(set) var loaded = false
     @Published private(set) var loadError: String?
     @Published private(set) var pending = 0
+    @Published private(set) var version = 0
     @Published private(set) var debouncing = false
     @Published private(set) var tick = Date()
     @Published var flash: WallFlash?
@@ -133,6 +134,7 @@ final class WallModel: ObservableObject {
             guard let d = r as? JSON else { return }
             status = d.obj("status") ?? [:]
             power = d.obj("power") ?? [:]
+            version = d.int("version") ?? version
             pulledAt = WallClock.pgDate(d.str("pulled_at"))
             statusAt = WallClock.pgDate(d.str("status_at"))
             if pending == 0 && !debouncing && Date().timeIntervalSince(lastWrite) > 2.0 {
@@ -322,15 +324,22 @@ final class WallModel: ObservableObject {
 
     // MARK: writes
 
-    /// Optimistic top-level merge, then wall_admin_set. Rolls back and buzzes on error.
-    func setPatch(_ patch: JSON, say msg: String? = nil) {
+    /// Stable Action id for a patch: "wall.<first key>" (plus "+" when several keys go together).
+    static func actionID(_ patch: JSON) -> String {
+        let keys = patch.keys.sorted()
+        return "wall." + (keys.first ?? "set") + (keys.count > 1 ? "+" : "")
+    }
+
+    /// Optimistic top-level merge, then wall_admin_set through Action.run. Reads wall_admin_get back to confirm the
+    /// server kept every key (the cleaners drop what they do not accept without an error). Rolls back on failure.
+    func setPatch(_ patch: JSON, say msg: String? = nil, id: String? = nil) {
         var rollback = JSON()
         for (k, v) in patch {
             rollback[k] = state[k] ?? NSNull()
             state[k] = v
         }
         if let m = msg { say(pair: m) }
-        send(patch, rollback: rollback)
+        send(patch, rollback: rollback, id: id ?? WallModel.actionID(patch))
     }
 
     /// Slider-style writes: local value moves now, one save 400 ms after the last change.
@@ -357,37 +366,62 @@ final class WallModel: ObservableObject {
         debounceBase = [:]
         debouncing = false
         guard !patch.isEmpty else { return }
-        send(patch, rollback: base)
+        send(patch, rollback: base, id: WallModel.actionID(patch))
     }
 
-    private func restore(_ rollback: JSON) {
+    /// Put back the old value of a key, unless a newer tap already changed it again.
+    private func restore(_ rollback: JSON, only patch: JSON) {
         for (k, v) in rollback {
+            if let want = patch[k], !WallVerify.matches(want, state[k]) { continue }
             if v is NSNull { state.removeValue(forKey: k) } else { state[k] = v }
         }
     }
 
-    private func shortError(_ e: Error) -> String {
-        let m = e.localizedDescription
-        return m.count > 60 ? "Check the connection and try again." : m
+    /// Re-reads the wall and checks every key of the patch. A key a newer tap already replaced locally counts as done.
+    private func verifyPatch(_ patch: JSON) async -> Bool {
+        guard let d = await WallAPI.get(), let st = d.obj("state") else { return false }
+        for (k, v) in patch {
+            if !WallVerify.matches(v, state[k]) { continue }
+            if !WallVerify.matches(v, st[k]) { return false }
+        }
+        return true
     }
 
-    private func send(_ patch: JSON, rollback: JSON) {
+    private func send(_ patch: JSON, rollback: JSON, id: String) {
+        Task { [self] in _ = await sendAsync(patch, rollback: rollback, id: id) }
+    }
+
+    /// Same as setPatch but waits for the answer, for sheets that stay open until the wall confirms.
+    func savePatch(_ patch: JSON, say msg: String? = nil, id: String? = nil) async -> Bool {
+        var rollback = JSON()
+        for (k, v) in patch {
+            rollback[k] = state[k] ?? NSNull()
+            state[k] = v
+        }
+        if let m = msg { say(pair: m) }
+        return await sendAsync(patch, rollback: rollback, id: id ?? WallModel.actionID(patch))
+    }
+
+    private func sendAsync(_ patch: JSON, rollback: JSON, id: String) async -> Bool {
         pending += 1
         lastWrite = Date()
-        Task { [self] in
-            do {
-                let r = try await AdminAPI.rpc("wall_admin_set", ["p_patch": patch])
-                pending = max(0, pending - 1)
-                lastWrite = Date()
-                if pending == 0, !debouncing, let st = (r as? JSON)?.obj("state") { state = st }
-                Haptics.ok()
-            } catch {
-                pending = max(0, pending - 1)
-                restore(rollback)
-                Haptics.fail()
-                say("DIDN'T SEND", shortError(error))
-            }
+        var echoed: JSON?
+        let ok = await Action.run(id, attempt: {
+            let r = try await AdminAPI.rpc("wall_admin_set", ["p_patch": patch])
+            echoed = (r as? JSON)?.obj("state")
+            return r
+        }, verify: { [self] in await verifyPatch(patch) })
+        pending = max(0, pending - 1)
+        lastWrite = Date()
+        if ok {
+            if pending == 0, !debouncing, let st = echoed { state = st }
+        } else {
+            restore(rollback, only: patch)
+            say("DIDN'T SAVE", "The wall didn't take that change.")
+            lastWrite = .distantPast
+            if pending == 0 { await refresh() }
         }
+        return ok
     }
 
     func togglePower() {
@@ -398,57 +432,70 @@ final class WallModel: ObservableObject {
         objectWillChange.send()
         pending += 1
         Task { [self] in
-            do {
+            var sent: JSON?
+            let ok = await Action.run("wall.power", attempt: {
                 let r = try await AdminAPI.rpc("wall_admin_power", ["p_on": goOn])
-                pending = max(0, pending - 1)
-                if let p = r as? JSON { power = p }
-                Haptics.ok()
-            } catch {
-                pending = max(0, pending - 1)
-                powerHint = nil
-                Haptics.fail()
-                say("DIDN'T SEND", shortError(error))
-            }
+                sent = r as? JSON
+                return r
+            }, verify: {
+                guard let d = await WallAPI.get(), let p = d.obj("power") else { return false }
+                let seq = p.int("seq") ?? 0
+                let want = sent?.int("seq") ?? 0
+                return seq >= want && (seq > want || p.bool("on") == goOn)
+            })
+            pending = max(0, pending - 1)
+            if ok { if let p = sent { power = p } } else { powerHint = nil; objectWillChange.send() }
         }
     }
 
+    /// focus, focus_left, focus_right, relaunch, airplay_restart. Never retried: a second nudge would move the focus twice.
     func command(_ cmd: String, say msg: String) {
         say(pair: msg)
         pending += 1
         Task { [self] in
-            do {
+            var sent: JSON?
+            let ok = await Action.run("wall.\(cmd)", idempotent: false, attempt: {
                 let r = try await AdminAPI.rpc("wall_admin_command", ["p_cmd": cmd])
-                pending = max(0, pending - 1)
-                if let p = r as? JSON { power = p }
-                Haptics.ok()
-            } catch {
-                pending = max(0, pending - 1)
-                Haptics.fail()
-                say("DIDN'T SEND", shortError(error))
-            }
+                sent = r as? JSON
+                return r
+            }, verify: {
+                guard let d = await WallAPI.get(), let p = d.obj("power") else { return false }
+                let seq = p.int("seq") ?? 0
+                let want = sent?.int("seq") ?? 0
+                return seq >= want && (seq > want || p.str("cmd") == cmd)
+            })
+            pending = max(0, pending - 1)
+            if ok, let p = sent { power = p }
         }
     }
 
     func geometry(redo: Bool) {
         pending += 1
         Task { [self] in
-            do {
+            var sent: JSON?
+            var nothing: String?
+            let ok = await Action.run(redo ? "wall.geometry_redo" : "wall.geometry_undo", idempotent: false, attempt: {
                 let r = try await AdminAPI.rpc(redo ? "wall_geometry_redo" : "wall_geometry_undo")
-                pending = max(0, pending - 1)
                 let d = r as? JSON
-                if d?.bool("ok") == true {
-                    Haptics.ok()
-                    say(redo ? "REDONE" : "UNDONE", redo ? "Wall layout stepped forward." : "Wall layout went back one step.")
-                    lastWrite = .distantPast
-                    await refresh()
-                } else {
-                    Haptics.nope()
-                    say(redo ? "NOTHING TO REDO" : "NOTHING TO UNDO", d?.str("error") ?? "")
+                if d?.bool("ok") == false {
+                    nothing = d?.str("error") ?? "Nothing to change."
+                    return ["ok": true] as JSON        // a normal answer, not a failure
                 }
-            } catch {
-                pending = max(0, pending - 1)
-                Haptics.fail()
-                say("DIDN'T SEND", shortError(error))
+                sent = d
+                return r
+            }, verify: {
+                if nothing != nil { return true }
+                guard let d = await WallAPI.get() else { return false }
+                return (d.int("version") ?? 0) >= (sent?.int("version") ?? 0)
+            })
+            pending = max(0, pending - 1)
+            if let n = nothing {
+                Haptics.nope()
+                say(redo ? "NOTHING TO REDO" : "NOTHING TO UNDO", n)
+            } else if ok {
+                say(redo ? "REDONE" : "UNDONE", redo ? "Wall layout stepped forward." : "Wall layout went back one step.")
+                lastWrite = .distantPast
+                await refresh()
             }
         }
     }
@@ -538,6 +585,13 @@ final class WallModel: ObservableObject {
     }
 
     func playStation(name: String, url: String, favicon: String) {
+        // The server drops a station whose address has spaces or is over 500 characters, with no error.
+        guard url.count <= 500, url.range(of: "^https?://[^\\s\"<>]{3,}$", options: .regularExpression) != nil else {
+            Haptics.nope()
+            say("CAN'T PLAY THAT", "That station's address won't work on the wall. Pick another.")
+            return
+        }
+        let favicon = (favicon.count <= 500 && favicon.range(of: "^https?://[^\\s\"<>]{3,}$", options: .regularExpression) != nil) ? favicon : ""
         let r: JSON = ["on": true, "name": String(name.prefix(60)), "url": url, "favicon": favicon, "ts": WallModel.nowMs()]
         setPatch(["radio": r, "atc": false], say: "RADIO|\(name.components(separatedBy: " - ").first ?? name) on the Desk HomePod.")
     }
@@ -577,5 +631,48 @@ final class WallModel: ObservableObject {
         setDnd(say: mode == "on" ? "QUIET|Quiet for 1\u{00A0}hour, until \(t)." : "SOUNDS ON|Sounds allowed until \(t).") {
             $0["override"] = WallModel.dndOverride(mode, until)
         }
+    }
+}
+
+// MARK: read-back helpers
+
+enum WallAPI {
+    /// wall_admin_get, or nil when the call fails.
+    static func get() async -> JSON? {
+        guard let r = try? await AdminAPI.rpc("wall_admin_get") else { return nil }
+        return r as? JSON
+    }
+}
+
+enum WallVerify {
+    private static let ledFx: Set<String> = ["sign", "turo", "scout", "alert", "hello"]
+
+    /// True when `got` (what the server kept) carries everything in `want` (what we sent).
+    /// Null matches null or a missing key; numbers match within 0.001; a patch object only has to be contained.
+    static func matches(_ want: Any, _ got: Any?) -> Bool {
+        if want is NSNull { return got == nil || got is NSNull }
+        guard let got, !(got is NSNull) else { return false }
+        if let w = want as? String { return (got as? String) == w }
+        if let w = want as? JSON {
+            guard let g = got as? JSON else { return false }
+            for (k, v) in w {
+                if k == "favicon", let s = v as? String, s.isEmpty { continue }       // the server stores an empty icon as null
+                if k == "test", let t = v as? JSON, let fx = t["fx"] as? String, !ledFx.contains(fx) { continue }
+                if !matches(v, g[k]) { return false }
+            }
+            return true
+        }
+        if let w = want as? [Any] {
+            guard let g = got as? [Any], g.count == w.count else { return false }
+            for i in w.indices where !matches(w[i], g[i]) { return false }
+            return true
+        }
+        if let w = want as? NSNumber, let g = got as? NSNumber {
+            let wb = CFGetTypeID(w) == CFBooleanGetTypeID()
+            let gb = CFGetTypeID(g) == CFBooleanGetTypeID()
+            if wb || gb { return w.boolValue == g.boolValue }
+            return abs(w.doubleValue - g.doubleValue) <= 0.001
+        }
+        return false
     }
 }
