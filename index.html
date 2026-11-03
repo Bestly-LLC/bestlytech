@@ -192,6 +192,19 @@
           if (wt) wt.setAttribute("content", "Bestly Admin");
         }
       }
+      // Bestly Studio pages carry the Studio orb, the same icon the Studio app is registered with
+      // on TikTok/Meta/LinkedIn/Pinterest. TikTok rejects the app when the site favicon differs.
+      if (location.pathname.indexOf("/studio") === 0) {
+        document.title = "Bestly Studio";
+        document.querySelectorAll('link[rel="icon"],link[rel="apple-touch-icon"]').forEach(function (l) {
+          l.setAttribute("data-site-href", l.getAttribute("href"));
+          l.href = l.rel === "apple-touch-icon" ? "/studio-apple-touch-icon.png"
+            : l.type === "image/x-icon" ? "/studio-favicon.ico"
+            : l.getAttribute("sizes") === "32x32" ? "/studio-favicon.png" : "/studio-favicon-512.png";
+        });
+        var wts = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+        if (wts) wts.setAttribute("content", "Bestly Studio");
+      }
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { SEOHead } from "@/components/SEOHead";
+import { useStudioFavicon } from "@/hooks/useStudioFavicon";
 import type { ReactNode } from "react";
 
 /**
@@ -41,6 +42,7 @@ function LegalPage({
 }: {
   title: string; intro: ReactNode; sections: Section[]; other: { to: string; label: string }; path: string; description: string;
 }) {
+  useStudioFavicon();
   return (
     <>
       <SEOHead title={`${title} | Bestly Studio`} description={description} path={path} image="/studio/og-studio.jpg" />

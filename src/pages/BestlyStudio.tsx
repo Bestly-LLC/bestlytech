@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { SEOHead } from "@/components/SEOHead";
+import { useStudioFavicon } from "@/hooks/useStudioFavicon";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,6 +93,7 @@ const faqs = [
 ];
 
 export default function BestlyStudio() {
+  useStudioFavicon();
   return (
     <>
       <SEOHead
@@ -105,7 +107,10 @@ export default function BestlyStudio() {
       <section className="border-b border-border bg-background">
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-2 lg:px-8 lg:py-28">
           <AnimatedSection animation="fade-in" immediate>
-            <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-primary">Bestly Studio</p>
+            <p className="mb-4 flex items-center gap-3 text-sm font-semibold uppercase tracking-widest text-primary">
+              <img src="/studio-favicon-512.png" width={40} height={40} alt="" className="h-10 w-10 shrink-0 rounded-[22%]" />
+              <span className="whitespace-nowrap">Bestly Studio</span>
+            </p>
             <h1 className="font-modern text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
               We make your social posts. You approve them from your phone. We post them.
             </h1>
