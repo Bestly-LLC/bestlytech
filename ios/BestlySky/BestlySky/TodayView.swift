@@ -91,7 +91,7 @@ struct TodayView: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: "clock").foregroundStyle(AT.orange).font(.system(size: 18, weight: .semibold))
-                Text(s.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(AT.text).lineLimit(2).minimumScaleFactor(0.85)
+                Text(s.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(AT.text).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 6)
                 if let since = s.since {
                     Text(Self.age(since)).font(.system(size: 13)).foregroundStyle(AT.hex(0xFDBA74)).lineLimit(1)
@@ -208,8 +208,8 @@ struct TodayView: View {
                 HStack(spacing: 12) {
                     QuarterRing(stage: t.stage, tint: t.tint)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(t.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(AT.text).lineLimit(2).minimumScaleFactor(0.85)
-                        Text(t.line).font(.system(size: 13)).foregroundStyle(AT.secondary).lineLimit(2).minimumScaleFactor(0.85)
+                        Text(t.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(AT.text).fixedSize(horizontal: false, vertical: true)
+                        Text(t.line).font(.system(size: 13)).foregroundStyle(AT.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(AT.hex(0x71717A))
@@ -233,7 +233,7 @@ struct TodayView: View {
                     Text("MY DAY").font(.system(size: 13, weight: .semibold)).tracking(0.3).foregroundStyle(AT.secondary)
                     Spacer()
                     Text("West Hollywood" + (model.nowTempF.map { " \($0)\u{00A0}\u{00B0}F" } ?? ""))
-                        .font(.system(size: 13)).foregroundStyle(AT.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                        .font(.system(size: 13)).foregroundStyle(AT.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 if model.hours.isEmpty {
                     Text(model.weatherFailed ? "Couldn't load the weather. Retrying." : "Loading the weather")
@@ -265,9 +265,9 @@ struct TodayView: View {
                     ForEach(model.events) { e in
                         HStack(spacing: 10) {
                             RoundedRectangle(cornerRadius: 2).fill(AT.lavender).frame(width: 4, height: 28)
-                            Text(e.title).font(.system(size: 15)).foregroundStyle(AT.text).lineLimit(2).minimumScaleFactor(0.85)
+                            Text(e.title).font(.system(size: 15)).foregroundStyle(AT.text).fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 6)
-                            Text(glue(e.when)).font(.system(size: 13)).foregroundStyle(AT.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                            Text(glue(e.when)).font(.system(size: 13)).foregroundStyle(AT.secondary).fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.horizontal, 12).padding(.vertical, 8)
                         .background(AT.inner, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
