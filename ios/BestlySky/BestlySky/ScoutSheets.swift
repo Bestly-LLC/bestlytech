@@ -168,7 +168,7 @@ struct ScoutSettingsSheet: View {
         switch model.prefs.offReason {
         case "cap": return "Free AI only until midnight. Today hit the \(capText) cap."
         case "hour_up": return "Free AI only. Flip this on, or tap \u{201C}Yes, use paid AI\u{201D} in a chat for another hour."
-        case "watchdog": return "From \(model.prefs.offBy ?? "Ares"): the budget watchdog caught paid spending while this was off and shut it down, so it can't be turned on until the watchdog clears it. Free AI only."
+        case "watchdog": return "From \(model.prefs.offBy ?? "Scout"): a budget check switched paid AI off. It stays off until that check clears. Free AI only."
         default: return "Free AI only. If a job needs Claude, Scout asks first. A yes turns this on for one hour."
         }
     }
