@@ -6,6 +6,7 @@ struct MoreView: View {
     @ObservedObject private var state = AdminState.shared
     @ObservedObject private var avaStore = AvaStore.shared
     @State private var confirmSignOut = false
+    @State private var showFailures = false
 
     private struct SafariRow: Identifiable { var id: String { title }; var title: String; var url: URL }
     private let safariRows: [SafariRow] = [
@@ -56,7 +57,9 @@ struct MoreView: View {
                                 .background(AT.card, in: RoundedRectangle(cornerRadius: AT.radius, style: .continuous))
                         }
                         .padding(.top, 6)
-                        Text("Build \(SkyAPI.appVersion)").font(.system(size: 12)).foregroundStyle(AT.secondary).frame(maxWidth: .infinity).padding(.top, 4)
+                        Text("Build \(SkyAPI.appVersion)").font(.system(size: 12)).foregroundStyle(AT.secondary).frame(maxWidth: .infinity, minHeight: 44).padding(.top, 4)
+                            .contentShape(Rectangle())
+                            .onLongPressGesture(minimumDuration: 0.8) { Haptics.select(); showFailures = true }
                     }
                     .padding(.horizontal, 16).padding(.bottom, 24)
                 }
@@ -70,6 +73,7 @@ struct MoreView: View {
                 case .agents: AgentsScreen()
                 }
             }
+            .sheet(isPresented: $showFailures) { FailuresSheet().preferredColorScheme(.dark) }
             .confirmationDialog("Sign out of Bestly Admin?", isPresented: $confirmSignOut, titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) { auth.signOut() }
                 Button("Cancel", role: .cancel) {}
@@ -99,5 +103,37 @@ struct MoreView: View {
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
         .background(AT.card, in: RoundedRectangle(cornerRadius: AT.radius, style: .continuous))
+    }
+}
+
+/// Hidden diagnostics: the last buttons that failed (long-press the build number).
+struct FailuresSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AT.bg.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if Action.lastFailures.isEmpty {
+                            Text("No failed buttons since the app opened.").font(.system(size: 15)).foregroundStyle(AT.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                        ForEach(Action.lastFailures) { f in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(AdminFmt.time.string(from: f.at)).font(.system(size: 13)).foregroundStyle(AT.secondary)
+                                Text(f.actionId).font(.system(size: 15, weight: .semibold)).foregroundStyle(AT.text).fixedSize(horizontal: false, vertical: true)
+                                Text(f.reason).font(.system(size: 14)).foregroundStyle(AT.text).fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(AT.card, in: RoundedRectangle(cornerRadius: AT.radius, style: .continuous))
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle("Recent failures")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
     }
 }

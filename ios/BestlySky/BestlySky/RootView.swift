@@ -15,6 +15,7 @@ struct RootView: View {
         }
         .tint(AT.lime)
         .preferredColorScheme(.dark)
+        .overlay(alignment: .bottom) { ActionToast() }
         .sheet(isPresented: $state.showAva) { AvaInboxView().preferredColorScheme(.dark) }
         .sheet(isPresented: $state.showCompass) { CompassView().preferredColorScheme(.dark) }
         .onOpenURL { url in

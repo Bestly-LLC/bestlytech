@@ -12,6 +12,20 @@ enum AdminAPI {
     private static var lastReport: [String: Date] = [:]
     private static let pendingKey = "adminPendingReports"
 
+    /// URLSession.shared caps the whole transfer at 7 days but its request timeout is 60 s; admin-chat needs both at 150 s.
+    private static let longSession: URLSession = {
+        let c = URLSessionConfiguration.default
+        c.timeoutIntervalForRequest = 150
+        c.timeoutIntervalForResource = 150
+        c.waitsForConnectivity = false
+        return URLSession(configuration: c)
+    }()
+
+    /// A button (see Action.run) failed: tell Scout which one.
+    static func reportAction(_ id: String, _ reason: String) async {
+        await report("action_failed", "\(id): \(reason)")
+    }
+
     /// POST /rest/v1/rpc/<name>
     static func rpc(_ name: String, _ params: JSON = [:]) async throws -> Any {
         try await call("/rest/v1/rpc/\(name)", params, label: "rpc \(name)")
@@ -42,12 +56,13 @@ enum AdminAPI {
     private static func send(_ path: String, _ body: JSON, token: String) async throws -> Any {
         var req = URLRequest(url: URL(string: AdminConfig.supabaseURL.absoluteString + path)!)
         req.httpMethod = "POST"
-        req.timeoutInterval = path.contains("admin-chat") ? 130 : 25
+        let long = path.contains("admin-chat")          // server replies in about 118 s
+        req.timeoutInterval = long ? 150 : 25
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(AdminConfig.anonKey, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await (long ? longSession : URLSession.shared).data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         let parsed = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
         guard (200..<300).contains(code) else {
@@ -63,7 +78,7 @@ enum AdminAPI {
     /// Without a session the report waits on the phone and goes out after the next sign-in (screen views are dropped).
     static func report(_ kind: String, _ detail: String) async {
         let now = Date()
-        let perScreen = kind == "screen_view" || kind == "screen_load_failed"
+        let perScreen = kind == "screen_view" || kind == "screen_load_failed" || kind == "action_failed"
         let key = perScreen ? kind + "|" + detail : kind
         let window: TimeInterval = kind == "screen_view" ? 30 : 60
         if let last = lastReport[key], now.timeIntervalSince(last) < window { return }
