@@ -1,0 +1,1 @@
+(async()=>{window.__mnOff=true;window.__scHold('flight');await new Promise(r=>setTimeout(r,3500));return JSON.stringify({ws:window.__ws(),bb:window.__bb(),wingHit:window.__tgb().wingHit,sig:(()=>{const s=document.querySelector('#wingFlight .v2sign');return s?s.textContent:null})()})})()
