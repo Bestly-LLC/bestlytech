@@ -15,7 +15,7 @@ import base64, glob, hashlib, json, os, re, shutil, signal, subprocess, sys, thr
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-VERSION = "1.11.2"  # 1.11.2: the self-test never starts a call unless call notifications are confirmed off for Jared in the test room (1.11.0 still rang him if that failed outside quiet hours); the daily window is read in Pacific time, not the Mac's clock. 1.11.1: the 45-minute row check (which can end in a big WebDAV PUT) runs off the main loop, so a failing upload no longer freezes Scout's poll for minutes. 1.11.0: the daily self-test never rings Jared (call notifications switched off for his seat in the test room; if that cannot be done it is skipped in quiet hours) and only runs 10 AM-8 PM; the Google Meet watcher (meet/meetwatch.py) can ask this agent to record locally (~/MeetingRec/.start-request.json / .stop-request); ingest passes source + client_slug from the recording meta. 1.10.4: Start Recording.app is fetched back from iCloud before every open (the full disk evicted it on 2026-10-18 and macOS answered "Resource deadlock avoided"); an open that still fails is reported to Scout at once. 1.10.3: the first audio of a call reaches the notetaker sooner (8 s hold, the notetaker starts early and in parallel with the recorder, faster looks at Talk). 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
+VERSION = "1.12.0"  # 1.12.0: big uploads to Bestly Cloud go up in resumable 10-24 MB WebDAV chunks (ncupload.py), over the LAN address when the Mac is home and the tunnel otherwise, and are verified by size; an upload failing for 30 minutes is retried with small chunks, then alerts recorder.upload.stuck (7 AM digest). Cause: single 55-60 MB PUTs through the tunnel always died (Broken pipe / Cloudflare 524 / Apache 400). 1.11.2: the self-test never starts a call unless call notifications are confirmed off for Jared in the test room (1.11.0 still rang him if that failed outside quiet hours); the daily window is read in Pacific time, not the Mac's clock. 1.11.1: the 45-minute row check (which can end in a big WebDAV PUT) runs off the main loop, so a failing upload no longer freezes Scout's poll for minutes. 1.11.0: the daily self-test never rings Jared (call notifications switched off for his seat in the test room; if that cannot be done it is skipped in quiet hours) and only runs 10 AM-8 PM; the Google Meet watcher (meet/meetwatch.py) can ask this agent to record locally (~/MeetingRec/.start-request.json / .stop-request); ingest passes source + client_slug from the recording meta. 1.10.4: Start Recording.app is fetched back from iCloud before every open (the full disk evicted it on 2026-10-18 and macOS answered "Resource deadlock avoided"); an open that still fails is reported to Scout at once. 1.10.3: the first audio of a call reaches the notetaker sooner (8 s hold, the notetaker starts early and in parallel with the recorder, faster looks at Talk). 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -93,7 +93,8 @@ auto = {"next": 0, "fails": 0, "hold": {}, "false_since": {}, "blocked": set(), 
 #    Scout needs to write the fix.
 REPO_READ = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/repo-read"   # authenticated repo fetch (Vault token stays server side)
 REPO_DIR = "scripts/meetingrec/"
-SYNC = {"notetaker/notetaker.js": f"{HOME}/notetaker/notetaker.js",
+SYNC = {"ncupload.py": f"{HOME}/ncupload.py",
+        "notetaker/notetaker.js": f"{HOME}/notetaker/notetaker.js",
         "notetaker/tester.js": f"{HOME}/notetaker/tester.js",
         "talk_tracks.py": f"{HOME}/talk_tracks.py",
         "voicebank.py": f"{HOME}/voicebank.py",
@@ -1420,8 +1421,95 @@ def meeting_row(name):
         return None
 
 
+def load_ncupload():
+    """ncupload.py (synced next to agent.py), re-read when it changes. None if it is missing or broken."""
+    import importlib.util
+    p = f"{HOME}/ncupload.py"
+    if not os.path.exists(p):
+        return None
+    mod = heal.get("ncupload")
+    stamp = os.path.getmtime(p)
+    if mod is None or heal.get("ncupload_at") != stamp:
+        spec = importlib.util.spec_from_file_location("ncupload", p)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        heal["ncupload"], heal["ncupload_at"] = mod, stamp
+    return mod
+
+
+UPLOAD_STUCK_S = 30 * 60        # an upload that has kept failing this long: retry once with small chunks, then alert (7 AM digest)
+upload_watch_state = {"next": 0, "running": False, "alerted": False}
+
+
+def upload_watch_tick():
+    """Watchdog for uploads to Bestly Cloud. ncupload.py notes every failing upload in ~/MeetingRec/.upload-fails.json (the agent's own
+    and autosync.sh's). Failing for over 30 minutes: retry once with small (2 MB) chunks over LAN then tunnel; still failing: alert
+    recorder.upload.stuck (owner Scout Notetaker, 7 AM digest). Nothing failing any more: resolve it."""
+    st = upload_watch_state
+    if time.time() < st["next"] or st["running"]:
+        return
+    st["next"] = time.time() + 300
+    try:
+        fails = json.loads(read(f"{HOME}/.upload-fails.json") or "{}")
+    except ValueError:
+        fails = {}
+    nu = load_ncupload()
+    if not nu:
+        return
+    for rel, e in list(fails.items()):
+        if not os.path.exists(e.get("local", "")):
+            fails.pop(rel, None)                        # the file is gone: nothing left to send
+    stuck = {rel: e for rel, e in fails.items() if time.time() - e.get("first", time.time()) > UPLOAD_STUCK_S}
+    if not fails:
+        if st["alerted"]:
+            st["alerted"] = False
+            health("upload.stuck", "resolved", "Uploads to Bestly Cloud are working again", "Every pending upload went through and the sizes match.", "info")
+        return
+    if not stuck:
+        return
+
+    def go():
+        st["running"] = True
+        try:
+            still = {}
+            for rel, e in stuck.items():
+                if not e.get("small_tried"):
+                    cur = nu._fails()
+                    if rel in cur:
+                        cur[rel]["small_tried"] = True
+                        nu._save_fails(cur)
+                    log("upload stuck over 30 min, retrying with small chunks", rel)
+                    ok, detail = nu.upload(e["local"], rel, small=True, pw=nc_password())
+                    if ok:
+                        continue
+                    e = nu._fails().get(rel, e)
+                still[rel] = e
+            late = {r: e for r, e in still.items() if nu._fails().get(r, {}).get("small_tried")}
+            if late and not st["alerted"]:
+                st["alerted"] = True
+                lines = "\n".join(f"- {r}: {e.get('err', '')[:160]}" for r, e in list(late.items())[:5])
+                health("upload.stuck", "problem", "A recording could not be uploaded to Bestly Cloud",
+                       f"{len(late)} file(s) have failed to upload for over 30 minutes, including a retry with small chunks over the home network and "
+                       f"the tunnel:\n{lines}\nThe files are safe on the Mac mini (~/MeetingRec/recordings). Scout keeps retrying.", "warning")
+        finally:
+            st["running"] = False
+    threading.Thread(target=go, daemon=True).start()
+
+
 def dav(method, rel, headers=None, timeout=180, body_path=None):
     """One WebDAV request on Jared's Nextcloud files. Returns the HTTP status, 0 if there was no answer."""
+    if method == "PUT" and body_path:
+        # Big files go up in verified, resumable chunks (LAN first, then the tunnel): one long PUT through the tunnel died every time
+        # on 2026-11-03 (Broken pipe / Cloudflare 524 / Apache 400). Only the plain PUT below is left as a fallback.
+        try:
+            nu = load_ncupload()
+            if nu:
+                ok, detail = nu.upload(body_path, rel, pw=nc_password())
+                if not ok:
+                    log("webdav chunked upload failed", rel, detail)
+                return 201 if ok else 0
+        except Exception as e:  # noqa: BLE001
+            log("ncupload unavailable, plain PUT", e)
     h = {"Authorization": "Basic " + base64.b64encode(f"jared:{nc_password()}".encode()).decode()}
     h.update(headers or {})
     data = None
@@ -2145,6 +2233,10 @@ def main():
                 heal_tick()
             except Exception as e:  # noqa: BLE001
                 log("notetaker/heal tick failed", e)
+            try:
+                upload_watch_tick()
+            except Exception as e:  # noqa: BLE001
+                log("upload watch failed", e)
             try:
                 if time.time() >= mailspam_job["next"]:
                     mailspam_job["next"] = time.time() + 60

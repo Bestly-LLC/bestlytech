@@ -22,7 +22,12 @@ OK=0; FAIL=0
 for f in "recordings/$NAME-system.m4a" "recordings/$NAME-mic.m4a" "recordings/$NAME-room.m4a" "recordings/$NAME-transcript.txt" "recordings/$NAME-transcript-named.txt" "recordings/$NAME-transcript-turns.txt"; do
   [ -f "$f" ] || continue
   bn=$(basename "$f")
-  code=$(curl -s -o /dev/null -w "%{http_code}" -u "jared:$PW" -T "$f" "$B/$ROOT/$DAY/$bn")
+  # chunked, resumable, size-verified (LAN first, then the tunnel); the old single PUT only if ncupload.py is missing
+  if [ -f "$HOME/MeetingRec/ncupload.py" ]; then
+    if python3 "$HOME/MeetingRec/ncupload.py" "$f" "Meeting Recordings/$DAY/$bn" >/dev/null 2>&1; then code=201; else code=000; fi
+  else
+    code=$(curl -s -o /dev/null -w "%{http_code}" -u "jared:$PW" -T "$f" "$B/$ROOT/$DAY/$bn")
+  fi
   case "$code" in
     20*) echo "  uploaded  $bn  ($(du -h "$f" | cut -f1))"; OK=$((OK+1)) ;;
     *)   echo "  FAILED    $bn  (HTTP $code)"; FAIL=$((FAIL+1)) ;;
