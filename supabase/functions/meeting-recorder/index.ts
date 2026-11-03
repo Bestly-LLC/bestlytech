@@ -193,12 +193,84 @@ async function asAdmin(req: Request, body: Record<string, any>) {
   return J({ ok: false, error: `unknown op ${op}` }, 400);
 }
 
+// ── Google Meet watcher (meetwatch.py on the Mac mini, 2026-11-03) ───────────────────────────────────────────────────────────
+const MEET_PATCH_KEYS = ["status", "skip", "client_slug", "recording_name", "recording_id", "attempts", "joined_at", "left_at", "last_note"];
+const MEET_STATUSES = ["scheduled", "joining", "in_call", "processing", "done", "failed", "cancelled", "skipped"];
+
+async function meetOp(op: string, body: Record<string, any>) {
+  if (op === "meet_mail") {
+    // Calendar invites / updates / cancellations that reached jared@bestly.tech in the last 14 days (the Mac parses them).
+    const since = new Date(Date.now() - 14 * 86400_000).toISOString();
+    const { data, error } = await db.from("bestly_mail").select("id, subject, sent_at, from_addr, body_text")
+      .gte("sent_at", since)
+      .or("body_text.ilike.%meet.google.com/%,subject.ilike.Canceled event%,subject.ilike.Cancelled event%")
+      .order("sent_at", { ascending: false }).limit(80);
+    if (error) return J({ ok: false, error: error.message }, 500);
+    return J({ ok: true, mails: (data ?? []).map((m: any) => ({ ...m, body_text: String(m.body_text ?? "").slice(0, 5000) })) });
+  }
+  if (op === "meet_list") {
+    const { data, error } = await db.from("meet_watch").select("*")
+      .gt("ends_at", new Date(Date.now() - 3 * 86400_000).toISOString()).order("starts_at").limit(200);
+    if (error) return J({ ok: false, error: error.message }, 500);
+    return J({ ok: true, rows: data ?? [] });
+  }
+  if (op === "meet_upsert") {
+    const rows = Array.isArray(body.rows) ? body.rows.slice(0, 50) : [];
+    let n = 0;
+    for (const r of rows) {
+      const key = String(r.event_key ?? "").slice(0, 200);
+      const code = String(r.meet_code ?? "");
+      if (!key || !/^[a-z]{3}-[a-z]{4}-[a-z]{3}$/.test(code)) continue;
+      const s = Date.parse(r.starts_at), e = Date.parse(r.ends_at);
+      if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) continue;
+      const fields: Record<string, unknown> = {
+        meet_code: code, meet_url: `https://meet.google.com/${code}`, title: String(r.title ?? "").slice(0, 300) || null,
+        starts_at: new Date(s).toISOString(), ends_at: new Date(e).toISOString(), organizer: r.organizer ? String(r.organizer).slice(0, 200) : null,
+        guests: Array.isArray(r.guests) ? r.guests.map((g: unknown) => String(g).slice(0, 200)).slice(0, 40) : [],
+      };
+      if (r.source) fields.source = String(r.source).slice(0, 30);
+      if (r.source_mail_id) fields.source_mail_id = String(r.source_mail_id);
+      if (r.google_event_id) fields.google_event_id = String(r.google_event_id).slice(0, 200);
+      if (r.client_slug && /^[a-z0-9-]{2,40}$/.test(String(r.client_slug))) fields.client_slug = String(r.client_slug);
+      const { data: ex } = await db.from("meet_watch").select("id, status").eq("event_key", key).maybeSingle();
+      if (ex) {
+        // a call that is already running or finished is never re-armed by a later mail
+        if (!["scheduled", "cancelled", "failed", "skipped"].includes(ex.status)) continue;
+        const patch: Record<string, unknown> = { ...fields };
+        if (ex.status === "cancelled" || ex.status === "failed") { if (!r.cancelled) patch.status = "scheduled"; }
+        if (r.cancelled) patch.status = "cancelled";
+        await db.from("meet_watch").update(patch).eq("id", ex.id);
+      } else {
+        await db.from("meet_watch").insert({ event_key: key, ...fields, status: r.cancelled ? "cancelled" : "scheduled" });
+      }
+      n++;
+    }
+    return J({ ok: true, n });
+  }
+  if (op === "meet_update") {
+    const id = String(body.id ?? "");
+    const patch: Record<string, unknown> = {};
+    for (const k of MEET_PATCH_KEYS) if (body.patch && k in body.patch) patch[k] = body.patch[k];
+    if (patch.status && !MEET_STATUSES.includes(String(patch.status))) return J({ ok: false, error: "bad status" }, 400);
+    if (!id || !Object.keys(patch).length) return J({ ok: false, error: "id and patch required" }, 400);
+    const { error } = await db.from("meet_watch").update(patch).eq("id", id);
+    return error ? J({ ok: false, error: error.message }, 500) : J({ ok: true });
+  }
+  if (op === "meet_beat") {
+    const { error } = await db.rpc("pi_job_report", { p_job: "meet_watch", p_ok: !!body.ok, p_summary: String(body.summary ?? "").slice(0, 300), p_duration_ms: null });
+    return error ? J({ ok: false, error: error.message }, 500) : J({ ok: true });
+  }
+  return J({ ok: false, error: `unknown op ${op}` }, 400);
+}
+
 async function asAgent(key: string, body: Record<string, any>) {
   const { data: row } = await db.from("meeting_recorder_state").select("key_sha256").eq("id", 1).single();
   if (!row?.key_sha256 || (await sha256(key)) !== row.key_sha256) return J({ ok: false, error: "bad key" }, 401);
 
   const op = String(body.op ?? "poll");
   const now = new Date().toISOString();
+
+  if (op.startsWith("meet_")) return meetOp(op, body);
 
   if (op === "poll") {
     const s = (body.state ?? {}) as Record<string, any>;
@@ -304,8 +376,12 @@ async function asAgent(key: string, body: Record<string, any>) {
     // The Talk room the call was in (Scout started the recording for a known room, or the notetaker joined one). The database
     // turns it into the client (meeting_client trigger: approval_clients.talk_room) in the SAME insert, so scout-daily's 'call'
     // step, which the insert fires, already sees client_slug. Only set when sent, so a re-ingest never blanks it.
+    // A Google Meet call sends the meet code (abc-defg-hij) as its room, plus source 'google-meet' and, when known, client_slug.
     const room = String(body.room ?? "");
-    if (/^[a-z0-9]{4,32}$/.test(room)) row.room = room;
+    if (/^[a-z0-9-]{4,32}$/.test(room)) row.room = room;
+    if (String(body.source ?? "") === "google-meet") row.source = "google-meet";
+    const cs = String(body.client_slug ?? "");
+    if (/^[a-z0-9-]{2,40}$/.test(cs)) row.client_slug = cs;
     const { error } = await db.from("meeting_recordings").upsert(row, { onConflict: "name" });
     if (error) return J({ ok: false, error: error.message }, 500);
     return J({ ok: true });
