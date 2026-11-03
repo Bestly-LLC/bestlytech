@@ -26,6 +26,20 @@ if [ ! -f BestlySky/Generated/SkyKey.swift ]; then       # never committed; same
   printf 'enum SkyKey { static let value = "%s" }\n' "$(cat "$HOME/.bestly/sky/app_key")" > BestlySky/Generated/SkyKey.swift
 fi
 
+echo "### CONTRACT CHECK $(date)"      # App Contract Check: every server call in the app must exist on the server
+CHECK="$HOME/Bestly/admin-app-contract/check.py"
+WEB="$HOME/Developer/bestlytech"
+if [ -f "$CHECK" ]; then
+  set +e
+  /usr/bin/python3 "$CHECK" BestlySky $([ -d "$WEB/.git" ] && echo "--repo $WEB")
+  RC=$?
+  set -e
+  if [ "$RC" = 1 ]; then echo "### CONTRACT CHECK FAILED (the app calls server things that do not exist; see MISMATCH lines above)"; exit 5; fi
+  if [ "$RC" != 0 ]; then echo "### CONTRACT CHECK COULD NOT RUN (exit $RC), shipping anyway"; fi
+else
+  echo "### CONTRACT CHECK SKIPPED (no $CHECK)"
+fi
+
 echo "### PROFILES $(date)"
 /usr/bin/python3 scripts/sky_asc.py profiles
 
