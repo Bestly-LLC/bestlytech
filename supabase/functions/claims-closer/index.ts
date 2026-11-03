@@ -36,6 +36,10 @@ import { llm, LlmUnavailable } from "../_shared/free-llm.ts";
 import { corsWith } from "../_shared/cors.ts";
 import { estimatePipeline, previewParse, previewRequest, askShops, type Ctx } from "./estimates.ts";
 import { answeredQuestions, bookingStep, thirdParties } from "./booking.ts";
+import { moneyGuard, planGuard, reviewGuard } from "./guards.ts";
+import { laTime } from "./time.ts";
+import { autoBookStep, deadlineStep, loadAutonomy, teslaStep } from "./engine.ts";
+import { insurerStep, outsideClaimsStep } from "./insurer.ts";
 
 const SECRETS: string[] = (() => {
   const out: string[] = [];
@@ -73,50 +77,16 @@ async function loadSettings() {
 // verify snippet the Pi reader looks for in the Turo thread after sending (same rule as claims_draft_decide)
 const snippetOf = (t: string) => (/^[A-Za-z0-9 ,.]{8,40}/.exec(t.replace(/\s+/g, " ")) ?? [""])[0].slice(0, 40);
 
-// "October 06 at 11:55 AM" (Turo's wording, Los Angeles time) -> epoch ms, this year (next year if that is far past).
-const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
-export function laTime(text: string, nowMs = Date.now()): number | null {
-  const m = /^([A-Za-z]+) (\d{1,2}) at (\d{1,2}):(\d{2}) ?([AP]M)$/i.exec(text.trim());
-  if (!m) return null;
-  const mon = MONTHS.indexOf(m[1].toLowerCase());
-  if (mon < 0) return null;
-  let h = Number(m[3]) % 12; if (m[5].toUpperCase() === "PM") h += 12;
-  const year = Number(new Date(nowMs).toLocaleDateString("en-CA", { timeZone: TZ }).slice(0, 4));
-  const at = (y: number) => {
-    const guess = Date.UTC(y, mon, Number(m[2]), h, Number(m[4]));
-    const shown = new Date(new Date(guess).toLocaleString("en-US", { timeZone: TZ })).getTime();
-    const asUtc = new Date(new Date(guess).toLocaleString("en-US", { timeZone: "UTC" })).getTime();
-    return guess + (asUtc - shown);   // shift by the LA offset on that date
-  };
-  const t = at(year);
-  return t < nowMs - 200 * 864e5 ? at(year + 1) : t;
-}
+// laTime ("October 06 at 11:55 AM" in Turo's wording, Los Angeles time) lives in time.ts with the other Pacific-time helpers.
+export { laTime };
 
 type Case = Record<string, any>;
 type Msg = { message_id: string; sent_at: string; role: string; author: string | null; body: string | null };
 type Draft = Record<string, any>;
 
 // ---------------------------------------------------------------- guards
-// Guest messages never mention reviews, ratings or stars, in any form (Jared, 2026-10-26).
-export function reviewGuard(text: string): { ok: boolean; cleaned: string } {
-  const sentences = text.split(/(?<=[.!?])\s+/);
-  const kept = sentences.filter((s) => !/\b(review\w*|rating\w*|rate you|stars?)\b/i.test(s));
-  return { ok: kept.length === sentences.length, cleaned: kept.join(" ").trim() };
-}
-
-// Jared's rule: hosts never tell a guest their deductible / plan cap / out-of-pocket max, and never speak for Turo (its plans, policies,
-// processes, payment options). Same wording list the SQL watchdog (claims_guard_watch) uses, slightly stricter.
-const TURO_VOICE = /deductible|out[-\s]of[-\s]pocket|protection|\bplan\s+(max|cap)|\b(turo|coverage|insurance)\s+plan|\bcap(s|ped)?\b|\bmax(imum)?\b|\bturo['\u2019]s\b|\b(through|via|in|on|using|with)\s+(the\s+)?turo\b|\bturo\s+(app|polic|process|team|support|insurance|rules?|claims?)|clause\s*2\.6|car[-\s]sharing agreement|terms of service/i;
-export function planGuard(text: string): boolean { return !TURO_VOICE.test(text); }
-
-// dollar figures: only the body shop estimate total may appear in a guest message
-function moneyGuard(text: string, allowed: number[]): boolean {
-  for (const m of text.matchAll(/\$\s?([0-9][0-9,]*(?:\.[0-9]{1,2})?)/g)) {
-    const v = Number(m[1].replace(/,/g, ""));
-    if (!allowed.some((a) => Math.abs(a - v) < 0.01)) return false;
-  }
-  return true;
-}
+// reviewGuard / planGuard / moneyGuard live in guards.ts (pure, so vitest runs them); the same ones now gate every outbound path through send.ts.
+export { reviewGuard, planGuard };
 
 // strip any sentence that carries a plan / cap / dollar figure out of text the model will read (old cases still have "$500" in goal and facts)
 const SCRUB = /out[-\s]of[-\s]pocket|plan\s+(max|cap)|protection|deductible|\bturo['\u2019]s\b|\bguest\s+(owes|plan)|\$\s?[0-9]/i;
@@ -306,6 +276,18 @@ async function work(c: Case, daily: boolean, settings: Record<string, any>): Pro
     }
   }
 
+  // ---- 2026-10-28 autonomy: each step is isolated, and each sends only through canSend (hold, return gate, guards)
+  const auto = await loadAutonomy(ctx);
+  const isolated = async (name: string, step: () => Promise<void>) => {
+    try { await step(); }
+    catch (e) {
+      notes.push(`${name} error: ${String(e).slice(0, 100)}`);
+      await event(c, "error", `Claims Closer step failed: ${name}`, { error: String(e).slice(0, 300) });
+      try { await db.rpc("bestly_raise", { p_key: `claims.${name.replace(/ /g, "-")}`, p_kind: "problem", p_severity: "warning", p_title: `Claims Closer ${name} step failed`, p_body: String(e).slice(0, 300), p_area: "turo", p_needs_jared: null, p_healed: false }); } catch { /* */ }
+    }
+  };
+  await isolated("tesla estimate", () => teslaStep(ctx, c, notes));
+
   // ---- v2: shops, estimates, choosing, the Turo invoice (failures here never block talking to the guest)
   try { await estimatePipeline(ctx, c, settings, notes); }
   catch (e) {
@@ -324,6 +306,14 @@ async function work(c: Case, daily: boolean, settings: Record<string, any>): Pro
       await event(c, "error", `Claims Closer step failed: ${name}`, { error: String(e).slice(0, 300) });
       try { await db.rpc("bestly_raise", { p_key: `claims.${name.replace(" ", "-")}`, p_kind: "problem", p_severity: "warning", p_title: `Claims Closer ${name} step failed`, p_body: String(e).slice(0, 300), p_area: "turo", p_needs_jared: null, p_healed: false }); } catch { /* */ }
     }
+  }
+
+  // ---- deadlines and route (item 2, 12), the guest's insurer (item 9), booking on its own (item 10)
+  {
+    const fresh = (await db.from("claim_cases").select("*").eq("id", c.id).maybeSingle()).data ?? c;
+    await isolated("deadlines", () => deadlineStep(ctx, fresh, auto, notes));
+    await isolated("insurer", () => insurerStep(ctx, fresh, notes));
+    await isolated("auto booking", () => autoBookStep(ctx, fresh, auto, notes));
   }
 
   // ---- what to say next (one pending draft per case, nothing while a message is going out)
@@ -436,6 +426,8 @@ Deno.serve(async (req) => {
         await db.from("claim_cases").update({ last_run_at: new Date().toISOString() }).eq("id", c.id);
       }
     }
+    try { const n: string[] = []; await outsideClaimsStep(ctx, n); if (n.length) out.push(`outside claims: ${n.join(", ")}`); }
+    catch (e) { out.push(`outside claims: error ${String(e).slice(0, 120)}`); }
     const failed = out.some((s) => s.includes(": error "));
     const summary = (out.length ? out.join(" | ") : `${(cases ?? []).length} open claim(s), nothing new`).slice(0, 480);
     await db.rpc("agent_beat", { p_slug: SLUG, p_ok: !failed, p_summary: summary });

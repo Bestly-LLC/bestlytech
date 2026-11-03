@@ -8,46 +8,36 @@
 //   answers   claim_questions answered on the Claims page (or by Scout) are acted on once (handled_at).
 //   insurer   the guest's insurer + policy number are pulled out of their reply; the parking garage question is raised once.
 import type { Ctx } from "./estimates.ts";
-import { sendMail } from "./estimates.ts";
+import { sendMail, photoAttachments } from "./estimates.ts";
+import { canSend, logSend, queueTuroAction } from "./send.ts";
+import { laInstant, spokenTime } from "./time.ts";
+import { bookingSlots } from "./autonomy.ts";
+import { insurerContactAnswer, insurerOfferAnswer } from "./insurer.ts";
+import { parseContactNote } from "./insurer-text.ts";
+import { pathExhaustedAnswer, teslaTotalAnswer } from "./engine.ts";
+import { INTENT_PROMPT, classifyByRules, composeShopAnswer, composeShopClose, groupAnswers, intentFromModel, parseShopAsk, planAnswer, questionStale, type Intent } from "./answers.ts";
 
 type Row = Record<string, any>;
 const SLUG = "claims-closer";
+
+// ---------------------------------------------------------------- time helpers (Los Angeles): time.ts
 const TZ = "America/Los_Angeles";
 const HOUR = 36e5;
-
-// ---------------------------------------------------------------- time helpers (Los Angeles)
-function laInstant(dateIso: string, h: number, m: number): number {
-  const [y, mo, d] = dateIso.split("-").map(Number);
-  const guess = Date.UTC(y, mo - 1, d, h, m);
-  const asLA = new Date(new Date(guess).toLocaleString("en-US", { timeZone: TZ })).getTime();
-  return guess + (guess - asLA);
-}
-const laDate = (ms: number) => new Date(ms).toLocaleDateString("en-CA", { timeZone: TZ });
-const laWeekday = (ms: number) => new Date(ms).toLocaleDateString("en-US", { timeZone: TZ, weekday: "short" });
-const spokenTime = (ms: number) => new Date(ms).toLocaleString("en-US", { timeZone: TZ, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
 const carName = (c: Row) => String(c.car ?? "2020 Tesla Model 3").replace(/\s+\(.*\)$/, "");
 
-/** Drop-off times (8:30 AM Pacific, weekdays, starting tomorrow) when the car has no Turo trip for the repair days. */
+/** Drop-off times (8:30 AM Pacific, weekdays, starting tomorrow) when the car has no booked Turo trip for the repair days plus the buffer (booking_buffer_hours, default 4). */
 export async function freeDropoffs(ctx: Ctx, c: Row, days: number, count = 3, horizonDays = 14): Promise<number[]> {
-  const { data: trips } = await ctx.db.from("turo_trips").select("starts_at, ends_at, vin, status").gt("ends_at", new Date().toISOString());
-  const mine = ((trips ?? []) as Row[]).filter((t) => t.status !== "CANCELLED" && (!t.vin || !c.vin || t.vin === c.vin));
-  const out: number[] = [];
-  const tomorrow = Date.parse(laDate(Date.now() + 24 * HOUR) + "T12:00:00Z");
-  for (let i = 0; i < horizonDays && out.length < count; i++) {
-    const day = laDate(tomorrow + i * 24 * HOUR);
-    const wd = laWeekday(laInstant(day, 12, 0));
-    if (wd === "Sat" || wd === "Sun") continue;
-    const drop = laInstant(day, 8, 30);
-    const pick = drop + days * 24 * HOUR + 2 * HOUR;
-    if (mine.some((t) => Date.parse(t.starts_at) < pick && Date.parse(t.ends_at) > drop - 2 * HOUR)) continue;
-    if (out.length && drop - out[out.length - 1] < 20 * HOUR) continue;
-    out.push(drop);
-  }
-  return out;
+  const [{ data: trips }, { data: st }] = await Promise.all([
+    ctx.db.from("turo_trips").select("starts_at, ends_at, vin, status").gt("ends_at", new Date().toISOString()),
+    ctx.db.from("claims_autonomy_settings").select("booking_buffer_hours").eq("id", true).maybeSingle(),
+  ]);
+  return bookingSlots((trips ?? []) as Row[], { now: Date.now(), days, count, horizonDays, bufferHours: Number(st?.booking_buffer_hours ?? 4), vin: c.vin });
 }
 
 // ---------------------------------------------------------------- the call
-async function avaCall(ctx: Ctx, o: { phone: string; name: string; purpose: string; first_line: string }): Promise<{ ok: boolean; call_id?: string; error?: string; retryable?: boolean }> {
+async function avaCall(ctx: Ctx, c: Row, o: { phone: string; name: string; purpose: string; first_line: string }, allowedAmounts: number[] = []): Promise<{ ok: boolean; call_id?: string; error?: string; retryable?: boolean; blocked?: boolean }> {
+  const d = await canSend(ctx, c, { channel: "ava_call", recipient: o.phone, purpose: "book_repair", text: `${o.first_line}\n${o.purpose}`, allowedAmounts });
+  if (!d.ok) return { ok: false, blocked: true, error: `blocked: ${d.reason}`, retryable: true };
   const r = await fetch(`${ctx.supabaseUrl}/functions/v1/ava-assistant`, {
     method: "POST", headers: { Authorization: `Bearer ${ctx.serviceKey}`, apikey: ctx.serviceKey, "Content-Type": "application/json" },
     // Jared (2026-10-06): shop calls go out in his voice (still disclosed as his AI assistant); no clone = her own voice
@@ -55,7 +45,9 @@ async function avaCall(ctx: Ctx, o: { phone: string; name: string; purpose: stri
       jared_first_line: o.first_line.replace(/^Hi, it's Ava, Jared Best's AI assistant, on a recorded line\./, "Hi, it's Jared Best's AI assistant, using his voice, on a recorded line.") }),
   }).catch(() => null);
   const j = await r?.json().catch(() => ({}));
-  return r?.ok && j?.ok ? { ok: true, call_id: j.call_id } : { ok: false, error: String(j?.error ?? `ava-assistant ${r?.status ?? "no answer"}`).slice(0, 200), retryable: j?.retryable === true };
+  const out = r?.ok && j?.ok ? { ok: true, call_id: j.call_id } : { ok: false, error: String(j?.error ?? `ava-assistant ${r?.status ?? "no answer"}`).slice(0, 200), retryable: j?.retryable === true };
+  await logSend(ctx, c, { channel: "ava_call", recipient: o.phone, purpose: "book_repair", text: o.purpose }, out.ok ? "sent" : "failed", undefined, out);
+  return out;
 }
 
 function bookingPurpose(c: Row, shop: Row, est: Row, slots: number[], ref: string, days: number) {
@@ -143,8 +135,9 @@ export async function bookingStep(ctx: Ctx, c: Row, notes: string[]): Promise<vo
       p_options: [{ value: "by_hand", label: "I will pick" }] });
     return;
   }
-  const r = await avaCall(ctx, { phone: shop.phone, name: shop.name, purpose: bookingPurpose(c, shop, est, slots, est.ref ?? "", days),
-    first_line: `Hi, it's Ava, Jared Best's AI assistant, on a recorded line. I'm calling to book a drop-off for a repair he asked about.` });
+  const r = await avaCall(ctx, c, { phone: shop.phone, name: shop.name, purpose: bookingPurpose(c, shop, est, slots, est.ref ?? "", days),
+    first_line: `Hi, it's Ava, Jared Best's AI assistant, on a recorded line. I'm calling to book a drop-off for a repair he asked about.` }, est.amount ? [Math.round(Number(est.amount)), Number(est.amount)] : []);
+  if (r.blocked) { notes.push(`booking call held: ${r.error}`); await ctx.db.from("claim_cases").update({ next_check_at: new Date(Date.now() + 30 * 60_000).toISOString() }).eq("id", c.id); return; }
   const tries = Number(rb.tries ?? 0) + 1;
   if (r.ok) {
     await save({ state: "calling", call_id: r.call_id, tries, last_try_at: new Date().toISOString(), slots_offered: slots, offer: null }, 4 * 60_000);
@@ -161,21 +154,48 @@ export async function bookingStep(ctx: Ctx, c: Row, notes: string[]): Promise<vo
 }
 
 // ---------------------------------------------------------------- phase 7: act on answers (once)
+// RULE (Jared, 2026-10-28): an answer is an INSTRUCTION TO CLAIMS CLOSER. Nothing he types is ever forwarded or quoted to a shop, guest, insurer or Turo.
+// Claims Closer reads what he meant (button, rules, then the free LLM ladder), then writes its own message in its own words, or sends nothing.
+// Several questions that got the same answer are ONE decision. Questions that went stale (over 7 days, the world moved on) are retired, not acted on.
 export async function answeredQuestions(ctx: Ctx, c: Row, notes: string[]): Promise<void> {
   const { data: qs } = await ctx.db.from("claim_questions").select("*").eq("case_id", c.id).not("answered_at", "is", null).is("handled_at", null);
-  for (const q of (qs ?? []) as Row[]) {
+  const all = (qs ?? []) as Row[];
+  const now = Date.now();
+  const { data: win } = await ctx.db.from("claim_windows").select("kind, status").eq("case_id", c.id);
+  const { data: ests } = await ctx.db.from("claim_estimates").select("id, status, ref, shop_id, claim_shops(name, email, contact_name)").eq("case_id", c.id);
+  const estById = new Map<string, Row>(((ests ?? []) as Row[]).map((e) => [e.id, e]));
+  const resolveClosed = ((win ?? []) as Row[]).some((w) => w.kind === "resolve_directly" && ["lapsed", "moot"].includes(w.status)) || (c.path === "resolve_directly" && !!c.escalate_by && Date.parse(c.escalate_by) < now);
+  const estimateObtained = c.estimate_amount != null || !!c.chosen_estimate_id;
+  const staleOf = (q: Row) => questionStale(q, { now, caseClosed: ["paid", "closed"].includes(String(c.status)), estimateObtained, resolveWindowClosed: resolveClosed,
+    shopThreadOpen: q.meta?.estimate_id ? ["requested", "replied", "needs_visit"].includes(String(estById.get(q.meta.estimate_id)?.status ?? "")) : null });
+
+  // 1. shop questions: one decision per (case, answer)
+  const shopQs = all.filter((q) => /^shop-asks-/.test(String(q.key ?? "")));
+  for (const group of groupAnswers(shopQs)) {
+    try { await handleShopGroup(ctx, c, group, estById, staleOf, notes); }
+    catch (e) { notes.push(`answer step failed: ${String(e).slice(0, 80)}`); }
+  }
+
+  // 2. everything else (button-style questions)
+  for (const q of all.filter((x) => !/^shop-asks-/.test(String(x.key ?? "")))) {
     const a = String(q.answer ?? "").trim();
     const key = String(q.key ?? "");
     let done = true;
+    const st = staleOf(q);
     try {
+      if (st.stale) {
+        await ctx.db.from("claim_questions").update({ retired_at: new Date().toISOString(), retired_reason: st.reason, handled_at: new Date().toISOString() }).eq("id", q.id);
+        await ctx.event(c, "question", `Retired an old question (${st.reason}); no action taken`, { question_id: q.id });
+        continue;
+      }
       if (/^turo-(action|stuck)-/.test(key)) {
         const actionId = key.replace(/^turo-(action|stuck)-/, "");
         if (a === "retry") {
           const { data: old } = await ctx.db.from("claim_turo_actions").select("kind, payload").eq("id", actionId).maybeSingle();
           if (old) {
-            await ctx.db.from("claim_turo_actions").insert({ case_id: c.id, kind: old.kind, payload: old.payload });
-            await ctx.db.from("turo_reader_state").update({ poke_at: new Date().toISOString() }).eq("id", 1);
-            await ctx.event(c, "turo_action", `Trying the Turo ${String(old.kind).replace("_", " ")} again`, { by: "answer" });
+            const r = await queueTuroAction(ctx, c, old.kind, old.payload ?? {}, [Number(old.payload?.amount ?? 0), Number(old.payload?.estimate_total ?? 0)].filter(Boolean));
+            if (r.ok) await ctx.event(c, "turo_action", `Trying the Turo ${String(old.kind).replace("_", " ")} again`, { by: "answer" });
+            else notes.push(`Turo retry held: ${r.error}`);
           }
         } else if (a === "done" || a === "by_hand") {
           await ctx.db.from("claim_cases").update({ turo_invoice: { by_hand: true, at: new Date().toISOString() }, needs_work: true, work_reason: "invoice handled by Jared" }).eq("id", c.id);
@@ -187,25 +207,92 @@ export async function answeredQuestions(ctx: Ctx, c: Row, notes: string[]): Prom
           const t = Date.parse(a.slice(4));
           if (Number.isFinite(t) && t > Date.now()) await ctx.db.from("claim_cases").update({ repair_booking: { state: "requested", tries: 0, shop_id: c.chosen_shop_id, offer: [t] }, needs_work: true }).eq("id", c.id);
         } else if (a === "by_hand") await ctx.db.from("claim_cases").update({ repair_booking: { ...rb, state: "by_hand" }, needs_work: false }).eq("id", c.id);
-      } else if (key.startsWith("shop-asks-") && a) {
-        const estId = key.replace("shop-asks-", "");
-        const { data: e } = await ctx.db.from("claim_estimates").select("*, claim_shops(name, email)").eq("id", estId).maybeSingle();
-        const to = e?.claim_shops?.email;
-        if (to) {
-          const r = await sendMail(ctx, { to, subject: `Re: Photo estimate request [${e.ref}]`, key: `claims-est-answer-${q.id}`, text: `Hi ${e.claim_shops.name} team,\n\n${a}\n\nThanks,\nJared` });
-          if (r.ok) { await ctx.db.from("claim_estimates").update({ status: "requested", requested_at: new Date().toISOString() }).eq("id", estId); await ctx.event(c, "estimate", `Answered ${e.claim_shops.name}'s question`, {}); }
-          else done = false;
-        }
+      } else if (key.startsWith("path-exhausted-")) {
+        await pathExhaustedAnswer(ctx, c, a);
+      } else if (key.startsWith("tesla-total-")) {
+        if (a !== "none" && !(await teslaTotalAnswer(ctx, c, a))) { await ctx.event(c, "note", "Saved Jared's note; there was no dollar total in it, so no Tesla estimate was added", { question_id: q.id }); }
+      } else if (key.startsWith("insurer-offer-")) {
+        await insurerOfferAnswer(ctx, c, q, a, notes);
+      } else if (key.startsWith("insurer-contact-")) {
+        await insurerContactAnswer(ctx, c, a, parseContactNote);
       } else if (key === "garage-claim") {
         if (/^yes/i.test(a)) {
           const r = await garageEmail(ctx, c);
           if (r.ok) { await ctx.event(c, "third_party", "Emailed the garage operator (ABM Parking) about the damage", { mail_id: r.id }); await ctx.notify("Told the garage operator about the damage", "I emailed ABM Parking (they run the Fig at 7th garage) with the photos and asked how to file a claim. Replies come to your inbox.", `claims-garage-sent-${c.id}`, "success"); }
+          else if (r.blocked) { notes.push(`garage email held: ${r.error}`); }
           else { done = false; notes.push(`garage email failed: ${r.error}`); }
         } else await ctx.event(c, "third_party", "Jared said no to contacting the garage", {});
+      } else if (a && !/^(yes|no|retry|done|by_hand|wait|walk_in)$/i.test(a)) {
+        // a free-text note on a question that has no free-text handler: keep it as a note, send nothing
+        await ctx.event(c, "note", "Saved Jared's note for Claims Closer; nothing was sent to anyone", { question_id: q.id });
       }
     } catch (e) { done = false; notes.push(`answer step failed: ${String(e).slice(0, 80)}`); }
     if (done) await ctx.db.from("claim_questions").update({ handled_at: new Date().toISOString() }).eq("id", q.id);
   }
+}
+
+/** Turn the note into an intent: button value, then rules, then the free LLM ladder. Anything unclear is "other" (nothing is sent). */
+async function readIntent(ctx: Ctx, c: Row, q: Row): Promise<{ intent: Intent; via: string }> {
+  const r = classifyByRules(String(q.answer ?? ""), (q.options ?? []) as { value: string }[]);
+  if (r.confident) return { intent: r.intent, via: r.via };
+  try {
+    const m = await ctx.llm({ task: "extract", system: INTENT_PROMPT, user: `QUESTION: ${String(q.question).slice(0, 300)}\nNOTE: ${String(q.answer).slice(0, 300)}`, json: true,
+      job: SLUG, ref: String(c.reservation_id), fn: SLUG, paid: "never", privacy: "private", deadlineMs: 30_000, maxTokens: 60, validate: (j: Row) => typeof j === "object" && j ? null : "not an object" });
+    return { intent: intentFromModel(m.json), via: "model" };
+  } catch (e) { if (!(e instanceof ctx.LlmUnavailable)) throw e; }
+  return { intent: r.intent === "provide_info" ? "provide_info" : "other", via: "fallback" };
+}
+
+async function handleShopGroup(ctx: Ctx, c: Row, group: Row[], estById: Map<string, Row>, staleOf: (q: Row) => { stale: boolean; reason?: string }, notes: string[]) {
+  const first = group[0];
+  const { intent, via } = await readIntent(ctx, c, first);
+  const staleBy: Record<string, string | undefined> = {};
+  for (const q of group) { const s = staleOf(q); if (s.stale) staleBy[q.id] = s.reason; }
+  const plan = planAnswer(group, intent, { staleBy, estimateIdOf: (q) => { const e = estById.get(String(q.meta?.estimate_id ?? String(q.key).replace(/^shop-asks-/, ""))); return e ? { id: e.id, shop: e.claim_shops?.name ?? "the shop" } : null; } });
+  const out: string[] = []; let retry = false;
+  for (const fx of plan.effects) {
+    if (fx.type === "retire") {
+      await ctx.db.from("claim_questions").update({ retired_at: new Date().toISOString(), retired_reason: fx.reason }).eq("id", fx.questionId);
+      out.push("retired one old question");
+    } else if (fx.type === "close_shop") {
+      const e = estById.get(fx.estimateId)!; const shop = e.claim_shops ?? {};
+      await ctx.db.from("claim_estimates").update({ status: "closed", notes: "closed by Claims Closer on Jared's instruction" }).eq("id", fx.estimateId);
+      let sent = false;
+      if (fx.sendLine && shop.email) {
+        const r = await sendMail(ctx, c, { to: shop.email, subject: `Re: Photo estimate request [${e.ref}]`, key: `claims-est-close-${fx.estimateId}`, text: composeShopClose(shop.name, shop.contact_name ? String(shop.contact_name).split(/\s+/)[0] : null), purpose: "close_shop", derivedFromAnswer: true });
+        sent = r.ok; if (r.error && !r.blocked) retry = true;
+      }
+      await ctx.event(c, "estimate", `Closed ${fx.shop}'s estimate request${sent ? " with a one-line thank you" : ""}`, { estimate_id: fx.estimateId, sent_line: sent });
+      out.push(`closed ${fx.shop}`);
+    } else if (fx.type === "answer_shop") {
+      const e = estById.get(fx.estimateId)!; const shop = e.claim_shops ?? {};
+      const q = group.find((g) => (g.meta?.estimate_id ?? String(g.key).replace(/^shop-asks-/, "")) === fx.estimateId)!;
+      const photos = await photoAttachments(ctx, c.id);
+      const mine = composeShopAnswer(shop.name ?? "", parseShopAsk(String(q.meta?.asks_for ?? q.question ?? "")), { vin: c.vin, photoCount: photos.list.length, contactFirst: shop.contact_name ? String(shop.contact_name).split(/\s+/)[0] : null });
+      if (!mine.text || !shop.email) {
+        await ctx.db.rpc("claims_ask", { p_case: c.id, p_kind: "fyi", p_key: `shop-unanswered-${fx.estimateId}`, p_options: [],
+          p_question: `${fx.shop} asked something I can't answer from the case record (${mine.left.join(", ") || "no email on file"}), so I sent nothing. Drop that shop or wait; I won't relay what you type.` });
+        out.push(`left ${fx.shop} unanswered`);
+      } else {
+        const r = await sendMail(ctx, c, { to: shop.email, subject: `Re: Photo estimate request [${e.ref}]`, key: `claims-est-answer-${q.id}`, text: mine.text, attachments: mine.attachPhotos ? photos.list : [], purpose: "answer_shop", derivedFromAnswer: true });
+        if (r.ok) { await ctx.event(c, "estimate", `Answered ${fx.shop}'s question`, { estimate_id: fx.estimateId, answered: mine.answered }); out.push(`answered ${fx.shop}`); }
+        else if (!r.blocked) retry = true;
+        // NOTE: the estimate row is left exactly as it was. (It used to be reset to 'requested' with requested_at = now, which restarted the 24 h / 48 h follow-up clocks.)
+      }
+    } else if (fx.type === "defer") {
+      await ctx.db.from("claim_questions").update({ answered_at: null, answer: null, answered_by: null, snoozed_until: new Date(Date.now() + 24 * 36e5).toISOString() }).eq("id", fx.questionId);
+      out.push("will ask again tomorrow");
+    } else {
+      await ctx.event(c, "note", "Saved Jared's note for Claims Closer; nothing was sent to anyone", { question_id: fx.questionId });
+    }
+  }
+  if (!retry) {
+    const deferred = new Set(plan.effects.filter((f) => f.type === "defer").map((f) => (f as { questionId: string }).questionId));
+    const ids = group.filter((q) => !deferred.has(q.id)).map((q) => q.id);
+    if (ids.length) await ctx.db.from("claim_questions").update({ handled_at: new Date().toISOString() }).in("id", ids);
+  }
+  await ctx.db.from("claim_decisions").insert({ case_id: c.id, kind: "answer", chosen: intent, why: plan.why, options: [], inputs: { question_ids: plan.questionIds, read_by: via, effects: plan.effects.map((f) => f.type), words_sent: false } });
+  if (out.length) { notes.push(out.join("; ")); await ctx.notify(`Handled your note on ${group.length} shop question${group.length === 1 ? "" : "s"}`, `Read as "${intent}": ${out.join("; ")}. What you typed was not sent to anyone.`, `claims-answer-${group.map((g) => g.id).sort()[0]}`, "success"); }
 }
 
 async function garageEmail(ctx: Ctx, c: Row) {
@@ -220,7 +307,7 @@ async function garageEmail(ctx: Ctx, c: Row) {
     attachments.push({ filename: `damage-${attachments.length + 1}.jpg`, content: btoa(bin) });
   }
   const trip = c.trip_end ? ctx.fmt(c.trip_end) : "early October";
-  return await sendMail(ctx, { to: "contactparking@abm.com", subject: `Damage claim: ${carName(c)} at The Fig at 7th garage (945 W 8th St)`, key: `claims-garage-${c.id}`, attachments,
+  return await sendMail(ctx, c, { channel: "garage_email", purpose: "garage_claim", to: "contactparking@abm.com", subject: `Damage claim: ${carName(c)} at The Fig at 7th garage (945 W 8th St)`, key: `claims-garage-${c.id}`, attachments,
     text: `Hello,\n\nMy ${carName(c)} was rented through a car-sharing platform, and the renter reports it was scraped while parked in The Fig at 7th garage (945 W 8th St, Los Angeles) during the rental that ended ${trip}. I attached photos of the damage.\n\nCould you tell me how to file a claim with the garage operator, and whether there is an incident report or camera footage for that period? Please reply to this email.\n\nThank you,\nJared Best` });
 }
 
