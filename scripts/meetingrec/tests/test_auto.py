@@ -686,6 +686,16 @@ class StartTests(unittest.TestCase):
 class AfterTests(unittest.TestCase):
     def setUp(self):
         setup_world()
+        # verify_tick skips recordings over 3 days old by the real clock: pin "now" to the recordings' day (the tests rotted after 2026-10-23)
+        real = agent.datetime
+
+        class Oct20(real):
+            @classmethod
+            def now(cls, tz=None):
+                t = real(2026, 10, 20, 12, 0)
+                return t if tz is None else t.replace(tzinfo=agent.ZoneInfo("America/Los_Angeles")).astimezone(tz)
+        agent.datetime = Oct20
+        self.addCleanup(setattr, agent, "datetime", real)
         self.name = "meeting-20261020-0900"
         for s in ("system", "mic"):
             open(f"{REC}/{self.name}-{s}.m4a", "w").write("x")
@@ -1529,6 +1539,22 @@ class MeetFallbackTests(unittest.TestCase):
         self.assertTrue(agent.selftest_hour_ok(19))
         self.assertFalse(agent.selftest_hour_ok(20))
         self.assertFalse(agent.selftest_hour_ok(23))
+
+    def test_self_test_starts_no_call_unless_jareds_seat_is_silenced(self):
+        """1.11.2: notifications still on for Jared in the test room -> no fake guest, no call, at any hour."""
+        calls, started = [], []
+        for name, fake in (("talk", lambda m, p, d=None, timeout=15: calls.append((m, p, d)) or
+                            ({"token": "selftok"} if p == "/room" else {"notificationCalls": 1} if m == "GET" else {})),
+                           ("health", lambda *a, **k: None), ("talk_version", lambda: "x"), ("rollback", lambda: None)):
+            self.addCleanup(setattr, agent, name, getattr(agent, name))
+            setattr(agent, name, fake)
+        for name, fake in (("Popen", lambda *a, **k: started.append(a)), ("run", lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="", stderr=""))):
+            self.addCleanup(setattr, agent.subprocess, name, getattr(agent.subprocess, name))
+            setattr(agent.subprocess, name, fake)
+        self.assertFalse(agent._run_selftest("daily check", quiet=True))
+        self.assertIn(("POST", "/room/selftok/notify-calls", {"level": 0}), calls)
+        self.assertEqual(started, [], "no fake guest, so no call rings Jared")
+        self.assertIn("still on for Jared", agent.heal["selftest"]["error"])
 
     def test_parse_local_request(self):
         r = agent.parse_local_request(json.dumps({"roster": ["eli-cooper", "Bad Name", "sam-cauthon"], "title": "Intro", "client_slug": "centering-you", "source": "google-meet"}))

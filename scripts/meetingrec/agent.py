@@ -13,8 +13,9 @@ Standard library only: it runs on the system python3.
 """
 import base64, glob, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
-VERSION = "1.11.1"  # 1.11.1: the 45-minute row check (which can end in a big WebDAV PUT) runs off the main loop, so a failing upload no longer freezes Scout's poll for minutes. 1.11.0: the daily self-test never rings Jared (call notifications switched off for his seat in the test room; if that cannot be done it is skipped in quiet hours) and only runs 10 AM-8 PM; the Google Meet watcher (meet/meetwatch.py) can ask this agent to record locally (~/MeetingRec/.start-request.json / .stop-request); ingest passes source + client_slug from the recording meta. 1.10.4: Start Recording.app is fetched back from iCloud before every open (the full disk evicted it on 2026-10-18 and macOS answered "Resource deadlock avoided"); an open that still fails is reported to Scout at once. 1.10.3: the first audio of a call reaches the notetaker sooner (8 s hold, the notetaker starts early and in parallel with the recorder, faster looks at Talk). 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
+VERSION = "1.11.2"  # 1.11.2: the self-test never starts a call unless call notifications are confirmed off for Jared in the test room (1.11.0 still rang him if that failed outside quiet hours); the daily window is read in Pacific time, not the Mac's clock. 1.11.1: the 45-minute row check (which can end in a big WebDAV PUT) runs off the main loop, so a failing upload no longer freezes Scout's poll for minutes. 1.11.0: the daily self-test never rings Jared (call notifications switched off for his seat in the test room; if that cannot be done it is skipped in quiet hours) and only runs 10 AM-8 PM; the Google Meet watcher (meet/meetwatch.py) can ask this agent to record locally (~/MeetingRec/.start-request.json / .stop-request); ingest passes source + client_slug from the recording meta. 1.10.4: Start Recording.app is fetched back from iCloud before every open (the full disk evicted it on 2026-10-18 and macOS answered "Resource deadlock avoided"); an open that still fails is reported to Scout at once. 1.10.3: the first audio of a call reaches the notetaker sooner (8 s hold, the notetaker starts early and in parallel with the recorder, faster looks at Talk). 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -750,7 +751,7 @@ def selftest_hour_ok(hour):
 
 
 def daily_selftest_window():
-    return selftest_hour_ok(datetime.now().hour)
+    return selftest_hour_ok(datetime.now(ZoneInfo("America/Los_Angeles")).hour)
 
 
 def run_selftest(reason, quiet=False):
@@ -777,13 +778,11 @@ def _run_selftest(reason, quiet=False):
         token = talk("POST", "/room", {"roomType": 3, "roomName": "Scout self-test"})["token"]
         heal["test_room"] = token
         # The room is created by Jared's own Talk account, so a call in it rings his devices (the 2026-11-03 4 AM ring). Switch call
-        # notifications off for his seat first; if that cannot be done, do not test during quiet hours (11 PM - 7 AM) at all.
-        try:
-            talk("POST", f"/room/{token}/notify-calls", {"level": 0})
-        except Exception as e:  # noqa: BLE001
-            log("self-test: could not switch call notifications off", e)
-            if datetime.now().hour >= 23 or datetime.now().hour < 7:
-                raise RuntimeError("could not silence Jared's call notifications and it is quiet hours, so the self-test was skipped")
+        # notifications off for his seat first and read it back; if it is not confirmed off, no call is started, at any hour.
+        step = "silence Jared's seat"
+        talk("POST", f"/room/{token}/notify-calls", {"level": 0})
+        if talk("GET", f"/room/{token}").get("notificationCalls") != 0:
+            raise RuntimeError("call notifications are still on for Jared in the test room, so no call was started")
         talk("POST", f"/room/{token}/participants", {"newParticipant": BOT_USER, "source": "users"})
         step = "test guest starts a call"
         tlog = open(f"{out}-tester.log", "w")
