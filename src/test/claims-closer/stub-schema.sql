@@ -74,6 +74,10 @@ begin
                    when not v_done then 'waiting for Complete trip' else 'open' end);
 end $$;
 create function public.claims_gate_sweep() returns jsonb language plpgsql as $$ begin return jsonb_build_object(); end $$;
+-- verbatim from production
+create function public.claims_send_ok(p_case uuid) returns boolean language sql stable as $$
+  select coalesce((public.claims_gate(p_case)->>'ok')::boolean, false)
+$$;
 
 -- roles and allowlist the hardening block touches
 do $$ begin
