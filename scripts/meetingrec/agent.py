@@ -14,7 +14,7 @@ Standard library only: it runs on the system python3.
 import base64, glob, hashlib, json, os, re, shutil, signal, subprocess, sys, threading, time, traceback, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
 
-VERSION = "1.11.0"  # 1.11.0: the daily self-test never rings Jared (call notifications switched off for his seat in the test room; if that cannot be done it is skipped in quiet hours) and only runs 10 AM-8 PM; the Google Meet watcher (meet/meetwatch.py) can ask this agent to record locally (~/MeetingRec/.start-request.json / .stop-request); ingest passes source + client_slug from the recording meta. 1.10.4: Start Recording.app is fetched back from iCloud before every open (the full disk evicted it on 2026-10-18 and macOS answered "Resource deadlock avoided"); an open that still fails is reported to Scout at once. 1.10.3: the first audio of a call reaches the notetaker sooner (8 s hold, the notetaker starts early and in parallel with the recorder, faster looks at Talk). 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
+VERSION = "1.11.1"  # 1.11.1: the 45-minute row check (which can end in a big WebDAV PUT) runs off the main loop, so a failing upload no longer freezes Scout's poll for minutes. 1.11.0: the daily self-test never rings Jared (call notifications switched off for his seat in the test room; if that cannot be done it is skipped in quiet hours) and only runs 10 AM-8 PM; the Google Meet watcher (meet/meetwatch.py) can ask this agent to record locally (~/MeetingRec/.start-request.json / .stop-request); ingest passes source + client_slug from the recording meta. 1.10.4: Start Recording.app is fetched back from iCloud before every open (the full disk evicted it on 2026-10-18 and macOS answered "Resource deadlock avoided"); an open that still fails is reported to Scout at once. 1.10.3: the first audio of a call reaches the notetaker sooner (8 s hold, the notetaker starts early and in parallel with the recorder, faster looks at Talk). 1.10.2: Jared's Talk track is the source for his lines; the Mac mic only stands in for it on a call he is in, never on one he is not. 1.10.1: the log says when the auto-record rule first holds and when a call empties. 1.10: Scout records Talk calls by itself (AUTO_ROOMS), the notetaker never starts a call and rejoins if dropped, client_slug/room on ingest, client folder copy, call watchdogs. 1.9: Spam Desk worker (mailspam.py). 1.8: voice bank (voicebank.py)
 HOME = os.path.expanduser("~/MeetingRec")
 REC = f"{HOME}/recordings"
 URL = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/meeting-recorder"
@@ -1578,6 +1578,9 @@ def check_row(name, m, now):
     write_meta(name, recheck=now + 600)
 
 
+VERIFY_ASYNC = True
+
+
 def verify_tick(now):
     """Once a minute: every recording from an AUTO room (or started by Scout) that ended 45 minutes ago must have its row in the admin."""
     if now < auto["verify_next"]:
@@ -1597,6 +1600,22 @@ def verify_tick(now):
             continue
         ended = recording_ended(name)
         if not ended or now - ended < AUTO_ROW_S or now < m.get("recheck", 0):
+            continue
+        if VERIFY_ASYNC:
+            # check_row can end in a big WebDAV PUT (filing under the client); a PUT that keeps failing used to hold this loop for minutes
+            # at a time (2026-11-03: Scout not answering for 3 minutes every 10), so it runs off the main loop.
+            if name in auto.setdefault("verifying", set()):
+                continue
+            auto["verifying"].add(name)
+
+            def go(n=name, m_=m):
+                try:
+                    check_row(n, m_, now)
+                except Exception as e:  # noqa: BLE001
+                    log("verify failed", n, e)
+                finally:
+                    auto["verifying"].discard(n)
+            threading.Thread(target=go, daemon=True).start()
             continue
         try:
             check_row(name, m, now)

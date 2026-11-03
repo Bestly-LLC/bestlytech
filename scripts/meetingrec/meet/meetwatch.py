@@ -384,6 +384,7 @@ def finalize(row, r):
     lines, people, src = build_transcript(segs, utts, t0)
     if not lines:
         return False, f"nothing was heard or captioned (bot: {meta.get('end_reason')}, captions on: {meta.get('captions_on')})"
+    mark_ingested(name)          # agent.py's sweep would otherwise ingest the transcript file again, with an empty roster and speakers
     hdr = ["# Google Meet call recorded by Scout Notetaker (visible guest, chat notice " + ("posted" if meta.get("notice_posted") else "NOT confirmed") + ").",
            f"# Source: {src}. Speaker names come from Meet's live captions."]
     for who, n in people.items():
@@ -406,6 +407,14 @@ def finalize(row, r):
         return False, "ingest was refused"
     filed = file_media(name)
     return True, f"{len(lines)} lines ({src}); {filed}"
+
+
+def mark_ingested(name):
+    try:
+        if name not in open(f"{HOME}/.ingested").read().split():
+            open(f"{HOME}/.ingested", "a").write(name + "\n")
+    except OSError:
+        open(f"{HOME}/.ingested", "a").write(name + "\n")
 
 
 def file_media(name):

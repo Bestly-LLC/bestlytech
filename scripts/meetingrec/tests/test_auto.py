@@ -21,6 +21,7 @@ with open(f"{TMP}/MeetingRec/.agent-key", "w") as _f:
     _f.write("test-key")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import agent  # noqa: E402
+agent.VERIFY_ASYNC = False                       # tests want the row check to finish before they look
 agent.daily_selftest_window = lambda: False      # the real hour must not decide whether a test run starts a daily self-test
 
 H = agent.HOME
