@@ -202,6 +202,19 @@ def note(local, rel, ok, detail):
     _save_fails(d)
 
 
+def size_any(rel, pw=None, routes=None):
+    """Size the server reports for rel (LAN first, then the tunnel); None if it is not there or could not be asked."""
+    pw = pw or password()
+    for label, scheme, host, port, hosthdr in (routes or ROUTES):
+        rt = Route(label, scheme, host, port, hosthdr, pw)
+        if label == "lan" and rt.req("OPTIONS", "/remote.php/dav/", timeout=3)[0] not in (200, 204, 401):
+            continue
+        n = remote_size(rt, rel)
+        if n is not None:
+            return n
+    return None
+
+
 def upload(local, rel, small=False, pw=None, routes=None):
     """Upload local -> rel (a path under the user's files). (True, detail) only after the server reports the exact local size."""
     if not os.path.isfile(local):

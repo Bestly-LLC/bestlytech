@@ -1589,8 +1589,20 @@ def file_under_client(name, slug):
     bad = []
     for f in files:
         dest = f"{folder}/{day}/{f}"
+        want = os.path.getsize(f"{REC}/{f}")
+        try:
+            nu = load_ncupload()
+        except Exception as e:  # noqa: BLE001
+            log("ncupload unavailable", e)
+            nu = None
+        if nu and nu.size_any(dest, nc_password()) == want:
+            continue                                # already there with every byte: a COPY over it would only risk it
         code = dav("COPY", f"Meeting Recordings/{day}/{f}", {"Destination": f"{DAV}/{urllib.parse.quote(dest)}", "Overwrite": "T"})
         if code == 404:                             # the day folder doesn't have it (that upload failed): send it from here
+            code = dav("PUT", dest, timeout=900, body_path=f"{REC}/{f}")
+        elif nu and code in (201, 204) and nu.size_any(dest, nc_password()) != want:
+            # 2026-11-03: a server-side COPY over an existing file left it at size 0 (Nextcloud server-side encryption): send it from here
+            log("client folder copy has the wrong size, uploading", dest)
             code = dav("PUT", dest, timeout=900, body_path=f"{REC}/{f}")
         if code not in (201, 204):
             bad.append(f"{f} (HTTP {code})")
