@@ -1,0 +1,1 @@
+(async()=>{window.__mnOff=true;window.__scHold('flight');await new Promise(r=>setTimeout(r,3500));const e=document.getElementById('wingFlight');const r=e.firstElementChild.getBoundingClientRect();return JSON.stringify({bb:window.__bb(),tgb:window.__tgb(),card:[r.left,r.top,r.right,r.bottom].map(Math.round),sc:window.__sc()})})()

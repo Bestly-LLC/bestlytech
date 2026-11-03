@@ -1,0 +1,1 @@
+(async()=>{window.__mnOff=true;window.__scHold('bus');await new Promise(r=>setTimeout(r,3500));const e=document.getElementById('wingBus');const r=e.firstElementChild.getBoundingClientRect();return JSON.stringify({bb:window.__bb(),tgb:window.__tgb(),card:[r.left,r.top,r.right,r.bottom].map(Math.round),cls:document.body.className})})()
