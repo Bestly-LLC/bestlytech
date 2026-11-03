@@ -162,31 +162,6 @@ export function DndCard({ dnd, onChange, compact, only }: {
   );
 }
 
-/** "Motivate me": bumps motivate.seq; the wall plays the pep-talk show once per new seq (W5).
- *  `tile` draws it as a square tile for the Moments row in the Now area. */
-export function MotivateButton({ seq, onFire, tile }: { seq: number; onFire: (next: { seq: number; ts: number }) => void; tile?: boolean }) {
-  const [sent, setSent] = useState(false);
-  return (
-    <button type="button" disabled={sent}
-      onClick={() => {
-        onFire({ seq: seq + 1, ts: Date.now() });
-        setSent(true);
-        window.setTimeout(() => setSent(false), 6000);
-      }}
-      className={cn(
-        tile
-          ? "flex min-h-[76px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-2xl px-1 py-2 text-center text-[13px] font-semibold leading-tight text-white"
-          : "group relative mt-3 flex min-h-[56px] w-full items-center justify-center gap-2.5 overflow-hidden rounded-2xl px-4 text-[17px] font-semibold text-white",
-        "bg-[linear-gradient(135deg,#FF9F0A_0%,#FF375F_55%,#BF5AF2_100%)] shadow-[0_8px_24px_-10px_rgba(255,55,95,0.6)]",
-        "transition-[transform,filter] duration-150 hover:brightness-110 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:opacity-80 touch-manipulation",
-      )}>
-      {sent ? <Check className={cn("shrink-0", tile ? "h-6 w-6" : "h-5 w-5")} aria-hidden /> : <Sparkles className={cn("shrink-0", tile ? "h-6 w-6" : "h-5 w-5")} aria-hidden />}
-      <span aria-live="polite">{sent ? (tile ? "On its way" : "On its way to the wall") : "Motivate me"}</span>
-    </button>
-  );
-}
-
 type Pkg = { id: number; carrier: string | null; what: string | null; eta: string | null; status: string | null; source: string | null; done: boolean; done_at: string | null; first_seen: string | null; last_seen: string | null };
 
 const etaText = (eta: string | null) => {

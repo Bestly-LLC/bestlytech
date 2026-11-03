@@ -39,16 +39,6 @@
       "icon": "mdi:view-dashboard-variant"
     },
     {
-      "id": "shows",
-      "title": "Show for friends",
-      "icon": "mdi:party-popper"
-    },
-    {
-      "id": "sleep",
-      "title": "Sleep mode",
-      "icon": "mdi:sleep"
-    },
-    {
       "id": "alarm",
       "title": "Alarm",
       "icon": "mdi:alarm"
@@ -1231,159 +1221,6 @@
       "admin": "Wall.tsx:881"
     },
     {
-      "id": "show_play",
-      "group": "shows",
-      "label": "Play the show",
-      "kind": "button",
-      "set": {
-        "tour": {
-          "cmd": "play",
-          "at": "$now"
-        }
-      },
-      "admin": "Wall.tsx:949"
-    },
-    {
-      "id": "show_party",
-      "group": "shows",
-      "label": "Party",
-      "kind": "button",
-      "set": {
-        "tour": {
-          "cmd": "party",
-          "at": "$now"
-        }
-      },
-      "admin": "Wall.tsx:953"
-    },
-    {
-      "id": "show_skit",
-      "group": "shows",
-      "label": "Skit",
-      "kind": "button",
-      "set": {
-        "tour": {
-          "cmd": "skit",
-          "at": "$now"
-        }
-      },
-      "admin": "Wall.tsx:956"
-    },
-    {
-      "id": "show_stop",
-      "group": "shows",
-      "label": "Stop",
-      "kind": "button",
-      "set": {
-        "tour": {
-          "cmd": "stop",
-          "at": "$now"
-        }
-      },
-      "admin": "Wall.tsx:959"
-    },
-    {
-      "id": "show_hshow",
-      "group": "shows",
-      "label": "Halloween show",
-      "kind": "button",
-      "set": {
-        "tour": {
-          "cmd": "hshow",
-          "at": "$now"
-        }
-      },
-      "admin": "Wall.tsx:966"
-    },
-    {
-      "id": "show_hparty",
-      "group": "shows",
-      "label": "Halloween party",
-      "kind": "button",
-      "set": {
-        "tour": {
-          "cmd": "hparty",
-          "at": "$now"
-        }
-      },
-      "admin": "Wall.tsx:969"
-    },
-    {
-      "id": "motivate",
-      "group": "shows",
-      "label": "Motivate me",
-      "kind": "button",
-      "set": {
-        "motivate": {
-          "seq": "$inc:motivate.seq",
-          "ts": "$now"
-        }
-      },
-      "how": "seq = current motivate.seq (0 if missing) + 1; the wall plays the pep talk once per new seq.",
-      "admin": "WallR4.tsx:150"
-    },
-    {
-      "id": "sleep_length",
-      "group": "sleep",
-      "label": "Length",
-      "kind": "select",
-      "path": null,
-      "local": true,
-      "options": [
-        {
-          "value": 15,
-          "label": "15 min"
-        },
-        {
-          "value": 30,
-          "label": "30 min"
-        },
-        {
-          "value": 60,
-          "label": "1 hour"
-        }
-      ],
-      "default": 30,
-      "admin": "Wall.tsx:993",
-      "how": "Not saved in wall state; it only sets the minutes for Start counting sheep."
-    },
-    {
-      "id": "sleep_music",
-      "group": "sleep",
-      "label": "Lullaby music",
-      "kind": "switch",
-      "path": null,
-      "local": true,
-      "default": true,
-      "admin": "Wall.tsx:997",
-      "how": "Not saved in wall state; it only sets music for Start counting sheep."
-    },
-    {
-      "id": "sleep_start",
-      "group": "sleep",
-      "label": "Start counting sheep",
-      "kind": "button",
-      "set": {
-        "sleepShow": {
-          "at": "$now",
-          "mins": "$input:sleep_length",
-          "music": "$input:sleep_music"
-        }
-      },
-      "how": "Uses the Length and Lullaby music inputs above.",
-      "admin": "Wall.tsx:999"
-    },
-    {
-      "id": "sleep_stop",
-      "group": "sleep",
-      "label": "Stop counting sheep",
-      "kind": "button",
-      "set": {
-        "sleepShow": null
-      },
-      "admin": "Wall.tsx:987"
-    },
-    {
       "id": "alarm_on",
       "group": "alarm",
       "label": "Wake-up alarm",
@@ -1499,24 +1336,6 @@
       "label": "Turo trips",
       "kind": "switch",
       "path": "liveActs.turo",
-      "default": true,
-      "admin": "Wall.tsx:1104"
-    },
-    {
-      "id": "live_show",
-      "group": "live",
-      "label": "Show for friends",
-      "kind": "switch",
-      "path": "liveActs.show",
-      "default": true,
-      "admin": "Wall.tsx:1104"
-    },
-    {
-      "id": "live_sleep",
-      "group": "live",
-      "label": "Sleep mode",
-      "kind": "switch",
-      "path": "liveActs.sleep",
       "default": true,
       "admin": "Wall.tsx:1104"
     },
@@ -1740,10 +1559,22 @@
       "kind": "select",
       "path": "skyTerrain",
       "options": [
-        { "value": "off", "label": "Off" },
-        { "value": "teal", "label": "Teal" },
-        { "value": "sand", "label": "Sand" },
-        { "value": "indigo", "label": "Indigo" }
+        {
+          "value": "off",
+          "label": "Off"
+        },
+        {
+          "value": "teal",
+          "label": "Teal"
+        },
+        {
+          "value": "sand",
+          "label": "Sand"
+        },
+        {
+          "value": "indigo",
+          "label": "Indigo"
+        }
       ],
       "default": "teal",
       "shown_if": "airShow",
@@ -2016,19 +1847,6 @@
       "admin": "Wall.tsx:1423"
     },
     {
-      "id": "fx_wake_sleep",
-      "group": "tests",
-      "label": "Wake + sleep",
-      "kind": "button",
-      "set": {
-        "fxPlay": {
-          "name": "show",
-          "at": "$now"
-        }
-      },
-      "admin": "Wall.tsx:1426"
-    },
-    {
       "id": "cal_grid",
       "group": "alignment",
       "label": "Alignment grid",
@@ -2168,20 +1986,6 @@
       "admin": "WallLedSign.tsx:130"
     },
     {
-      "id": "neon_play_motivate",
-      "group": "neon",
-      "label": "Play: Motivate me",
-      "kind": "button",
-      "set": {
-        "ledSign.test": {
-          "fx": "motivate",
-          "at": "$now"
-        },
-        "ledSign.outline": false
-      },
-      "admin": "WallLedSign.tsx:130"
-    },
-    {
       "id": "neon_play_scout",
       "group": "neon",
       "label": "Play: Scout alert",
@@ -2218,12 +2022,6 @@
       "dnd_allow_tonight",
       "dnd_schedule",
       "radio_on",
-      "show_play",
-      "show_party",
-      "motivate",
-      "show_stop",
-      "sleep_start",
-      "sleep_stop",
       "alarm_on",
       "alarm_time"
     ],
@@ -2266,12 +2064,11 @@
     },
     {
       "id": "alarm",
-      "title": "Alarm & Sleep",
+      "title": "Alarm",
       "icon": "mdi:alarm",
-      "summary": "Wake-up alarm, counting sheep",
+      "summary": "Wake-up alarm",
       "groups": [
-        "alarm",
-        "sleep"
+        "alarm"
       ]
     },
     {
@@ -2282,15 +2079,6 @@
       "groups": [
         "heads",
         "live"
-      ]
-    },
-    {
-      "id": "shows",
-      "title": "Show for friends",
-      "icon": "mdi:party-popper",
-      "summary": "Shows, party, skits",
-      "groups": [
-        "shows"
       ]
     },
     {

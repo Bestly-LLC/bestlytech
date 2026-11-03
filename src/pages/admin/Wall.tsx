@@ -32,7 +32,7 @@ import { WallRadioSection, type WallRadio, type WallRadioLive } from "@/componen
 import { WallPowerCost, type WallPowerMeter } from "@/components/admin/WallPowerCost";
 import { WallLedSign, type LedSign, type LedSignHealth } from "@/components/admin/WallLedSign";
 import { Group, Row, Segmented, btn, btnPrimary, swHit, NW } from "@/components/admin/wallUi";
-import { DndCard, MotivateButton, PackagesCard, type Dnd } from "@/components/admin/WallR4";
+import { DndCard, PackagesCard, type Dnd } from "@/components/admin/WallR4";
 import { HeyScoutRow, VoiceCard, type Voice } from "@/components/admin/WallVoice";
 import { RadioNowPlaying } from "@/components/admin/WallRadio";
 import { now as NOW_MANIFEST, panes as PANES_MANIFEST } from "@/config/wall-controls.json";
@@ -57,7 +57,7 @@ const STRIP_WIDGETS: { id: StripWidget; label: string; detail: string }[] = [
 ];
 
 type Pt = [number, number];
-type LiveKind = "plane" | "sweep" | "turo" | "show" | "sleep" | "incident";
+type LiveKind = "plane" | "sweep" | "turo" | "incident";
 type Mode = "auto" | "board" | "ambient" | "demo" | "off";
 /** Values of the wall state key `theme` (null = Normal). A new theme adds its value here, to THEMES,
  *  to server.py's theme check, to wall_clean_tour, and to wall.html. */
@@ -69,7 +69,7 @@ type WallState = {
   demoLeft?: string; demoNames?: string; demoRight?: string;
   wing?: Pt[]; signShow?: "auto" | "on" | "off"; signNear?: number | null; sound?: boolean;
   soundPack?: "glass" | "marimba" | "keys"; soundTest?: number | null;
-  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; skyCars?: boolean; alertCats?: Record<string, boolean>; skyCarLabels?: boolean; skyAlerts?: boolean; skyOverscan?: boolean; airLabels?: boolean; airLabelsSmall?: boolean; airCard?: boolean; airCardHeli?: boolean; airCardPin?: boolean; leftDate?: boolean; radio?: WallRadio; tour?: { cmd: "play" | "party" | "stop" | "skit" | "hshow" | "hparty"; at: number } | null; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
+  air?: Pt[]; airShow?: boolean; skyStars?: boolean; skyStarLabels?: boolean; skyGrid?: boolean; presence?: boolean; skyMoon?: boolean; skySun?: boolean; skyPlanets?: boolean; skyCars?: boolean; alertCats?: Record<string, boolean>; skyCarLabels?: boolean; skyAlerts?: boolean; skyOverscan?: boolean; airLabels?: boolean; airLabelsSmall?: boolean; airCard?: boolean; airCardHeli?: boolean; airCardPin?: boolean; leftDate?: boolean; radio?: WallRadio; theme?: ThemeId | null; volume?: number | null; airplay?: boolean;
   alarm?: { on: boolean; time: string; days?: "once" | "weekdays" | "weekends" | "daily"; vol?: number; label?: string; set_at?: number; stop?: number; test?: number } | null;
   heads?: { id: string; at: number; title: string; sub?: string; sound?: boolean; vol?: number; soon?: number }[] | null; headsStop?: number | null; tripDismiss?: { id: string; at: number } | null; airKey?: boolean; airBearing?: number; calGrid?: boolean;
   /** W1 round 3 (sky): Space Station name tag, home marker, sky radius in miles (2-25), live LAX tower audio. */
@@ -86,14 +86,12 @@ type WallState = {
   homePos?: { x: number; y: number } | null; airFocus?: { hex: string; until: number } | null;
   /** Strip widgets on the left side (missing = on) and the sample Turo booking pop-up (ms). W2 round 3. */
   widgets?: Partial<Record<StripWidget, boolean>> | null; bookingDemo?: number | null;
-  fxPlay?: { name: "show" | "wake" | "sleep"; at: number } | null;
-  sleepShow?: { at: number; mins: number; music?: boolean } | null;
   liveActs?: Partial<Record<LiveKind, boolean>> | null;
   /** W8 round 4: projection-mapped neon sign (glow look, color, fine-align, alert animations, test play). */
   ledSign?: LedSign | null;
   /** W4 round 4: Do Not Disturb, the layout block the projector outlines while the grid is on, and Motivate me (W5 plays it). */
   voice?: Voice | null;   // W7 round 4: Hey Scout
-  dnd?: Dnd | null; layoutSel?: "corners" | "mask" | "wing" | "air" | null; motivate?: { seq: number; ts: number } | null;
+  dnd?: Dnd | null; layoutSel?: "corners" | "mask" | "wing" | "air" | null;
 };
 /** One undo step from wall_geometry_history_list (newest first). can_undo / can_redo mark the next step each way. */
 type GeoStep = { id: number; at: string; reason: string; can_undo: boolean; can_redo: boolean; undone: boolean; who?: string | null };
@@ -178,15 +176,11 @@ const toF = (c: number) => Math.round((c * 9) / 5 + 32);
 
 /* building blocks (Group, Row, Segmented, btn, ...) live in components/admin/wallUi.tsx */
 
-const TOUR_NAME = { play: "The show", party: "The party", skit: "The skit", hshow: "The Halloween show", hparty: "The Halloween party", stop: "Stop" } as const;
-
 /** iPhone Live Activities the wall server drives. State key liveActs; a missing kind means on. */
 const LIVE_ACTS: { id: LiveKind; label: string; detail: string; icon: React.ElementType }[] = [
   { id: "plane", label: "Nearby aircraft", detail: "Airline, flight, route, altitude and speed of the plane overhead.", icon: Plane },
   { id: "sweep", label: "Move the car", detail: "Countdown to street sweeping.", icon: Car },
   { id: "turo", label: "Turo trips", detail: "Countdown to the next pickup or return.", icon: CalendarClock },
-  { id: "show", label: "Show for friends", detail: "Timer while the show or party is on.", icon: PartyPopper },
-  { id: "sleep", label: "Sleep mode", detail: "Counting-sheep countdown to lights out.", icon: Moon },
   { id: "incident", label: "Something's broken", detail: "A red card while a serious problem is open.", icon: AlertTriangle },
 ];
 
@@ -211,14 +205,13 @@ const PANE_LOOK: Record<string, { icon: React.ElementType; tint: string }> = {
   sky: { icon: Plane, tint: "bg-indigo-500" },
   alarm: { icon: AlarmClock, tint: "bg-orange-500" },
   alerts: { icon: Bell, tint: "bg-red-500" },
-  shows: { icon: PartyPopper, tint: "bg-fuchsia-500" },
   neon: { icon: Lightbulb, tint: "bg-violet-500" },
   projector: { icon: Projector, tint: "bg-zinc-500" },
   tests: { icon: FlaskConical, tint: "bg-emerald-600" },
 };
 /** Old section anchors (Live Activities and bookmarks use #sleep, #show, #live, #theme) -> the pane that holds them. */
 const HASH_PANE: Record<string, string> = {
-  sleep: "alarm", show: "shows", live: "alerts", packages: "alerts", theme: "display", "new-theme": "display",
+  live: "alerts", packages: "alerts", theme: "display", "new-theme": "display",
   "strip-widgets": "display", dnd: "sound", voice: "sound", radio: "sound", "sky-details": "sky", advanced: "projector",
 };
 
@@ -344,8 +337,6 @@ export default function Wall() {
   const [copiedAlign, setCopiedAlign] = useState(false);
   const [themeIdea, setThemeIdea] = useState("");
   const [copiedTheme, setCopiedTheme] = useState(false);
-  const [sheepMins, setSheepMins] = useState<"15" | "30" | "60">("30");
-  const [sheepMusic, setSheepMusic] = useState(true);
   const [, setSheepTick] = useState(0);
   useEffect(() => { const t = setInterval(() => setSheepTick((n) => n + 1), 15000); return () => clearInterval(t); }, []);
   /** Picked handle; ALL (the default) = the blue dot, so the arrows move the whole area unless a dot is tapped. */
@@ -773,32 +764,17 @@ export default function Wall() {
   const handles: Pt[] = pts ? [...pts, pts.reduce<Pt>((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length], [0, 0])] : [];
 
   const now = Date.now();
-  const tour = s.tour && s.tour.cmd !== "stop" && now - s.tour.at < (s.tour.cmd === "skit" ? 3 : 45) * 60000 ? s.tour : null;
-  const showOn = !!tour && tour.cmd !== "skit";
-  const skitOn = tour?.cmd === "skit";
-  const sheepEnd = s.sleepShow ? s.sleepShow.at + s.sleepShow.mins * 60000 : 0;
-  const sheepOn = !!s.sleepShow && now < sheepEnd;
   const ap = st?.airplay ?? null;
   const asleep = powerHint && now - powerHint.at < 90000
     ? !powerHint.on
     : st?.status === "asleep" || (st?.status ?? "").startsWith("unreachable");
   const modeLabel = MODES.find((m) => m.id === s.mode)?.label ?? s.mode;
-  const playing = sheepOn
-    ? <>Counting sheep until <NW>{time12(sheepEnd)}</NW></>
-    : tour
-      ? <>{TOUR_NAME[tour.cmd]}, started <NW>{time12(tour.at)}</NW></>
-      : ap?.casting && s.airplay !== false
-        ? <>AirPlay {ap.kind === "audio" ? "audio" : "video"}</>
-        : null;
-  const sheepLen = sheepMins === "60" ? "1\u00a0hour" : `${sheepMins}\u00a0minutes`;
+  const playing = ap?.casting && s.airplay !== false
+    ? <>AirPlay {ap.kind === "audio" ? "audio" : "video"}</>
+    : null;
 
   /** Make a change and confirm it with a toast (one toast at a time, the newest wins). */
   const act = (p: Partial<WallState>, msg: string) => { change(p); toast.success(msg, { id: "wall-act" }); };
-  const playShow = (cmd: "play" | "party" | "skit" | "hshow" | "hparty") =>
-    act({ tour: { cmd, at: Date.now() } }, `${TOUR_NAME[cmd]} starting on the wall.`);
-  const stopShow = () => act({ tour: { cmd: "stop", at: Date.now() } }, "Stopping. The wall goes back to normal.");
-  const startSheep = () => act({ sleepShow: { at: Date.now(), mins: Number(sheepMins), music: sheepMusic } }, `Counting sheep for ${sheepLen}. Good night.`);
-  const stopSheep = () => act({ sleepShow: null }, "Sleep mode stopped.");
   /* Handlers shared by the Now area and the panes (one write path each). */
   const setMode = (m: Mode) => act({ mode: m }, `Mode: ${MODES.find((x) => x.id === m)?.label ?? m}.`);
   const setSound = (v: boolean) => act({ sound: v }, v ? "Wall sounds on." : "Wall sounds off.");
@@ -1179,38 +1155,6 @@ export default function Wall() {
               );
             })()}
       </>);
-      case "sleep": return (<>
-            {/* Sleep mode: counting sheep */}
-            <Group id="sleep" title="Sleep mode" footer={`Sheep hop a fence while a soft lullaby plays. It slows down as you drift off, says good night, and turns the projector off until 7\u00a0AM.`}>
-              {sheepOn ? (
-                /* Counting: Stop is the one filled button, so it's the obvious tap (the Live Activity lands here). */
-                <div className="space-y-3 px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <Moon className="h-5 w-5 shrink-0 text-indigo-300" aria-hidden />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[17px] font-semibold text-white">Counting sheep</div>
-                      <div className="text-[15px] text-white/60">Ends at <NW>{time12(sheepEnd)}</NW></div>
-                    </div>
-                  </div>
-                  <button type="button" className={cn(btnPrimary, "w-full")} onClick={stopSheep}>
-                    <Square className="h-5 w-5" aria-hidden /> Stop counting sheep
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3 px-4 py-3">
-                  <Segmented label="Length" value={sheepMins} onChange={(v) => setSheepMins(v as "15" | "30" | "60")}
-                    options={[{ id: "15", label: "15\u00a0min" }, { id: "30", label: "30\u00a0min" }, { id: "60", label: "1\u00a0hour" }]} />
-                  <div className="flex min-h-[44px] items-center justify-between">
-                    <label htmlFor="wall-sheep-music" className="text-[16px] text-white">Lullaby music</label>
-                    <Switch className={swHit} id="wall-sheep-music" checked={sheepMusic} onCheckedChange={setSheepMusic} />
-                  </div>
-                  <button type="button" className={cn(btnPrimary, "w-full bg-indigo-500 text-white hover:bg-indigo-500/90 active:bg-indigo-500/80")} onClick={startSheep}>
-                    <Moon className="h-5 w-5" aria-hidden /> Start counting sheep
-                  </button>
-                </div>
-              )}
-            </Group>
-      </>);
       case "heads": return (<>
             {/* Heads-up: a card grows on the wall 15 minutes before ("soon", quiet), then "now" with a chime + a phone push. */}
             {(() => {
@@ -1256,63 +1200,6 @@ export default function Wall() {
             })()}
             {/* Packages: "Got it" hides one from the wall (W2 data: wall_admin_packages / wall_package_done). */}
             <PackagesCard />
-      </>);
-      case "shows": return (<>
-            {/* Show for friends: a ~2 minute tour, then a party loop until you stop it (45 min max). */}
-            <Group id="show" title="Show for friends"
-              footer={<>The show is a 2-minute tour, then a party until you stop it (45{"\u00a0"}minutes max). The skit is a 2-minute cartoon with speech bubbles. Music and voices play when wall sound is on and Do Not Disturb isn't; otherwise it's lights only.</>}>
-              {tour ? (
-                /* Playing: Stop is the one filled button, so it's the obvious tap (the Live Activity lands here). */
-                <div className="space-y-3 px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    {skitOn ? <Clapperboard className="h-5 w-5 shrink-0 text-red-300" aria-hidden /> : <PartyPopper className="h-5 w-5 shrink-0 text-red-300" aria-hidden />}
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[17px] font-semibold text-white">{TOUR_NAME[tour.cmd]} is playing</div>
-                      <div className="text-[15px] text-white/60">Started <NW>{time12(tour.at)}</NW></div>
-                    </div>
-                  </div>
-                  <button type="button" className={cn(btnPrimary, "w-full bg-red-500 text-white hover:bg-red-500/90 active:bg-red-500/80")} onClick={stopShow}>
-                    <Square className="h-5 w-5" aria-hidden /> {skitOn ? "Stop the skit" : "Stop the show"}
-                  </button>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("play")}>
-                      <Presentation className="h-4 w-4 shrink-0" aria-hidden /> Show
-                    </button>
-                    <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("party")}>
-                      <PartyPopper className="h-4 w-4 shrink-0" aria-hidden /> Party
-                    </button>
-                    <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("skit")}>
-                      <Clapperboard className="h-4 w-4 shrink-0" aria-hidden /> Skit
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2 px-4 py-3">
-                  <button type="button" className={cn(btnPrimary, "w-full")} onClick={() => playShow("play")}>
-                    <Presentation className="h-5 w-5" aria-hidden /> Play the show
-                  </button>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("party")}>
-                      <PartyPopper className="h-4 w-4 shrink-0" aria-hidden /> Party
-                    </button>
-                    <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("skit")}>
-                      <Clapperboard className="h-4 w-4 shrink-0" aria-hidden /> Skit
-                    </button>
-                    <button type="button" className={cn(btn, "px-2")} onClick={stopShow}>
-                      <Square className="h-4 w-4 shrink-0" aria-hidden /> Stop
-                    </button>
-                  </div>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-2 border-t border-white/[0.07] px-4 py-3">
-                <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("hshow")}>
-                  <Ghost className="h-4 w-4 shrink-0" aria-hidden /> Halloween show
-                </button>
-                <button type="button" className={cn(btn, "px-2")} onClick={() => playShow("hparty")}>
-                  <Skull className="h-4 w-4 shrink-0" aria-hidden /> Halloween party
-                </button>
-              </div>
-            </Group>
       </>);
       case "neon": return (<>
             {/* W8 round 4: the projection-mapped neon sign on the sign wall (glow, looks, alert animations, fine-align) */}
@@ -1593,9 +1480,6 @@ export default function Wall() {
                 <button type="button" className={cn(btn, "px-2")} onClick={() => act({ soundTest: Date.now() }, "Playing every wall sound: chime, mode switch, alert, signature, celebration.")}>
                   <Volume2 className="h-4 w-4 shrink-0" aria-hidden /> Every sound
                 </button>
-                <button type="button" className={cn(btn, "px-2")} onClick={() => act({ fxPlay: { name: "show", at: Date.now() } }, "The wall powers down, then wakes back up.")}>
-                  <Sparkles className="h-4 w-4 shrink-0" aria-hidden /> Wake + sleep
-                </button>
               </div>
             </Group>
       </>);
@@ -1733,17 +1617,6 @@ export default function Wall() {
 
       <Group title="Radio">
         <RadioNowPlaying radio={s.radio} live={st?.radio ?? null} onPlay={radioPlay} onStop={radioStop} onBrowse={() => openPane("sound", "#radio")} />
-      </Group>
-
-      <Group title="Moments">
-        <div className="grid grid-cols-4 gap-2 p-2" role="group" aria-label="Moments">
-          <QuickAction icon={tour ? Square : Presentation} label={tour ? (skitOn ? "Stop skit" : "Stop show") : "Play the show"} active={!!tour}
-            onClick={() => (tour ? stopShow() : playShow("play"))} />
-          <QuickAction icon={PartyPopper} label="Party" active={tour?.cmd === "party"} onClick={() => playShow("party")} />
-          <MotivateButton tile seq={s.motivate?.seq ?? 0} onFire={(m) => act({ motivate: m }, "Motivate me: a pep talk is on its way to the wall.")} />
-          <QuickAction icon={sheepOn ? Square : Moon} label={sheepOn ? "Stop sheep" : "Count sheep"} active={sheepOn}
-            onClick={() => (sheepOn ? stopSheep() : startSheep())} />
-        </div>
       </Group>
 
       <Group title="Alarm">

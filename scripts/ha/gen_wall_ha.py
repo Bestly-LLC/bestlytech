@@ -222,7 +222,7 @@ for name, url, icon in PRESETS:
 
 # ---- state sensor: one call, every key the controls read ----
 tops = sorted({c["path"].split(".")[0] for c in C if c.get("path")} |
-              {"radio", "one", "motivate", "tour", "sleepShow", "alarm", "dnd", "voice", "widgets", "liveActs", "ledSign", "theme"})
+              {"radio", "one", "alarm", "dnd", "voice", "widgets", "liveActs", "ledSign", "theme"})
 rest = [{
     "resource": "!secret bestly_rpc_wall_ha_get", "method": "POST", "scan_interval": 20, "timeout": 15,
     "headers": {"apikey": "!secret bestly_publishable", "Authorization": "!secret bestly_publishable_bearer",
@@ -395,8 +395,6 @@ radio_rows = [row(c) for c in grp("radio")] + [{"entity": "sensor.wall_radio_sta
      "tap_action": {"action": "perform-action", "perform_action": "button.press",
                     "target": {"entity_id": "button.wall_radio_" + n.lower().replace(" ", "_")}}} for n, _, _ in PRESETS]
 
-sleep_rows = [{"entity": "input_select.wall_sleep_length", "name": "Length"},
-              {"entity": "input_boolean.wall_sleep_music", "name": "Lullaby music"}] + [row(c) for c in grp("sleep") if not c.get("local")]
 
 
 def G(gid, rows=None, title=None):
@@ -409,8 +407,6 @@ def grp_rows(gid):
         return wall_rows
     if gid == "radio":
         return radio_rows
-    if gid == "sleep":
-        return sleep_rows
     if gid == "power":
         return [row(BY_ID["power_on"]), row(BY_ID["power_off"]), row(BY_ID["away"])]
     return [row(c) for c in grp(gid)]
@@ -460,9 +456,6 @@ main = {"title": "Wall", "path": "wall", "icon": "mdi:projector", "type": "secti
     hero,
     section([header("Controls"), card("Controls", "", quick)]),
     section([header("Listen"), card("Listen", "", listen)]),
-    section([header("Moments"), press_tile("show_play", "Show"), press_tile("show_party", "Party"),
-             press_tile("motivate", "Motivate"), press_tile("sleep_start", "Sheep"),
-             press_tile("show_stop", "Stop show"), press_tile("sleep_stop", "Stop sheep")]),
     section([header("Alarm"), card("Alarm", "", alarm_now)]),
     section([header("Settings")] + [nav_tile(p) for p in M["panes"]], 2),
 ]}

@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export type LedSignLook = "lit" | "breathe" | "wash" | "trace" | "none";
-export type LedSignFx = "sign" | "turo" | "motivate" | "scout" | "hello";
+export type LedSignFx = "sign" | "turo" | "scout" | "hello";
 export type LedSign = {
   on: boolean; look: LedSignLook; color: string;
   /** offset as a share of the projector picture (0..1), size, turn in degrees, extra width */
@@ -44,7 +44,7 @@ const COLORS: { hex: string; name: string }[] = [
   { hex: "#A78BFA", name: "Violet" }, { hex: "#64D2FF", name: "Blue" }, { hex: "#FFB340", name: "Amber" },
 ];
 const PLAYS: { fx: LedSignFx; label: string }[] = [
-  { fx: "sign", label: "New signature" }, { fx: "turo", label: "Turo booking" }, { fx: "motivate", label: "Motivate me" }, { fx: "scout", label: "Scout alert" },
+  { fx: "sign", label: "New signature" }, { fx: "turo", label: "Turo booking" }, { fx: "scout", label: "Scout alert" },
 ];
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
