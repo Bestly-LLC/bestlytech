@@ -41,6 +41,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Face ID confirms car commands and approvals.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Sky points the arrow at the plane on the wall from wherever you are standing.</string>
 	<key>NSSupportsLiveActivities</key>
