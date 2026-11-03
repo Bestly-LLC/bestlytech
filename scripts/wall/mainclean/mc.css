@@ -1,0 +1,65 @@
+/* MAINCLEAN_20261102: main-mode clean-up. Text never cut (autofit: shrink to a floor, then drop trailing whole words), bigger calendar text,
+   Local alerts + Airports pinned in the sign wall, one shared slot for plane card / bus / key legend, logo or icon in the empty photo slot. */
+/* ---------- generic fit target (JS: mcFit) ---------- */
+.mcf.mcf{white-space:normal!important;overflow:hidden!important;display:block!important;-webkit-line-clamp:unset!important;text-overflow:clip!important;line-height:1.2!important;max-height:calc(var(--mcl,2)*1.2em)!important;margin-left:0!important;-webkit-mask-image:none!important;mask-image:none!important}
+.mcf .wmq-in{animation:none!important;transform:none!important;display:inline!important;padding-left:0!important;will-change:auto!important}
+/* Focus card header 20 px */
+.pick .hdr{font-size:20px;line-height:1.2}
+.pick .hdr .src{line-height:1.2}
+/* Focus card body line: 22 px, up to 2 lines, no sliding */
+.pick .why.mcf{font-size:22px}
+/* calendar line under the clock: 24 px, up to 2 lines, full title */
+.next .row .nm.mcf{font-size:24px}
+.next .row{align-items:flex-start}
+.next .row svg{margin-top:2px}
+.next .row .in{margin-top:2px;white-space:nowrap}
+/* ---------- Turo calendar (right panel): dates / legend / names >= 20 css px (the page has !important sizes, so these are too) ---------- */
+#cTcal{bottom:-44px;gap:4px}
+#cTcal .hdr{font-size:22px;line-height:1.2}
+#cTcal .hdr,#cTcal .tc-wk,#cTcal .tc-grid,#cTcal .tc-key{flex:none}
+#cTcal .tc-wk{font-size:20px!important;margin-bottom:0}
+#cTcal .tc-grid{grid-auto-rows:30px;row-gap:3px;overflow:visible}
+#cTcal .tc-c{font-size:21px!important}
+#cTcal .tc-mo{display:none}
+#cTcal .tc-n:has(.tc-mo){text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:5px}
+.tc-today .tc-n::before{width:30px;height:30px}
+#cTcal .tc-g{font:700 20px/1 var(--sf)!important;gap:6px;left:9px}
+#cTcal .tc-g svg{width:17px;height:17px}
+#cTcal .tc-c.tc-lsh .tc-g{left:50px}
+#cTcal .tc-key,#cTcal .tc-key.tc-k5,#cTcal .tc-key.tc-k6,#cTcal .tc-key.tc-k7{font-size:20px!important;gap:6px 12px;margin-top:2px;flex-wrap:wrap;overflow:visible;width:392px}
+#cTcal .tc-dot,#cTcal .tc-key.tc-k6 .tc-dot,#cTcal .tc-key.tc-k7 .tc-dot{width:12px;height:12px;margin-right:6px}
+/* ---------- sign wall: Local alerts pinned in the left wing column (wing 20,495 - 410,780), 1:1 ---------- */
+#wingAlerts{width:390px!important;height:268px!important}
+#wingAlerts{opacity:1}
+#wingAlerts .al{width:390px;padding:14px 18px 12px;border-radius:36px;max-height:268px;overflow:hidden}
+#wingAlerts .al-hd{font:800 26px/1 var(--sf);letter-spacing:.04em;margin-bottom:4px;color:rgba(255,255,255,.92)}
+#wingAlerts .al-hd span:last-child{font:700 22px/1 var(--sf);letter-spacing:0;text-transform:none;color:rgba(255,255,255,.8)}
+#wingAlerts .al-r{gap:14px;padding:8px 0;align-items:flex-start}
+#wingAlerts .al-ic{width:56px;height:56px;border-radius:16px;padding:12px;box-shadow:0 0 12px 3px rgba(var(--r),.3)}
+#wingAlerts .al-ic svg{width:32px;height:32px}
+#wingAlerts .al-t{font:800 30px/1.1 var(--sf);overflow-wrap:normal}
+#wingAlerts .al-t s{font:800 20px/1 var(--sf);margin-left:10px;vertical-align:3px}
+#wingAlerts .al-s{font:700 22px/1.2 var(--sf);margin-top:2px;color:rgba(255,255,255,.86)}
+#wingAlerts .al-more{font:700 22px/1 var(--sf);padding-top:4px;color:rgba(255,255,255,.8)}
+#wingAlerts .al-q{font:700 26px/1.2 var(--sf);padding-top:20px;color:rgba(255,255,255,.88)}
+/* ---------- sign wall: Airports pinned in the bottom wing strip (wing 20,790 - 690,975), 1:1 ---------- */
+#wingAp{position:fixed;left:0;top:0;width:670px;height:185px;transform-origin:0 0;z-index:6;pointer-events:none;opacity:1}
+body.skit #wingAp,body.sheep #wingAp,body.mapping #wingAp,body.thin #wingAp,body.pf-nowing #wingAp,body.black #wingAp{opacity:0!important}
+body.w2-fxi #wingAp{opacity:0!important;visibility:hidden!important}
+#wingAp .apc{box-sizing:border-box;width:670px;height:185px;padding:10px 22px;border-radius:40px;background:rgba(255,255,255,.055);box-shadow:inset 0 0 0 2px rgba(255,255,255,.15);color:#fff;font-family:var(--sf);display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+#wingAp .ar{display:grid;grid-template-columns:84px minmax(0,1fr) auto;align-items:center;column-gap:14px;height:54px}
+#wingAp .ar+.ar{box-shadow:inset 0 2px 0 rgba(255,255,255,.1)}
+#wingAp .ar .cb{font:800 30px/1 var(--sf);font-style:normal;text-align:center;padding:7px 0;border-radius:16px;background:var(--c);color:var(--t)}
+#wingAp .ar b{font:700 30px/1.1 var(--sf);color:#fff;white-space:nowrap;overflow:hidden}
+#wingAp .ar em{font:700 24px/1 var(--sf);font-style:normal;color:rgba(255,255,255,.92);white-space:nowrap}
+#wingAp .ar.q b{color:rgba(255,255,255,.8)}
+/* ---------- sign wall slot: key legend = one small row ---------- */
+#wingKey .sck.lgd{height:auto;padding:12px 24px;border-radius:40px;display:flex;align-items:center;justify-content:space-between;gap:10px;white-space:nowrap}
+#wingKey .sck.lgd .k{font:700 26px/1 var(--sf);min-height:0;gap:8px}
+#wingKey .sck.lgd .k svg{width:30px;height:30px}
+/* ---------- plane card: no photo -> airline logo (or a type icon on a dark tile) in the slot, never a gray box ---------- */
+body #wingFlight .v2c .v2ph.nop{background:linear-gradient(150deg,#262d3d,#10141c);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18)}
+body #wingFlight .v2c .v2ph.nop svg{width:76px;height:76px;fill:var(--acc,#fff);opacity:1}
+body #wingFlight .v2c .v2ph.nop.lgo{background:#fff;box-shadow:none}
+body #wingFlight .v2c .v2ph.nop.lgo svg{display:none}
+body #wingFlight .v2c .v2ph.nop img.mclg{position:absolute;inset:8px;width:calc(100% - 16px);height:calc(100% - 16px);object-fit:contain}
