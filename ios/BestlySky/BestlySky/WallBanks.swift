@@ -8,6 +8,7 @@ struct BKToggle {
     var on: Bool
     var needs: String?
     var blocked: Bool
+    var sub: String? = nil   // SKYBUSES_20261103: one-line plain explanation under the label
     var tap: () -> Void
 }
 
@@ -68,7 +69,7 @@ struct WallDoor: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let ids: [(String, String)] = [
-        ("sky", "SKY"), ("flights", "FLIGHTS"), ("stars", "STARS"), ("alerts", "LOCAL"),
+        ("sky", "SKY"), ("flights", "FLIGHTS"), ("stars", "STARS"), ("alerts", "LOCAL"), ("buses", "BUSES"),
         ("sound", "SOUND"), ("voice", "VOICE"), ("radio", "RADIO"), ("display", "DISPLAY"),
         ("strip", "STRIP"), ("alarm", "ALARM"), ("live", "PHONE"), ("neon", "NEON"),
         ("sign", "SIGN"), ("proj", "PROJ"), ("align", "ALIGN"), ("tests", "TESTS")
@@ -200,6 +201,7 @@ struct WallDoor: View {
         case "flights": return flightsBank()
         case "stars": return starsBank()
         case "alerts": return alertsBank()
+        case "buses": return busesBank()
         case "sound": return soundBank()
         case "voice": return voiceBank()
         case "radio": return radioBank()
@@ -284,6 +286,22 @@ struct WallDoor: View {
         }
         return BKBank(id: "alerts", label: "LOCAL", title: "Local alerts on the sky",
                       note: "Which kinds of nearby alerts get drawn.", blocks: [.toggles(t)])
+    }
+
+    /// SKYBUSES_20261103: Buses on the sky (state.skyBuses, missing = on) and Mae's leave-now push (state.busPush, missing = on).
+    /// Both go through model.setPatch -> Action.run (retry, wall_admin_get verify, rollback, toast, report).
+    private func busesBank() -> BKBank {
+        func bt(_ key: String, _ label: String, _ sub: String) -> BKToggle {
+            let on = model.flag(key, true)
+            return BKToggle(label: label, on: on, needs: nil, blocked: false, sub: sub) {
+                model.setPatch([key: !on])
+            }
+        }
+        let t = [
+            bt("skyBuses", "Buses on the sky", "Bus pills, stops and walk path on the sky map"),
+            bt("busPush", "Leave-now alerts", "Mae pings your iPhone when it's time to walk to the bus")
+        ]
+        return BKBank(id: "buses", label: "BUSES", title: "Buses", note: "Bus info on the sky map and the leave-now ping.", blocks: [.toggles(t)])
     }
 
     private func soundBank() -> BKBank {
@@ -647,6 +665,9 @@ struct BankToggles: View {
                         .fixedSize(horizontal: false, vertical: true)
                     if t.blocked, let n = t.needs {
                         Text(n).font(.system(size: 11)).foregroundStyle(AT.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !t.blocked, let sub = t.sub {
+                        Text(sub).font(.system(size: 11)).foregroundStyle(AT.secondary).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 4)
