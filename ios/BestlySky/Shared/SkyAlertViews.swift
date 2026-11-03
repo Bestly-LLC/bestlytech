@@ -393,7 +393,7 @@ struct SkyAlertCard: View {
 
 struct SkyCompactLeading: View {
     var s: SkyState
-    var body: some View { SkyChip(kind: SkyKind(s.kind), size: 22) }
+    var body: some View { SkyRing(s: s, size: 26, stroke: 2.8) { SkyChip(kind: SkyKind(s.kind), size: 15) } }
 }
 
 struct SkyCompactTrailing: View {
@@ -418,7 +418,7 @@ struct SkyMinimal: View {
     var s: SkyState
 
     var body: some View {
-        SkyArrow(tint: SkyKind(s.kind).tint, size: 16, degrees: s.bearingDeg, glow: 4)
+        SkyRing(s: s, size: 28, stroke: 3) { SkyArrow(tint: SkyKind(s.kind).tint, size: 14, degrees: s.bearingDeg, glow: 3) }
             .accessibilityLabel("\(SkyKind(s.kind).subject), \(Sky.dirWord(s.bearingDeg))")
     }
 }

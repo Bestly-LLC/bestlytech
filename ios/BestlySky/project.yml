@@ -14,7 +14,7 @@ settings:
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: 2
+    CURRENT_PROJECT_VERSION: 4
     TARGETED_DEVICE_FAMILY: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 targets:
@@ -28,7 +28,7 @@ targets:
     info:
       path: BestlySky/Info.plist
       properties:
-        CFBundleDisplayName: Sky
+        CFBundleDisplayName: Bestly Admin
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSSupportsLiveActivities: true
@@ -40,6 +40,8 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: tech.bestly.sky
             CFBundleURLSchemes: [bestlysky]
+          - CFBundleURLName: tech.bestly.admin
+            CFBundleURLSchemes: [bestlyadmin]
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:
@@ -65,7 +67,7 @@ targets:
     info:
       path: BestlySkyWidgets/Info.plist
       properties:
-        CFBundleDisplayName: Sky
+        CFBundleDisplayName: Bestly Admin
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:

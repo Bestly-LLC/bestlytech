@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct BestlySkyApp: App {
+    @UIApplicationDelegateAdaptor(AdminAppDelegate.self) private var appDelegate
     init() {
         // Runs on a normal launch AND when iOS wakes the app in the background after a push-to-start,
         // so the new activity's update token always reaches the server.
@@ -36,10 +37,10 @@ struct BestlySkyApp: App {
         } else if CommandLine.arguments.contains("-turoPreview") {
             TuroPreviewGallery()
         } else {
-            CompassView()
+            RootView()
         }
         #else
-        CompassView()
+        RootView()
         #endif
     }
 }
