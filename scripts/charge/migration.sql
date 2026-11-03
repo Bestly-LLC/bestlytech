@@ -1,0 +1,14 @@
+-- CHARGEPLAN_20261103: Mae's charging planner (applied to rcqfqhguwpmaarseifqg as migration mae_charge_planner_20261103).
+-- Undo: drop table charge_station_state, car_charge_plan, car_charge_alert_log; drop function car_charge_plan_json, admin_car_charge_plan,
+--       wall_car_charge_plan(text), car_charge_notify(text,text,text), car_charge_digest(text,text,text);
+--       delete from notification_owners where prefix='car.charge'; delete from pi_jobs where job in ('charge_plan','charge_plan_watch');
+-- Tables (RLS on, no policies: service role only):
+--   charge_station_state (singleton id=1): device_id, name, address, station_status, ports jsonb, ports_free, ports_total, tou jsonb (seconds of day),
+--       service_fee, idle_rate_hr, idle_grace_min, fetched_at, ok_at, last_error, err_kind, err_count, backoff_until
+--   car_charge_plan (pk vin): car, soc, range_mi, home, plugged_in, charging_state, data_at, stale, data_source, next_trip_at, next_trip_id,
+--       target_pct, status (plan|ready|away|busy|wont_make|stale|charging), plan_start, plan_end, hours_to_target, kwh_needed, est_cost,
+--       est_is_estimate, charger_status, price_now, plan_text, updated_at
+--   car_charge_alert_log (vin, kind charge_now|wont_ready, trip_id, sent_at, text, result)
+-- RPCs: admin_car_charge_plan() (team_is_admin), wall_car_charge_plan(p_token) (hub agent key) -> {station, cars[], as_of}
+--       car_charge_notify(title, body, tag) time-sensitive push signed Mae (service only); car_charge_digest(title, body, tag) 7 AM digest line signed Mae (service only)
+-- The full DDL lives in the applied migration; see supabase_migrations for the exact text.

@@ -1,0 +1,12 @@
+{
+  "device_id": 187133,
+  "name": "ESSEX / THE BLAKE 01",
+  "short_name": "the Blake charger",
+  "home_lat": 0.0,
+  "home_lon": 0.0,
+  "home_radius_m": 150,
+  "port_kw": 6.6,
+  "wall_efficiency": 0.90,
+  "target_pct": 80,
+  "pack_kwh": {"default": 52.0}
+}

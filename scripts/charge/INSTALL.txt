@@ -1,0 +1,6 @@
+Mae's charging planner (CHARGEPLAN_20261103), Hestia.
+cp.py            -> /opt/bestly/chargepoint/cp.py (adds read-only find/station; stop unchanged)
+charge_plan*.py  -> /opt/bestly/cron/jobs/
+station.json     -> /opt/bestly/chargepoint/station.json (copy station.example.json, fill in home coordinates)
+crontab: 2-59/10 * * * * /opt/bestly/cron/run.sh charge_plan ; 7-59/10 * * * * /opt/bestly/cron/run.sh charge_plan_watch
+Dry runs: RUNJOB_NOREPORT=1 python3 /opt/bestly/cron/runjob.py charge_plan --dry --force | --preview
