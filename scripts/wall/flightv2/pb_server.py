@@ -105,7 +105,7 @@ def _pred_flags(a):
 def _pred_target(a, stage, c, stt, now):
     t = SKYA.plane_target(a, _plane_type(a), _iata)
     t["pred"] = {"stage": stage, "secs": (c or {}).get("secs"), "alt": ((c or {}).get("alt") if stage == "approaching" else a.get("alt")),
-                 "progress": SKYA.pred_progress(c, stt["d0"]) if c else 0.5, "sq": a.get("sq"), "vr": a.get("vr")}
+                 "progress": 0.5 if (stage in ("emergency", "rapid") or not c) else SKYA.pred_progress(c, stt["d0"]), "sq": a.get("sq"), "vr": a.get("vr")}
     return t
 
 
