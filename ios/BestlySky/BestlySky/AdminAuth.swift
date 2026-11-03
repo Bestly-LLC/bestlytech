@@ -11,9 +11,6 @@ enum AdminConfig {
     static var anonKey: String { SkyAPI.publishable }
     static let origin = "https://www.bestly.tech"
     static let rpId = "www.bestly.tech"
-    static let storageKey = "sb-rcqfqhguwpmaarseifqg-auth-token"   // supabase-js v2 localStorage key
-    static let userAgentToken = "BestlyAdminApp"
-    static let adminBase = "https://www.bestly.tech"
 }
 
 extension Data {
@@ -65,7 +62,6 @@ struct AdminSession {
         self.raw = j
     }
     var data: Data { (try? JSONSerialization.data(withJSONObject: raw)) ?? Data() }
-    var jsonString: String { String(data: data, encoding: .utf8) ?? "{}" }
 }
 
 struct AdminDeviceRequest: Equatable {
@@ -162,19 +158,11 @@ final class AdminAuth: NSObject, ObservableObject {
         }
     }
 
-    /// The web pages refresh their own copy of the session; take theirs when it is newer so the two never fight.
-    func adoptWebSession(_ jsonString: String) {
-        guard let d = jsonString.data(using: .utf8), let j = (try? JSONSerialization.jsonObject(with: d)) as? JSON,
-              let s = AdminSession(j), let mine = session, s.userId == mine.userId, s.expiresAt > mine.expiresAt else { return }
-        store(s)
-    }
-
     func signOut() {
         devicePoll?.cancel()
         device = nil
         dropSession()
         error = nil
-        Task { await AdminWeb.clearSession() }
     }
 
     // MARK: passkey

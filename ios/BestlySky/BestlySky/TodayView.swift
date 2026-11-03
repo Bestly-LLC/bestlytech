@@ -5,9 +5,8 @@ struct TodayView: View {
     @StateObject private var model = TodayModel()
     @ObservedObject private var state = AdminState.shared
     @Environment(\.scenePhase) private var phase
-    @State private var webSheet: WebTarget?
-
-    struct WebTarget: Identifiable { var id: String { path }; var path: String; var title: String }
+    @State private var showHealth = false
+    @State private var detail: StuckSummary?
 
     var body: some View {
         NavigationStack {
@@ -17,6 +16,7 @@ struct TodayView: View {
                     VStack(spacing: 14) {
                         header
                         if let s = model.stuck { stuckCard(s) } else if model.stuckFailed { oneLine("Couldn't load what's stuck. Retrying.") }
+                        wallCard
                         moneyCard
                         turoCard
                         myDayCard
@@ -36,10 +36,9 @@ struct TodayView: View {
             }
         }
         .onChange(of: phase) { _, p in if p == .active { Task { await model.load() } } }
-        .sheet(item: $webSheet) { t in
-            NavigationStack { AdminWebScreen(title: t.title, url: Self.url(t.path), showsTitle: true) }
-                .preferredColorScheme(.dark)
-        }
+        .sheet(isPresented: $showHealth) { HealthSheet(issues: model.issueList).preferredColorScheme(.dark) }
+        .sheet(item: $detail) { s in StuckDetailSheet(item: s).preferredColorScheme(.dark) }
+        .screenView("today")
         .overlay(alignment: .bottom) {
             if let t = model.toast {
                 Text(t).font(.system(size: 15)).foregroundStyle(AT.text)
@@ -49,11 +48,6 @@ struct TodayView: View {
                     .task { try? await Task.sleep(nanoseconds: 3_000_000_000); model.toast = nil }
             }
         }
-    }
-
-    static func url(_ path: String) -> URL {
-        if path.hasPrefix("http"), let u = URL(string: path) { return u }
-        return URL(string: AdminConfig.adminBase + (path.hasPrefix("/") ? path : "/" + path)) ?? AdminWeb.adminURL("/admin")
     }
 
     // MARK: header
@@ -67,7 +61,7 @@ struct TodayView: View {
                 Text("Today").font(.system(size: 34, weight: .bold)).foregroundStyle(AT.text)
             }
             Spacer(minLength: 8)
-            Button { webSheet = WebTarget(path: "/admin/overview", title: "Status") } label: {
+            Button { showHealth = true } label: {
                 HStack(spacing: 8) {
                     Circle().fill(healthColor).frame(width: 9, height: 9).shadow(color: healthColor.opacity(0.45), radius: 5)
                     Text(healthText).font(.system(size: 13)).foregroundStyle(Color(white: 0.83)).lineLimit(1).minimumScaleFactor(0.8)
@@ -120,7 +114,7 @@ struct TodayView: View {
                     .foregroundStyle(AT.hex(0x1A0E05))
                 }
                 .disabled(working)
-                Button { webSheet = WebTarget(path: s.link ?? "/admin/overview", title: "Details") } label: {
+                Button { detail = s } label: {
                     Text("Show me").font(.system(size: 15))
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -141,6 +135,33 @@ struct TodayView: View {
         let h = m / 60
         if h < 48 { return "\(h)\u{00A0}hr" }
         return "\(h / 24)\u{00A0}days"
+    }
+
+    // MARK: wall
+
+    @ViewBuilder private var wallCard: some View {
+        if let w = model.wall {
+            Button { state.go(.wall) } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "av.remote.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(AT.lime)
+                        .frame(width: 44, height: 44)
+                        .background(LinearGradient(colors: [AT.hex(0x3B3B45), AT.hex(0x2C2C34)], startPoint: .top, endPoint: .bottom),
+                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(w.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(AT.text).fixedSize(horizontal: false, vertical: true)
+                        Text(w.line).font(.system(size: 13)).foregroundStyle(AT.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(AT.hex(0x71717A))
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
+                .background(AT.card, in: RoundedRectangle(cornerRadius: AT.radius, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        } else if model.wallFailed {
+            oneLine("Couldn't load the wall. Retrying.")
+        }
     }
 
     // MARK: money
@@ -183,7 +204,7 @@ struct TodayView: View {
 
     @ViewBuilder private var turoCard: some View {
         if let t = model.turo {
-            Button { state.tab = 3 } label: {
+            Button { state.go(.turo) } label: {
                 HStack(spacing: 12) {
                     QuarterRing(stage: t.stage, tint: t.tint)
                     VStack(alignment: .leading, spacing: 2) {
@@ -282,5 +303,101 @@ struct QuarterRing: View {
         }
         .frame(width: 44, height: 44)
         .accessibilityLabel(stage == 0 ? "No trip in progress" : "Trip stage \(stage) of 4")
+    }
+}
+
+
+/// Health pill: every open issue from the command center, who owns it and how serious it is.
+struct HealthSheet: View {
+    var issues: [HealthIssue]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AT.bg.ignoresSafeArea()
+                ScrollView {
+                    VStack(spacing: 10) {
+                        if issues.isEmpty {
+                            Text("Everything is working. Nothing needs a look.").font(.system(size: 15)).foregroundStyle(AT.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                                .background(AT.card, in: RoundedRectangle(cornerRadius: AT.radius, style: .continuous))
+                        }
+                        ForEach(issues) { i in
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(alignment: .top, spacing: 8) {
+                                    Circle().fill(color(i.severity)).frame(width: 9, height: 9).padding(.top, 6)
+                                    Text(i.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(AT.text).fixedSize(horizontal: false, vertical: true)
+                                }
+                                Text((i.severity.isEmpty ? "Open" : i.severity.capitalized) + " \u{00B7} From \(i.employee)")
+                                    .font(.system(size: 13)).foregroundStyle(AT.secondary)
+                            }
+                            .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(AT.card, in: RoundedRectangle(cornerRadius: AT.radius, style: .continuous))
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle("Status").navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AT.bg, for: .navigationBar)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+        .screenView("health")
+    }
+
+    private func color(_ sev: String) -> Color {
+        ["error", "critical", "high", "down", "blocked"].contains(sev) ? AT.red : AT.orange
+    }
+}
+
+/// "Show me" on the stuck card: everything we know about the item, and the web page when it has one.
+struct StuckDetailSheet: View {
+    var item: StuckSummary
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AT.bg.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(item.title).font(.system(size: 22, weight: .bold)).foregroundStyle(AT.text).fixedSize(horizontal: false, vertical: true)
+                        if !item.sentence.isEmpty { field("What happened", item.sentence) }
+                        if !item.steps.isEmpty { field("What is blocked", item.steps.joined(separator: "\n")) }
+                        if let since = item.since { field("Stuck since", AdminFmt.whenShort(since)) }
+                        if let note = item.actionNote, item.actionStatus != nil { field("Fix status", (item.actionStatus ?? "").capitalized + ". " + note) }
+                        field("Owner", item.employee)
+                        if let link = item.link, let url = Self.url(link) {
+                            Button { SafariLink.open(url) } label: {
+                                Text("Open on the web").font(.system(size: 15, weight: .semibold))
+                                    .frame(maxWidth: .infinity, minHeight: 48)
+                                    .background(AT.lime, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    .foregroundStyle(AT.hex(0x111114))
+                            }
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle("Details").navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AT.bg, for: .navigationBar)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+        .screenView("stuck_detail")
+    }
+
+    private func field(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased()).font(.system(size: 12, weight: .semibold)).tracking(0.3).foregroundStyle(AT.secondary)
+            Text(value).font(.system(size: 15)).foregroundStyle(AT.text).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+        .background(AT.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    static func url(_ path: String) -> URL? {
+        if path.hasPrefix("http") { return URL(string: path) }
+        return URL(string: "https://www.bestly.tech" + (path.hasPrefix("/") ? path : "/" + path))
     }
 }

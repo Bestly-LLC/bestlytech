@@ -1,4 +1,4 @@
-// Bestly Admin: the app's home. Signed out: the sign-in screen. Signed in: Today, Needs you, Scout, Turo, More.
+// Bestly Admin: the app's home. Signed out: the sign-in screen. Signed in: Today, Needs you, Scout, Wall, More.
 // Deep links keep working: bestlyadmin://ava/<n> (and a tapped Ava push) opens that call; bestlysky:// opens the compass.
 import SwiftUI
 
@@ -6,6 +6,7 @@ struct RootView: View {
     @ObservedObject private var auth = AdminAuth.shared
     @ObservedObject private var state = AdminState.shared
     @ObservedObject private var ava = AvaStore.shared
+    @ObservedObject private var needs = NeedsYouModel.shared
     @Environment(\.scenePhase) private var phase
 
     var body: some View {
@@ -23,9 +24,10 @@ struct RootView: View {
         }
         .onChange(of: ava.pendingOpen) { _, n in consume(n) }
         .onChange(of: phase) { _, p in
-            if p == .active, auth.isSignedIn { Task { _ = try? await auth.validAccessToken(); await state.refreshBadge() } }
+            if p == .active, auth.isSignedIn { Task { _ = try? await auth.validAccessToken(); await needs.load() } }
         }
-        .onAppear { consume(ava.pendingOpen); state.startPolling() }
+        .onChange(of: auth.isSignedIn) { _, on in if on { needs.start() } }
+        .onAppear { consume(ava.pendingOpen); if auth.isSignedIn { needs.start() } }
     }
 
     private var tabs: some View {
@@ -33,15 +35,15 @@ struct RootView: View {
             TodayView()
                 .tabItem { Label("Today", systemImage: "house.fill") }
                 .tag(0)
-            NavigationStack { AdminWebScreen(title: "Needs you", url: AdminWeb.adminURL("/admin/needs-you"), isTabRoot: true) }
+            NeedsYouScreen()
                 .tabItem { Label("Needs you", systemImage: "bell.fill") }
-                .badge(state.needsYou)
+                .badge(needs.badgeCount)
                 .tag(1)
-            NavigationStack { AdminWebScreen(title: "Scout", url: AdminWeb.adminURL("/admin?scout=open"), isTabRoot: true) }
+            ScoutScreen()
                 .tabItem { Label("Scout", systemImage: "binoculars.fill") }
                 .tag(2)
-            NavigationStack { AdminWebScreen(title: "Turo", url: AdminWeb.adminURL("/admin/turo"), isTabRoot: true) }
-                .tabItem { Label("Turo", systemImage: "car.fill") }
+            WallScreen()
+                .tabItem { Label("Wall", systemImage: "av.remote.fill") }
                 .tag(3)
             MoreView()
                 .tabItem { Label("More", systemImage: "ellipsis") }

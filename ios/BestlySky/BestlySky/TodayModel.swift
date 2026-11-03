@@ -2,7 +2,8 @@
 import Foundation
 import SwiftUI
 
-struct StuckSummary: Equatable {
+struct StuckSummary: Equatable, Identifiable {
+    var id: String { itemId }
     var itemId: String
     var title: String
     var sentence: String
@@ -14,7 +15,17 @@ struct StuckSummary: Equatable {
     var actionId: String?
     var actionStatus: String?  // working | done | failed | needs_yes
     var actionNote: String?
+    var steps: [String] = []   // what is blocked, one line each (for the detail sheet)
 }
+
+struct HealthIssue: Identifiable, Equatable {
+    var id: Int
+    var title: String
+    var severity: String
+    var employee: String
+}
+
+struct WallSummary: Equatable { var title: String; var line: String }
 
 struct MoneySummary: Equatable { var total: Double; var inDelta: Double; var outDelta: Double }
 
@@ -52,6 +63,9 @@ final class TodayModel: ObservableObject {
     @Published var turoFailed = false
     @Published var health = HealthSummary(issues: 0, red: false)
     @Published var healthKnown = false
+    @Published var issueList: [HealthIssue] = []
+    @Published var wall: WallSummary?
+    @Published var wallFailed = false
     @Published var hours: [HourTemp] = []
     @Published var nowTempF: Int?
     @Published var weatherFailed = false
@@ -71,7 +85,8 @@ final class TodayModel: ObservableObject {
         async let b: Void = loadStuck()
         async let c: Void = loadWeather()
         async let d: Void = loadEvents()
-        _ = await (a, b, c, d)
+        async let e: Void = loadWall()
+        _ = await (a, b, c, d, e)
     }
 
     // MARK: command center bundle: money, turo, issues
@@ -88,8 +103,15 @@ final class TodayModel: ObservableObject {
             let issues = cc.arr("issues")
             let redWords: Set<String> = ["error", "critical", "high", "down", "blocked"]
             health = HealthSummary(issues: issues.count, red: issues.contains { redWords.contains(($0.str("severity") ?? "").lowercased()) })
+            issueList = issues.enumerated().map { i, j in
+                HealthIssue(id: i, title: j.str("title") ?? j.str("label") ?? j.str("message") ?? "Something needs a look",
+                            severity: (j.str("severity") ?? "").lowercased(),
+                            employee: j.str("employee_name") ?? j.str("employee") ?? j.str("owner") ?? "Scout")
+            }
             healthKnown = true
+            ScreenWatch.ok("today")
         } catch {
+            ScreenWatch.failed("today") { [weak self] in await self?.load() }
             moneyFailed = true; turoFailed = true
             await AdminAPI.report("today_load_failed", "command center: \(error.localizedDescription)")
         }
@@ -133,7 +155,8 @@ final class TodayModel: ObservableObject {
                 itemId: it.str("item_id") ?? "", title: it.str("title") ?? "Something is stuck", sentence: sentence,
                 employee: it.str("employee_name") ?? "Scout", since: AdminFmt.date(it.str("stuck_since")),
                 link: it.str("link") ?? fix?.str("link"), fixable: blocks.contains { ($0.str("fix_action") ?? "").isEmpty == false },
-                primary: fix?.str("primary") ?? "scout", actionId: act?.str("id"), actionStatus: act?.str("status"), actionNote: act?.str("note"))
+                primary: fix?.str("primary") ?? "scout", actionId: act?.str("id"), actionStatus: act?.str("status"), actionNote: act?.str("note"),
+                steps: blocks.compactMap { $0.str("label") })
         } catch {
             stuckFailed = true
             await AdminAPI.report("today_load_failed", "stuck items: \(error.localizedDescription)")
@@ -163,6 +186,32 @@ final class TodayModel: ObservableObject {
             _ = try? await AdminAPI.rpc("admin_stuck_action", ["p_action_id": id])
             await loadStuck()
             tries += 1
+        }
+    }
+
+    // MARK: wall (one read, same RPC the Wall tab polls)
+
+    private func loadWall() async {
+        do {
+            guard let d = try await AdminAPI.rpc("wall_admin_get") as? JSON else { throw AdminAPIError(status: 0, message: "unexpected shape") }
+            let mode = d.obj("state")?.str("mode") ?? "auto"
+            let word = WallModel.modes.first { $0.key == mode }?.word.capitalized ?? mode.capitalized
+            let status = d.obj("status") ?? [:]
+            let txt = status.str("status") ?? ""
+            let pulled = WallClock.pgDate(d.str("pulled_at"))
+            let line: String
+            if d.obj("state")?.bool("away") == true { line = "Away mode" }
+            else if pulled == nil || Date().timeIntervalSince(pulled!) > 90 { line = "Pi not checking in" }
+            else if txt.hasPrefix("unreachable") { line = "Projector offline" }
+            else if txt == "asleep" { line = "Projector asleep" }
+            else if txt.hasPrefix("in use") { line = "Showing another app" }
+            else if txt == "ok" { line = "On the wall now" }
+            else { line = "Checking" }
+            wall = WallSummary(title: "Wall \u{00B7} \(word)", line: line)
+            wallFailed = false
+        } catch {
+            wallFailed = true
+            await AdminAPI.report("today_load_failed", "wall: \(error.localizedDescription)")
         }
     }
 
@@ -209,29 +258,32 @@ final class TodayModel: ObservableObject {
     }
 }
 
-/// App-wide small counters (the Needs you tab badge).
+/// Where in-app links can go (Needs you rows, notifications, Today cards).
+enum AdminRoute: Equatable {
+    case turo, home, agents, wall, scout
+    case safari(URL)
+}
+
+/// Screens pushed on More's navigation stack.
+enum MoreDestination: Hashable { case turo, home, agents }
+
+/// App-wide state: selected tab, More's navigation path, sheets.
 @MainActor
 final class AdminState: ObservableObject {
     static let shared = AdminState()
-    @Published var needsYou = 0
     @Published var tab = 0
+    @Published var morePath: [MoreDestination] = []
     @Published var showAva = false
     @Published var showCompass = false
-    private var polling = false
 
-    func refreshBadge() async {
-        guard AdminAuth.shared.isSignedIn else { needsYou = 0; return }
-        if let rows = try? await AdminAPI.rpc("admin_today") as? [Any] { needsYou = rows.count }
-    }
-
-    func startPolling() {
-        guard !polling else { return }
-        polling = true
-        Task { [weak self] in
-            while true {
-                await self?.refreshBadge()
-                try? await Task.sleep(nanoseconds: 60_000_000_000)
-            }
+    func go(_ route: AdminRoute) {
+        switch route {
+        case .wall: tab = 3
+        case .scout: tab = 2
+        case .turo: tab = 4; morePath = [.turo]
+        case .home: tab = 4; morePath = [.home]
+        case .agents: tab = 4; morePath = [.agents]
+        case .safari(let url): SafariLink.open(url)
         }
     }
 }

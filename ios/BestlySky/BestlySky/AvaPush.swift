@@ -21,6 +21,8 @@ final class AvaPush {
 final class AdminAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        NeedsYouActions.registerCategories()
+        Task { @MainActor in Haptics.prepare() }
         Task { @MainActor in await AvaPush.shared.registerIfAllowed() }
         return true
     }
@@ -35,6 +37,10 @@ final class AdminAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificatio
     }
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
+        if response.notification.request.content.categoryIdentifier.hasPrefix("NEEDS_YOU") {
+            await NeedsYouActions.handle(actionIdentifier: response.actionIdentifier, userInfo: info)
+            return
+        }
         var call: Int?
         if let n = info["call_no"] as? Int { call = n }
         else if let s = info["call_no"] as? String { call = Int(s) }

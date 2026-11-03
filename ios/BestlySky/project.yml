@@ -14,7 +14,7 @@ settings:
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: 4
+    CURRENT_PROJECT_VERSION: 6
     TARGETED_DEVICE_FAMILY: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 targets:
@@ -36,6 +36,7 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIRequiresFullScreen: true
+        NSFaceIDUsageDescription: "Face ID confirms car commands and approvals."
         NSLocationWhenInUseUsageDescription: "Sky points the arrow at the plane on the wall from wherever you are standing."
         CFBundleURLTypes:
           - CFBundleURLName: tech.bestly.sky

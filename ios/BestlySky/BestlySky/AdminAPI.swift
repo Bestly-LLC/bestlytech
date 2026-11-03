@@ -59,13 +59,17 @@ enum AdminAPI {
 
     // MARK: watchdog reporting
 
-    /// Throttled to one per kind per minute. Without a session the report waits on the phone and goes out after the next sign-in.
+    /// Throttled to one per kind per minute (screen_view and screen_load_failed: one per screen name; views every 30 s).
+    /// Without a session the report waits on the phone and goes out after the next sign-in (screen views are dropped).
     static func report(_ kind: String, _ detail: String) async {
         let now = Date()
-        if let last = lastReport[kind], now.timeIntervalSince(last) < 60 { return }
-        lastReport[kind] = now
+        let perScreen = kind == "screen_view" || kind == "screen_load_failed"
+        let key = perScreen ? kind + "|" + detail : kind
+        let window: TimeInterval = kind == "screen_view" ? 30 : 60
+        if let last = lastReport[key], now.timeIntervalSince(last) < window { return }
+        lastReport[key] = now
         let signedIn = await MainActor.run { AdminAuth.shared.isSignedIn }
-        guard signedIn else { queue(kind, detail, now); return }
+        guard signedIn else { if kind != "screen_view" { queue(kind, detail, now) }; return }
         await sendReport(kind, detail)
     }
 
