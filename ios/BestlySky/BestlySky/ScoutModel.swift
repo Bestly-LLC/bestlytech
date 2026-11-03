@@ -173,6 +173,7 @@ struct ScoutPrefs: Equatable {
     var paidOK = false
     var paidUntil: Date?
     var offReason: String?
+    var offBy: String?
     var chatCap: Double?
     var backgroundCap: Double?
 }
@@ -212,9 +213,13 @@ final class ScoutModel: ObservableObject {
     @Published var budgetLine: String?
     @Published var loaded = false
     @Published var tick = 0
+    /// The POST ended without a reply (slow server, dropped connection) but Scout may still answer: keep polling the table.
+    @Published var awaiting = false
 
     var visible = false
     private var sendStart = Date()
+    private var awaitDeadline = Date.distantPast
+    private var lastSentText = ""
     private var generation = 0
     private var markTask: Task<Void, Never>?
     private var lastMarked = ""
@@ -228,7 +233,7 @@ final class ScoutModel: ObservableObject {
         guard let last = messages.last, last.role == "assistant", last.isProgress else { return false }
         return Date().timeIntervalSince(last.created) < 240
     }
-    var running: Bool { sending || continuing }
+    var running: Bool { sending || continuing || awaiting }
     var anyNeedsYou: Bool { threads.contains { $0.needsYou } }
     var anyUnread: Bool { threads.contains { $0.unread > 0 } }
     var currentTitle: String {
@@ -263,9 +268,45 @@ final class ScoutModel: ObservableObject {
     func pollTick(_ n: Int) async {
         guard visible else { return }
         tick += 1
-        if running, let t = threadId, !(sending && Date().timeIntervalSince(sendStart) < 5) { await loadMessages(t) }
+        if awaiting { await pollForReply() }
+        else if running, let t = threadId, !(sending && Date().timeIntervalSince(sendStart) < 5) { await loadMessages(t) }
         if n % 10 == 0 { await loadThreads() }
         if n % 10 == 5 { await loadPrefs() }
+    }
+
+    /// While waiting for a reply the POST never delivered: find the thread, reload, stop waiting when Scout's answer lands.
+    private func pollForReply() async {
+        if threadId == nil {
+            await loadThreads()
+            if let first = threads.first, let u = first.updated, u > sendStart.addingTimeInterval(-30) {
+                threadId = first.id
+                UserDefaults.standard.set(first.id, forKey: Self.threadKey)
+            }
+        }
+        if let t = threadId { await loadMessages(t) }
+        let cutoff = sendStart.addingTimeInterval(-2)
+        let answered = messages.contains { $0.role == "assistant" && !$0.isProgress && $0.created > cutoff }
+        if answered {
+            awaiting = false
+            pendingUser = nil
+            await loadThreads()
+            return
+        }
+        let delivered = messages.contains { $0.isUser && $0.created > cutoff && $0.body.trimmingCharacters(in: .whitespacesAndNewlines) == lastSentText }
+        if !delivered && Date().timeIntervalSince(sendStart) > 25 {
+            // The server never saw it: give the text back instead of waiting for a reply that cannot come.
+            awaiting = false
+            pendingUser = nil
+            if input.isEmpty { input = lastSentText }
+            notice = "That message didn\u{2019}t go through. It\u{2019}s back in the box, tap send to try again."
+            Haptics.fail()
+            return
+        }
+        if Date() > awaitDeadline {
+            awaiting = false
+            pendingUser = nil
+            notice = "Scout hasn\u{2019}t answered yet. Say \u{2018}keep going\u{2019} to nudge it, or check back in a minute."
+        }
     }
 
     // MARK: reads
@@ -314,6 +355,7 @@ final class ScoutModel: ObservableObject {
     func newChat() {
         generation += 1
         sending = false
+        awaiting = false
         pendingUser = nil
         threadId = nil
         messages = []
@@ -330,7 +372,7 @@ final class ScoutModel: ObservableObject {
         markTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             if Task.isCancelled { return }
-            _ = try? await AdminAPI.rpc("admin_chat_mark_read", ["p_thread": t])
+            do { _ = try await AdminAPI.rpc("admin_chat_mark_read", ["p_thread": t]) } catch { return }
             guard let self else { return }
             self.lastMarked = stamp
             if let i = self.threads.firstIndex(where: { $0.id == t }) {
@@ -350,6 +392,7 @@ final class ScoutModel: ObservableObject {
         sending = true
         sendStart = Date()
         pendingUser = text
+        lastSentText = text
         notice = nil
         input = ""
         Haptics.tap()
@@ -369,6 +412,7 @@ final class ScoutModel: ObservableObject {
                     }
                 }
                 self.sending = false
+                self.awaiting = false
                 if let t = self.threadId { await self.loadMessages(t) }
                 self.pendingUser = nil
                 await self.loadThreads()
@@ -376,17 +420,16 @@ final class ScoutModel: ObservableObject {
             } catch {
                 guard gen == self.generation else { return }
                 self.sending = false
-                self.pendingUser = nil
-                self.notice = Self.notice(for: error)
-                Haptics.fail()
-                if self.threadId == nil {
-                    await self.loadThreads()
-                    if let first = self.threads.first, let u = first.updated, Date().timeIntervalSince(u) < 300 {
-                        self.threadId = first.id
-                        UserDefaults.standard.set(first.id, forKey: Self.threadKey)
-                    }
+                if Self.isAuthError(error) {
+                    self.pendingUser = nil
+                    self.notice = Self.notice(for: error)
+                    Haptics.fail()
+                    return
                 }
-                if let t = self.threadId { await self.loadMessages(t) }
+                // Timeout, 504, dropped connection: the server may still be working. Never show an error; keep polling for the reply.
+                self.awaiting = true
+                self.awaitDeadline = Date().addingTimeInterval(600)
+                await self.pollForReply()
             }
         }
     }
@@ -394,13 +437,19 @@ final class ScoutModel: ObservableObject {
     func stop() {
         generation += 1
         sending = false
+        awaiting = false
         pendingUser = nil
         Haptics.tap()
         guard let t = threadId else { return }
         Task { [weak self] in
-            _ = try? await AdminAPI.invoke("admin-chat", ["op": "stop", "thread_id": t])
+            await Action.run("scout.stop", attempt: { try await AdminAPI.invoke("admin-chat", ["op": "stop", "thread_id": t]) })
             await self?.loadMessages(t)
         }
+    }
+
+    private static func isAuthError(_ error: Error) -> Bool {
+        if let e = error as? AdminAPIError { return e.status == 401 || e.status == 403 }
+        return false
     }
 
     private static func notice(for error: Error) -> String {
@@ -425,6 +474,7 @@ final class ScoutModel: ObservableObject {
         p.paidOK = j.bool("paid_ai_ok") ?? false
         p.paidUntil = AdminFmt.date(j.str("paid_ai_until"))
         p.offReason = j.str("paid_ai_off_reason")
+        p.offBy = j.str("paid_ai_off_by") ?? j.str("paid_ai_off_employee")
         p.chatCap = j.dbl("chat_cap_usd")
         p.backgroundCap = j.dbl("background_cap_usd")
         prefs = p
@@ -434,16 +484,27 @@ final class ScoutModel: ObservableObject {
     func setPaid(_ on: Bool) async {
         let before = prefs
         prefs.paidOK = on
-        do { _ = try await AdminAPI.rpc("scout_paid_ai_set", ["p_on": on]); Haptics.select() }
-        catch { prefs = before; Haptics.fail() }
+        let ok = await Action.run("scout.paid_ai", okSay: nil,
+                                  attempt: { try await AdminAPI.rpc("scout_paid_ai_set", ["p_on": on]) },
+                                  verify: { [weak self] in
+                                      guard let j = (try? await AdminAPI.rpc("scout_prefs")) as? JSON else { return false }
+                                      _ = self
+                                      return (j.bool("paid_ai_ok") ?? false) == on
+                                  })
+        if ok { Haptics.select() } else { prefs = before }
         await loadPrefs()
     }
 
     func setAutoRun(_ on: Bool) async {
         let before = prefs
         prefs.autoRun = on
-        do { _ = try await AdminAPI.rpc("scout_auto_run_set", ["p_on": on]); Haptics.select() }
-        catch { prefs = before; Haptics.fail() }
+        let ok = await Action.run("scout.auto_run",
+                                  attempt: { try await AdminAPI.rpc("scout_auto_run_set", ["p_on": on]) },
+                                  verify: {
+                                      guard let j = (try? await AdminAPI.rpc("scout_prefs")) as? JSON else { return false }
+                                      return (j.bool("auto_run") ?? false) == on
+                                  })
+        if ok { Haptics.select() } else { prefs = before }
         await loadPrefs()
     }
 

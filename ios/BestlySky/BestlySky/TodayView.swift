@@ -69,6 +69,7 @@ struct TodayView: View {
                 .padding(.horizontal, 14).frame(minHeight: 44)
                 .background(AT.card, in: Capsule())
             }
+            .buttonStyle(NYPressStyle())
             .accessibilityLabel("System health: \(healthText)")
         }
         .padding(.top, 8)
@@ -113,6 +114,7 @@ struct TodayView: View {
                     .background(AT.orange, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .foregroundStyle(AT.hex(0x1A0E05))
                 }
+                .buttonStyle(NYPressStyle())
                 .disabled(working)
                 Button { detail = s } label: {
                     Text("Show me").font(.system(size: 15))
@@ -120,6 +122,7 @@ struct TodayView: View {
                         .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .foregroundStyle(AT.text)
                 }
+                .buttonStyle(NYPressStyle())
             }
             Text("From \(s.employee)").font(.system(size: 12)).foregroundStyle(AT.hex(0xFDBA74))
         }
@@ -158,7 +161,7 @@ struct TodayView: View {
                 .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
                 .background(AT.card, in: RoundedRectangle(cornerRadius: AT.radius, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NYPressStyle())
         } else if model.wallFailed {
             oneLine("Couldn't load the wall. Retrying.")
         }
@@ -218,7 +221,7 @@ struct TodayView: View {
                 .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
                 .background(AT.card, in: RoundedRectangle(cornerRadius: AT.radius, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NYPressStyle())
         } else if model.turoFailed {
             oneLine("Couldn't load Turo. Retrying.")
         }

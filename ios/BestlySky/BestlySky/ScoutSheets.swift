@@ -101,7 +101,7 @@ struct ScoutSettingsSheet: View {
                         card {
                             toggleRow(title: paidTitle, detail: paidDetail, tint: ScoutColors.needs,
                                       isOn: Binding(get: { model.prefs.paidOK }, set: { v in Task { await model.setPaid(v) } }),
-                                      label: "Paid AI")
+                                      label: "Paid AI", disabled: forcedOff)
                         }
                         card {
                             toggleRow(title: model.prefs.autoRun ? "Auto-run is on" : "Auto-run is off",
@@ -159,6 +159,7 @@ struct ScoutSettingsSheet: View {
         default: return "Paid AI is off"
         }
     }
+    private var forcedOff: Bool { !model.prefs.paidOK && model.prefs.offReason == "watchdog" }
     private var paidDetail: String {
         if model.prefs.paidOK {
             if let u = untilText { return "Scout is using Claude (paid). Turns itself off at \(u) or at the \(capText) daily cap." }
@@ -167,7 +168,7 @@ struct ScoutSettingsSheet: View {
         switch model.prefs.offReason {
         case "cap": return "Free AI only until midnight. Today hit the \(capText) cap."
         case "hour_up": return "Free AI only. Flip this on, or tap \u{201C}Yes, use paid AI\u{201D} in a chat for another hour."
-        case "watchdog": return "The watchdog caught paid spending while this was off and shut it down. Free AI only."
+        case "watchdog": return "From \(model.prefs.offBy ?? "Ares"): the budget watchdog caught paid spending while this was off and shut it down, so it can't be turned on until the watchdog clears it. Free AI only."
         default: return "Free AI only. If a job needs Claude, Scout asks first. A yes turns this on for one hour."
         }
     }
@@ -178,7 +179,7 @@ struct ScoutSettingsSheet: View {
             .background(AT.card, in: RoundedRectangle(cornerRadius: AT.radius, style: .continuous))
     }
 
-    private func toggleRow(title: String, detail: String, tint: Color, isOn: Binding<Bool>, label: String) -> some View {
+    private func toggleRow(title: String, detail: String, tint: Color, isOn: Binding<Bool>, label: String, disabled: Bool = false) -> some View {
         Toggle(isOn: isOn) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(AT.text)
@@ -188,6 +189,7 @@ struct ScoutSettingsSheet: View {
             }
         }
         .tint(tint)
+        .disabled(disabled)
         .frame(minHeight: 44)
         .accessibilityLabel(label)
         .accessibilityValue(isOn.wrappedValue ? "On" : "Off")

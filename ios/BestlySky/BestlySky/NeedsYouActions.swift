@@ -44,7 +44,13 @@ enum NeedsYouActions {
             action = "approve"
         default: return
         }
-        _ = try? await AdminAPI.rpc("admin_today_act", ["p_key": key, "p_action": action])
+        await Action.run("needs.push_\(action)", idempotent: action != "approve", attempt: {
+            let res = try await AdminAPI.rpc("admin_today_act", ["p_key": key, "p_action": action])
+            if let j = res as? JSON, j.bool("ok") == false, j.str("error") != "not_found" {
+                throw AdminAPIError(status: 0, message: j.str("error") ?? "failed")
+            }
+            return nil
+        })
         await NeedsYouModel.shared.load()
     }
 }

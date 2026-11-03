@@ -138,23 +138,49 @@ final class NeedsYouModel: ObservableObject {
 
     // MARK: loading
 
+    /// Fetch admin_today in its own task so a cancelled view (tab switch, pull-to-refresh ending) cannot kill the request.
+    /// That cancellation was what reported "screen_load_failed needs_you" in build 6 while the server answered 200.
+    private static func fetchRows() async throws -> [JSON] {
+        let any = try await Task { try await AdminAPI.rpc("admin_today") }.value
+        return (any as? [Any])?.compactMap { $0 as? JSON } ?? []
+    }
+
+    private static func isCancel(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let u = error as? URLError, u.code == .cancelled { return true }
+        return (error as NSError).code == NSURLErrorCancelled
+    }
+
     func load() async {
         guard AdminAuth.shared.isSignedIn else { rows = []; badgeCount = 0; return }
         if loading { return }
         loading = true
         defer { loading = false; loadedOnce = true }
-        do {
-            let any = try await AdminAPI.rpc("admin_today")
-            let list = (any as? [Any])?.compactMap { $0 as? JSON } ?? []
-            let parsed = list.compactMap(Self.parse).filter { !hidden.contains($0.key) }
-            apply(parsed)
-            lastChecked = Date()
-            loadFailed = false
-            ScreenWatch.ok("needs_you")
-        } catch {
-            loadFailed = true
-            ScreenWatch.failed("needs_you") { [weak self] in await self?.load() }
+        var lastError: Error?
+        for attempt in 0..<2 {
+            do {
+                let list = try await Self.fetchRows()
+                let parsed = list.compactMap(Self.parse).filter { !hidden.contains($0.key) }
+                apply(parsed)
+                lastChecked = Date()
+                loadFailed = false
+                ScreenWatch.ok("needs_you")
+                return
+            } catch {
+                if Self.isCancel(error) { return }          // not a failure: keep what is on screen
+                lastError = error
+                if attempt == 0 { try? await Task.sleep(nanoseconds: 1_200_000_000) }
+            }
         }
+        loadFailed = true
+        ScreenWatch.failed("needs_you") { [weak self] in await self?.load() }
+        if let lastError { await AdminAPI.report("api_failed", "needs_you load: \(lastError.localizedDescription)") }
+    }
+
+    /// Keys the server still lists right now (nil = could not read). Used to verify Done, Later, Approve and Undo.
+    private func serverKeys() async -> Set<String>? {
+        guard let list = try? await Self.fetchRows() else { return nil }
+        return Set(list.compactMap { $0.str("key") })
     }
 
     private func apply(_ parsed: [NeedsRow]) {
@@ -218,25 +244,29 @@ final class NeedsYouModel: ObservableObject {
         }
         let keys = row.allKeys
         let wire: String = act == .approve ? "approve" : (act == .later ? "snooze" : "dismiss")
+        let id = act == .approve ? "needs.approve" : (act == .later ? "needs.later" : "needs.done")
         hidden.formUnion(keys)
         withAnimation(.easeOut(duration: 0.22)) {
             rows.removeAll { $0.id == row.id }
         }
         badgeCount = rows.filter { $0.tag != .fyi }.count
 
-        var failed = false
-        for k in keys {
-            if !(await call(k, wire)) { failed = true }
-        }
-        if failed {
-            Haptics.fail()
-            hidden.subtract(keys)
+        let ok = await Action.run(id,
+                                  idempotent: act != .approve,
+                                  attempt: { [weak self] in
+                                      guard let self else { return nil }
+                                      for k in keys { try await self.callOne(k, wire) }
+                                      return nil
+                                  },
+                                  verify: { [weak self] in
+                                      guard let have = await self?.serverKeys() else { return false }
+                                      return keys.allSatisfy { !have.contains($0) }
+                                  })
+        if !ok {
+            hidden.subtract(keys)           // roll back: the row comes back
             await load()
-            toast = NeedsToast(text: "Couldn\u{2019}t do that. Nothing changed.", undoKeys: [])
-            scheduleToastClear()
             return
         }
-        Haptics.ok()
         // Approve and Hermes "Not now" cannot be undone on the server.
         let undoable = act != .approve && !row.isHermesApproval
         switch act {
@@ -245,31 +275,38 @@ final class NeedsYouModel: ObservableObject {
         case .approve: toast = NeedsToast(text: "Approved", undoKeys: [])
         }
         scheduleToastClear()
-        // The server stops returning it; clear the local guard on the next refresh.
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            self?.hidden.subtract(keys)
-            await self?.load()
-        }
+        hidden.subtract(keys)
+        await load()
     }
 
     func undo(_ t: NeedsToast) async {
         toast = nil
-        var failed = false
-        for k in t.undoKeys { if !(await call(k, "undo")) { failed = true } }
-        hidden.subtract(t.undoKeys)
-        if failed { Haptics.fail() } else { Haptics.ok() }
+        let keys = t.undoKeys
+        let ok = await Action.run("needs.undo",
+                                  attempt: { [weak self] in
+                                      guard let self else { return nil }
+                                      for k in keys { try await self.callOne(k, "undo") }
+                                      return nil
+                                  },
+                                  verify: { [weak self] in
+                                      guard let have = await self?.serverKeys() else { return false }
+                                      // Some kinds (a read alert marked unread again) come back; accept when at least one is listed.
+                                      return keys.contains { have.contains($0) }
+                                  })
+        _ = ok
+        hidden.subtract(keys)
         await load()
     }
 
-    private func call(_ key: String, _ action: String) async -> Bool {
-        do {
-            let res = try await AdminAPI.rpc("admin_today_act", ["p_key": key, "p_action": action])
-            if let j = res as? JSON { return j.bool("ok") ?? false }
-            return false
-        } catch {
-            return false
-        }
+    /// One admin_today_act call. Throws on a real refusal. "not_found" means it is already gone, which is what we wanted.
+    nonisolated func callOne(_ key: String, _ action: String) async throws {
+        let res = try await AdminAPI.rpc("admin_today_act", ["p_key": key, "p_action": action])
+        guard let j = res as? JSON else { throw AdminAPIError(status: 0, message: "unexpected answer") }
+        if j.bool("ok") == true { return }
+        let err = j.str("error") ?? "failed"
+        if err == "not_found" && action != "undo" { return }
+        if err == "no_undo" { return }
+        throw AdminAPIError(status: 0, message: err)
     }
 
     private func scheduleToastClear() {

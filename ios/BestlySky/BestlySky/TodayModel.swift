@@ -111,6 +111,7 @@ final class TodayModel: ObservableObject {
             healthKnown = true
             ScreenWatch.ok("today")
         } catch {
+            if (error as? URLError)?.code == .cancelled || error is CancellationError { return }
             ScreenWatch.failed("today") { [weak self] in await self?.load() }
             moneyFailed = true; turoFailed = true
             await AdminAPI.report("today_load_failed", "command center: \(error.localizedDescription)")
@@ -158,6 +159,7 @@ final class TodayModel: ObservableObject {
                 primary: fix?.str("primary") ?? "scout", actionId: act?.str("id"), actionStatus: act?.str("status"), actionNote: act?.str("note"),
                 steps: blocks.compactMap { $0.str("label") })
         } catch {
+            if (error as? URLError)?.code == .cancelled || error is CancellationError { return }
             stuckFailed = true
             await AdminAPI.report("today_load_failed", "stuck items: \(error.localizedDescription)")
         }
@@ -168,16 +170,21 @@ final class TodayModel: ObservableObject {
         guard let s = stuck, !fixing else { return }
         fixing = true
         defer { fixing = false }
-        do {
-            if s.fixable {
-                _ = try await AdminAPI.rpc("admin_stuck_fix", ["p_item_id": s.itemId, "p_action": "all"])
-            } else {
-                _ = try await AdminAPI.rpc("admin_stuck_run", ["p_item_id": s.itemId, "p_action": s.primary == "retry" ? "retry" : "scout"])
-            }
-        } catch {
-            toast = "That fix didn't start. Try again."
-            return
-        }
+        let itemId = s.itemId
+        let ok = await Action.run("today.fix", idempotent: false,
+                                  attempt: {
+                                      if s.fixable {
+                                          return try await AdminAPI.rpc("admin_stuck_fix", ["p_item_id": itemId, "p_action": "all"])
+                                      }
+                                      return try await AdminAPI.rpc("admin_stuck_run", ["p_item_id": itemId, "p_action": s.primary == "retry" ? "retry" : "scout"])
+                                  },
+                                  verify: {
+                                      // Started when the item is gone, or an action row now exists for it.
+                                      let items = ((try? await AdminAPI.rpc("admin_stuck_items")) as? [Any])?.compactMap { $0 as? JSON } ?? []
+                                      guard let it = items.first(where: { $0.str("item_id") == itemId }) else { return true }
+                                      return it.obj("action") != nil && s.actionId != it.obj("action")?.str("id") || it.obj("action")?.str("status") == "working"
+                                  })
+        guard ok else { return }
         await loadStuck()
         // The server settles the action; ask for its answer every 3 seconds, up to 2 minutes.
         var tries = 0
@@ -210,6 +217,7 @@ final class TodayModel: ObservableObject {
             wall = WallSummary(title: "Wall \u{00B7} \(word)", line: line)
             wallFailed = false
         } catch {
+            if (error as? URLError)?.code == .cancelled || error is CancellationError { return }
             wallFailed = true
             await AdminAPI.report("today_load_failed", "wall: \(error.localizedDescription)")
         }
@@ -233,6 +241,7 @@ final class TodayModel: ObservableObject {
             hours = rows.enumerated().map { i, r in HourTemp(id: i, label: i == 0 ? "Now" : AdminFmt.hour.string(from: r.0), tempF: r.1) }
             weatherFailed = false
         } catch {
+            if (error as? URLError)?.code == .cancelled || error is CancellationError { return }
             weatherFailed = true
             await AdminAPI.report("today_load_failed", "weather: \(error.localizedDescription)")
         }
@@ -252,6 +261,7 @@ final class TodayModel: ObservableObject {
             events = Array(list.sorted { $0.0 < $1.0 }.prefix(2).map { $0.1 })
             eventsFailed = false
         } catch {
+            if (error as? URLError)?.code == .cancelled || error is CancellationError { return }
             eventsFailed = true
             await AdminAPI.report("today_load_failed", "calendar: \(error.localizedDescription)")
         }
