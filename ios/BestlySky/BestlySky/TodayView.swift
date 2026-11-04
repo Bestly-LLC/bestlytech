@@ -19,6 +19,7 @@ struct TodayView: View {
                         wallCard
                         moneyCard
                         turoCard
+                        DeliveriesSection(model: model)
                         myDayCard
                     }
                     .padding(.horizontal, 16)

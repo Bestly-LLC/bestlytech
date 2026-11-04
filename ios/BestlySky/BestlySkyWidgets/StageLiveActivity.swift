@@ -43,7 +43,7 @@ struct StageLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 4) {
                         StageDots(s: s)
-                        Text(s.statusLine).font(.system(size: 16, weight: .medium)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
+                        Text(s.statusLine).font(.system(size: s.stageLabels.isEmpty ? 16 : 17, weight: .medium)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
                         StageBar(s: s).padding(.top, 2)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

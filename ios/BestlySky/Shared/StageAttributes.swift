@@ -21,9 +21,10 @@ struct StageAttributes: ActivityAttributes {
         var subtitle: String      // who signs the card, "Mae"
         var url: String?
         var at: Double
+        var stageLabels: [String]   // delivery cards: one label under each segment of the bar; empty = no labels (car service)
         init(stage: Int = 1, stageCount: Int = 4, progress: Double = 0, stageColor: String = "#0A84FF", icon: String = "car",
              compactWord: String = "", dotsLine: String = "", statusLine: String = "", watchLine: String = "",
-             subtitle: String = "", url: String? = nil, at: Double = 0) {
+             subtitle: String = "", url: String? = nil, at: Double = 0, stageLabels: [String] = []) {
             self.stage = stage
             self.stageCount = stageCount
             self.progress = progress
@@ -36,9 +37,10 @@ struct StageAttributes: ActivityAttributes {
             self.subtitle = subtitle
             self.url = url
             self.at = at
+            self.stageLabels = stageLabels
         }
         enum CodingKeys: String, CodingKey {
-            case stage, stageCount, progress, stageColor, icon, compactWord, dotsLine, statusLine, watchLine, subtitle, url, at
+            case stage, stageCount, progress, stageColor, icon, compactWord, dotsLine, statusLine, watchLine, subtitle, url, at, stageLabels
         }
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -53,7 +55,8 @@ struct StageAttributes: ActivityAttributes {
                       watchLine: c.skyValue(.watchLine, ""),
                       subtitle: c.skyValue(.subtitle, ""),
                       url: try? c.decodeIfPresent(String.self, forKey: .url),
-                      at: c.skyValue(.at, 0.0))
+                      at: c.skyValue(.at, 0.0),
+                      stageLabels: (try? c.decodeIfPresent([String].self, forKey: .stageLabels)) ?? [])
         }
     }
     var key: String
@@ -74,6 +77,9 @@ enum StageIcons {
         case "alert": return "mdi-alert-circle"
         case "bolt": return "mdi-lightning-bolt"
         case "pin": return "mdi-map-marker"
+        case "cart": return "mdi-cart"
+        case "food": return "mdi-food"
+        case "bag": return "mdi-shopping"
         default: return "mdi-car"
         }
     }

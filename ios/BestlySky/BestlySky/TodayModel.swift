@@ -74,6 +74,8 @@ final class TodayModel: ObservableObject {
     @Published var loadedOnce = false
     @Published var fixing = false
     @Published var toast: String?
+    @Published var deliveries: [DeliveryCard] = []
+    @Published var deliveriesFailed = false
 
     private var loading = false
 
@@ -86,7 +88,8 @@ final class TodayModel: ObservableObject {
         async let c: Void = loadWeather()
         async let d: Void = loadEvents()
         async let e: Void = loadWall()
-        _ = await (a, b, c, d, e)
+        async let f: Void = loadDeliveries()
+        _ = await (a, b, c, d, e, f)
     }
 
     // MARK: command center bundle: money, turo, issues

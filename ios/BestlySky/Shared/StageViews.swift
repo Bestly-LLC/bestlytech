@@ -86,9 +86,24 @@ struct StageBar: View {
     var body: some View {
         let tint = Color(stageHex: s.stageColor)
         if s.stageCount > 0 {
-            HStack(spacing: 4) {
-                ForEach(0..<s.stageCount, id: \.self) { i in
-                    Capsule().fill(i < s.stage ? tint : StageStyle.bar).frame(height: 5)
+            VStack(spacing: 5) {
+                HStack(spacing: 4) {
+                    ForEach(0..<s.stageCount, id: \.self) { i in
+                        Capsule().fill(i < s.stage ? tint : StageStyle.bar).frame(height: 5)
+                    }
+                }
+                if s.stageLabels.count == s.stageCount {
+                    // Delivery cards: a label under each segment. Current = stage tint and bold, done = white 85%, upcoming = gray.
+                    HStack(spacing: 4) {
+                        ForEach(0..<s.stageCount, id: \.self) { i in
+                            let current = i == s.stage - 1
+                            Text(s.stageLabels[i])
+                                .font(.system(size: 11, weight: current ? .bold : .regular))
+                                .foregroundStyle(current ? tint : (i < s.stage - 1 ? Color.white.opacity(0.85) : Color(red: 142.0 / 255, green: 142.0 / 255, blue: 147.0 / 255)))
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
                 }
             }
         } else {
@@ -111,14 +126,14 @@ struct StageLockScreen: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 10) {
                 StageRing(s: s, size: 38, stroke: 3.6, glyph: 19, glow: true)
-                Text(a.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.6)
+                Text(a.title).font(.system(size: s.stageLabels.isEmpty ? 15 : 17, weight: .semibold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.6)
                 Spacer(minLength: 4)
                 if !s.subtitle.isEmpty {
                     Text(s.subtitle).font(.system(size: 12)).foregroundStyle(Color(white: 0.62)).lineLimit(1)
                 }
             }
             StageDots(s: s)
-            Text(s.statusLine).font(.system(size: 16, weight: .medium)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
+            Text(s.statusLine).font(.system(size: s.stageLabels.isEmpty ? 16 : 17, weight: .medium)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
             StageBar(s: s).padding(.top, 2)
         }
         .padding(.horizontal, 16).padding(.vertical, 11)
