@@ -223,16 +223,55 @@ def _ask_json(system, user, check, deadline, tries=3):
     raise RuntimeError("plan failed the rules 3 times: " + "; ".join(last))
 
 
+# ---------------------------------------------------------------- caption asking (2026-11-03)
+# Plain-text caption requests let reasoning models (gpt-oss, some FreeLLM routes) answer with their THINKING instead of a
+# caption ("We need to produce caption only, with constraints..." 1,700 words, "Bestly appears 51 times"), and the old
+# fix loop fed that back as the assistant turn, so tries 2 and 3 "fixed" the reasoning. Every daily/carousel/studio
+# caption failed this way on Oct 23-25, Nov 1 and Nov 3. Now: ask for {"caption": ...} in JSON mode (which also skips
+# FreeLLM "auto"), drop a reply that is reasoning instead of sending it back, and move an inline closing question
+# onto its own line (gpt-oss writes it at the end of the last paragraph).
+CAPTION_JSON = ('\n\nReply with ONE JSON object only: {"caption": "<the caption text; use \\n\\n between paragraphs>"}. '
+                'No notes, no reasoning, nothing outside the JSON.')
+REASONING = re.compile(r"^\s*(we need to|we must|the user|i need to|i will now|i'll now|let me|okay,|alright,|to fix (this|these)|"
+                       r"the caption must|constraints:)", re.I)
+
+
+def _ask_caption(msgs, deadline):
+    """-> (caption or None, provider, why). None means the reply was not a caption (reasoning or junk)."""
+    msg, prov = freellm.chat(msgs, None, max_tokens=2500, deadline=deadline, json_mode=True)
+    raw = (msg.get("content") or "").strip()
+    cap = None
+    try:
+        j = _json(raw)
+        if isinstance(j, dict) and isinstance(j.get("caption"), str):
+            cap = j["caption"]
+    except (ValueError, TypeError):
+        cap = raw
+    if cap is None:
+        return None, prov, "reply had no caption field"
+    cap = cap.replace("\\n", "\n").strip().strip('"').strip()
+    cap = re.sub(r"^(caption|here is the caption)\s*:\s*", "", cap, flags=re.I).strip()
+    if REASONING.search(cap) or len(cap.split()) > 400:
+        return None, prov, "reply was the model's reasoning, not a caption"
+    if cap.endswith("?"):
+        m = re.search(r"[.!\u201d\"]\s+([^.!?\n]+\?)$", cap)
+        if m and "\n" not in cap[m.start(1):]:
+            cap = cap[: m.start(1)].rstrip() + "\n\n" + m.group(1).strip()
+    return cap, prov, ""
+
+
 def _caption(system, brief, deadline, rec=None, slug="bestly-cloud", hist=None):
     if rec and hv:
         brief = brief + "\n\n" + hv.prompt_block(rec, hist or {}, "Bestly")
-    msgs = [{"role": "system", "content": playbook.add(system)}, {"role": "user", "content": brief}]
+    msgs = [{"role": "system", "content": playbook.add(system) + CAPTION_JSON}, {"role": "user", "content": brief}]
     last, cap = [], ""
-    for _ in range(3):
+    for _ in range(4):
         # 2500 tokens: Gemini's thinking counts against max_tokens; 700 cut captions off mid-sentence.
-        msg, provider = freellm.chat(msgs, None, max_tokens=2500, deadline=deadline)
-        cap = (msg.get("content") or "").strip().strip('"').strip()
-        cap = re.sub(r"^(caption|here is the caption)\s*:\s*", "", cap, flags=re.I).strip()
+        got, provider, why = _ask_caption(msgs, deadline)
+        if got is None:
+            last = [f"{why} ({provider})"]
+            continue                  # never feed reasoning back as the assistant turn
+        cap = got
         last = _problems(cap, rec)
         if not last and hv:
             ok, why = hv.probe(slug, cap)     # the gate's own duplicate check, before anything is filed
@@ -240,9 +279,9 @@ def _caption(system, brief, deadline, rec=None, slug="bestly-cloud", hist=None):
                 last = [why]
         if not last:
             return cap, provider
-        msgs += [{"role": "assistant", "content": cap},
-                 {"role": "user", "content": "Fix these and reply with the caption only: " + "; ".join(last)}]
-    raise RuntimeError("caption failed the rules 3 times: " + "; ".join(last) + " | last try: " + cap[:300])
+        msgs += [{"role": "assistant", "content": json.dumps({"caption": cap})},
+                 {"role": "user", "content": "Fix these and reply with the JSON only: " + "; ".join(last)}]
+    raise RuntimeError("caption failed the rules 4 times: " + "; ".join(last) + " | last try: " + cap[:300])
 
 
 # ---------------------------------------------------------------- data
@@ -586,6 +625,8 @@ def _report(what, asset, ig, fb):
 # ---------------------------------------------------------------- stats + learn
 def _stats():
     code, body = _graph("pi_bestly_ig_media")
+    if code is None:   # the Graph read was just slow (Oct 27, Nov 2): ask once more with a longer wait
+        code, body = _graph("pi_bestly_ig_media", wait=6, polls=10)
     media = body.get("data") if isinstance(body, dict) else None
     if code != 200 or media is None:
         raise RuntimeError(f"could not read Instagram posts: {code} {json.dumps(body)[:200]}")
@@ -765,12 +806,14 @@ def _studio_review(cap, cards, deadline):
 def _studio_caption(system, brief, deadline, rec=None, hist=None):
     if rec and hv:
         brief = brief + "\n\n" + hv.prompt_block(rec, hist or {}, "Bestly Studio")
-    msgs = [{"role": "system", "content": playbook.add(system)}, {"role": "user", "content": brief}]
+    msgs = [{"role": "system", "content": playbook.add(system) + CAPTION_JSON}, {"role": "user", "content": brief}]
     last, cap, prov = [], "", None
-    for _ in range(3):
-        msg, prov = freellm.chat(msgs, None, max_tokens=2500, deadline=deadline)
-        cap = (msg.get("content") or "").strip().strip('"').strip()
-        cap = re.sub(r"^(caption|here is the caption)\s*:\s*", "", cap, flags=re.I).strip()
+    for _ in range(4):
+        got, prov, why = _ask_caption(msgs, deadline)
+        if got is None:
+            last = [f"{why} ({prov})"]
+            continue
+        cap = got
         last = _problems(cap, rec) + _studio_claims([cap])
         if not last and hv:
             ok, why = hv.probe("bestly-studio", cap)
@@ -778,9 +821,9 @@ def _studio_caption(system, brief, deadline, rec=None, hist=None):
                 last = [why]
         if not last:
             return cap, prov
-        msgs += [{"role": "assistant", "content": cap},
-                 {"role": "user", "content": "Fix these and reply with the caption only: " + "; ".join(last)}]
-    raise RuntimeError("studio caption failed the rules 3 times: " + "; ".join(last)[:400] + " | last try: " + cap[:300])
+        msgs += [{"role": "assistant", "content": json.dumps({"caption": cap})},
+                 {"role": "user", "content": "Fix these and reply with the JSON only: " + "; ".join(last)}]
+    raise RuntimeError("studio caption failed the rules 4 times: " + "; ".join(last)[:400] + " | last try: " + cap[:300])
 
 
 def _studio_card_plan(theme, items, deadline):

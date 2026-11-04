@@ -57,6 +57,9 @@ SLOT_UTC = 18                # 11:00 AM Pacific in summer time, 10:00 AM in wint
 AHEAD = 2                    # today + tomorrow
 UA = {"User-Agent": "bestly-pi-cron/1.0 (+https://bestly.tech)"}
 TAIL = "Join the waitlist. Link in bio."
+# The caption must name the product or the house gate rejects it ("The caption never names the product (hoku)",
+# H10-H13, 2026-11-03). The card keeps the short TAIL; the caption ends with this.
+CAPTION_TAIL = "Join the HOKU waitlist. Link in bio."
 
 THEMES = ["gold", "forest", "sage", "brown", "paper"]
 SINGLE_LAYOUTS = ["text", "bar", "bold", "center", "list", "duo"]
@@ -572,7 +575,7 @@ def _make_one(day, at, posts, past, deadline, dry):
         first = plan["title"].strip().rstrip(".").lower()
         if not cap.lower().startswith(first[: max(12, len(first) // 2)]):
             cap = plan["title"].strip() + "\n\n" + cap
-    cap = cap + "\n\n" + TAIL
+    cap = cap + "\n\n" + CAPTION_TAIL
     label = f"[{fmt}/{layout}/{theme}] '{plan['title']}' ({topic}; {why}; via {prov})"
     if dry:
         code, body = _invoke("bestly-ig-poster", {"action": "dryrun", "brand": "hoku",

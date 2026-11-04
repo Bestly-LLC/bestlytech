@@ -53,7 +53,7 @@ body{background:${t.bg};color:${t.ink}}
 .krule{width:62px;height:2px;background:${t.accent};margin-bottom:22px;opacity:.9}
 h1{font-family:'Newsreader',Georgia,serif;font-weight:400;font-size:${hSize}px;line-height:1.14;letter-spacing:-.004em;margin-top:${s.kicker ? 87 : 0}px;max-width:910px}
 .L-bold h1::after{content:'';display:block;width:82px;height:3px;background:${t.accent};margin-top:34px}
-p.sub{font-size:34px;line-height:1.32;color:${t.dim};margin-top:44px;max-width:910px}
+p.sub{font-size:40px;line-height:1.3;color:${t.dim};margin-top:44px;max-width:910px}
 p.sub.small{font-size:30px;margin-top:18px}
 .big{font-family:'Newsreader',Georgia,serif;font-size:300px;line-height:.92;letter-spacing:-.02em;margin-top:40px;color:${t.ink}}
 .big + h1{margin-top:42px}
@@ -71,13 +71,14 @@ ol.list span{display:block;font-size:27px;line-height:1.4;color:${t.dim};margin-
 .pimg{flex:0 0 auto;line-height:0}
 .pimg img{display:block}
 .L-product h1{max-width:none}
-.L-product ol.list{margin-top:46px}
-.L-product ol.list li{gap:22px;margin-bottom:26px}
-.L-product ol.list .n{min-width:34px;font-size:20px}
-.L-product ol.list b{font-size:29px}
-.L-product ol.list span{font-size:23px;margin-top:4px}
+.L-product ol.list{margin-top:36px}
+.L-product ol.list li{gap:20px;margin-bottom:22px}
+.L-product ol.list .n{min-width:30px;font-size:24px}
+.L-product ol.list b{font-size:38px;line-height:1.2}
+.L-product ol.list span{font-size:38px;line-height:1.25;margin-top:4px}
 .L-product .cta{flex-direction:column;align-items:flex-start;gap:6px;margin-top:10px;padding-top:24px}
-.L-product .cta span{font-size:27px}
+.L-product .cta span{font-size:36px}
+.L-product .cta em{font-size:28px}
 .duo{margin-top:52px;display:flex;flex-direction:column;gap:38px;max-width:910px}
 .duo .blk{border-left:4px solid ${t.accent};padding-left:30px}
 .duo .lbl{font-size:18px;letter-spacing:.22em;text-transform:uppercase;color:${t.accent};font-weight:600}
@@ -126,7 +127,7 @@ function slide(s, hSize) {
   const g = s.graphic ? `<div class="gwrap">${gfx(s.graphic, gSize, t.accent, tname)}</div>` : '';
   let inner;
   if (layout === 'product') {
-    inner = `<div class="prod"><div class="pcol">${kicker}${h1}${body}</div><div class="pimg">${gfx('hokucan', s.canH || 760, t.accent, tname)}</div></div>`;
+    inner = `<div class="prod"><div class="pcol">${kicker}${h1}${body}</div><div class="pimg">${gfx('hokucan', s.canH || 560, t.accent, tname)}</div></div>`;
   } else if (layout === 'end') {
     inner = `<img class="biglogo" src="${logo}" alt="HOKU"><h1 class="endh">${rich(s.title)}</h1>
        <p class="sub">${rich(s.body)}</p><div class="url">${esc(s.url || 'hoku-clean.com')}</div>
