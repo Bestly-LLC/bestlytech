@@ -38,6 +38,9 @@ const NeckPilot = lazyPage(() => import("./pages/NeckPilot"));
 const BestlyAgent = lazyPage(() => import("./pages/BestlyAgent"));
 const PressKit = lazyPage(() => import("./pages/PressKit"));
 const PrivacyPolicy = lazyPage(() => import("./pages/PrivacyPolicy"));
+const ScoutRecorderProduct = lazyPage(() => import("./pages/ScoutRecorderProduct"));
+const ScoutRecorderPrivacy = lazyPage(() => import("./pages/ScoutRecorderPrivacy"));
+const ScoutRecorderConnect = lazyPage(() => import("./pages/ScoutRecorderConnect"));
 const TermsOfService = lazyPage(() => import("./pages/TermsOfService"));
 const TermsOfUse = lazyPage(() => import("./pages/TermsOfUse"));
 const DeveloperCompliance = lazyPage(() => import("./pages/DeveloperCompliance"));
@@ -238,9 +241,13 @@ const App = () => {
                   <Route path="/apple-modernization" element={<AppleModernization />} />
                   <Route path="/marketplace-setup" element={<MarketplaceSetup />} />
                   <Route path="/support" element={<CookieYetiSupport />} />
+                  <Route path="/scout-recorder" element={<ScoutRecorderProduct />} />
+                  <Route path="/scout-recorder/privacy" element={<ScoutRecorderPrivacy />} />
                 </Route>
 
                 {/* Standalone pages (no Header/Footer) */}
+                {/* Scout Recorder extension sign-in: standalone and public, so the query string survives (no auth guard). */}
+                <Route path="/scout/connect" element={<ScoutRecorderConnect />} />
                 <Route path="/links" element={<Links />} />
                 <Route path="/jared" element={<Jared />} />
                 <Route path="/j" element={<Navigate to="/jared" replace />} />
