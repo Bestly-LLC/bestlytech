@@ -1,0 +1,29 @@
+# Morning Brief dismiss in Apple Home + Siri (BRIEFFIT2_20261104, Jared 2026-11-04).
+# Helper: input_boolean.wall_morning_brief ("Morning Brief", created in the HA helper UI storage). The wall server (Hestia, server.py brief loop)
+# turns it ON while the morning brief is on the wall and OFF when the brief hides (dismissed, or the noon auto-hide).
+# A person turning it OFF (Siri, Apple Home tile, HA) dismisses the brief: this automation writes briefDismiss = now through the same path
+# every other wall control uses (script.bestly_wall_set -> rest_command.bestly_wall_patch -> rpc/wall_ha_patch).
+# Loop guard: the Pi publishes sensor.wall_brief_show (on = brief wanted) BEFORE it flips the helper; the condition below only lets a
+# turn-off through while that sensor is on, so the Pi's own OFF never writes a dismiss. After an HA restart the sensor is gone until the
+# Pi re-publishes it (within 30 s), which only means a dismiss in those seconds is ignored.
+# Exposed to Apple Home through the existing HomeKit Bridge "Bestly Radio" (packages/bestly_homekit_radio.yaml, include_entities).
+# Siri: "Hey Siri, turn off Morning Brief".
+# Undo: delete this file, remove input_boolean.wall_morning_brief from the HomeKit include list, delete the helper (Settings > Devices > Helpers).
+automation:
+  - id: bestly_morning_brief_dismiss
+    alias: "Wall: Morning Brief turned off (dismiss)"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.wall_morning_brief
+        from: "on"
+        to: "off"
+    conditions:
+      - condition: state
+        entity_id: sensor.wall_brief_show
+        state: "on"
+    actions:
+      - action: script.bestly_wall_set
+        data:
+          patch:
+            briefDismiss: "$now"

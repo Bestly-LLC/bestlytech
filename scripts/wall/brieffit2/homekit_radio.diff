@@ -1,0 +1,5 @@
+31a32
+>         - input_boolean.wall_morning_brief
+44a46,47
+>       input_boolean.wall_morning_brief:
+>         name: Morning Brief
