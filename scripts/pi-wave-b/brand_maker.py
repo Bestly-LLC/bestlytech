@@ -386,6 +386,14 @@ def _make(brands, dry):
         bank_open = lib.get("social_content_bank", f"select=id,topic,composition,ground&brand=eq.{brand}"
                             "&approved=is.true&rejected=is.false&queued_at=is.null") or []
         need = KEEP_READY - len(bank_open)
+        # "Ready" must mean ready AND postable. InventoryProof sat on 2 approved rows that both clashed with its last post
+        # (same ground/pose/composition within 3), so the renderer said nothing_fits every night, nothing new posted to
+        # change "the last post", and this job saw 2 ready and made nothing: frozen Oct 18 - Nov 3. When none of the
+        # open rows can go next, make fresh ones (the stuck rows stay; they fit again once newer posts go out).
+        nx = lib.rpc("social_bank_next", p_brand=brand) or {}
+        if isinstance(nx, dict) and nx.get("error") == "nothing_fits" and bank_open:
+            need = max(need, 2)
+            out.append(f"{brand}: {len(bank_open)} in the bank but none fits next (variety rule), making fresh ones")
         short = hv.need(cfg["claim"]) if hv else None
         if short is not None and short == 0 and not dry:
             out.append(f"{brand}: a week of finished posts already waits ahead, nothing to make")
