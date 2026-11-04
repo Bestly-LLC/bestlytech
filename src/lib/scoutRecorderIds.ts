@@ -10,7 +10,7 @@
  */
 export const DEV_IDS: string[] = [];
 
-export const STORE_IDS: string[] = [];
+export const STORE_IDS: string[] = ["opnknclfclfkccofcbobdjbnlkhfmoak"];
 
 export const SCOUT_RECORDER_EXTENSION_IDS: string[] = [...STORE_IDS, ...DEV_IDS];
 
