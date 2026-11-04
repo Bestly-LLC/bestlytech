@@ -635,6 +635,110 @@ def clips_for(job, script, jd, note):
     return out
 
 
+# ---------------------------------------------------------------- clip library (studio_clips), wired 2026-11-04
+# Jared 2026-11-04: "wire the library". A video with no paid LTX clips fills its plain scenes with APPROVED clips from the brand's
+# library (studio_clip_pick: approved only, 7-day cool-off, least used first), free. Drafts (the reshoot list) are never picked.
+# Not used on: call cards, list/big-number scenes and the Bestly Cloud 3D unit moment (that scene already shows the unit).
+# AI people (people != none) are skipped: these brands have the AI label off (social_brand_settings.ai_label).
+# A re-cut keeps the clips its parent used. Any failure = plain cards for those scenes + an FYI to Scout (never fails a video).
+LIB_BRANDS = {"hoku": ("hoku", ("product",), None), "inventoryproof": ("inventoryproof", ("broll",), None),
+              "cookie-yeti": ("cookieyeti", ("broll",), None), "bestly-cloud": ("bestly", ("product",), "bestly-cloud")}
+LIB_SKIP = ("card", "unit", "items", "big")
+# Jared 2026-11-04 ("Soften, preview first"): every HOKU library clip shows the can, and its label text fought the headline.
+# HOKU clips are blurred while they are fitted, so the can reads as soft background (gaussian sigma at 1080x1920).
+LIB_SOFT = {"hoku": 14}
+
+
+def _fit_clip(raw, d, dst, soft=0):
+    vf = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30" + (f",gblur=sigma={soft}" if soft else "")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-stream_loop", "-1", "-i", raw, "-t", f"{d + 0.2:.2f}",
+                    "-vf", vf,
+                    "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p", dst], check=True, timeout=600)
+
+
+def library_clips_for(job, script, jd, note, mark=True):
+    """Fill plain scenes with approved clips from the brand's clip library. Returns {scene_index: "clips/sN.mp4"} and records the picks in
+    script["library_clips"] (so a re-cut reuses them and the Studio note can say where the footage came from)."""
+    import re
+    import urllib.request
+    slug = job["client_slug"]
+    m = LIB_BRANDS.get(slug)
+    if not m:
+        return {}
+    pol = (lib.get("montage_brand_policy", f"select=ai_footage_ok,library_broll&client_slug=eq.{slug}") or [{}])[0]
+    if not pol.get("library_broll"):        # per-brand switch (migration montage_library_broll_switch); HOKU off until Jared picks
+        return {}
+    if not pol.get("ai_footage_ok"):
+        note("clip library: AI footage is off for this brand, scenes stay plain cards")
+        return {}
+    lbrand, kinds, tag = m
+    scenes = script["scenes"]
+    want = [i for i, sc in enumerate(scenes) if not any(sc.get(k) for k in LIB_SKIP)]
+    if not want:
+        return {}
+    reuse = {}
+    if job.get("parent_job_id"):
+        rows = lib.get("studio_video_jobs", f"select=script&id=eq.{job['parent_job_id']}") or []
+        for c in (((rows[0].get("script") or {}).get("library_clips")) if rows else None) or []:
+            reuse[int(c["scene"])] = c["id"]
+    pool = []
+    for k in kinds:
+        pool += lib.rpc("studio_clip_pick", p_brand=lbrand, p_kind=k, p_use=None, p_n=20, p_exclude=[]) or []
+    if reuse:
+        have = {c["id"] for c in pool}
+        more = [x for x in reuse.values() if x not in have]
+        if more:
+            pool += lib.get("studio_clips", "select=*&status=eq.approved&id=in.(" + ",".join(more) + ")") or []
+    pool = [c for c in pool if c.get("media_url") and (c.get("people") or "none") == "none" and (not tag or tag in (c.get("tags") or []))]
+    byid = {c["id"]: c for c in pool}
+    if not pool:
+        note(f"clip library: no fresh approved clips for {lbrand} right now, scenes stay plain cards")
+        return {}
+    words = lambda t: set(re.findall(r"[a-z]{3,}", (t or "").lower()))
+    os.makedirs(f"{jd}/public/clips", exist_ok=True)
+    out, picks, used, failed = {}, [], set(), []
+    for i in want:
+        sc = scenes[i]
+        c = byid.get(reuse.get(i))
+        if not c or c["id"] in used:
+            sw = words(" ".join(str(sc.get(k) or "") for k in ("kicker", "line", "say", "shot")))
+            free = [x for x in pool if x["id"] not in used]
+            if not free:
+                break
+            c = max(free, key=lambda x: (len(sw & (set(x.get("tags") or []) | words(x.get("title")))), -free.index(x)))
+        used.add(c["id"])
+        raw = f"{jd}/lib{i}.mp4"
+        try:
+            with urllib.request.urlopen(urllib.request.Request(c["media_url"], headers={"User-Agent": "bestly-montage"}), timeout=180) as r, \
+                    open(raw, "wb") as f:
+                shutil.copyfileobj(r, f)
+            _fit_clip(raw, sc["end"] - sc["start"], f"{jd}/public/clips/s{i}.mp4", LIB_SOFT.get(slug, 0))
+        except Exception as e:  # noqa: BLE001
+            failed.append(f"{c.get('title')}: {str(e)[:120]}")
+            continue
+        out[i] = f"clips/s{i}.mp4"
+        picks.append({"scene": i, "id": c["id"], "title": c.get("title")})
+    script["library_clips"] = picks
+    if mark and picks:
+        try:
+            lib.rpc("studio_clip_used", p_ids=[p["id"] for p in picks])
+        except Exception as e:  # noqa: BLE001
+            print("studio_clip_used failed:", e, flush=True)
+    note(f"clip library: {len(out)} clip(s) placed ({', '.join(p['title'] for p in picks)[:300]})"
+         + (f"; {len(failed)} could not load: {'; '.join(failed)[:300]}" if failed else ""))
+    try:
+        if failed and not out:
+            lib.rpc("bestly_raise", p_key="montage:clip-library", p_kind="problem", p_severity="info",
+                    p_title="Montage could not load clip-library footage",
+                    p_body=f"{job['client_slug']} video {job['id']}: every library clip failed to load, so it used plain cards. {'; '.join(failed)[:600]}",
+                    p_area="studio", p_healed=True)
+        elif out:
+            lib.rpc("bestly_raise", p_key="montage:clip-library", p_kind="resolved", p_severity="info", p_area="studio")
+    except Exception as e:  # noqa: BLE001
+        print("clip-library raise failed:", e, flush=True)
+    return out
+
+
 def check(out, total, script=None, minfo=None, unit=None):
     """Our own gate on top of OpenMontage's review. Returns a list of problems. A video with no music bed, a near-silent bed, or a finished mix
     that is silent in the gaps between narration lines FAILS (rule of 2026-10-12: every video ships with a real music bed)."""
@@ -818,6 +922,12 @@ def process(job):
         note(f"3D unit moment '{script['unit']['moment']}' ({script['unit']['scene'] if script['unit']['scene'] == 'end' else 'scene ' + str(script['unit']['scene'] + 1)}), "
              f"{unit_moment.stage(f'{jd}/public', script, getattr(brand, 'UNIT_KIT', unit_moment.KIT))} frames")
     clips = clips_for(job, script, jd, note) if (job.get("clips") or job.get("parent_job_id")) else {}
+    if not clips:
+        try:
+            clips = library_clips_for(job, script, jd, note)
+        except Exception as e:  # noqa: BLE001  (the library is an extra: never fail a video over it)
+            note(f"clip library skipped: {str(e)[:200]}")
+            clips = {}
     props = {"theme": script["theme"],
              "scenes": [{**{k: s[k] for k in ("kicker", "line", "start", "end")}, **({"clip": clips[i]} if i in clips else {}),
                          **({"icon": s["icon"]} if s.get("icon") else {}), **({"card": s["card"]} if s.get("card") else {}),
@@ -874,7 +984,7 @@ def process(job):
     r = lib.rpc("montage_file", p_id=jid, p={
         "title": script["title"], "caption": script["caption"], "media_url": media, "thumb_url": turl,
         "variants": [{"platform": "instagram", "caption": script["caption"]}],
-        "provenance": {"music": {k: minfo.get(k) for k in ("track_id", "name", "mood", "looped", "duck_db")}, "theme": script["theme"], "provider": script["provider"], "editor_score": script["score"], "broll_clips": len(clips),
+        "provenance": {"music": {k: minfo.get(k) for k in ("track_id", "name", "mood", "looped", "duck_db")}, "theme": script["theme"], "provider": script["provider"], "editor_score": script["score"], "broll_clips": len(clips), **({"library_clips": [c["id"] for c in script["library_clips"]]} if script.get("library_clips") and clips else {}),
                        "render_s": render_s, "length_s": round(total, 1), "openmontage": "9327439", "look": script.get("look"),
                        **({"recut_changed": script["recut_changed"]} if script.get("recut_changed") is not None else {}),
                        **({"graphics": True} if _has_graphics(props) else {})},
@@ -883,7 +993,7 @@ def process(job):
                  + (f"Script hand-written for this ad, passed {getattr(brand, 'NAME', 'HOKU')}'s claim rules and number guard. " if script["provider"] == "hand-written" else
                     f"Script by free AI ({script['provider']}), passed {getattr(brand, 'NAME', 'HOKU')}'s claim rules and fact check (editor {script['score']:g}/10). ")
                  + f"Voice: {'ElevenLabs' if vinfo.get('provider') == 'elevenlabs' else 'Piper'}. "
-                 + (f"{len(clips)} b-roll clip(s) from the LTX box. " if clips else "")
+                 + (f"{len(clips)} b-roll clip(s) from the {'clip library' if script.get('library_clips') else 'LTX box'}. " if clips else "")
                  + f"Rendered on the Pi in {render_s}s with OpenMontage.")})
     return f"filed #{r.get('code')} '{script['title']}' ({total:.0f}s video, rendered in {render_s}s)"
 

@@ -14,6 +14,12 @@ Built 2026-10-06. Spark's main video tool (`make_montage` in `supabase/functions
 2. Music gate, then ElevenLabs voices each scene (held, not Piper, if it cannot; see Voice); scene lengths follow the voice. Then the music bed (see Music).
 3. b-roll (optional): `montage_clip_request` orders vertical LTX clips and parks the job; `montage_claim` resumes it
    when no clip is still queued/rendering (or after 90 min, with plain cards for missing clips).
+3b. clip library (2026-11-04, `library_clips_for`): a video with no LTX clips fills its plain scenes with APPROVED `studio_clips` for the
+   brand (`studio_clip_pick`, 7-day cool-off, matched to the scene words), free. Brand map `LIB_BRANDS`: hoku -> product, inventoryproof
+   and cookie-yeti -> broll, bestly-cloud -> product tagged bestly-cloud; bestly-studio / bestly-agent have none. Skips call cards,
+   list/big-number scenes and the 3D unit scene; skips AI people (AI label is off for these brands). Gated on
+   `montage_brand_policy.ai_footage_ok`. Picks land in `script.library_clips` (a re-cut reuses them) and `provenance.library_clips`;
+   `studio_clip_used` marks them. Any failure = plain cards + Scout FYI `montage:clip-library`; stock is watched by `studio_clip_watch`.
 4. Render + OpenMontage review, then our checks (1080x1920, length, loudness, size), thumbnail, upload to `review`.
 5. `montage_file` files to Studio > Drafts > To review (or updates the same item on a re-cut), posts to the Spark thread.
 6. Changes with a note on a Montage item -> trigger `montage_recut` -> a re-cut job with the note.
