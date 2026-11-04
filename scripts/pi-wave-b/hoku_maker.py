@@ -238,6 +238,41 @@ def _pick(posts):
 
 
 # ---------------------------------------------------------------- writing + checks
+# Words every HOKU beat may share (the product and the act). Letter-level matching counted these, so nearly any
+# three short beats ending in "Mist." looked like a repeat (2026-11-03: "Magazines. Can. Spray." was flagged against
+# "Cold air. Can clicks. Spray."). Judge the distinctive words instead.
+_BEAT_COMMON = {"mist", "mists", "misted", "spray", "sprays", "can", "cap", "it", "a", "the", "on", "off", "up", "in",
+                "let", "dry", "and", "then", "out", "down", "back"}
+
+
+def _beat_words(t):
+    return {w for w in re.findall(r"[a-z']+", (t or "").lower()) if w not in _BEAT_COMMON}
+
+
+def _beats_close(new, old):
+    a, b = _beat_words(new), _beat_words(old)
+    if not a or not b:
+        return False
+    first_new = (new.split(".")[0] or "").strip().lower()
+    first_old = (old.split(".")[0] or "").strip().lower()
+    return first_new == first_old or len(a & b) / len(a | b) >= 0.5
+
+
+def _tidy(plan):
+    """Some rungs (Cloudflare gpt-oss) pad every key and value with a space and drop the capital: ' title': ' after yoga.'"""
+    if not isinstance(plan, dict):
+        return plan
+    def fix(v, cap=True):
+        if isinstance(v, str):
+            v = v.strip()
+            return v[:1].upper() + v[1:] if cap and v[:1].islower() else v
+        if isinstance(v, list):
+            return [fix(x, cap) for x in v]
+        return v
+    return {str(k).strip(): fix(v, str(k).strip() not in ("topic", "graphic")) if str(k).strip() not in ("topic", "graphic")
+            else (v.strip().lower() if isinstance(v, str) else v) for k, v in plan.items()}
+
+
 def _check(fmt, layout, p, past, rec=None):
     e = []
     def rng(name, t, lo, hi):
@@ -259,7 +294,7 @@ def _check(fmt, layout, p, past, rec=None):
         rng("lead", p.get("lead"), 3, 9)
         beats = " ".join(str(l).strip() for l in lines)
         for old in _PAST_BEATS:
-            if difflib.SequenceMatcher(None, beats.lower(), old.lower()).ratio() > 0.55:
+            if _beats_close(beats, old):
                 e.append(f"the 3 beats are too close to an earlier post ('{old}'); find beats that belong to THIS moment only")
                 break
         rng("caption", cap, 12, 85)
@@ -299,6 +334,15 @@ def _check(fmt, layout, p, past, rec=None):
     # The prompt asks for the question as the LAST LINE of the caption; the model usually writes it as the last
     # line of the final paragraph, not as a paragraph of its own. Judge the last line, however it is separated
     # (2026-10-31: every nightly post had failed this check 4x since Oct 28).
+    # gpt-oss (the night-time rung) writes the question at the END of the last paragraph on the same line
+    # ("...no extra step. Do you spray after every run?"), so the whole 30-word line was judged as the question and
+    # failed all 4 tries every night (Oct 27 - Nov 3; Gemini puts it on its own line). Split the trailing question
+    # sentence onto its own line, in the caption that gets posted too.
+    if rec and hv and rec.get("question") and cap.endswith("?"):
+        m = re.search(r"[.!\u201d\"]\s+([^.!?\n]+\?)$", cap)
+        if m and "\n" not in cap[m.start(1):]:
+            cap = cap[: m.start(1)].rstrip() + "\n\n" + m.group(1).strip()
+            p["caption"] = cap
     last_line = cap.rstrip().splitlines()[-1].strip() if cap.strip() else ""
     if rec and hv and rec.get("question") and last_line.endswith("?"):
         ask = last_line
@@ -414,14 +458,15 @@ def _write(fmt, layout, topic, posts, past, deadline):
     for _ in range(4):
         msg, prov = freellm.chat(msgs, None, max_tokens=3000, deadline=deadline, json_mode=True)
         try:
-            plan = bm._json(msg.get("content"))
+            plan = _tidy(bm._json(msg.get("content")))
             errs, score = _check(fmt, layout, plan, past, rec), 0.0
             if not errs:
                 errs, score = _review(plan, deadline)
                 # Factually clean and a 7: keep it as the fallback; a 7 in HOKU's quiet voice beats a re-run.
                 if errs and all(e.startswith("editor") for e in errs) and score >= 7 and (not near or score > near[1]):
                     near = (plan, score, prov)
-            tries.append(f"{prov}: {json.dumps(plan)[:260]} -> {'; '.join(errs)[:220] or 'ok'}")
+            # reasons first: the summary is cut short, and the reasons are what anyone fixing this needs
+            tries.append(f"{prov}: {'; '.join(errs)[:260] or 'ok'} <- {json.dumps(plan)[:160]}")
         except (ValueError, TypeError, KeyError, AttributeError) as e:
             plan, errs = None, [f"reply was not the JSON asked for ({e}; {prov})"]
             continue
@@ -602,7 +647,7 @@ def _make(dry):
                                       "topic": (plan.get("topic") or "").lower()}})
             out.append(line)
         except Exception as e:  # noqa: BLE001
-            out.append(f"{day}: FAILED {type(e).__name__}: {str(e)[:300]}")
+            out.append(f"{day}: FAILED {type(e).__name__}: {str(e)[:700]}")
             rr = _rerun(day, at, posts, dry)
             if rr:
                 out.append(rr)
