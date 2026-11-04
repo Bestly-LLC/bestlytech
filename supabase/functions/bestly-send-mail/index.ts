@@ -8,7 +8,7 @@
 // Deliberately narrow:
 //   * From is always jared@bestly.tech. No arbitrary sender.
 //   * Admin JWT or service key only.
-//   * One recipient per call, plain text, no attachments.
+//   * One recipient per call (plus up to 5 optional cc), plain text, no attachments.
 //   * Every send is logged to vendor_requests when a request_id is given, so a follow-up can be tracked.
 // Replies go to jared@bestly.tech, which the Mac's puller ingests into bestly_mail within about two minutes,
 // so an AI employee can watch for the answer without anyone forwarding anything.
@@ -52,11 +52,14 @@ Deno.serve(async (req) => {
   const subject = String(b.subject ?? "").trim();
   const text = String(b.text ?? "");
   const requestId = typeof b.request_id === "string" ? b.request_id : null;
+  // 2026-11-03: optional cc (one email to several people, e.g. a client and her partner on the same thread).
+  const cc = (Array.isArray(b.cc) ? b.cc : []).map((x: unknown) => String(x ?? "").trim().toLowerCase()).filter(Boolean);
   if (!EMAIL.test(to)) return err("Give one valid recipient.");
+  if (cc.length > 5 || cc.some((x: string) => !EMAIL.test(x) || x === to)) return err("cc takes up to 5 valid addresses, not the main recipient.");
   if (!subject || subject.length > 200) return err("Give a subject under 200 characters.");
   if (text.length < 20 || text.length > 20000) return err("Give a body between 20 and 20,000 characters.");
 
-  const sent = await sendAsJared(db, { to: [to], subject, text, key: requestId ? `vendor-${requestId}` : undefined });
+  const sent = await sendAsJared(db, { to: [to], ...(cc.length ? { cc } : {}), subject, text, key: requestId ? `vendor-${requestId}` : undefined });
   if (!sent.ok) return err(`The mail service refused it: ${sent.error}`, 502);
   const body = { id: sent.id };
 
@@ -66,5 +69,5 @@ Deno.serve(async (req) => {
       next_check_at: new Date(Date.now() + 2 * 864e5).toISOString(),
     }).eq("id", requestId);
   }
-  return ok({ message_id: body?.id ?? null, to, subject });
+  return ok({ message_id: body?.id ?? null, to, cc, subject });
 });
