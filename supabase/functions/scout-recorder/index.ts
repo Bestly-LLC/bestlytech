@@ -19,8 +19,10 @@ const JOIN = /(https:\/\/[\w.-]*zoom\.us\/(?:j|wc\/join)\/[^\s"<>\\]+|https:\/\/
 // ---------- http helpers ----------
 function corsFor(req: Request): Record<string, string> {
   const o = req.headers.get("origin") ?? "";
+  // Only Chrome extensions get CORS access. Web pages (and pg_net, which does not use CORS) get no ACAO header.
+  const allow: Record<string, string> = /^chrome-extension:\/\/[a-z0-9]{3,64}$/.test(o) ? { "Access-Control-Allow-Origin": o } : {};
   return {
-    "Access-Control-Allow-Origin": o.startsWith("chrome-extension://") ? o : "*",
+    ...allow,
     "Access-Control-Allow-Headers": "apikey, content-type, x-scout-key, x-worker-key, authorization, x-client-info",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
@@ -31,7 +33,7 @@ class Refuse extends Error { constructor(public msg: string, public status = 400
 
 // ---------- time ----------
 const fmtTime = (d: Date) => new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit", hour12: true })
-  .format(d).replace(/[  ]/g, " ");
+  .format(d).replace(/[\u202f\u00a0]/g, " ");
 function laStamp(d: Date) {
   const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
     .formatToParts(d).map((x) => [x.type, x.value]));
@@ -177,9 +179,12 @@ async function visibleEvents(a: Auth, days: number): Promise<Ev[]> {
   let list = events.filter((e) => Date.parse(e.end ?? e.start) > Date.now() - 15 * 60e3).sort((x, y) => x.start.localeCompare(y.start));
   if (!a.admin) {
     const { data: p } = await db.from("partners").select("name,email,roster_name").eq("user_id", a.user_id).maybeSingle();
-    const name = p?.name?.toLowerCase().trim() ?? "", email = p?.email?.toLowerCase() ?? "";
-    const keys = [email, email.split("@")[0], name, ...name.split(/\s+/), p?.roster_name?.toLowerCase()].filter((k): k is string => !!k && k.length > 2);
-    list = list.filter((e) => keys.some((k) => e.text.includes(k)));
+    const name = p?.name?.toLowerCase().trim() ?? "", email = p?.email?.toLowerCase().trim() ?? "";
+    const roster = p?.roster_name?.toLowerCase().trim() ?? "";
+    const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Whole-word matches only (a first name like "eli" must not match "delivery"). Attendee emails match exactly.
+    const words = [name, name.split(/\s+/)[0], roster].filter((k, i, a): k is string => !!k && k.length > 2 && a.indexOf(k) === i).map((k) => new RegExp(`(^|[^a-z0-9])${esc(k)}([^a-z0-9]|$)`));
+    list = list.filter((e) => (email && e.attendees.some((x) => x.email === email)) || e.attendees.some((x) => x.name && name && x.name.toLowerCase().trim() === name) || words.some((re) => re.test(e.text)));
   }
   return list.slice(0, 50);
 }
@@ -286,7 +291,7 @@ async function aFinish(a: Auth, b: Record<string, unknown>) {
       throw new Refuse("Some parts of the recording have not arrived yet.", 409, { missing });
     }
   }
-  const caps = (Array.isArray(b.captions) ? b.captions : []).slice(0, 50000).map((c: Record<string, unknown>) => ({
+  const caps = (Array.isArray(b.captions) ? b.captions : []).slice(0, 20000).map((c: Record<string, unknown>) => ({
     t: Math.round(num(c?.t, 0) * 100) / 100, speaker: str(c?.speaker, 120), text: str(c?.text, 2000),
   })).filter((c) => c.text);
   const la = laStamp(new Date(s.started_at));
@@ -356,7 +361,11 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return J({ ok: false, error: "POST only." }, 405);
   try {
     let b: Record<string, unknown>;
-    try { b = await req.json(); } catch { return J({ ok: false, error: "That request was not understood." }, 400); }
+    if (Number(req.headers.get("content-length") ?? 0) > 6_000_000) return J({ ok: false, error: "That request was too large." }, 413);
+    let raw = "";
+    try { raw = await req.text(); } catch { return J({ ok: false, error: "That request was not understood." }, 400); }
+    if (raw.length > 6_000_000) return J({ ok: false, error: "That request was too large." }, 413);
+    try { b = JSON.parse(raw); } catch { return J({ ok: false, error: "That request was not understood." }, 400); }
     const action = str(b?.action, 30);
     // worker key may only run selftest
     const wk = req.headers.get("x-worker-key");
