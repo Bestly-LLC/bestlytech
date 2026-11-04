@@ -7,13 +7,16 @@
 // and returns the stored URL. social_posts only ever points at stored copies,
 // so a bad day here cannot break a post that is already scheduled.
 //
+// v12 (2026-10-18): layout.ts type scale ~2x (Jared approved). ROLLBACK: rename
+// layout.v11.ts to layout.ts (it is the exact v11 layout) and redeploy.
+//
 // Actions (POST, JSON):
 //   render   { brand, slug, cards:[{kind, eyebrow, head, body, big, pose, ground, accent}], dry? }
 //            -> renders every card as slides 1..n, stores under
 //               <bucket>/social/<brand>/<slug>-NN.jpg (a single: <slug>.jpg)
 //            -> { ok, urls }.  dry:true returns the first JPEG inline instead.
 //   preview  { brand, card }  -> image/jpeg of that one card, nothing stored
-//   queue_next { brand, limit? } -> bank -> render -> social_posts, up to per_run times
+//   queue_next { brand, limit? } -> bank -> render ONE missing card per call (CPU) -> social_posts when whole
 //   health   -> fonts reachable, wasm ready
 //
 // Auth: the service_role JWT (pg_cron / invoke_edge_function) or a staff
@@ -27,7 +30,6 @@ import { initWasm, Resvg } from "npm:@resvg/resvg-wasm@2.6.2";
 import { encode as jpegEncode } from "npm:jpeg-js@0.4.4";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { W, H, KINDS, GROUNDS, ACCENT, cy, ip, setAssets, type Card } from "./layout.ts";
-import { corsWith } from "../_shared/cors.ts";
 
 // Key switch (2026-09-24): new keys first, legacy as fallback.
 const __keys = (n: string) => { try { return JSON.parse(Deno.env.get(n) ?? "{}").default as string | undefined; } catch { return undefined; } };
@@ -35,10 +37,7 @@ const SB_SECRET: string = __keys("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABA
 const __svc = new Set([SB_SECRET, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", ...Object.values((() => { try { return JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); } catch { return {}; } })()) as string[]].filter(Boolean));
 const isSvc = (req: Request) => { const b = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim(); const a = (req.headers.get("apikey") ?? "").trim(); return __svc.has(b) || __svc.has(a); };
 
-const cors = corsWith({
-  headers: "authorization, apikey, content-type, x-staff-token, x-proxy-key",
-  methods: "POST, OPTIONS"
-});
+const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-staff-token, x-proxy-key", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
 const SB = Deno.env.get("SUPABASE_URL")!;
@@ -180,19 +179,38 @@ Deno.serve(async (req) => {
           .order("id", { ascending: false }).limit(1).maybeSingle();
         if (open) await db.from("social_bank_log").update({ status, note, finished_at: new Date().toISOString() }).eq("id", open.id);
       };
+      // v15 (2026-11-03): ONE card render per call. An edge function gets ~2 s of CPU; rendering a whole 4-card
+      // Cookie Yeti carousel in one call hit "CPU Time exceeded" (HTTP 546) every night from Nov 2, saved nothing,
+      // and blocked every post behind it. Cards already stored are skipped, so each call adds the next missing card;
+      // social_bank_resume() (pg_cron, every 5 min) calls again until the post is whole, then it commits.
       try {
         for (let k = 0; k < limit; k++) {
           const { data: nx, error: e1 } = await db.rpc("social_bank_next", { p_brand: brand });
           if (e1) throw new Error("bank_next: " + e1.message);
           if (!nx?.ok) { results.push({ stop: nx }); break; }
           const row = nx.row;
-          let rendered: { urls: string[]; ms: number[] };
-          try { rendered = await renderAll(brand, b, String(row.slug), row.cards as Card[]); }
-          catch (e) { results.push({ slug: row.slug, error: "render: " + (e as Error).message }); break; }
-          const { data: c, error: e2 } = await db.rpc("social_bank_commit", { p_bank_id: row.id, p_media_urls: rendered.urls, p_slot: nx.slot });
+          const cards = row.cards as Card[];
+          const n = cards.length, slug = String(row.slug), bucket = BUCKET[brand];
+          const pathOf = (i: number) => n === 1 ? `social/${brand}/${slug}.jpg` : `social/${brand}/${slug}-${String(i + 1).padStart(2, "0")}.jpg`;
+          const { data: have } = await db.storage.from(bucket).list(`social/${brand}`, { search: slug, limit: 100 });
+          const stored = new Set((have ?? []).map((f: { name: string }) => `social/${brand}/${f.name}`));
+          const missing = Array.from({ length: n }, (_, i) => i).filter((i) => !stored.has(pathOf(i)));
+          let rendered = false;
+          if (missing.length) {
+            const i = missing[0], t0 = Date.now();
+            try {
+              const jpg = await renderJpg(b, { ...cards[i], i: i + 1, n });
+              const { error } = await db.storage.from(bucket).upload(pathOf(i), jpg, { contentType: "image/jpeg", upsert: true, cacheControl: "31536000" });
+              if (error) throw new Error(`store ${pathOf(i)}: ${error.message}`);
+            } catch (e) { results.push({ slug, error: "render: " + (e as Error).message }); break; }
+            rendered = true;
+            if (missing.length > 1) { results.push({ slug, partial: `${n - missing.length + 1}/${n}`, ms: Date.now() - t0 }); break; }
+          }
+          const urls = Array.from({ length: n }, (_, i) => `${SB}/storage/v1/object/public/${bucket}/${pathOf(i)}`);
+          const { data: c, error: e2 } = await db.rpc("social_bank_commit", { p_bank_id: row.id, p_media_urls: urls, p_slot: nx.slot });
           if (e2) throw new Error("bank_commit: " + e2.message);
-          results.push({ slug: row.slug, slot: nx.slot, ms: rendered.ms, commit: c });
-          if (!c?.ok) break;
+          results.push({ slug, slot: nx.slot, commit: c });
+          if (!c?.ok || rendered) break;   // at most one render per call
         }
       } catch (e) {
         await done(500, String((e as Error).message ?? e));
@@ -201,7 +219,9 @@ Deno.serve(async (req) => {
       const queued = results.filter((r) => (r as { commit?: { ok?: boolean } }).commit?.ok).length;
       const firstErr = results.map((r) => (r as { error?: string }).error).find(Boolean);
       const stop = results.map((r) => (r as { stop?: { error?: string; reason?: string } }).stop).find(Boolean);
-      await done(firstErr ? 500 : 200, firstErr ?? `${queued} queued` + (stop ? ` · ${stop.error ?? stop.reason ?? "stopped"}` : ""));
+      const partial = results.map((r) => (r as { partial?: string }).partial).find(Boolean);
+      await done(firstErr ? 500 : partial ? 202 : 200,
+        firstErr ?? (partial ? `rendering ${partial} (resumes)` : `${queued} queued` + (stop ? ` · ${stop.error ?? stop.reason ?? "stopped"}` : "")));
       return J({ ok: true, brand, results, by: staff ? staff.slug : "service" });
     }
 
