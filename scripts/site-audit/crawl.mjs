@@ -52,7 +52,7 @@ const ROUTES = [
   "/", "/agent", "/about", "/products", "/services", "/hire", "/contact", "/press",
   "/cookie-yeti", "/cookie-yeti/privacy", "/cookie-yeti/terms", "/cookie-yeti/success",
   "/cookie-yeti/cancel", "/cookie-yeti/transparency",
-  "/in-house-cloud", "/studio", "/neckpilot", "/inventory-proof", "/hoku",
+  "/in-house-cloud", "/studio", "/studio/for/coaches", "/studio/for/real-estate", "/studio/for/products", "/studio/for/apps", "/studio/for/local", "/studio/for/creators", "/studio/for/nonprofits", "/neckpilot", "/inventory-proof", "/hoku",
   "/get-started", "/shield/report", "/support", "/status", "/links", "/jared", "/unsubscribe",
   "/apple-modernization", "/marketplace-setup", "/developer-compliance", "/report-site",
   "/confesh/privacy", "/confesh/support", "/privacy-policy", "/terms",

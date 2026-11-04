@@ -22,9 +22,7 @@ Say these, in plain words. Each line says where it is true.
 - **A calendar of what is coming.** "The next 30 days".
 - **Send us an idea or a clip.** The board has "Send us an idea" and "Record" (things for you to film). Email works too: photos and
   notes sent to studio@bestly.tech arrive in the Studio Inbox, where Bestly picks them up.
-- **Posting.** After you approve, a post can go out to your Instagram account (you connect the account once). Auto-posting is a
-  switch per client, off until the client and Bestly turn it on; otherwise a Bestly person presses Post. Say only "we post it to your
-  Instagram". TikTok: updated 2026-10-26. Say that each business connects its own TikTok through TikTok's own login, reviews the video and caption, chooses who can view it, and taps Post; nothing is sent before that tap; TikTok is still under TikTok's review, so it is open to approved test accounts only. Never promise TikTok posting for everyone until the review passes. No promise for Facebook, LinkedIn or anything else.
+- **Posting.** Updated 2026-11-04 (checked in `social_posts`): in the last 30 days Studio posted to Instagram, Facebook, Threads, Bluesky, LinkedIn, Pinterest and TikTok. After you approve, a post goes to your own account on those platforms (you connect each account once, on the platform's own login page). Auto-posting is a switch per client, off until the client and Bestly turn it on; otherwise a Bestly person presses Post. TikTok: each business connects its own TikTok through TikTok's own login, reviews the video and caption, chooses who can view it, and taps Post; nothing is sent before that tap; TikTok is still under TikTok's review, so it is open to approved test accounts only. Never promise TikTok posting for everyone until the review passes. YouTube: nothing posted yet, never name it. X: never name it.
 - **Who it is for.** Small businesses, solo professionals, real estate agents (as an audience; see the real estate rule below).
 - **How we work with AI, if asked.** We use software, including AI tools, to draft, design and edit. A person at Bestly checks every
   post. (Fine in the FAQ and when a viewer asks. Do not use "AI" as the headline.)
@@ -44,8 +42,7 @@ Say these, in plain words. Each line says where it is true.
 6. **Real estate.** Agents are a target audience; say "for real estate agents" and stop. Do not imply AI-generated property footage and
    do not promise listing videos, property tours or listing reels: Bestly's real-estate offer is photo-based and is not built yet.
 7. **No speed, volume or availability promises.** No "instantly", "in 24 hours", "same day", "24/7", "unlimited", "X posts a week/day".
-8. **No platform over-claims.** Instagram posting works today. Do not say "all platforms" or promise Facebook, LinkedIn, YouTube,
-   Pinterest or X. TikTok and Instagram can be named as formats the videos are made for, not as places we post to.
+8. **No platform over-claims.** Updated 2026-11-04. The platforms we may name as places we post are Instagram, Facebook, Threads, Bluesky, LinkedIn, Pinterest and TikTok (TikTok with the tap-Post and test-accounts-only note above). Do not say "all platforms". Never name YouTube or X.
 9. **No privacy or security claims about Studio.** Photos and notes pass through the tools that draft and edit them, so never say
    "private", "never shared", "never stored", "encrypted", "on-device", "we don't train on your data", or similar.
 10. **No credentials or team claims.** No "team of experts", "award-winning", "years of experience", "dedicated manager",

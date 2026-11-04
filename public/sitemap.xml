@@ -12,6 +12,13 @@
   <url><loc>https://www.bestly.tech/inventory-proof</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://www.bestly.tech/hoku</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://www.bestly.tech/studio</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.bestly.tech/studio/for/coaches</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://www.bestly.tech/studio/for/real-estate</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://www.bestly.tech/studio/for/products</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://www.bestly.tech/studio/for/apps</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://www.bestly.tech/studio/for/local</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://www.bestly.tech/studio/for/creators</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://www.bestly.tech/studio/for/nonprofits</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://www.bestly.tech/studio/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
   <url><loc>https://www.bestly.tech/studio/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
   <url><loc>https://www.bestly.tech/agent</loc><changefreq>weekly</changefreq><priority>0.95</priority></url>
