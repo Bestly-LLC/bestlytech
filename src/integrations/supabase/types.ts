@@ -8645,6 +8645,7 @@ export type Database = {
           product_terms: string | null
           resource_has: string | null
           resource_hint: string | null
+          resource_fix: string | null
           resource_when: string | null
           theme: Json | null
           voice: Json | null
@@ -8662,6 +8663,7 @@ export type Database = {
           product_terms?: string | null
           resource_has?: string | null
           resource_hint?: string | null
+          resource_fix?: string | null
           resource_when?: string | null
           theme?: Json | null
           voice?: Json | null
@@ -8679,6 +8681,7 @@ export type Database = {
           product_terms?: string | null
           resource_has?: string | null
           resource_hint?: string | null
+          resource_fix?: string | null
           resource_when?: string | null
           theme?: Json | null
           voice?: Json | null
