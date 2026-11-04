@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "note": "ALERTS_20261103. Rare aircraft list (owner Sky Sync). A rule matches when EVERY condition it lists holds: types (ICAO type code), callsign_re (regex), mil (needs the military flag), hexes. Edit freely; reloaded within 20 seconds. cooldown_min and the 15 mi feed are set in alerts_config.json.",
+  "rules": [
+    {"name": "Air Force One", "callsign_re": "^AF1"},
+    {"name": "Air Force Two", "callsign_re": "^AF2"},
+    {"name": "VC-25", "types": ["B742"], "callsign_re": "^(SAM|AF1|AF2)"},
+    {"name": "C-32", "types": ["B752"], "callsign_re": "^(SAM|AF1|AF2)"},
+    {"name": "C-40", "types": ["B737", "B738", "B739"], "callsign_re": "^(SAM|AF1|AF2)"},
+    {"name": "B-2", "types": ["B2"]},
+    {"name": "B-52", "types": ["B52"]},
+    {"name": "B-1", "types": ["B1"]},
+    {"name": "V-22 Osprey", "types": ["V22"]},
+    {"name": "An-124", "types": ["A124"]},
+    {"name": "An-225", "types": ["A225"]},
+    {"name": "C-5", "types": ["C5M", "C5"]},
+    {"name": "U-2", "types": ["U2"]},
+    {"name": "F-22", "types": ["F22"]},
+    {"name": "F-35", "types": ["F35"]},
+    {"name": "Blue Angels", "callsign_re": "^(BLUE\\d|ANGEL)", "mil": true},
+    {"name": "Thunderbirds", "callsign_re": "^(THUND|TBIRD)", "mil": true},
+    {"name": "AWACS", "types": ["E3TF", "E3CF"], "mil": true},
+    {"name": "RC-135", "types": ["R135"], "mil": true},
+    {"name": "RQ-4 Global Hawk", "types": ["Q4"], "mil": true}
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "home": [34.0845505, -118.3723285],
+  "quiet_from": 23,
+  "quiet_to": 7,
+  "heli": {
+    "match_radius_mi": 0.75,
+    "incident_max_age_min": 60,
+    "push_within_mi": 1.0,
+    "push_dwell_s": 300,
+    "gap_reset_s": 60,
+    "incident_cats": ["police", "sheriff_city", "fire_medical", "wildfire", "traffic"],
+    "skip_sources": ["heli", "metro", "nws", "aqi", "usgs", "sce", "closures"]
+  },
+  "rare": {
+    "cooldown_min": 60,
+    "max_range_mi": 15,
+    "voice": true,
+    "private_entity": "input_boolean.sexy_time",
+    "speak_script": "script.news_chopper_announce"
+  },
+  "wall_off": {
+    "digest_in_quiet": true,
+    "wake_button": "button.wall_power_on",
+    "source_button": "button.wall_power_off"
+  }
+}
