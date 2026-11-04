@@ -31,6 +31,11 @@ Why this shape (2026-10-03, docs/pi-move-opusplan-2026-10-03.md):
     the options to confirm Turo saved it; 'verify' only re-reads. dry_run posts nothing. Wrapped so a failure never stops trip/inbox reading.
   - 1.5.1 (2026-10-29): Groq's free vision allows about one 3-photo call a minute, so the read moved to the cloud (pg_cron
     claims_cleaning_look_tick -> claims-cleaning look_next). 'photos' now only stores the photos (768 px) and reports pending_check.
+  - 1.6.1 (2026-11-03): a claim opened from Turo mail has a claim number but no incident id, and 1.2.0 only synced cases that
+    already had one, so Craig's claim 1110100 sat "Not synced with Turo" for 5 days while every Sync tap did nothing.
+    claims_sync_list now also hands out unlinked cases; this reader finds each one in Turo's own claims list
+    (/api/claims/host, matched by claim number, else by a single claim on the reservation) and reports it through
+    claims_sync_link, which links the case (or logs that Turo's list does not show it yet), then syncs it in the same pass.
   - Every 2 minutes, or within ~15 s when the iPhone Turo shortcut pings (turo_reader_note returns poke).
   - Signed out: the tab goes to Turo's sign-in page and a LAN-only noVNC view starts on :6080 so Jared can
     sign in once from any browser at home; it stops by itself once signed in.
@@ -41,7 +46,7 @@ import asyncio, base64, json, os, subprocess, sys, tempfile, time, urllib.reques
 
 import websockets
 
-VERSION = "1.6.0"
+VERSION = "1.6.1"
 SB = "https://rcqfqhguwpmaarseifqg.supabase.co"
 PUB = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw"
 CDP = "http://127.0.0.1:9334"
@@ -244,6 +249,7 @@ if (s.status === 401 || s.status === 403) return {signed_out: s.status};
 if (s.ok) { const j = await s.json(); out.summary = j.claimsSummary || (j.claims && j.claims.claimsSummary) || null; }
 for (const c of ids) {
   const r = {};
+  if (!c.incident_id) { out.cases[c.case_id] = {unlinked: true}; continue; }
   try { const i = await fetch('/api/v2/incidents/' + c.incident_id, {credentials:'include'}); r.incident = i.ok ? await i.json() : {error: i.status}; } catch (e) { r.incident = {error: String(e)}; }
   await new Promise(x => setTimeout(x, 600));
   try { const f = await fetch('/api/claims/static/fnol/context?reservationId=' + c.reservation_id, {credentials:'include'}); r.fnol = f.ok ? await f.json() : {error: f.status}; } catch (e) { r.fnol = {error: String(e)}; }
@@ -363,7 +369,30 @@ def to_jpeg(raw):
         return data, w, h
 
 
-async def sync_claims(tab):
+def link_unlinked(cases, rows):
+    """1.6.1: find each case that has no Turo incident id in Turo's claims list and report it. Returns how many got linked."""
+    linked = 0
+    for c in cases:
+        if c.get("incident_id"):
+            continue
+        hit = None
+        if c.get("claim_no"):
+            hit = next((x for x in rows if str(x.get("claimNumber") or "") == str(c["claim_no"])), None)
+        if hit is None:
+            same = [x for x in rows if str(x.get("reservationId") or "") == str(c["reservation_id"])]
+            hit = same[0] if len(same) == 1 else None
+        inc = hit.get("id") if hit else None
+        res = rpc("claims_sync_link", {"p_token": TOKEN, "p_case": c["case_id"],
+                                       "p_incident": int(inc) if str(inc or "").isdigit() else None,
+                                       "p_claim_no": str(hit.get("claimNumber") or "") if hit else None,
+                                       "p_listed": len(rows)}) or {}
+        log(f"claims sync {c['reservation_id']}: unlinked case -> {'incident ' + str(inc) if inc else 'not in Turo list (' + str(len(rows)) + ' claims)'} {res}")
+        if inc and res.get("linked"):
+            linked += 1
+    return linked
+
+
+async def sync_claims(tab, again=True):
     """Claims Closer evidence sync. Read-only in Turo; failures here are logged and never raised."""
     cases = rpc("claims_sync_list", {"p_token": TOKEN}) or []
     if not cases:
@@ -371,7 +400,14 @@ async def sync_claims(tab):
     r = await tab.js(SYNC_JS % json.dumps(cases), timeout=180) or {}
     if r.get("signed_out"):
         log("claims sync: Turo signed out"); return
-    summary = {str(x.get("id")): x for x in (r.get("summary") or []) if isinstance(x, dict)}
+    rows = [x for x in (r.get("summary") or []) if isinstance(x, dict)]
+    if any(not c.get("incident_id") for c in cases):
+        if r.get("summary") is None:
+            log("claims sync: Turo claims list did not load; unlinked cases wait for the next pass")
+        elif link_unlinked(cases, rows) and again:
+            return await sync_claims(tab, again=False)      # newly linked: read them now, not in 10 minutes
+        cases = [c for c in cases if c.get("incident_id")]
+    summary = {str(x.get("id")): x for x in rows}
     img = None
     new_photos = 0
     try:
