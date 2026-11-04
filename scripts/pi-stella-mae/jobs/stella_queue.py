@@ -229,7 +229,13 @@ def run_guard(dry):
         v = e.get("value") or {}
         if v.get("mode") != "live" or not v.get("start"):
             continue
-        s, en = datetime.datetime.fromisoformat(v["start"]), datetime.datetime.fromisoformat(v["end"])
+        # A live booking may arrive with only a start (the rebooker did this from 2026-10-31 and crashed this job 451 times).
+        # Costco tire windows are 3 hours; the database also fills value.end (trigger fleet_booking_fill_end).
+        try:
+            s = datetime.datetime.fromisoformat(v["start"])
+            en = datetime.datetime.fromisoformat(v["end"]) if v.get("end") else s + datetime.timedelta(hours=3)
+        except (ValueError, TypeError):
+            continue
         for t in trips:
             if s < datetime.datetime.fromisoformat(t["ends_at"]) and en > datetime.datetime.fromisoformat(t["starts_at"]):
                 bad += 1
