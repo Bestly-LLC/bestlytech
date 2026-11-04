@@ -66,6 +66,10 @@ VOICE = """Her voice and her rules (from her Field Guide and her own notes; thes
   sale; manufactured urgency ("don't wait", "act now"); platitudes ("journey", "you've got this", "just breathe",
   "bounce back"); "burnout" as a stand-in for a clinical term; her family or any client story; "subpar"; "strangely".
 - No statistics or numbers on the slides or in the captions (they must be sourced, and you cannot source them here).
+- Help line: if any slide or caption names postpartum depression, postpartum anxiety, postpartum rage, intrusive
+  thoughts, PPD, PPA, or postpartum/perinatal mental health (her own credential wording counts), BOTH captions must
+  include this exact sentence just before their last sentence: "If you are struggling, call or text the National Maternal Mental Health Hotline at 1-833-852-6262, free, day or night, or 988 in a crisis.". Keep those terms off
+  the slides. The hotline numbers in that sentence are the only numbers allowed.
 - Do not write about suicide, psychosis, pregnancy loss or infertility in this weekly post.
 - The last slide is the bridge: it must name Centering YOU or the deck and say how a card is used, so a reader sees
   why the deck belongs to this idea. The captions must make that connection clear too, and end with centeringyou.com.
@@ -105,6 +109,14 @@ Reply with ONE JSON object only: {{"ok": true|false, "score": <1-10>, "problems"
   "improve": "<the one or two edits that would most raise the score>"}}"""
 
 DIGITS = re.compile(r"\d")
+# Her help-seeking standard (client_brand.resource_when / resource_has for centering-you): any post that names
+# postpartum depression/anxiety/rage, intrusive thoughts or postpartum/perinatal mental health must carry a help line.
+# Fix 2026-11-03: the writer was never told this, claim_check's hint opens with "Nothing must be included...", and
+# the no-numbers rule blocked 988 / 1-833-TLC-MAMA, so every retry failed. Hotline numbers are not statistics.
+# Numeric form on purpose: "TLC-MAMA" trips her soft "defaults to mama or mom" rule, and "24/7" trips no-numbers.
+HELP_LINE = ("If you are struggling, call or text the National Maternal Mental Health Hotline at 1-833-852-6262, "
+             "free, day or night, or 988 in a crisis.")
+HOTLINE_NUM = re.compile(r"1-833-TLC-MAMA|1-833-852-6262|\b988\b", re.I)
 
 
 def _wc(t):
@@ -127,6 +139,26 @@ def _texts(p):
     return out
 
 
+def _add_help(p):
+    """Her standard, applied without asking the model: if any slide or caption triggers her help-line rule, put
+    HELP_LINE into both captions just before their closing sentence (which must stay the centeringyou.com line)."""
+    whole = " ".join(t for _, t in _texts(p))
+    if not lib.rpc("claim_needs_resource", _client_slug="centering-you", _text=whole):
+        return
+    for k in ("caption_instagram", "caption_tiktok"):
+        c = (p.get(k) or "").strip()
+        if not c or HELP_LINE in c or lib.rpc("claim_has_resource", _client_slug="centering-you", _text=c):
+            continue
+        if k == "caption_instagram" and "\n\n" in c:
+            a, b = c.rsplit("\n\n", 1)
+            c = f"{a}\n\n{HELP_LINE}\n\n{b}"
+        else:
+            end = c.lower().rfind("centeringyou.com")
+            cut = max(c.rfind(". ", 0, end), c.rfind("! ", 0, end), c.rfind("? ", 0, end))
+            c = f"{c[:cut + 1]} {HELP_LINE}{c[cut + 1:]}" if cut >= 0 else f"{HELP_LINE} {c}"
+        p[k] = c
+
+
 def _check(p, mid, titles):
     e = []
     def rng(name, t, lo, hi):
@@ -135,6 +167,7 @@ def _check(p, mid, titles):
             e.append(f"{name} is {w} words (want {lo}-{hi})")
     if not isinstance(p.get("cover"), dict) or not isinstance(p.get("closing"), dict):
         return ["cover and closing must be objects"]
+    _add_help(p)
     rng("title", p.get("title"), 3, 10)
     rng("cover kicker", p["cover"].get("kicker"), 2, 5)
     rng("cover head", p["cover"].get("head"), 5, 15)
@@ -146,15 +179,16 @@ def _check(p, mid, titles):
         rng(f"slide {i} body", s.get("body"), 8, 32)
     rng("closing head", p["closing"].get("head"), 4, 13)
     rng("closing body", p["closing"].get("body"), 10, 32)
-    rng("instagram caption", p.get("caption_instagram"), 45, 150)
-    rng("tiktok caption", p.get("caption_tiktok"), 22, 75)
+    rng("instagram caption", (p.get("caption_instagram") or "").replace(HELP_LINE, ""), 45, 150)
+    rng("tiktok caption", (p.get("caption_tiktok") or "").replace(HELP_LINE, ""), 22, 75)
     for k, n in (("hashtags_instagram", 3), ("hashtags_tiktok", 4)):
         h = p.get(k) or []
         if len(h) != n or not all(isinstance(x, str) and re.fullmatch(r"#[a-z0-9]{3,40}", x) for x in h):
             e.append(f"{k} must be exactly {n} lowercase hashtags like #postpartum")
     texts = _texts(p)
     for where, t in texts:
-        if DIGITS.search(t) and where != "instagram caption" or (where == "instagram caption" and re.search(r"\d+\s*%|\b\d+ (in|out of) \d+", t)):
+        tn = HOTLINE_NUM.sub("", t)
+        if DIGITS.search(tn) and where != "instagram caption" or (where == "instagram caption" and re.search(r"\d+\s*%|\b\d+ (in|out of) \d+", tn)):
             e.append(f"{where}: no numbers or statistics")
         if "#" in t:
             e.append(f"{where}: no hashtags in the text")
@@ -174,7 +208,10 @@ def _check(p, mid, titles):
         return e
     for where, t in texts:
         r = lib.rpc("claim_check", _client_slug="centering-you", _text=t, _context="cy_maker") or {}
-        if r.get("ok") is False or r.get("severity") == "soft":
+        if r.get("reason") == "missing crisis resource":
+            e.append(f"{where} names a postpartum mental health condition, so it needs her help line: on a slide, reword "
+                     f"without naming the condition; in a caption, include exactly: \"{HELP_LINE}\"")
+        elif r.get("ok") is False or r.get("severity") == "soft":
             e.append(f"{where} breaks her rule '{r.get('reason')}'" + (f" ({r['hint'][:160]})" if r.get("hint") else ""))
     for where, t in [("instagram caption", p.get("caption_instagram")), ("tiktok caption", p.get("caption_tiktok")),
                      ("closing", f"{p['closing'].get('head')} {p['closing'].get('body')}")]:
