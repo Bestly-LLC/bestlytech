@@ -203,6 +203,8 @@ def fp_bus(q, ctx):
     for L in lines:
         if want and L.get("line") != want:
             continue
+        if L.get("line") == "105" and not re.search(r"LAX", " ".join(str(L.get(k) or "") for k in ("toward", "direction", "headsign")), re.I):
+            continue    # ASKCARD: same as the wall bus card, only the 105 toward LAX
         for ar in L.get("arrivals", []):
             if ar["mins"] >= (L.get("walk_min") or 0):
                 if not best or ar["mins"] < best[1]["mins"]:
@@ -213,7 +215,12 @@ def fp_bus(q, ctx):
     L, ar = best
     stop = L["stop"].replace(" / ", " and ")
     leave = max(ar["mins"] - (L.get("walk_min") or 0), 0)
-    toward = (L.get("headsign") or L.get("direction") or "").strip()
+    # ASKCARD: same short form the wall bus card uses (105 -> LAX, "Toward " dropped, "trips" dropped)
+    toward = re.sub(r"\s+trips$", "", re.sub(r"^toward\s+", "", (L.get("toward") or "").strip(), flags=re.I), flags=re.I).strip()
+    if L.get("line") == "105" and re.search(r"LAX", " ".join(str(L.get(k) or "") for k in ("toward", "direction", "headsign")), re.I):
+        toward = "LAX"
+    if not toward:
+        toward = (L.get("headsign") or L.get("direction") or "").strip()
     s = f"Your next bus is the {L['name']} toward {toward}, {mins_text(ar['mins'])} away at {stop}."
     s += " Leave now." if leave <= 0 else f" Leave in {mins_text(leave)}."
     arr = datetime.fromtimestamp(ar["eta"] / 1000, LA)
@@ -432,12 +439,21 @@ def touch_heart():
         f.write(str(time.time()))
 
 
+def askc_push(row, say, card):
+    """ASKCARD: hand the finished answer to the wall (Hestia /api/ask) so the answer card shows it. Best effort, never blocks the answer."""
+    try:
+        http_json(WALL + "/api/ask", {"id": row["id"], "question": row["question"], "answer_text": say, "answer_card": card}, timeout=3)
+    except Exception as e:
+        log("askc push failed", repr(e)[:100])
+
+
 def handle(row):
     t0 = time.time()
     try:
         say, card, method = answer(row["question"])
         say = clean(say)
         rpc("wall_ask_answer_t", {"p_token": TOKEN, "p_id": row["id"], "p_text": say, "p_card": card, "p_method": method})
+        askc_push(row, say, card)
         log(f"answered [{method}] {int((time.time() - t0) * 1000)} ms: {row['question']!r} -> {say}")
     except Exception as e:
         log("handle error", repr(e))
