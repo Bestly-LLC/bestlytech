@@ -197,7 +197,7 @@ def fp_heli(q, ctx):
 
 def fp_bus(q, ctx):
     lines = (ctx.get("bus") or {}).get("lines") or []
-    mm = re.search(r"\bmetro\s+(\d+)|\bthe\s+(\d{1,3})\b|\bline\s+(\d+)", q)
+    mm = re.search(r"\bmetro\s+(\d+)|\bthe\s+(\d{1,3})\b|\bline\s+(\d+)|\bnext\s+(\d{1,3})\b|\b(\d{2,3})\s+bus\b|\b(105)\b", q)   # PLACEFIT_20261103
     want = next((g for g in mm.groups() if g), None) if mm else None
     best = None
     for L in lines:
@@ -296,7 +296,7 @@ def fp_cal(q, ctx):
 FAST = [(re.compile(r"\b(my )?(calendar|schedule|agenda)\b|what.?s next on|what do i have (today|next|coming)|my next (meeting|event|call)"), fp_cal),
         (re.compile(r"helicopter|chopper|\bheli\b|\bcopter\b"), fp_heli),
         (re.compile(r"what('?s| is)? (that|this) (plane|aircraft|jet)|what plane|which plane|what.?s that flying|what is that flying|plane is that"), fp_plane),
-        (re.compile(r"\bnext bus\b|when.{0,12}\bbus\b|\bbus\b.{0,15}(coming|next|when)"), fp_bus),
+        (re.compile(r"\bnext bus\b|when.{0,12}\bbus\b|\bbus\b.{0,15}(coming|next|when)|\b105\b"), fp_bus),   # PLACEFIT_20261103: any question naming the 105 or "next bus" takes the bus fast path
         (re.compile(r"\b(rain|raining|umbrella)\b"), fp_rain),
         (re.compile(r"how (much )?(charged|juice|range|battery)|\bcharged\b|\bcharge level\b|\bbattery\b|blue steel.{0,20}(charge|battery|percent)"), fp_car)]
 
