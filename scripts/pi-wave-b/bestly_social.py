@@ -326,8 +326,10 @@ def _invoke(fn, payload, timeout_ms, polls, wait):
     return None, {"error": "no answer yet (still in flight?) - not retried, to avoid a double post"}
 
 
-def _graph(rpc_name, wait=4, polls=6):
-    """Start a Graph read inside the database (token never leaves it) and return the sanitized JSON."""
+def _graph(rpc_name, wait=4, polls=15):
+    """Start a Graph read inside the database (token never leaves it) and return the sanitized JSON.
+    Waits up to 60 s: pg_net answers can land ~30 s after the request when its queue is busy (2026-11-03: the feed
+    check gave up at 28 s and the answer, a 200, landed that same second, so the day was skipped)."""
     rid = lib.rpc(rpc_name)
     for _ in range(polls):
         time.sleep(wait)
@@ -625,8 +627,8 @@ def _report(what, asset, ig, fb):
 # ---------------------------------------------------------------- stats + learn
 def _stats():
     code, body = _graph("pi_bestly_ig_media")
-    if code is None:   # the Graph read was just slow (Oct 27, Nov 2): ask once more with a longer wait
-        code, body = _graph("pi_bestly_ig_media", wait=6, polls=10)
+    if code is None:   # the Graph read was just slow (Oct 27, Nov 2): ask once more
+        code, body = _graph("pi_bestly_ig_media")
     media = body.get("data") if isinstance(body, dict) else None
     if code != 200 or media is None:
         raise RuntimeError(f"could not read Instagram posts: {code} {json.dumps(body)[:200]}")
