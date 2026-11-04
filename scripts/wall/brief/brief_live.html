@@ -1,0 +1,124 @@
+<!-- BRIEF_20261103 morning brief: takes over the centre board panel only (clock + picks hidden). Server decides when (/api/brief); any failure = normal board. -->
+<style id="briefCss">
+body.brief-on #board .left,body.brief-on #board #lalt,body.brief-on #board #picks{display:none!important}
+#briefP{position:absolute;left:0;top:0;width:1040px;height:300px;z-index:30;box-sizing:border-box;padding:0 30px;color:var(--label);font-family:var(--sf);white-space:nowrap}
+#briefP .bcol{position:absolute;top:0;height:300px;display:flex;flex-direction:column;justify-content:center}
+#briefP .bL{left:30px;width:318px}
+#briefP .bR{left:394px;width:616px}
+#briefP .brule{position:absolute;left:372px;top:34px;width:1px;height:232px;background:linear-gradient(180deg,rgba(235,235,245,0),rgba(235,235,245,.22) 28%,rgba(235,235,245,.22) 72%,rgba(235,235,245,0))}
+#briefP .bhi{font-size:24px;line-height:28px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--label-2)}
+#briefP .btemp{font-family:"Big Shoulders Display",var(--sf);font-weight:800;font-size:100px;line-height:84px;letter-spacing:0;margin-top:14px;display:block}
+#briefP .bt{font-size:26px;line-height:32px;font-weight:600;letter-spacing:-.01em}
+#briefP .bt2{color:var(--label-2)}
+#briefP .bone{margin-top:8px;color:var(--label)}
+#briefP .brow{display:grid;grid-template-columns:32px var(--tw,150px) 1fr;column-gap:0;align-items:start}
+#briefP .brow.bg{margin-top:12px}
+#briefP .brow .bic{height:32px;display:flex;align-items:center}
+#briefP .brow .bic svg{width:24px;height:24px;fill:var(--label-2);color:var(--label-2)}
+#briefP .brow .btm{color:var(--label-2);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:26px;line-height:32px;font-weight:600}
+#briefP .brow .btx,#briefP .brow .bwide{overflow:hidden;text-overflow:clip;font-size:26px;line-height:32px;font-weight:600;letter-spacing:-.01em;min-width:0;white-space:nowrap}
+#briefP .brow .btx{grid-column:3}
+#briefP .brow .bwide{grid-column:2 / 4}
+#briefP .brow .btx.bwrap{white-space:normal;max-height:64px}
+#briefP .brow .bwide.bl2{color:var(--label-2)}
+#briefP .bacc{color:var(--yellow)}
+#briefP .bn{white-space:nowrap}
+</style>
+<script id="briefJs">
+(function(){
+'use strict';
+const NB=' ', DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const HB=window.__brief={on:false,errs:0,err:null,sig:null,at:0};
+let bad=0, lastSig='', timer=0;
+const t12=d=>{let h=d.getHours(),m=d.getMinutes();const ap=h<12?'AM':'PM';h=h%12||12;return h+':'+String(m).padStart(2,'0')+NB+ap;};
+const sameDay=(a,b)=>a.toDateString()===b.toDateString();
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const nb=s=>String(s).replace(/(\d) (?=[A-Za-z])/g,'$1'+NB);
+const condMap={Clear:'Clear',MostlyClear:'Mostly clear',PartlyCloudy:'Partly cloudy',MostlyCloudy:'Mostly cloudy',Cloudy:'Cloudy',Rain:'Rain',Drizzle:'Drizzle',Fog:'Fog',Haze:'Haze',Smoke:'Smoke'};
+const cond=c=>condMap[c]||String(c||'').replace(/([a-z])([A-Z])/g,'$1 $2');
+const ICON=id=>'<svg class="sym" viewBox="0 0 24 24"><use href="#'+id+'"/></svg>';
+function off(){ document.body.classList.remove('brief-on'); const e=document.getElementById('briefP'); if(e) e.remove(); lastSig=''; HB.on=false; }
+function build(B,D){
+  const now=new Date(Date.now()); if(now.getHours()>=12) return null;     // safety: auto-hide at noon
+  const W=D.weather||{}, feeds=D.feeds||{};
+  if(typeof W.temp_f!=='number') return null;                            // no weather = no brief (normal board)
+  const hr=(W.hourly||[]).find(x=>Math.abs(new Date(x.t)-now)<45*60000);
+  const dly=(W.daily||[]).find(x=>sameDay(new Date(x.t),now))||{};
+  const temp=Math.round(hr&&typeof hr.temp_f==='number'?hr.temp_f:W.temp_f);
+  const hi=Math.round(dly.hi), lo=Math.round(dly.lo);
+  if(!isFinite(hi)||!isFinite(lo)) return null;
+  const condition=cond((hr&&hr.code)||W.code);
+  let one=null; const aqi=(feeds.air||{}).aqi, gust=dly.gust_mph||W.gust_mph;
+  const wet=(W.hourly||[]).filter(x=>sameDay(new Date(x.t),now)&&new Date(x.t)>=new Date(now-3600e3)&&x.pop>=50);
+  if(wet.length) one='Rain '+t12(new Date(wet[0].t))+' to '+t12(new Date(+new Date(wet[wet.length-1].t)+3600e3));
+  else if(aqi>100) one='Smoke: air quality '+aqi;
+  else if(gust>=25) one='Santa Ana gusts to '+gust+NB+'mph';
+  const evs=((D.calendar||{}).events||[]).filter(e=>!e.all_day&&e.calendar!=='Turo'&&e.source!=='turo')
+    .map(e=>({s:new Date(e.start),e:new Date(e.end||e.start),title:e.title}))
+    .filter(e=>sameDay(e.s,now)&&e.e>now).sort((a,b)=>a.s-b.s).slice(0,2)
+    .map(e=>({tm:t12(e.s),tx:e.title,wrap:1}));
+  const turo=((B.turo)||[]).filter(t=>t&&t.at).slice(0,2).map(t=>({tm:t12(new Date(t.at)),tx:(t.car||'Turo')+' '+(t.kind==='pickup'?'pickup':'return'),wrap:0}));
+  const sky=[]; const sk=B.sky||{}; const parts=[];
+  if(sk.planes>0) parts.push(sk.planes+' low '+(sk.planes===1?'plane':'planes'));
+  if(sk.helis>0) parts.push(sk.helis+(sk.helis===1?' helicopter':' helicopters'));
+  if(parts.length) sky.push(nb(parts.join(' · ')));
+  if(sk.flip&&sk.flip.to&&sk.flip.at) sky.push('LAX flipped to '+sk.flip.to+' flow at '+String(sk.flip.at).replace(' ',NB));
+  let dig=null; const dg=B.digest;
+  if(dg&&typeof dg.fixed==='number'&&typeof dg.needs==='number'){
+    const fx=dg.fixed>0?dg.fixed+NB+'fixed'+NB+'themselves':null;
+    if(dg.needs>0) dig={l1:(fx?[fx+' · ',dg.needs+NB+'needs'+NB+'you']:[dg.needs+NB+'needs'+NB+'you']),l2:dg.top||null,acc:true};
+    else dig={l1:[fx?fx+' · nothing needs you':'nothing needs you'],l2:null};
+  }
+  return {temp,hi,lo,condition,one,evs,turo,sky,dig,day:now};
+}
+function render(v){
+  const board=document.getElementById('board'); if(!board) return false;
+  const sig=JSON.stringify(v,(k,x)=>k==='day'?undefined:x)+'|'+v.day.getDate()+'|'+(board.querySelector('#briefP')?1:0);
+  if(sig===lastSig) return true;
+  document.getElementById('briefP')?.remove();
+  const rows=[];
+  v.evs.forEach((e,i)=>rows.push('<div class="brow"><div class="bic">'+(i?'':ICON('i-cal'))+'</div><div class="btm">'+esc(e.tm)+'</div><div class="btx bfit bwrap">'+esc(e.tx)+'</div></div>'));
+  v.turo.forEach((e,i)=>rows.push('<div class="brow"><div class="bic">'+(i?'':ICON('i-car'))+'</div><div class="btm">'+esc(e.tm)+'</div><div class="btx bfit">'+esc(e.tx)+'</div></div>'));
+  v.sky.forEach((s,i)=>rows.push('<div class="brow'+(i?'':' bg')+'"><div class="bic">'+(i?'':ICON('i-plane'))+'</div><div class="bwide bfit'+(i?' bl2':'')+'">'+esc(s)+'</div></div>'));
+  if(v.dig){
+    const d1=v.dig.l1.length>1?esc(v.dig.l1[0])+'<span class="bacc">'+esc(v.dig.l1[1])+'</span>':(v.dig.acc?'<span class="bacc">'+esc(v.dig.l1[0])+'</span>':esc(v.dig.l1[0]));
+    rows.push('<div class="brow bg"><div class="bic">'+ICON('i-shield')+'</div><div class="bwide bfit">'+d1+'</div></div>');
+    if(v.dig.l2) rows.push('<div class="brow"><div class="bic"></div><div class="bwide bfit bl2">'+esc(v.dig.l2)+'</div></div>');
+  }
+  const el=document.createElement('div'); el.id='briefP';
+  const dd=v.day;
+  el.innerHTML='<div class="brule"></div><div class="bcol bL"><div class="bhi">Good morning<br>'+DOW[dd.getDay()]+', '+MON[dd.getMonth()]+' '+dd.getDate()+'</div>'+
+   '<div class="btemp"><span class="bn">'+v.temp+'°</span></div><div class="bt bn">'+esc(v.condition)+'</div><div class="bt bt2 bn">H'+NB+v.hi+'° · L'+NB+v.lo+'°</div>'+
+   (v.one?'<div class="bt bone bfit">'+esc(v.one)+'</div>':'')+'</div><div class="bcol bR">'+rows.join('')+'</div>';
+  board.appendChild(el);
+  document.body.classList.add('brief-on');
+  const tms=[...el.querySelectorAll('.btm')]; const tw=Math.max(0,...tms.map(x=>x.scrollWidth))+20;
+  el.querySelector('.bR').style.setProperty('--tw',Math.ceil(tw)+'px');
+  // fit: never "..." and never clip. wrapped event titles take 2 lines max; otherwise whole trailing words are dropped
+  const col=el.querySelector('.bR');
+  const dropWords=f=>{ if(f.querySelector('span')) return; let w=f.textContent.split(' ');
+    const fits=()=>f.classList.contains('bwrap')?(f.scrollHeight<=f.clientHeight+1&&f.scrollWidth<=f.clientWidth+1):f.scrollWidth<=f.clientWidth+0.5;
+    while(!fits()&&w.length>1){ w.pop(); while(w.length>1&&/^(and|with|of|the|to|a|for|\/|·|-)$/i.test(w[w.length-1])) w.pop(); f.textContent=w.join(' '); } };
+  for(const f of el.querySelectorAll('.bfit')) dropWords(f);
+  if(col.scrollHeight>298){ for(const f of el.querySelectorAll('.bwrap')){ f.classList.remove('bwrap'); } for(const f of el.querySelectorAll('.btx')) dropWords(f); }
+  lastSig=sig; HB.on=true; HB.sig=sig.length;
+  return true;
+}
+async function poll(){
+  try{
+    const force=window.__BRIEF_FORCE||null;
+    const B=await (await fetch('/api/brief',{cache:'no-store'})).json();
+    if(force){ if(force.sky) B.sky=force.sky; if(force.digest) B.digest=force.digest; if(force.turo) B.turo=force.turo; if(force.dismissed) B.show=false; else B.show=true; }
+    if(!B.show){ bad=0; if(HB.on) off(); return; }
+    if(document.body.dataset.mode&&document.body.dataset.mode!=='board'){ return; }   // main mode only; the panel lives in #board
+    const D=await (await fetch('/api/data',{cache:'no-store'})).json();
+    const v=build(B,D);
+    if(!v){ bad++; if(bad>=2&&HB.on) off(); if(!HB.on) off(); return; }
+    bad=0; HB.err=null;
+    if(!render(v)){ off(); }
+  }catch(e){ bad++; HB.errs++; HB.err=String(e&&e.message||e).slice(0,80); if(bad>=2) off(); }
+}
+function start(){ poll(); timer=setInterval(poll,15000); }
+if(document.readyState==='complete') setTimeout(start,3000); else addEventListener('load',()=>setTimeout(start,3000));
+})();
+</script>
