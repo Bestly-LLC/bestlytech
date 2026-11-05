@@ -16,7 +16,7 @@ import { NotificationBell } from "./NotificationBell";
 import { RecordingPill } from "./ScoutRecorder";
 import { ClipActivity } from "./ClipActivity";
 import { MobileNav } from "./MobileNav";
-import { armNotifySound, notifySoundMuted, setNotifySoundMuted, playNotifySound } from "@/lib/notifySound";
+import { armNotifySound, enableJaredQuietHours, notifySoundMuted, setNotifySoundMuted, playNotifySound } from "@/lib/notifySound";
 import { useState } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 import {
@@ -74,7 +74,7 @@ function sidebarDefaultOpen(): boolean {
 export function AdminLayout() {
   const { signOut, user } = useAdminAuth();
   const textSize = useAdminTextSize();
-  useEffect(() => armNotifySound(), []);
+  useEffect(() => { enableJaredQuietHours(); armNotifySound(); }, []);
   // Loader cards: pull the deck at idle time once the admin shell is up, refresh every 10 minutes.
   useEffect(() => startAdminLoaderDeck(), []);
   // A tapped phone notification asks the open admin tab to go to its page (public/sw.js "bestly-open").
@@ -251,7 +251,7 @@ export function AdminLayout() {
                         const next = !muted;
                         setNotifySoundMuted(next);
                         setMuted(next);
-                        if (!next) playNotifySound();
+                        if (!next) playNotifySound(true); // he tapped it: a preview, never held by quiet hours
                       }}
                     >
                       {muted ? <VolumeX className="mr-2 h-4 w-4" /> : <Volume2 className="mr-2 h-4 w-4" />}

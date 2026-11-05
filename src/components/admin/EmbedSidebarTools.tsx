@@ -50,7 +50,7 @@ export function EmbedSidebarTools({ collapsed }: { collapsed: boolean }) {
               const next = !muted;
               setNotifySoundMuted(next);
               setMuted(next);
-              if (!next) playNotifySound();
+              if (!next) playNotifySound(true); // he tapped it: a preview, never held by quiet hours
             }}
           >
             {muted ? <VolumeX className="mr-2 h-4 w-4" /> : <Volume2 className="mr-2 h-4 w-4" />}

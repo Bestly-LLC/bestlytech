@@ -711,7 +711,7 @@ const ScoutWindow = forwardRef<ScoutHandle, WindowProps>(function ScoutWindow(
       refreshScoutPrefs();   // v44: a typed "use paid AI" flips the Paid AI pill on the server; show it now, not on the next 30 s poll
       // Done: the happy pop (played below, once, when the window stops running). A problem: the alert.
       // Still carrying on by itself: quiet until it really finishes.
-      if (error) playNotifySound();
+      if (error) playNotifySound(true); // answers his own message, so he is awake: not held by quiet hours
       refreshJobs();
       // Back to the box, but only if he is in this window: a run that finishes behind another window must not
       // yank focus (and the front) away from where he is typing.

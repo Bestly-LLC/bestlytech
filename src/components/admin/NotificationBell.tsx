@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { playNotifySound } from "@/lib/notifySound";
+import { playNotifySound, setNotifyQuiet } from "@/lib/notifySound";
 import { AlertPane, type PaneAlert } from "@/components/admin/AlertPane";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -38,7 +38,7 @@ type Notification = {
   title: string;
   body: string | null;
   url: string | null;
-  severity: "info" | "success" | "warning";
+  severity: "info" | "success" | "warning" | "error" | "critical";
   silent?: boolean;
   read_at: string | null;
   entity_key?: string | null;
@@ -152,12 +152,14 @@ export function NotificationBell({ triggerClassName }: { triggerClassName?: stri
       .on("postgres_changes" as any, { event: "INSERT", schema: "public", table: "admin_notifications" }, (payload: any) => {
         const n = payload.new as Notification;
         setItems((xs) => [n, ...xs.filter((x) => x.id !== n.id)].slice(0, 50));
-        // A receipt lands in the list without a word. Quiet hours and DND hold everything but
-        // a warning, which matches what the server already does to the push.
-        const urgent = n.severity === "warning";
+        // A receipt lands in the list without a word. Quiet hours and DND hold everything but an
+        // emergency (critical or error), which matches the server: push_web_send and the
+        // admin_notifications quiet gate both let only those through (Nov 5 2026; warnings used to
+        // chime here all night).
+        const urgent = n.severity === "critical" || n.severity === "error";
         if (n.silent) return;
         if (quietRef.current && !urgent) return;
-        if (soundRef.current) playNotifySound();
+        if (soundRef.current) playNotifySound(urgent);
         // "Your call is ready to review" shows itself as the debrief pop-up: a second toast would say the same thing twice.
         if (debriefIdFromUrl(n.url)) return;
         toast(n.title, {
@@ -187,7 +189,7 @@ export function NotificationBell({ triggerClassName }: { triggerClassName?: stri
      A browser cannot read macOS Focus — there is no web API for it — but a push that arrives
      while the Mac is in Focus is already suppressed by macOS. This is Bestly's own quiet: it
      stops the toast and the sound here, and push_web_send() skips the send server-side, so a
-     phone stays quiet too. Warnings still come through unless you turn that off. */
+     phone stays quiet too. Only emergencies (critical or error) come through unless you turn that off. */
   const [prefs, setPrefs] = useState<{ quiet: boolean; why?: string; until?: string; sound_on: boolean; quiet_on: boolean; quiet_start: string; quiet_end: string; urgent_through: boolean } | null>(null);
   const quietRef = useRef(false);
   const soundRef = useRef(true);
@@ -202,6 +204,7 @@ export function NotificationBell({ triggerClassName }: { triggerClassName?: stri
       urgent_through: d.urgent_through !== false,
     };
     setPrefs(next); quietRef.current = next.quiet; soundRef.current = next.sound_on;
+    setNotifyQuiet(next.quiet, next.urgent_through);
   }, []);
   useEffect(() => { loadPrefs(); const t = window.setInterval(loadPrefs, 60_000); return () => window.clearInterval(t); }, [loadPrefs]);
 
@@ -210,7 +213,7 @@ export function NotificationBell({ triggerClassName }: { triggerClassName?: stri
     if (error) { toast.error("Couldn't change that", { description: error.message }); return; }
     await loadPrefs();
     toast(minutes > 0 ? `Quiet for ${minutes >= 1440 ? "the day" : minutes >= 60 ? `${minutes / 60} hour${minutes === 60 ? "" : "s"}` : `${minutes} minutes`}` : "Notifications back on",
-      { description: minutes > 0 ? "Warnings still come through." : undefined });
+      { description: minutes > 0 ? "Only emergencies come through." : undefined });
   };
   const toggleQuietHours = async () => {
     const { error } = await supabase.rpc("admin_notify_prefs_set" as never, { p_quiet_on: !prefs?.quiet_on } as never);

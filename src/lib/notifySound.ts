@@ -19,6 +19,51 @@ let el: HTMLAudioElement | null = null;
 let unlocked = false;
 let last = 0;
 
+/*
+ * Quiet hours (Nov 5 2026). Jared's rule: 11 PM to 7 AM Los Angeles time nothing makes a sound
+ * except an emergency. The bell feeds the server's answer in through setNotifyQuiet() every minute;
+ * until it has, the default window is used, so a tab that never reached the server stays quiet too.
+ */
+let quietKnown: { quiet: boolean; urgentThrough: boolean; at: number } | null = null;
+// Only the admin is Jared's. The partner portal shares this file and keeps its own sounds, so the gate is opt-in.
+let quietApplies = false;
+
+/** Called by the admin shell: from now on this window follows Jared's quiet hours. */
+export function enableJaredQuietHours() {
+  quietApplies = true;
+}
+const DEFAULT_QUIET_START = 23 * 60; // 11:00 PM
+const DEFAULT_QUIET_END = 7 * 60;    // 7:00 AM
+
+export function setNotifyQuiet(quiet: boolean, urgentThrough = true) {
+  quietApplies = true;
+  quietKnown = { quiet, urgentThrough, at: Date.now() };
+}
+
+function laMinutesNow(): number {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "numeric", hourCycle: "h23" }).formatToParts(new Date());
+    const h = Number(parts.find((x) => x.type === "hour")?.value ?? 0);
+    const m = Number(parts.find((x) => x.type === "minute")?.value ?? 0);
+    return (h % 24) * 60 + m;
+  } catch {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  }
+}
+
+/** True when a sound must not play now. `urgent` = an emergency (critical or error). */
+export function notifyQuietNow(urgent = false): boolean {
+  if (!quietApplies) return false;
+  // The server's answer is trusted for 3 minutes; after that (asleep laptop, lost connection) fall back to the clock.
+  if (quietKnown && Date.now() - quietKnown.at < 180_000) {
+    return quietKnown.quiet && !(urgent && quietKnown.urgentThrough);
+  }
+  const m = laMinutesNow();
+  const quiet = m >= DEFAULT_QUIET_START || m < DEFAULT_QUIET_END;
+  return quiet && !urgent;
+}
+
 function audio(): HTMLAudioElement | null {
   if (typeof window === "undefined") return null;
   if (!el) {
@@ -61,9 +106,10 @@ export function armNotifySound() {
   window.addEventListener("keydown", arm, { once: true });
 }
 
-/** Play it, unless the person muted it, the tab is silent, or it just played. */
-export function playNotifySound() {
+/** Play it, unless the person muted it, it is quiet hours (and this is not an emergency), or it just played. */
+export function playNotifySound(urgent = false) {
   if (!unlocked || notifySoundMuted()) return;
+  if (notifyQuietNow(urgent)) return;
   const now = Date.now();
   if (now - last < MIN_GAP_MS) return;
   last = now;
@@ -118,6 +164,8 @@ function bubblePop() {
 /** Play the success sound (same mute switch and autoplay rules as the alert sound). */
 export function playSuccessSound() {
   if (!unlocked || notifySoundMuted()) return;
+  if (notifyQuietNow(false)) return; // a finished job is never an emergency
+
   const now = Date.now();
   if (now - lastOk < MIN_GAP_MS) return;
   lastOk = now;
