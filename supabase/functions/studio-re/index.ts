@@ -31,11 +31,15 @@ const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const db = createClient(SB_URL, SB_SECRET, { auth: { persistSession: false } });
 
 const APP = "https://studio.bestly.tech";
-const RP_ID = "studio.bestly.tech";
-const ORIGINS = [APP];
+// 2026-11-05: the sign-up and the self-serve board live on the public site, right under the Studio page
+// (bestly.tech/studio/start, bestly.tech/studio/me). Passkeys use rpID bestly.tech so they work on both hosts
+// (no self-serve passkey existed before this change).
+const SITE = "https://www.bestly.tech/studio";
+const RP_ID = "bestly.tech";
+const ORIGINS = [APP, "https://www.bestly.tech", "https://bestly.tech"];
 // Browsers may call us from the app, the board host, localhost (tests), and any exact https origin named in
 // STUDIO_RE_EXTRA_ORIGINS (e.g. a Vercel preview). Never "*".
-const ALLOWED_ORIGINS = new Set<string>([APP, "https://review.bestly.tech",
+const ALLOWED_ORIGINS = new Set<string>([APP, "https://review.bestly.tech", "https://www.bestly.tech", "https://bestly.tech",
   ...(Deno.env.get("STUDIO_RE_EXTRA_ORIGINS") ?? "").split(",").map((x) => x.trim()).filter((x) => /^https:\/\/[a-z0-9.-]+$/i.test(x))]);
 const LOCAL_ORIGIN = /^http:\/\/localhost(:\d{1,5})?$/;
 const originOk = (o: string) => ALLOWED_ORIGINS.has(o) || LOCAL_ORIGIN.test(o);
@@ -201,7 +205,7 @@ async function sweep(req: Request): Promise<Response> {
   const { data: waits } = await db.from("studio_network_waits").select("id,email,platform,studio_networks!inner(label,open)").is("notified_at", null).eq("studio_networks.open", true).limit(50);
   for (const w of waits ?? []) {
     const name = (w as any).studio_networks?.label ?? w.platform;
-    const link = `${APP}/start`;
+    const link = `${SITE}/start`;
     const text = `Good news: you can now connect ${name} to Bestly Studio.\n\nPick up where you left off:\n${link}\n\nYour 7 days free start when you add a plan.\n\nBestly Studio\nWe make your social media posts. You approve them. We post them.`;
     const ok = await sendMail(w.email, `${name} is open in Bestly Studio`, text, simpleHtml(`${name} is open now`, `You asked us to tell you when ${name} opened. It has. Pick up where you left off.`, link, "Pick up where I left off"));
     if (ok) { await db.from("studio_network_waits").update({ notified_at: new Date().toISOString() }).eq("id", w.id); out.opened++; } else out.failed++;
@@ -212,7 +216,7 @@ async function sweep(req: Request): Promise<Response> {
     .eq("status", "linked").is("client_slug", null).is("nudge_sent_at", null)
     .lt("updated_at", day).gt("created_at", fortnight).limit(25);
   for (const s of quiet ?? []) {
-    const link = `${APP}/start${s.vertical === "real-estate" ? "?for=real-estate" : ""}`;
+    const link = `${SITE}/start${s.vertical === "real-estate" ? "?for=real-estate" : ""}`;
     const text = `You started setting up Bestly Studio and stopped partway. Your answers are saved.\n\nPick up where you left off:\n${link}\n\nWe will not email you about this again.\n\nBestly Studio`;
     const ok = await sendMail(s.email, "Your Bestly Studio setup is saved", text, simpleHtml("Your answers are saved", "You started setting up Bestly Studio and stopped partway. Everything you typed is still there. We will not email you about this again.", link, "Pick up where I left off"));
     await db.from("studio_signups").update({ nudge_sent_at: new Date().toISOString() }).eq("id", s.id);
@@ -240,7 +244,7 @@ function emailBody(link: string, vertical = "real-estate"): { text: string; html
 
 ${link}
 
-It works once and it lasts ${LINK_MINUTES} minutes. If it has gone stale, go back to studio.bestly.tech/start and ask for another one.
+It works once and it lasts ${LINK_MINUTES} minutes. If it has gone stale, go back to bestly.tech/studio/start and ask for another one.
 
 You are not signing up for anything by opening it. It just puts you back where you left off.
 
@@ -258,7 +262,7 @@ ${vertical === "real-estate" ? "We turn listing photos into posts, and publish t
     <p style="margin:0 0 26px"><a href="${esc(link)}" style="display:inline-block;background:#1F8F82;color:#fff;text-decoration:none;font-weight:600;padding:14px 22px;border-radius:999px">Open Bestly Studio</a></p>
     <p style="margin:0 0 8px;color:#555;font-size:14px">Or copy this into your browser:<br><span style="color:#111;word-break:break-all">${esc(link)}</span></p>
   </td></tr>
-  <tr><td style="padding:18px 8px 0;font:400 13px/1.5 ${f};color:#777">Stale link? Go back to studio.bestly.tech/start and ask for another. Opening this signs you up for nothing by itself.</td></tr>
+  <tr><td style="padding:18px 8px 0;font:400 13px/1.5 ${f};color:#777">Stale link? Go back to bestly.tech/studio/start and ask for another. Opening this signs you up for nothing by itself.</td></tr>
 </table></td></tr></table></body></html>`;
   return { text, html };
 }
@@ -547,7 +551,7 @@ async function extraVideoCheckout(signup: any, body: Record<string, any>): Promi
   const meta = { surface: "studio", signup_id: signup.id, plan: "extra_video", cadence: "once", listing_id: listingId };
   const p = new URLSearchParams({
     mode: "payment", client_reference_id: signup.id, "line_items[0][price]": price, "line_items[0][quantity]": "1",
-    success_url: `${APP}/me?extra=1`, cancel_url: `${APP}/me`, allow_promotion_codes: "false", "payment_method_types[0]": "card",
+    success_url: `${SITE}/me?extra=1`, cancel_url: `${SITE}/me`, allow_promotion_codes: "false", "payment_method_types[0]": "card",
   });
   if (customer) p.set("customer", customer); else p.set("customer_email", signup.email);
   for (const [k, v] of Object.entries(meta)) { p.set(`metadata[${k}]`, v); p.set(`payment_intent_data[metadata][${k}]`, v); }
@@ -604,7 +608,7 @@ async function handle(req: Request): Promise<Response> {
       const c = rndCode(9);
       const { error: e2 } = await db.from("studio_magic_links").insert({ code: c, signup_id: id, email, expires_at: new Date(Date.now() + LINK_MINUTES * 60_000).toISOString() });
       if (e2) { console.error("link code", e2.message); return same; }
-      const { text, html } = emailBody(`${APP}/t/${c}`, vNow);
+      const { text, html } = emailBody(`${SITE}/start?c=${c}${vNow === "real-estate" ? "&for=real-estate" : ""}`, vNow);
       if (!(await sendMail(email, "Your link into Bestly Studio", text, html))) return E("mail_failed", "We could not send that email. Try again in a minute.");
       return same;
     }
@@ -625,7 +629,7 @@ async function handle(req: Request): Promise<Response> {
       if (s0.status === "open") await db.from("studio_signups").update({ status: "linked" }).eq("id", s0.id); // paying clients keep "converted"
       const tok = await mintSession(s0.id);
       const { data: s } = await db.from("studio_signups").select("*").eq("id", s0.id).single();
-      return J({ ok: true, token: tok, step: s.step_id ?? "intro", answers: cleanAnswers(s.answers), email: s.email, rev: s.rev ?? 0, client_slug: s.client_slug ?? null });
+      return J({ ok: true, token: tok, step: s.step_id ?? "intro", answers: cleanAnswers(s.answers), email: s.email, rev: s.rev ?? 0, client_slug: s.client_slug ?? null, vertical: s.vertical ?? "real-estate", networks: await networks() });
     }
 
     /* no token needed */
@@ -1107,7 +1111,7 @@ async function handle(req: Request): Promise<Response> {
         customer = j.id as string;
         await db.from("studio_signups").update({ stripe_customer: customer }).eq("id", signup.id);
       }
-      const out = await createCheckout(ctx, { id: signup.id, email: signup.email, answers: { _stripe_customer: customer } }, plan, cadence, APP);
+      const out = await createCheckout(ctx, { id: signup.id, email: signup.email, answers: { _stripe_customer: customer } }, plan, cadence, SITE);
       if (!out.ok) return E("checkout_failed", out.error ?? "We could not start the checkout. Nothing was charged.");
       await db.from("studio_signups").update({ plan, cadence_billing: cadence, updated_at: new Date().toISOString() }).eq("id", signup.id);
       return J({ ok: true, url: out.url });
@@ -1122,7 +1126,7 @@ async function handle(req: Request): Promise<Response> {
       if (!signup.client_slug) return E("no_card_on_file", "Pick a plan first.");
       const { data: b } = await db.from("studio_billing").select("stripe_customer").eq("client_slug", signup.client_slug).maybeSingle();
       if (!b?.stripe_customer) return E("no_card_on_file", "Pick a plan first.");
-      const out = await createPortal({ db, url: SB_URL, secret: SB_SECRET }, b.stripe_customer as string, `${APP}/me`);
+      const out = await createPortal({ db, url: SB_URL, secret: SB_SECRET }, b.stripe_customer as string, `${SITE}/me`);
       return out.ok ? J({ ok: true, url: out.url }) : E("portal_failed", out.error ?? "We could not open the billing page.");
     }
 
