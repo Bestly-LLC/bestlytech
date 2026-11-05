@@ -15,6 +15,9 @@
 // Recipients (2026-11-04): `to`, `cc`, `bcc` are lists of { email, name? } (the old single `to` + `to_name` still
 // works). Up to 20 people per email; Jared (or the kit's bcc) is always added to Bcc.
 //
+// Sent folder (2026-11-04): every successful send is snapshotted into email_sent_copies; Hermes's Hestia job
+// sent_copies files it into jared@bestly.tech -> Sent.
+//
 // POST { library_id, to, cc?, bcc?, subject, html_sha, attempt, attachments? }  ->  { ok, id }
 // POST { ..., dry_run: true } checks everything and reports what it would send; Resend is not called.
 
@@ -166,6 +169,18 @@ Deno.serve(async (req) => {
     return J({ ok: false, error: "The mail service refused it. Nothing was sent.", detail: msg }, 200);
   }
   await log("sent", j?.id ?? null, null);
+  // Resend sends from outside the mailbox, so nothing lands in Sent. Hermes's Hestia job (sent_copies) files this
+  // snapshot into jared@bestly.tech -> Sent. A failure here never fails the send: the email already went out.
+  try {
+    const { error: qErr } = await db.from("email_sent_copies").insert({
+      provider_id: j?.id ?? null, library_id: row.id, from_header: from, reply_to: replyTo,
+      to_list: toP.map(header), cc_list: ccP.map(header), bcc_list: bccAll, subject, html: row.html, text_body: row.text_body || null,
+      attachments: atts.map((a) => ({ path: a.path, name: a.name, type: a.type ?? null })),
+    });
+    if (qErr) throw new Error(qErr.message);
+  } catch (e) {
+    await raiseSend("Email builder: no Sent copy", `Sent to ${everyone.join(", ")}, but the copy for your Sent folder could not be queued: ${(e as Error).message}`);
+  }
   await db.from("email_library").update({ status: "sent", recipient_email: to, recipient_name: toName || null, sent_at: new Date().toISOString() }).eq("id", row.id);
   return J({ ok: true, id: j?.id ?? null, from, to: toP.map(header), cc: ccP.map(header), bcc: bccP.map(header) });
 });
