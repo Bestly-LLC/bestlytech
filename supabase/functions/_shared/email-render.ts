@@ -438,6 +438,66 @@ export function urlsIn(text: string): string[] {
 }
 
 /** Turn whatever the model returned into valid blocks. Never throws; says what it fixed in `warnings`. */
+/* ───────── bare links -> buttons ───────── */
+
+// A bare https:// link (not already inside a [label](url) markdown link). Trailing punctuation is not part of it.
+const BARE_URL = /(?<![(\[])\bhttps:\/\/[^\s<>"'\])]+/g;
+const trimUrl = (u: string) => u.replace(/[.,;:!?]+$/, "");
+const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return "the link"; } };
+/** "TRML XL – 10.3" ePaper…" -> "TRML XL": the words before the first dash, colon or bracket, at most 5 words. */
+function nameFrom(text: string): string {
+  const head = text.split(/\s[–—-]\s|:|\(|,/)[0].replace(/[*_`]/g, "").trim();
+  const words = head.split(/\s+/).filter(Boolean);
+  return words.length && words.length <= 5 && head.length <= 32 ? head : "";
+}
+/** Strip the links out of a line and tidy what is left ("Buy it here: https://…" -> "Buy it here"). */
+function withoutUrls(text: string): string {
+  return text.replace(BARE_URL, "").replace(/\s*[–—-]\s*$|\s*[:\-–—]\s*(?=$|\n)/g, "").replace(/\(\s*\)/g, "").replace(/[ \t]{2,}/g, " ").replace(/\s+([.,;!?])/g, "$1").trim();
+}
+
+/**
+ * Every bare link the AI left in a paragraph or list becomes a real button right under it (list items are named after
+ * the item: "View TRML XL"). Links already on a button, and [label](url) inline links, are left alone.
+ * Deterministic, so it runs after every write and every change whatever the free AI did.
+ */
+export function linksToButtons(blocks: Block[], max = 6): { blocks: Block[]; made: number } {
+  const used = new Set<string>();
+  for (const b of blocks) {
+    if (b.type === "button") used.add(b.url);
+    if (b.type === "callout" && b.button) used.add(b.button.url);
+  }
+  const out: Block[] = [];
+  let made = 0;
+  const btn = (label: string, url: string, first: boolean): Block => ({ id: blockId(), type: "button", label: label.slice(0, 40), url, style: first ? "solid" : "outline" });
+  for (const b of blocks) {
+    if (made >= max || (b.type !== "paragraph" && b.type !== "list")) { out.push(b); continue; }
+    const extra: Block[] = [];
+    const take = (text: string, labelFor: (rest: string, url: string) => string): string => {
+      const all = [...new Set((text.match(BARE_URL) ?? []).map(trimUrl))].filter((u) => u.length > 12);
+      if (!all.length) return text;
+      const urls = all.filter((u) => !used.has(u));
+      let rest = withoutUrls(text);
+      if (rest && /[.!?]$/.test(text.trim()) && !/[.!?:]$/.test(rest)) rest += ".";
+      for (const u of urls) {
+        if (made >= max) break;
+        used.add(u); made++;
+        extra.push(btn(labelFor(rest, u), u, extra.length === 0));
+      }
+      return rest;
+    };
+    if (b.type === "paragraph") {
+      const text = take(b.text, (_r, u) => `Visit ${hostOf(u)}`);
+      if (text !== b.text) { if (text) out.push({ ...b, text }); } else out.push(b);
+    } else {
+      const items = b.items.map((it) => take(it, (rest, u) => { const n = nameFrom(rest); return n ? `View ${n}` : `Visit ${hostOf(u)}`; }));
+      const kept = items.filter((x) => x.trim());
+      if (kept.length) out.push({ ...b, items: kept });
+    }
+    out.push(...extra);
+  }
+  return { blocks: out, made };
+}
+
 export function normalizeDoc(raw: unknown, o: NormalizeOpts): { doc: EmailDoc; warnings: string[]; problems: string[] } {
   const warnings: string[] = [];
   const problems: string[] = []; // things so wrong the caller should retry

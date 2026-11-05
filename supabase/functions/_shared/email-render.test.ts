@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { KITS } from "../../../scripts/email-builder/kits.mjs";
 import { elizabethDoc } from "../../../scripts/email-builder/elizabeth-blocks.mjs";
 import {
-  bindUnits, buildEml, imageUrlsIn, lintDoc, normalizeDoc, qp, renderEmail, renderText, resolveKit, rewriteImagesToCid, stripEmoji,
+  bindUnits, buildEml, linksToButtons, imageUrlsIn, lintDoc, normalizeDoc, qp, renderEmail, renderText, resolveKit, rewriteImagesToCid, stripEmoji, type Block,
   type EmailDoc, type Kit,
 } from "./email-render.ts";
 
@@ -186,5 +186,24 @@ describe(".eml export", () => {
     expect(buildEml({ from: "a@b.co", subject: "Café", html: "<p>é</p>", text: "é" })).toContain("Subject: =?UTF-8?B?");
     expect(qp("café =")).toBe("caf=C3=A9 =3D");
     expect(qp("a".repeat(100)).split("\r\n").every((l) => l.length <= 76)).toBe(true);
+  });
+});
+
+describe("linksToButtons", () => {
+  it("turns bare links in lists and paragraphs into buttons, once", () => {
+    const blocks = [
+      { id: "l", type: "list", items: ['TRML XL – 10.3" ePaper. https://shop.trmnl.com/products/trmnl-x?variant=1', "TRML – 7.5\" ePaper https://shop.trmnl.com/products/trmnl"] },
+      { id: "p", type: "paragraph", text: "Book a time here: https://cloud.bestly.tech/apps/calendar/appointment/abc." },
+      { id: "m", type: "paragraph", text: "See [the deck](https://centeringyou.com) for more." },
+    ] as Block[];
+    const r = linksToButtons(blocks);
+    expect(r.made).toBe(3);
+    const btns = r.blocks.filter((b) => b.type === "button") as Extract<Block, { type: "button" }>[];
+    expect(btns.map((b) => b.label)).toEqual(["View TRML XL", "View TRML", "Visit cloud.bestly.tech"]);
+    expect(btns[0].style).toBe("solid");
+    expect(JSON.stringify(r.blocks.filter((b) => b.type !== "button"))).not.toContain("shop.trmnl.com");
+    expect((r.blocks.find((b) => b.id === "p") as { text: string }).text).toBe("Book a time here.");
+    expect((r.blocks.find((b) => b.id === "m") as { text: string }).text).toContain("[the deck](https://centeringyou.com)");
+    expect(linksToButtons(r.blocks).made).toBe(0);
   });
 });

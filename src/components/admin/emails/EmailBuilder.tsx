@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { btnPlain, btnPrimary, btnTinted, card, field, secondary } from "@/pages/admin/laxUi";
 import { focusRing } from "@/components/admin/ui";
-import { renderText, type Block, type Kit } from "@/lib/email/render";
+import { linksToButtons, renderText, type Block, type Kit } from "@/lib/email/render";
 import type { EmailApi, LibraryRow } from "@/lib/email/api";
 import { PreviewFrame, type EditMsg } from "./PreviewFrame";
 import { ButtonDialog } from "./ButtonDialog";
@@ -43,7 +43,8 @@ export function EmailBuilder({ api, initial, onSaved, onSentDone }: { api: Email
   const future = useRef<Snap[]>([]);
   const [, bump] = useState(0);
 
-  useEffect(() => { setDraft(initial); past.current = []; future.current = []; setWarnings([]); setError(""); setSaved(null); setNote(null); setRunning(""); }, [initial]);
+  // opening a draft: any bare link the AI left in the text becomes a button (no-op when there are none)
+  useEffect(() => { setDraft(initial.fixedHtml ? initial : { ...initial, blocks: linksToButtons(initial.blocks).blocks }); past.current = []; future.current = []; setWarnings([]); setError(""); setSaved(null); setNote(null); setRunning(""); }, [initial]);
   useEffect(() => () => { if (noteTimer.current) clearTimeout(noteTimer.current); }, []);
 
   const kit: Kit = api.kits.find((k) => k.slug === draft.kit) ?? api.kits[0];
@@ -65,7 +66,8 @@ export function EmailBuilder({ api, initial, onSaved, onSentDone }: { api: Email
     setBusy("");
     if (!r.ok || !r.doc) { setError(r.error ?? "Could not write it. Nothing was lost."); return; }
     remember();
-    setDraft((d) => ({ ...d, subject: r.doc!.subject, preheader: r.doc!.preheader ?? "", blocks: r.doc!.blocks, title: d.title || r.doc!.subject, fixedHtml: undefined }));
+    const linked = linksToButtons(r.doc.blocks);
+    setDraft((d) => ({ ...d, subject: r.doc!.subject, preheader: r.doc!.preheader ?? "", blocks: linked.blocks, title: d.title || r.doc!.subject, fixedHtml: undefined }));
     setWarnings(r.warnings ?? []);
     setPane("preview");
   };
@@ -85,7 +87,7 @@ export function EmailBuilder({ api, initial, onSaved, onSentDone }: { api: Email
     catch (e) { r = { ok: false, error: e instanceof Error ? e.message : String(e) }; }
     setBusy(""); setRunning("");
     if (!r.ok || !r.doc) { showNote({ kind: "error", text: r.error ?? "Could not change it. Your email is untouched." }); return; }
-    const next = { subject: r.doc.subject || draft.subject, preheader: r.doc.preheader ?? draft.preheader, blocks: r.doc.blocks };
+    const next = { subject: r.doc.subject || draft.subject, preheader: r.doc.preheader ?? draft.preheader, blocks: linksToButtons(r.doc.blocks).blocks };
     const same = r.changed === false || (r.changed === undefined && JSON.stringify(next) === before);
     if (same) { showNote({ kind: "same", text: "The free AI sent it back unchanged. Try saying it another way." }); return; }
     remember();
