@@ -17,7 +17,11 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsWith } from "../_shared/cors.ts";
-import { sha256Hex } from "../_shared/email-render.ts";
+// Same as sha256Hex in ../_shared/email-render.ts (kept local so this function deploys without the 42 KB render module).
+async function sha256Hex(s: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(d)].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
 
 const secretKeys = (() => {
   const out: string[] = [];
