@@ -357,7 +357,7 @@ export function EmailBuilder({ api, initial, onSaved, onSentDone }: { api: Email
           {hasDoc ? (
             <>
               {!locked && <p className={cn("text-[13px]", secondary)}><Lines>Tap any text to edit it. Tap a button to change its words or link.</Lines></p>}
-              <PreviewFrame html={preview} device={device} dark={dark} editable={!locked} onEdit={onEdit} />
+              <PreviewFrame html={preview} device={device} dark={dark} editable={!locked} onEdit={onEdit} attachments={draft.attachments} />
               <div className={cn(card, "space-y-3")}>
                 <AttachmentList api={api} value={draft.attachments} disabled={!!busy}
                   savedPaths={(saved?.attachments ?? initial.attachments).map((a) => a.path)}

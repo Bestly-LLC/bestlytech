@@ -1,14 +1,48 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { previewHtml } from "@/lib/email/previewDoc";
+import type { Attachment } from "@/lib/email/api";
+import { fileSize } from "./emailUtils";
+
+/** "PDF", "PNG", "DOCX" … from the file name, for the attachment tile. */
+const extOf = (name: string) => (name.match(/\.([a-z0-9]{1,5})$/i)?.[1] ?? "FILE").toUpperCase();
+const TILE: Record<string, string> = { PDF: "#E5484D", DOC: "#2F6FEB", DOCX: "#2F6FEB", XLS: "#1F9D55", XLSX: "#1F9D55", CSV: "#1F9D55", PPT: "#D9622B", PPTX: "#D9622B", KEY: "#2F6FEB", PAGES: "#E8A33D", NUMBERS: "#1F9D55", ZIP: "#8E8E93" };
+
+/** The attachments as the person will see them under the email in their mail app. */
+export function AttachmentStrip({ files, dark }: { files: Attachment[]; dark: boolean }) {
+  if (!files.length) return null;
+  return (
+    <div className={cn("border-t px-4 py-3", dark ? "border-white/10 bg-[#0b0d14]" : "border-black/[0.08] bg-[#faf9f7]")} aria-label={`${files.length} ${files.length === 1 ? "attachment" : "attachments"}`} role="group">
+      <p className={cn("mb-2 text-[12px] font-medium", dark ? "text-white/50" : "text-black/50")}>
+        <span className="whitespace-nowrap">{files.length} {files.length === 1 ? "attachment" : "attachments"}</span>
+        <span aria-hidden="true"> · </span>
+        <span className="whitespace-nowrap">{fileSize(files.reduce((n, a) => n + a.size, 0))}</span>
+      </p>
+      <ul className="flex flex-wrap gap-2">
+        {files.map((a) => {
+          const ext = extOf(a.name);
+          return (
+            <li key={a.path} className={cn("flex max-w-full items-center gap-2.5 rounded-xl px-2.5 py-2", dark ? "bg-white/[0.06]" : "bg-white shadow-[0_1px_2px_rgba(0,0,0,.06)] ring-1 ring-black/[0.06]")}>
+              <span className="flex h-9 w-8 shrink-0 items-end justify-center rounded-[5px] pb-1 text-[8px] font-bold tracking-wide text-white" style={{ background: TILE[ext] ?? (a.type.startsWith("image/") ? "#8E5CF6" : "#8E8E93") }} aria-hidden="true">{ext.slice(0, 4)}</span>
+              <span className="min-w-0">
+                <span className={cn("block text-[13px] font-medium leading-snug [overflow-wrap:anywhere]", dark ? "text-white/90" : "text-black/85")}>{a.name}</span>
+                <span className={cn("block whitespace-nowrap text-[12px]", dark ? "text-white/50" : "text-black/50")}>{fileSize(a.size)}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 export type EditMsg =
   | { t: "edit"; bid: string; field: string; text: string }
   | { t: "button"; bid: string };
 
 /** The live preview: the real email HTML in a sandboxed frame, forced light or dark, at desktop or phone width. */
-export function PreviewFrame({ html, device, dark, editable, onEdit, className, title = "Email preview" }: {
-  html: string; device: "desktop" | "phone"; dark: boolean; editable?: boolean; onEdit?: (m: EditMsg) => void; className?: string; title?: string;
+export function PreviewFrame({ html, device, dark, editable, onEdit, className, title = "Email preview", attachments = [] }: {
+  html: string; device: "desktop" | "phone"; dark: boolean; editable?: boolean; onEdit?: (m: EditMsg) => void; className?: string; title?: string; attachments?: Attachment[];
 }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const scroll = useRef(0);
@@ -47,6 +81,7 @@ export function PreviewFrame({ html, device, dark, editable, onEdit, className, 
           className="block w-full border-0"
           style={{ height: h }}
         />
+        <AttachmentStrip files={attachments} dark={dark} />
       </div>
     </div>
   );

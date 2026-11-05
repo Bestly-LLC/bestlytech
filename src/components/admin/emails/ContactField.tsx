@@ -22,12 +22,19 @@ function mark(text: string, q: string): ReactNode {
  * A text field with contact type-ahead (ARIA combobox). Typing asks `suggest` for matches; picking one calls `onPick`
  * so the parent can fill the name AND the email together. With no `suggest` it is a plain input.
  */
-export function ContactField({ label, value, onText, onPick, suggest, disabled, placeholder, inputMode, className }: {
+export function ContactField({ label, value, onText, onPick, suggest, disabled, placeholder, inputMode, className, onCommitKey, onLeave, before, id: idProp, labelClassName }: {
   label: ReactNode; value: string; onText: (v: string) => void; onPick: (hit: ContactHit) => void;
   suggest?: (q: string) => Promise<ContactHit[]>; disabled?: boolean; placeholder?: string; inputMode?: "email"; className?: string;
+  /** Recipient lists: a key that is not picking a suggestion (Enter, comma, Backspace on empty). Return true to swallow it. */
+  onCommitKey?: (e: React.KeyboardEvent<HTMLInputElement>) => boolean;
+  /** Called when focus leaves the input. */
+  onLeave?: () => void;
+  /** Rendered inside the field box before the input (recipient chips). */
+  before?: ReactNode;
+  id?: string; labelClassName?: string;
 }) {
   const uid = useId();
-  const inputId = `${uid}-in`, listId = `${uid}-list`;
+  const inputId = idProp ?? `${uid}-in`, listId = `${uid}-list`;
   const [hits, setHits] = useState<ContactHit[]>([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -70,21 +77,38 @@ export function ContactField({ label, value, onText, onPick, suggest, disabled, 
       e.preventDefault(); pick(hits[active]);
     } else if (e.key === "Escape" && open) {
       e.preventDefault(); e.stopPropagation(); close();
+    } else if (onCommitKey?.(e)) {
+      e.preventDefault(); close();
     }
   };
 
   return (
     <div className="relative">
-      <label htmlFor={inputId} className="block text-[13px] text-white/60">{label}</label>
+      <label htmlFor={inputId} className={labelClassName ?? "block text-[13px] text-white/60"}>{label}</label>
+      {before !== undefined ? (
+        <div className={cn(field, "mt-1 flex min-h-[44px] flex-wrap items-center gap-1.5 py-1.5 focus-within:bg-[#3A3A3C] focus-within:ring-2 focus-within:ring-[#0A84FF] bento:focus-within:ring-[#007AFF]", disabled && "opacity-60", className)} onMouseDown={(e) => { if (e.target === e.currentTarget) { e.preventDefault(); document.getElementById(inputId)?.focus(); } }}>
+          {before}
+          <input
+            id={inputId} value={value} disabled={disabled} inputMode={inputMode} placeholder={placeholder} autoComplete="off" autoCorrect="off" spellCheck={false}
+            role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded={open} aria-controls={listId}
+            aria-activedescendant={open && active >= 0 ? `${listId}-${active}` : undefined}
+            onChange={(e) => { onText(e.target.value); ask(e.target.value); }}
+            onKeyDown={onKeyDown}
+            onBlur={() => { close(); onLeave?.(); }}
+            className="min-w-[8rem] flex-1 bg-transparent py-1 text-inherit outline-none placeholder:text-[#EBEBF54d] bento:placeholder:text-[#3C3C434d]"
+          />
+        </div>
+      ) : (
       <input
         id={inputId} value={value} disabled={disabled} inputMode={inputMode} placeholder={placeholder} autoComplete="off" autoCorrect="off" spellCheck={false}
         role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded={open} aria-controls={listId}
         aria-activedescendant={open && active >= 0 ? `${listId}-${active}` : undefined}
         onChange={(e) => { onText(e.target.value); ask(e.target.value); }}
         onKeyDown={onKeyDown}
-        onBlur={close}
+        onBlur={() => { close(); onLeave?.(); }}
         className={cn(field, "mt-1", className)}
       />
+      )}
       <span className="sr-only" role="status" aria-live="polite">{open ? `${hits.length} ${hits.length === 1 ? "suggestion" : "suggestions"}` : ""}</span>
       {open && hits.length > 0 && (
         <ul

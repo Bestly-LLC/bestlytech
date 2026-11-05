@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Paperclip, RotateCcw, Send, ShieldCheck } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { btnPlain, btnPrimary, btnTinted } from "@/pages/admin/laxUi";
@@ -7,7 +7,7 @@ import { sha256Hex } from "@/lib/email/render";
 import type { Attachment, EmailApi } from "@/lib/email/api";
 import { fileSize } from "./emailUtils";
 import { PreviewFrame } from "./PreviewFrame";
-import { ContactField } from "./ContactField";
+import { EMAIL_RE, RecipientField, type Recipient } from "./RecipientField";
 import "./sendFlow.css";
 
 const COUNTDOWN_MS = 2800;
@@ -24,8 +24,14 @@ export function SendDialog({ api, open, onClose, libraryId, html, subject, attac
   api: EmailApi; open: boolean; onClose: () => void; libraryId: string; html: string; subject: string; attachments?: Attachment[]; defaultTo: string; defaultName: string; fromLine: string;
   onSent: (to: string, name: string) => void; onFinished?: (to: string, name: string) => void;
 }) {
-  const [to, setTo] = useState(defaultTo);
-  const [name, setName] = useState(defaultName);
+  const start = (): Recipient[] => (defaultTo.trim() ? [{ email: defaultTo.trim(), ...(defaultName.trim() ? { name: defaultName.trim() } : {}) }] : []);
+  const [toList, setToList] = useState<Recipient[]>(start);
+  const [cc, setCc] = useState<Recipient[]>([]);
+  const [bcc, setBcc] = useState<Recipient[]>([]);
+  const [showCc, setShowCc] = useState(false);
+  const [pending, setPending] = useState({ to: false, cc: false, bcc: false });
+  const pend = useCallback((k: "to" | "cc" | "bcc") => (v: boolean) => setPending((p) => (p[k] === v ? p : { ...p, [k]: v })), []);
+  const pendTo = useMemo(() => pend("to"), [pend]), pendCc = useMemo(() => pend("cc"), [pend]), pendBcc = useMemo(() => pend("bcc"), [pend]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [phase, setPhase] = useState<"confirm" | "success">("confirm");
@@ -46,7 +52,7 @@ export function SendDialog({ api, open, onClose, libraryId, html, subject, attac
   /* One id per distinct request: a retry of the same thing reuses it (never a double send); changing who/what gets a new one. */
   const attempt = useRef<{ key: string; id: string } | null>(null);
   const attemptFor = () => {
-    const key = [to.trim(), name.trim(), subject, html, ...attachments.map((a) => a.path)].join("\u0001");
+    const key = [JSON.stringify([toList, cc, bcc]), subject, html, ...attachments.map((a) => a.path)].join("\u0001");
     if (!attempt.current || attempt.current.key !== key) attempt.current = { key, id: crypto.randomUUID() };
     return attempt.current.id;
   };
@@ -54,24 +60,27 @@ export function SendDialog({ api, open, onClose, libraryId, html, subject, attac
   // Reset only when the dialog opens (defaults change while it is open when onSent updates the draft; that must not reset it).
   useEffect(() => {
     if (!open) return;
-    setTo(defaultTo); setName(defaultName); setErr(""); setBusy(false); setPhase("confirm"); setLeaving(false); setFlags({ hover: false, focus: false, key: false });
+    setToList(start()); setCc([]); setBcc([]); setShowCc(false); setPending({ to: false, cc: false, bcc: false }); setErr(""); setBusy(false); setPhase("confirm"); setLeaving(false); setFlags({ hover: false, focus: false, key: false });
     closedRef.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const valid = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/.test(to.trim());
-  const [typingName, setTypingName] = useState(false);
-  const first = typingName ? "" : (name.trim().split(/\s+/)[0] ?? "");
-  const who = name.trim() || to.trim();
+  const everyone = [...toList, ...cc, ...bcc];
+  const typing = pending.to || pending.cc || pending.bcc;
+  const valid = toList.length > 0 && everyone.length <= 20 && everyone.every((r) => EMAIL_RE.test(r.email)) && !typing;
+  const lead = toList[0];
+  const first = lead ? (lead.name?.trim().split(/\s+/)[0] || lead.email) : "";
+  const others = everyone.length - 1;
+  const who = lead ? `${lead.name || lead.email}${others > 0 ? ` and ${others} ${others === 1 ? "other" : "others"}` : ""}` : "";
 
   const send = async () => {
     if (busy || !valid || !subject) return;
     setBusy(true); setErr("");
     try {
       const html_sha = await sha256Hex(html);
-      const r = await api.send({ library_id: libraryId, to: to.trim(), to_name: name.trim() || undefined, subject, html_sha, attempt: attemptFor(), attachments: attachments.map((a) => a.path) });
+      const r = await api.send({ library_id: libraryId, to: toList, cc, bcc, subject, html_sha, attempt: attemptFor(), attachments: attachments.map((a) => a.path) });
       if (r.ok) {
-        const t = to.trim(), n = name.trim();
+        const t = lead.email, n = lead.name ?? "";
         sentRef.current = { to: t, name: n };
         const el = boxRef.current;
         if (el) { const b = el.getBoundingClientRect(); from.current = { h: b.height, w: b.width }; }
@@ -125,9 +134,9 @@ export function SendDialog({ api, open, onClose, libraryId, html, subject, attac
   const showConfirm = phase === "confirm" || leaving;
   const set = (k: "hover" | "focus" | "key", v: boolean) => setFlags((f) => (f[k] === v ? f : { ...f, [k]: v }));
   const Title = phase === "confirm" ? DialogTitle : "h2";
-  const sendLabel = err ? "Try again" : first ? `Send to ${first}` : "Send";
+  const sendLabel = err ? "Try again" : !first ? "Send" : others > 0 ? `Send to ${everyone.length} people` : `Send to ${first}`;
 
-  const live = phase === "success" ? `Sent to ${who}. A copy is in your inbox. This closes in a few seconds.` : busy ? `Sending to ${first || to.trim()}` : "";
+  const live = phase === "success" ? `Sent to ${who}. A copy is in your inbox. This closes in a few seconds.` : busy ? `Sending to ${who}` : "";
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (o || busy) return; if (phase === "success") finish(); else onClose(); }}>
@@ -163,13 +172,22 @@ export function SendDialog({ api, open, onClose, libraryId, html, subject, attac
                 : <p className="text-[13px] text-white/60">Check who it goes to and how it looks. It sends only when you tap Send.</p>}
             </DialogHeader>
 
-            <div className="relative z-20 grid shrink-0 gap-3 px-5 pt-4 sm:grid-cols-2">
-              <div onFocusCapture={() => setTypingName(true)} onBlurCapture={() => setTypingName(false)}>
-              <ContactField label="To (name)" value={name} onText={setName} disabled={busy} placeholder="Elizabeth" suggest={api.suggestContacts}
-                onPick={(h) => { if (h.name) setName(h.name); setTo(h.email); setTypingName(false); }} />
+            <div className="relative z-20 shrink-0 space-y-2.5 px-5 pt-4">
+              <div className="flex items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <RecipientField label="To" value={toList} onChange={setToList} onPending={pendTo} disabled={busy} placeholder="Name or email" suggest={api.suggestContacts} />
+                </div>
+                {!showCc && (
+                  <button type="button" onClick={() => setShowCc(true)} disabled={busy} className={cn(btnPlain, "mb-0.5 shrink-0 px-1 sm:min-h-[44px]")}>Cc/Bcc</button>
+                )}
               </div>
-              <ContactField label="To (email)" value={to} onText={setTo} disabled={busy} inputMode="email" placeholder="name@example.com" suggest={api.suggestContacts}
-                onPick={(h) => { if (h.name) setName(h.name); setTo(h.email); }} />
+              {showCc && (
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  <RecipientField label="Cc" value={cc} onChange={setCc} onPending={pendCc} disabled={busy} placeholder="Everyone sees them" suggest={api.suggestContacts} />
+                  <RecipientField label="Bcc" value={bcc} onChange={setBcc} onPending={pendBcc} disabled={busy} placeholder="Hidden from the others" suggest={api.suggestContacts} />
+                </div>
+              )}
+              {everyone.length > 20 && <p role="alert" className="text-[12px] text-[#FF6961]">Up to 20 people per email.</p>}
             </div>
 
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
@@ -187,7 +205,7 @@ export function SendDialog({ api, open, onClose, libraryId, html, subject, attac
                 <div className="flex items-start gap-1.5 pt-1 text-white/50"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span>Sends exactly what you see below. You are copied by bcc.</span></div>
               </dl>
               <div className={cn("transition-opacity duration-300", busy && "opacity-60")}>
-                <PreviewFrame html={html} device="desktop" dark={false} title="Email you are about to send" />
+                <PreviewFrame html={html} device="desktop" dark={false} title="Email you are about to send" attachments={attachments} />
               </div>
             </div>
 
@@ -197,7 +215,7 @@ export function SendDialog({ api, open, onClose, libraryId, html, subject, attac
               <button type="button" onClick={onClose} disabled={busy} className={btnPlain}>Not yet</button>
               <button type="button" onClick={() => void send()} disabled={busy || !valid || !subject} className={cn(btnPrimary, "h-auto max-w-full py-2.5 text-center [overflow-wrap:anywhere]")}>
                 {busy ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" /> : err ? <RotateCcw className="h-4 w-4 shrink-0" aria-hidden="true" /> : <Send className="h-4 w-4 shrink-0" aria-hidden="true" />}
-                <span>{busy ? `Sending to ${first || to.trim()}` : sendLabel}</span>
+                <span>{busy ? (others > 0 ? `Sending to ${everyone.length} people` : `Sending to ${first}`) : sendLabel}</span>
               </button>
             </div>
           </div>
@@ -218,7 +236,7 @@ export function SendDialog({ api, open, onClose, libraryId, html, subject, attac
             </div>
             <Title className="mt-7 max-w-full text-[26px] font-semibold leading-tight tracking-[-0.02em] text-white [overflow-wrap:anywhere]">Sent to {who}</Title>
             <div className="mt-2 max-w-full space-y-0.5 text-[15px] leading-snug text-[#EBEBF599]">
-              {name.trim() && <p className="[overflow-wrap:anywhere]">{sentRef.current.to}</p>}
+              {others === 0 && lead?.name && <p className="[overflow-wrap:anywhere]">{lead.email}</p>}
               <p className="[overflow-wrap:anywhere]">{subject}</p>
             </div>
             <p className="mt-4 text-[13px] text-[#EBEBF54d]">A copy is in your inbox.</p>

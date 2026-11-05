@@ -12,7 +12,10 @@
 // email-attachments. They are downloaded here with the service key and sent through Resend. The dialog posts the
 // paths it showed (`attachments`); if the saved list differs, nothing is sent (409). Max 10 files, 25 MB in all.
 //
-// POST { library_id, to, to_name?, subject, html_sha, attempt, attachments? }  ->  { ok, id }
+// Recipients (2026-11-04): `to`, `cc`, `bcc` are lists of { email, name? } (the old single `to` + `to_name` still
+// works). Up to 20 people per email; Jared (or the kit's bcc) is always added to Bcc.
+//
+// POST { library_id, to, cc?, bcc?, subject, html_sha, attempt, attachments? }  ->  { ok, id }
 // POST { ..., dry_run: true } checks everything and reports what it would send; Resend is not called.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -44,6 +47,21 @@ function b64(bytes: Uint8Array): string {
   return btoa(s);
 }
 const EMAIL = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/;
+const MAX_PEOPLE = 20;
+type Person = { email: string; name: string };
+const cleanName = (v: unknown) => String(v ?? "").replace(/[<>"\r\n,;]/g, "").trim().slice(0, 80);
+/** A list of { email, name? } (or one address string) -> clean people; null when any address is bad. */
+function people(v: unknown, legacyName?: unknown): Person[] | null {
+  const raw = Array.isArray(v) ? v : (v == null || v === "" ? [] : [{ email: v, name: legacyName }]);
+  const out: Person[] = [];
+  for (const r of raw) {
+    const email = String((r as Record<string, unknown>)?.email ?? r ?? "").trim();
+    if (!EMAIL.test(email)) return null;
+    out.push({ email, name: cleanName((r as Record<string, unknown>)?.name) });
+  }
+  return out;
+}
+const header = (p: Person) => (p.name ? `${p.name} <${p.email}>` : p.email);
 
 async function adminId(req: Request): Promise<string | null> {
   const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
@@ -66,10 +84,16 @@ Deno.serve(async (req) => {
   let b: Record<string, any> = {};
   try { b = await req.json(); } catch { return J({ ok: false, error: "json" }, 400); }
 
-  const to = String(b.to ?? "").trim();
-  const toName = String(b.to_name ?? "").replace(/[<>"\r\n]/g, "").trim().slice(0, 80);
+  const toList = people(b.to, b.to_name), ccList = people(b.cc), bccList = people(b.bcc);
+  if (!toList || !ccList || !bccList) return J({ ok: false, error: "One of the addresses is not a real email address." }, 400);
+  if (!toList.length) return J({ ok: false, error: "Add at least one person in To." }, 400);
+  // one person, one line: To beats Cc beats Bcc
+  const seen = new Set<string>();
+  const uniq = (l: Person[]) => l.filter((p) => { const k = p.email.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+  const toP = uniq(toList), ccP = uniq(ccList), bccP = uniq(bccList);
+  if (toP.length + ccP.length + bccP.length > MAX_PEOPLE) return J({ ok: false, error: `Up to ${MAX_PEOPLE} people per email.` }, 400);
+  const to = toP[0].email, toName = toP[0].name;
   const subject = String(b.subject ?? "").replace(/[\r\n]+/g, " ").trim().slice(0, 200);
-  if (!EMAIL.test(to)) return J({ ok: false, error: "That is not one email address." }, 400);
   if (!subject) return J({ ok: false, error: "The subject is empty." }, 400);
   if (typeof b.html_sha !== "string" || b.html_sha.length !== 64) return J({ ok: false, error: "Confirm the preview first." }, 400);
 
@@ -93,13 +117,14 @@ Deno.serve(async (req) => {
   const replyTo = /^[\w.+-]+@bestly\.tech$/i.test(s.reply_to ?? "") ? s.reply_to : "jared@bestly.tech";
   const bcc = /^[\w.+-]+@bestly\.tech$/i.test(s.bcc ?? "") ? s.bcc : "jared@bestly.tech";
   const from = `${fromName} <${fromEmail}>`;
-  const toHeader = toName ? `${toName} <${to}>` : to;
+  const bccAll = [...bccP.map(header), ...(seen.has(bcc.toLowerCase()) ? [] : [bcc])];
+  const everyone = [...toP, ...ccP, ...bccP].map((p) => p.email);
 
   const since = new Date(); since.setUTCHours(0, 0, 0, 0);
   const { count } = await db.from("email_send_log").select("id", { count: "exact", head: true }).eq("template_name", "email-builder").eq("status", "sent").gte("created_at", since.toISOString());
   if ((count ?? 0) >= DAILY_MAX) return J({ ok: false, error: `Daily send limit reached (${DAILY_MAX}).` }, 429);
 
-  if (b.dry_run === true) return J({ ok: true, dry_run: true, from, to: toHeader, reply_to: replyTo, bcc, subject, html_bytes: row.html.length, sha, attachments: atts.map((a) => ({ name: a.name, size: a.size ?? null })) });
+  if (b.dry_run === true) return J({ ok: true, dry_run: true, from, to: toP.map(header), cc: ccP.map(header), bcc: bccAll, reply_to: replyTo, subject, html_bytes: row.html.length, sha, attachments: atts.map((a) => ({ name: a.name, size: a.size ?? null })) });
 
   // Read every file before calling the mail service: a missing file means nothing is sent.
   const files: { filename: string; content: string; content_type?: string }[] = [];
@@ -121,7 +146,7 @@ Deno.serve(async (req) => {
     // email_send_log is the shared transactional log: builder details ride in metadata.
     db.from("email_send_log").insert({
       template_name: "email-builder", recipient_email: to, message_id: providerId, status, error_message: err,
-      metadata: { library_id: row.id, to_name: toName || null, subject, from_email: fromEmail, provider: "resend", html_sha: sha, sent_by: uid, attachments: atts.map((a) => a.name), attachment_bytes: total },
+      metadata: { library_id: row.id, to_name: toName || null, to: toP.map((p) => p.email), cc: ccP.map((p) => p.email), bcc: bccP.map((p) => p.email), subject, from_email: fromEmail, provider: "resend", html_sha: sha, sent_by: uid, attachments: atts.map((a) => a.name), attachment_bytes: total },
     }).then(({ error }) => { if (error) console.error("email_send_log insert failed:", error.message); });
   if (!key) {
     await log("failed", null, "RESEND_API_KEY is not set");
@@ -131,16 +156,16 @@ Deno.serve(async (req) => {
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "Idempotency-Key": `eb-${row.id}-${String(b.attempt ?? crypto.randomUUID()).slice(0, 64)}` },
-    body: JSON.stringify({ from, to: [toHeader], bcc: [bcc], reply_to: replyTo, subject, html: row.html, text: row.text_body || undefined, ...(files.length ? { attachments: files } : {}) }),
+    body: JSON.stringify({ from, to: toP.map(header), ...(ccP.length ? { cc: ccP.map(header) } : {}), bcc: bccAll, reply_to: replyTo, subject, html: row.html, text: row.text_body || undefined, ...(files.length ? { attachments: files } : {}) }),
   }).catch((e) => ({ ok: false, status: 0, json: async () => ({ message: String(e) }) }) as unknown as Response);
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     const msg = `Resend ${r.status}: ${JSON.stringify(j).slice(0, 200)}`;
     await log("failed", null, msg);
-    await raiseSend("Email builder: send failed", `${msg}. Nothing reached ${to}.`);
+    await raiseSend("Email builder: send failed", `${msg}. Nothing reached ${everyone.join(", ")}.`);
     return J({ ok: false, error: "The mail service refused it. Nothing was sent.", detail: msg }, 200);
   }
   await log("sent", j?.id ?? null, null);
   await db.from("email_library").update({ status: "sent", recipient_email: to, recipient_name: toName || null, sent_at: new Date().toISOString() }).eq("id", row.id);
-  return J({ ok: true, id: j?.id ?? null, from, to: toHeader });
+  return J({ ok: true, id: j?.id ?? null, from, to: toP.map(header), cc: ccP.map(header), bcc: bccP.map(header) });
 });

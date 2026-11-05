@@ -29,6 +29,7 @@ export interface LibraryRow {
 
 /** One file attached to a library email. `path` is inside the private bucket email-attachments. */
 export interface Attachment { path: string; name: string; type: string; size: number }
+export interface EmailPerson { email: string; name?: string }
 export const ATTACH_MAX_FILES = 10;
 export const ATTACH_MAX_FILE = 20 * 1024 * 1024;
 export const ATTACH_MAX_TOTAL = 25 * 1024 * 1024;
@@ -51,7 +52,7 @@ export interface EmailApi {
   revise: (body: { kit: string; doc: EmailDoc; instruction: string }) => Promise<GenResult>;
   makeImage: (kit: string, prompt: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
   exportEml: (i: { html: string; text: string; subject: string; to?: string }) => Promise<{ ok: boolean; eml?: string; inlined?: number; skipped?: string[]; error?: string }>;
-  send: (i: { library_id: string; to: string; to_name?: string; subject: string; html_sha: string; attempt: string; attachments?: string[] }) => Promise<SendResult>;
+  send: (i: { library_id: string; to: EmailPerson[]; cc?: EmailPerson[]; bcc?: EmailPerson[]; subject: string; html_sha: string; attempt: string; attachments?: string[] }) => Promise<SendResult>;
   /** Attachments: upload to the private bucket, fetch back (for the .eml), forget an unsaved one. Absent offline. */
   uploadAttachment?: (file: File) => Promise<Attachment>;
   fetchAttachment?: (path: string) => Promise<Blob>;
