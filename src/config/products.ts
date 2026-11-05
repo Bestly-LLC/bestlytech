@@ -5,6 +5,7 @@ import neckpilotIcon from "@/assets/neckpilot-icon.png";
 import schoolpilotIcon from "@/assets/schoolpilot-icon.png";
 import hoacureIcon from "@/assets/hoacure-icon.png";
 import confeshIcon from "@/assets/confesh-icon.png";
+import studioIcon from "@/assets/studio-icon.png";
 import { Droplets, Gem, HeartHandshake, Compass, Leaf, Flower2, ShoppingBag, Clapperboard, PhoneCall } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -139,6 +140,7 @@ export const products: Product[] = [
     description:
       "We make your social posts. You approve them from your phone. We post them.",
     href: "/studio",
+    image: studioIcon,
     icon: Clapperboard,
     category: "Social",
     status: "Live",

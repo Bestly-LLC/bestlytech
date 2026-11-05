@@ -8,11 +8,15 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 import bestlyLogo from "@/assets/bestly-logo.png";
 import { products, isExternalHref } from "@/config/products";
+import studioIcon from "@/assets/studio-icon.png";
 
-const navigation: { name: string; href: string; external?: boolean; isNew?: boolean }[] = [
-  { name: "Home", href: "/" },
+const navigation: { name: string; href: string; external?: boolean; isNew?: boolean; image?: string; wideOnly?: boolean }[] = [
+  // On narrower laptops (1024-1279px) the bar is full once Studio is in it;
+  // the logo already goes home, so Home steps aside there.
+  { name: "Home", href: "/", wideOnly: true },
   { name: "In-House Cloud", href: "/cloud" },
   { name: "Agents", href: "/agent", isNew: true },
+  { name: "Studio", href: "/studio", image: studioIcon },
   // /work is a static page in public/, outside the React router. It must be a
   // plain <a> so the browser does a real page load; <Link> would hit the SPA
   // catch-all rewrite in vercel.json and render the 404 route instead.
@@ -29,6 +33,11 @@ function NewPill() {
       New
     </span>
   );
+}
+
+/** Product app icon beside a nav label (decorative: the label already names it). */
+function NavIcon({ src }: { src: string }) {
+  return <img src={src} alt="" aria-hidden className="mr-1.5 h-4 w-4 shrink-0 rounded-[4px]" />;
 }
 
 // Quiet door to the operator admin: three taps on the logo within 600 ms. Own counter (iPhone Safari
@@ -55,6 +64,13 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
     location.pathname.startsWith("/inventory-proof") ||
     location.pathname.startsWith("/hoku");
   const isServicesActive = location.pathname === "/services" || location.pathname.startsWith("/apple-modernization");
+  // /studio has child pages (/studio/for/<slug>), so it stays lit on those too.
+  const isNavActive = (href: string) =>
+    href === "/services"
+      ? isServicesActive
+      : href === "/studio"
+        ? location.pathname === "/studio" || location.pathname.startsWith("/studio/")
+        : location.pathname === href;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -119,7 +135,7 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
       )}
     >
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-8">
-        <div className="flex lg:flex-1">
+        <div className="flex lg:flex-1 lg:pr-6">
           <Link to="/" onClick={logoDoor} style={{ touchAction: "manipulation" }} className="-m-1.5 p-1.5 flex items-center gap-2.5 group">
             <img 
               src={bestlyLogo} 
@@ -152,7 +168,7 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
                 href={item.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="relative whitespace-nowrap px-2.5 xl:px-4 py-2 text-sm font-medium transition-colors rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                className="relative whitespace-nowrap px-2 xl:px-3 2xl:px-4 py-2 text-sm font-medium transition-colors rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50"
               >
                 {item.name}
               </a>
@@ -161,17 +177,19 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
               key={item.name}
               to={item.href}
               className={cn(
-                "relative whitespace-nowrap px-2.5 xl:px-4 py-2 text-sm font-medium transition-colors rounded-lg",
-              (item.href === "/services" ? isServicesActive : location.pathname === item.href)
+                "relative inline-flex items-center whitespace-nowrap px-2 xl:px-3 2xl:px-4 py-2 text-sm font-medium transition-colors rounded-lg",
+                item.wideOnly && "hidden xl:inline-flex",
+              isNavActive(item.href)
                    ? "text-foreground"
                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
               )}
             >
               <span className="inline-flex items-center whitespace-nowrap">
+                {item.image && <NavIcon src={item.image} />}
                 {item.name}
                 {item.isNew && <NewPill />}
               </span>
-              {(item.href === "/services" ? isServicesActive : location.pathname === item.href) && (
+              {isNavActive(item.href) && (
                 <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
               )}
             </Link>
@@ -263,13 +281,14 @@ export function Header({ compact = false }: { compact?: boolean } = {}) {
                           onClick={() => setMobileMenuOpen(false)}
                           className={cn(
                             "block rounded-xl px-4 py-3 text-base font-medium transition-all",
-                            location.pathname === item.href
+                            isNavActive(item.href)
                               ? "bg-accent text-foreground"
                               : "text-muted-foreground hover:bg-accent hover:text-foreground"
                           )}
                           style={{ animationDelay: `${index * 50}ms` }}
                         >
                           <span className="inline-flex items-center whitespace-nowrap">
+                            {item.image && <NavIcon src={item.image} />}
                             {item.name}
                             {item.isNew && <NewPill />}
                           </span>
