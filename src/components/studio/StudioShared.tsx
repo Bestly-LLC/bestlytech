@@ -7,6 +7,10 @@ import { STUDIO_USE_CASES } from "@/config/studioUseCases";
 
 export const BOOKING = "https://cloud.bestly.tech/apps/calendar/appointment/BtktQYtGFocY";
 export const EMAIL = "studio@bestly.tech";
+/** Self-serve sign-up (questions, then 7 days free, card at the end) on Studio itself. */
+export const START = "https://studio.bestly.tech/start";
+/** Where an existing Studio client signs in. */
+export const SIGNIN = "https://studio.bestly.tech/start?signin=1";
 
 export const chipClass =
   "inline-flex min-h-[44px] items-center rounded-full border border-border bg-card px-5 text-sm font-semibold text-foreground " +
@@ -14,18 +18,23 @@ export const chipClass =
 
 export function StudioCtas({ center = false }: { center?: boolean }) {
   return (
-    <div className={`flex flex-wrap items-center gap-x-6 gap-y-2 ${center ? "justify-center" : ""}`}>
-      <Button asChild size="lg" className="min-h-[44px] active:scale-[0.97]">
-        <a href={BOOKING} target="_blank" rel="noopener noreferrer">
-          Book a free call <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+    <div className={`flex flex-col gap-3 ${center ? "items-center" : "items-start"}`}>
+      <div className={`flex flex-wrap items-center gap-3 ${center ? "justify-center" : ""}`}>
+        <Button asChild size="lg" className="min-h-[44px] active:scale-[0.97]">
+          <a href={START}>
+            Start free for 7&nbsp;days <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+          </a>
+        </Button>
+        <Button asChild size="lg" variant="outline" className="min-h-[44px] active:scale-[0.97]">
+          <a href={BOOKING} target="_blank" rel="noopener noreferrer">Book a free call</a>
+        </Button>
+      </div>
+      <p className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground ${center ? "justify-center" : ""}`}>
+        <span className="whitespace-nowrap">No card until your first account is connected.</span>
+        <a href={SIGNIN} className="inline-flex min-h-[44px] items-center whitespace-nowrap font-semibold text-foreground underline underline-offset-4 hover:text-primary">
+          Already a client? Sign in
         </a>
-      </Button>
-      <a
-        href={`mailto:${EMAIL}`}
-        className="inline-flex min-h-[44px] items-center text-sm font-semibold text-foreground underline underline-offset-4 hover:text-primary"
-      >
-        Or email {EMAIL}
-      </a>
+      </p>
     </div>
   );
 }
