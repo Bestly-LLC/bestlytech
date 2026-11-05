@@ -4,7 +4,7 @@
 //
 //   plans · link · verify · resume · save · ai · upload_url · listing_save · listing_list · queue · decide ·
 //   video_make · connect_start · connect_status · checkout · billing · portal · passkey_options · passkey_save ·
-//   passkey_login_options · passkey_login · originals · forget · networks · wait · sweep (cron, service key)
+//   passkey_login_options · passkey_login · originals · forget · networks · wait · sweep (cron, x-sweep-key)
 //
 // 2026-11-05: serves every business, not just real estate. studio_signups.vertical = 'general' | 'real-estate'.
 // Connect comes BEFORE the card: connect_start makes an inactive pre-client (studio_ensure_client) so the
@@ -196,10 +196,12 @@ async function resumePayload(signup: any) {
   };
 }
 
-/* ── sweep: run by cron studio-selfserve-sweep with the service key ──────── */
+/* ── sweep: run by cron studio-selfserve-sweep (x-sweep-key from Vault) ──── */
 async function sweep(req: Request): Promise<Response> {
-  const auth = req.headers.get("authorization") ?? "";
-  if (!SB_SECRET || auth !== `Bearer ${SB_SECRET}`) return E("forbidden", "Not allowed.", 403);
+  // The cron sends the studio_notify_key from Vault; the database compares it, so the key never lives in this code.
+  const k = req.headers.get("x-sweep-key") ?? "";
+  const chk = k.length >= 20 ? await db.rpc("studio_sweep_key_ok", { p_key: k }) : null;
+  if (!chk || chk.error || chk.data !== true) return E("forbidden", "Not allowed.", 403);
   const out = { opened: 0, nudged: 0, failed: 0 };
   // 1. a network opened: tell everyone waiting for it, once
   const { data: waits } = await db.from("studio_network_waits").select("id,email,platform,studio_networks!inner(label,open)").is("notified_at", null).eq("studio_networks.open", true).limit(50);
