@@ -1,0 +1,1615 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Get started - Bestly Studio</title>
+<meta name="theme-color" content="#F5F5F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0F0E" media="(prefers-color-scheme: dark)">
+<style>
+/* TOKENS: copied verbatim from preview/index.html (:root and .dark). Light is default; dark follows the OS. */
+:root{
+  /* Color (light) */
+  --bg:#F5F5F7;            /* page */
+  --card:#FFFFFF;         /* raised surface */
+  --ink:#0E1312;          /* primary text */
+  --dim:#5E6B68;          /* secondary text (5.3:1 on --bg) */
+  --line:#E3E7E5;         /* hairlines, decorative borders */
+  --edge:#86938F;         /* borders of inputs and buttons (3:1 on white) */
+  --go:#1F7F77;           /* Studio teal: fills */
+  --go-ink:#FFFFFF;       /* text on --go */
+  --go-text:#17695F;      /* teal used as text on --bg / --card */
+  --chip:#EDF2F1;         /* quiet fill */
+  --go-tint:#DCEFEC;      /* status: good / new */
+  --go-tint-ink:#145A54;
+  --warn:#8F5A15;         /* status: time-sensitive (text) */
+  --warn-tint:#F7ECD9;
+  --bar:rgba(255,255,255,.86);   /* translucent tab bar */
+
+  /* Spacing scale */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+
+  /* Radius */
+  --r1:12px;              /* buttons, fields, chips, thumbnails */
+  --r2:20px;              /* cards, sheets, frames */
+  --rp:999px;             /* pills */
+
+  /* Type scale (px) */
+  --t13:13px; --t15:15px; --t17:17px; --t20:20px; --t24:24px; --t32:32px; --t44:44px;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+
+  /* Elevation: two levels only */
+  --e1:0 1px 2px rgba(9,20,18,.05),0 8px 24px rgba(9,20,18,.06);     /* cards */
+  --e2:0 2px 6px rgba(9,20,18,.06),0 24px 60px rgba(9,20,18,.14);    /* sheets, device frames */
+
+  /* Touch sizes */
+  --hit:44px;             /* minimum target */
+  --field:48px;           /* input height */
+}
+.dark{
+  --bg:#0B0F0E; --card:#141A19; --ink:#EDF3F1; --dim:#9AA8A5; --line:#24302D; --edge:#5F6F6B;
+  --go:#5FC0B6; --go-ink:#06201D; --go-text:#5FC0B6; --chip:#1B2422;
+  --go-tint:#173532; --go-tint-ink:#8FE0D6; --warn:#E0AC6A; --warn-tint:#33281A;
+  --bar:rgba(11,15,14,.84);
+  --e1:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.28);
+  --e2:0 2px 6px rgba(0,0,0,.4),0 24px 60px rgba(0,0,0,.5);
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:dark){:root:not(.light){
+  --bg:#0B0F0E; --card:#141A19; --ink:#EDF3F1; --dim:#9AA8A5; --line:#24302D; --edge:#5F6F6B;
+  --go:#5FC0B6; --go-ink:#06201D; --go-text:#5FC0B6; --chip:#1B2422;
+  --go-tint:#173532; --go-tint-ink:#8FE0D6; --warn:#E0AC6A; --warn-tint:#33281A;
+  --bar:rgba(11,15,14,.84);
+  --e1:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.28);
+  --e2:0 2px 6px rgba(0,0,0,.4),0 24px 60px rgba(0,0,0,.5);
+  color-scheme:dark;
+}}
+
+/* phones: no text under 16 px (the 13/15 steps are for large screens) */
+@media (max-width:700px){:root{--t13:16px;--t15:16px}}
+:root{--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px);--bar-h:0px;--danger:#B3261E;--danger-tint:#FBE6E3}
+@media (prefers-color-scheme:dark){:root{--danger:#F2A39C;--danger-tint:#3A1D1A}}
+
+/* ---------- base ---------- */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+html,body,a,button,input,select,textarea,summary,label{touch-action:manipulation}
+body{margin:0;min-height:100vh;min-height:100dvh;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:var(--t17);font-weight:400;line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,ul{margin:0}
+button,input,textarea,select{font-family:var(--font);font-size:var(--t17);color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0;line-height:1.2}
+a{color:var(--go-text)}
+:focus-visible{outline:3px solid var(--go);outline-offset:2px}
+[tabindex="-1"]:focus{outline:none}
+.nw{white-space:nowrap}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.skip{position:absolute;left:var(--s4);top:-80px;z-index:100;background:var(--ink);color:var(--bg);padding:12px 16px;border-radius:var(--r1);text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
+.skip:focus{top:calc(var(--sat) + 8px)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.l{width:24px;height:24px}
+.ic.s{width:16px;height:16px}
+[hidden]{display:none!important}
+.wrapany{overflow-wrap:anywhere}
+
+/* ---------- buttons, chips ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hit);min-width:var(--hit);padding:0 var(--s5);border-radius:var(--r1);border:1px solid transparent;background:var(--go);color:var(--go-ink);font-weight:600;font-size:var(--t17);line-height:1.1;white-space:nowrap;text-decoration:none;transition:transform .12s ease-out,opacity .12s}
+.btn:active{transform:scale(.98)}
+.btn[disabled],.btn[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
+.btn .ic.b{margin-right:var(--s2)}
+.btn .ic.a{margin-left:var(--s2)}
+.btn.lg{min-height:56px}
+.btn.out{background:transparent;color:var(--ink);border-color:var(--edge)}
+.btn.quiet{background:transparent;color:var(--go-text);padding:0 var(--s3)}
+.btn.danger{background:var(--danger);color:#fff}
+.btn.dangerout{background:transparent;color:var(--danger);border-color:var(--danger)}
+.btn.block{width:100%}
+.btn.wrap{white-space:normal;text-align:center;padding-top:10px;padding-bottom:10px}
+.chip{display:inline-block;line-height:28px;height:28px;padding:0 var(--s3);border-radius:var(--rp);background:var(--chip);color:var(--ink);font-size:var(--t13);font-weight:600;white-space:nowrap}
+.chip.new{background:var(--go-tint);color:var(--go-tint-ink)}
+.chip.soon{background:var(--chip);color:var(--dim)}
+.chip.open{background:var(--warn-tint);color:var(--warn)}
+.chip.sold{background:var(--ink);color:var(--bg)}
+.chip.ok{background:var(--go-tint);color:var(--go-tint-ink)}
+
+/* ---------- fields ---------- */
+.field{display:block}
+.field>span,.lbl{display:block;font-size:var(--t15);font-weight:600;color:var(--dim);margin-bottom:4px}
+.in{display:block;width:100%;height:var(--field);padding:0 14px;border:1px solid var(--edge);border-radius:var(--r1);background:var(--card);color:var(--ink);font-size:var(--t17);line-height:1.2;-webkit-appearance:none;appearance:none}
+textarea.in{height:auto;min-height:96px;padding:12px 14px;line-height:1.4;resize:vertical}
+select.in{background-image:none;padding-right:14px}
+.in:focus{outline:none;border-color:var(--go);box-shadow:0 0 0 4px rgba(31,127,119,.22)}
+.in.bad{border-color:var(--danger)}
+.help{margin-top:4px;font-size:var(--t15);line-height:1.4;color:var(--dim)}
+.err{margin-top:6px;font-size:var(--t15);line-height:1.4;color:var(--danger);font-weight:500}
+.seg{display:inline-flex;padding:4px;gap:4px;border-radius:var(--r1);background:var(--chip)}
+.seg button{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hit);padding:0 var(--s4);border-radius:8px;font-size:var(--t15);font-weight:600;color:var(--dim);white-space:nowrap}
+.seg button[aria-checked="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(9,20,18,.12)}
+.sgm{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2)}
+.sgm button{display:flex;align-items:center;justify-content:center;gap:6px;min-height:var(--field);border:1px solid var(--edge);border-radius:var(--r1);background:var(--card);font-size:var(--t17);font-weight:500;padding:0 6px}
+.sgm button[aria-checked="true"]{background:var(--go);border-color:var(--go);color:var(--go-ink);font-weight:600}
+.chk{display:flex;gap:var(--s3);align-items:flex-start;min-height:var(--hit);font-size:var(--t15);line-height:1.45;color:var(--ink);cursor:pointer}
+.chk input{appearance:none;-webkit-appearance:none;flex:none;width:28px;height:28px;margin:0;border:1.5px solid var(--edge);border-radius:8px;background:var(--card);display:grid;place-items:center;cursor:pointer}
+.chk input:checked{background:var(--go);border-color:var(--go)}
+.chk input:checked::after{content:"";width:7px;height:13px;border:solid var(--go-ink);border-width:0 2.5px 2.5px 0;transform:translateY(-1px) rotate(45deg)}
+.chk.bad input{border-color:var(--danger)}
+/* switch rows */
+.sw{display:flex;align-items:center;gap:var(--s4);width:100%;min-height:64px;padding:var(--s3) var(--s4);text-align:left;background:var(--card);border:1px solid var(--line);border-radius:var(--r1)}
+.sw .tx{flex:1;min-width:0}
+.sw .tx b{display:block;font-size:var(--t17);font-weight:600;line-height:1.3}
+.sw .tx small{display:block;margin-top:2px;font-size:var(--t15);line-height:1.4;color:var(--dim)}
+.knob{position:relative;flex:none;width:51px;height:31px;border-radius:99px;background:var(--edge);transition:background .2s}
+.knob::after{content:"";position:absolute;left:2px;top:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+.sw[aria-checked="true"] .knob{background:var(--go)}
+.sw[aria-checked="true"] .knob::after{transform:translateX(20px)}
+.sw .st{flex:none;min-width:32px;font-size:var(--t15);font-weight:600;color:var(--dim)}
+.pick{display:inline-flex;align-items:center;gap:6px;min-height:var(--hit);padding:0 var(--s4);border:1px solid var(--edge);border-radius:var(--rp);background:var(--card);font-weight:500;font-size:var(--t17)}
+.pick[aria-pressed="true"]{background:var(--go);border-color:var(--go);color:var(--go-ink);font-weight:600}
+.picks{display:flex;flex-wrap:wrap;gap:var(--s2)}
+
+/* ---------- placeholder art (feathered) ---------- */
+.ph{position:relative;background:radial-gradient(70% 55% at 28% 22%,var(--hi),transparent 72%),radial-gradient(90% 70% at 80% 92%,var(--lo),transparent 78%),linear-gradient(160deg,var(--a),var(--b))}
+.ph::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 100% at 50% 45%,transparent 52%,rgba(0,0,0,.26) 100%);pointer-events:none}
+.p1{--a:#86B4DD;--b:#CDB48C;--hi:#FFF1CF;--lo:#6B7A4E}
+.p2{--a:#E8D9C3;--b:#B58F6A;--hi:#FFFFFF;--lo:#6B4A33}
+.p3{--a:#C8D3D9;--b:#8F9FA6;--hi:#FFFFFF;--lo:#4B5A62}
+.p4{--a:#F0B78C;--b:#6A5B8A;--hi:#FFE3B8;--lo:#2F2A4D}
+.p5{--a:#BFD6A8;--b:#6F9163;--hi:#F4F9E0;--lo:#2F4A36}
+.p6{--a:#E6DAD6;--b:#B7A39C;--hi:#FFFFFF;--lo:#7A6159}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:var(--r1);background:rgba(10,14,13,.62);color:#fff;font-size:var(--t13);font-weight:600;line-height:1.25;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+
+/* ---------- callouts, spinner ---------- */
+.note{display:flex;gap:var(--s3);align-items:flex-start;padding:var(--s3) var(--s4);border-radius:var(--r1);background:var(--go-tint);color:var(--go-tint-ink);font-size:var(--t15);line-height:1.45}
+.note .ic{margin-top:2px}
+.note.warn{background:var(--warn-tint);color:var(--warn)}
+.note.bad{background:var(--danger-tint);color:var(--danger)}
+.note.plain{background:var(--chip);color:var(--ink)}
+.spin{width:40px;height:40px;fill:none;stroke:var(--go);stroke-width:2.5;stroke-linecap:round;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.mid{display:flex;flex-direction:column;align-items:center;text-align:center;gap:var(--s4);padding:var(--s7) var(--s4)}
+.mid h1,.mid h2{font-size:var(--t24);line-height:1.2;font-weight:600;letter-spacing:-.015em;text-wrap:balance}
+.mid p{color:var(--dim);max-width:30em}
+.bigic{display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:var(--go-tint);color:var(--go-tint-ink)}
+.bigic .ic{width:32px;height:32px}
+
+/* ---------- toasts ---------- */
+.toasts{position:fixed;left:0;right:0;bottom:calc(var(--bar-h) + var(--sab) + 12px);padding:0 calc(var(--s4) + var(--sar)) 0 calc(var(--s4) + var(--sal));display:flex;flex-direction:column;align-items:center;gap:var(--s2);pointer-events:none;z-index:70}
+.toast{pointer-events:auto;max-width:480px;background:var(--ink);color:var(--bg);border-radius:var(--r1);padding:12px 16px;box-shadow:var(--e2);font-size:var(--t15);font-weight:500;line-height:1.4;animation:tin .2s ease-out}
+.toast.bad{background:var(--danger);color:#fff}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ---------- sheet ---------- */
+.scrim{position:fixed;inset:0;background:rgba(14,19,18,.4);opacity:0;transition:opacity .2s;z-index:50}
+.scrim.on{opacity:1}
+.sheet{position:fixed;z-index:51;left:0;right:0;bottom:0;max-height:94vh;max-height:94dvh;background:var(--card);color:var(--ink);border-radius:var(--r2) var(--r2) 0 0;box-shadow:var(--e2);display:flex;flex-direction:column;transform:translateY(100%);transition:transform .25s ease-out;padding-left:var(--sal);padding-right:var(--sar)}
+.sheet.on{transform:none}
+.sheet .shd{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3) var(--s5) 0}
+.sheet .shd h2{font-size:var(--t24);font-weight:600;letter-spacing:-.015em;line-height:1.2}
+.sheet .sbody{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:var(--s3) var(--s5) var(--s4);display:grid;gap:var(--s3);align-content:start}
+.sheet .sact{padding:var(--s3) var(--s5) calc(var(--s4) + var(--sab));display:grid;gap:var(--s2);border-top:1px solid var(--line)}
+.xbtn{flex:none;display:grid;place-items:center;width:var(--hit);height:var(--hit);margin-right:-10px;border-radius:50%;color:var(--dim)}
+@media (min-width:1024px){
+  .sheet{left:auto;top:0;width:480px;max-height:none;border-radius:0;transform:translateX(100%)}
+  .sheet.on{transform:none}
+}
+
+/* ---------- uploader ---------- */
+.drop{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;width:100%;min-height:132px;justify-content:center;padding:var(--s4);border:2px dashed var(--go);border-radius:var(--r2);background:radial-gradient(80% 90% at 50% 40%,rgba(31,127,119,.16),rgba(31,127,119,0) 100%),var(--chip);color:var(--ink)}
+.drop.over{border-style:solid}
+.drop .up{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--go);color:var(--go-ink);margin-bottom:2px}
+.drop b{text-wrap:balance;font-size:var(--t17);font-weight:600;line-height:1.35}
+.drop small{font-size:var(--t15);color:var(--dim);line-height:1.4}
+.ugrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:var(--s2)}
+.ut{position:relative;aspect-ratio:1;border-radius:var(--r1);overflow:hidden;background:var(--chip);display:grid;place-items:center}
+.ut img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.ut .gen{display:grid;justify-items:center;gap:2px;color:var(--dim);font-size:var(--t15);font-weight:600;padding:4px;text-align:center}
+.ut .rm{position:absolute;top:0;right:0;width:44px;height:44px;display:grid;place-items:center;z-index:3}
+.ut .rm i{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:rgba(10,14,13,.66);color:#fff}
+.ut .rm .ic{width:16px;height:16px}
+.ut .bar{position:absolute;left:8px;right:8px;bottom:8px;height:5px;border-radius:99px;background:rgba(255,255,255,.55);z-index:2;overflow:hidden}
+.ut .bar i{display:block;height:100%;width:100%;transform-origin:left center;transform:scaleX(var(--p,0));background:var(--go);border-radius:99px;transition:transform .15s linear}
+.ut .pc{position:absolute;left:6px;top:6px;z-index:2;padding:2px 8px;border-radius:99px;background:rgba(10,14,13,.66);color:#fff;font-size:var(--t15);font-weight:600;line-height:1.4}
+.ut .ck{position:absolute;left:6px;bottom:6px;z-index:2;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--go);color:var(--go-ink)}
+.ut .ck .ic{width:14px;height:14px;stroke-width:2.5}
+.ut.bad{background:var(--danger-tint)}
+.ut .retry{position:absolute;inset:0;z-index:4;display:grid;place-content:center;justify-items:center;gap:4px;padding:6px;color:var(--danger);font-weight:600;font-size:var(--t15);line-height:1.25;text-align:center;background:var(--danger-tint)}
+.tcount{font-size:var(--t15);color:var(--dim)}
+.f4{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2)}
+.f4 .in{padding:0 10px;white-space:nowrap}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
+.fcs{display:grid;grid-template-columns:1.4fr .7fr 1fr;gap:var(--s2)}
+.fcs .in{padding:0 10px;white-space:nowrap}
+.lform{display:grid;gap:var(--s3)}
+
+/* progress bar (single file) */
+.meter{height:6px;border-radius:99px;background:var(--line);overflow:hidden}
+.meter i{display:block;height:100%;width:100%;transform-origin:left center;transform:scaleX(var(--p,0));background:var(--go);border-radius:99px;transition:transform .15s linear}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  .spin{animation:none}
+}
+
+
+/* ---------- wizard ---------- */
+:root{--bar-h:96px}
+.app{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
+.wtop{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);max-width:608px;width:100%;margin:0 auto;padding:calc(var(--sat) + var(--s2)) calc(var(--s5) + var(--sar)) 0 calc(var(--s5) + var(--sal))}
+.back{display:inline-flex;align-items:center;gap:2px;min-height:var(--hit);min-width:var(--hit);margin-left:-10px;padding:0 10px 0 4px;color:var(--go-text);font-size:var(--t17);font-weight:500}
+.back[hidden]{display:inline-flex!important;visibility:hidden}
+.saved{flex:1;text-align:center;font-size:var(--t15);color:var(--dim);min-height:24px}
+.count{font-size:var(--t17);font-weight:600;color:var(--dim);text-align:right;min-width:64px}
+.prog{max-width:560px;width:calc(100% - 48px - var(--sal) - var(--sar));margin:2px auto 0;height:6px;border-radius:var(--rp);background:var(--line);overflow:hidden}
+.prog i{display:block;height:100%;width:100%;transform-origin:left center;transform:scaleX(var(--p,0));border-radius:var(--rp);background:var(--go);transition:transform .3s ease-out}
+.wiz{flex:1;width:100%;max-width:608px;margin:0 auto;padding:var(--s5) calc(var(--s5) + var(--sar)) var(--s5) calc(var(--s5) + var(--sal))}
+.screen{animation:sin .22s ease-out}
+@keyframes sin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.wiz h1{text-wrap:balance;font-size:var(--t32);line-height:1.12;font-weight:600;letter-spacing:-.022em;overflow-wrap:break-word}
+.sub{margin-top:var(--s3);color:var(--dim);font-size:var(--t17);line-height:1.45}
+.form{display:grid;gap:var(--s4);margin-top:var(--s5)}
+.dock{position:sticky;bottom:0;z-index:4;pointer-events:none;padding:var(--s6) calc(var(--s5) + var(--sar)) calc(var(--s4) + var(--sab)) calc(var(--s5) + var(--sal));background:linear-gradient(to top,var(--bg) 58%,transparent)}
+.dock>div{max-width:560px;margin:0 auto;display:grid;gap:var(--s2);pointer-events:auto}
+.dmsg{font-size:var(--t15);line-height:1.4;color:var(--dim);text-align:center}
+.dmsg.bad{color:var(--danger);font-weight:500}
+.hero-ic{display:grid;place-items:center;width:56px;height:56px;border-radius:16px;background:var(--go);color:var(--go-ink);margin-bottom:var(--s5)}
+.hero-ic .ic{width:30px;height:30px}
+.pts{list-style:none;padding:0;margin:var(--s5) 0 0;display:grid;gap:var(--s3)}
+.pts li{display:flex;gap:var(--s3);align-items:flex-start;line-height:1.4}
+.pts li .ic{margin-top:2px;color:var(--go-text)}
+.sug{border:1px solid var(--go);border-radius:var(--r2);padding:var(--s4);background:var(--card);display:grid;gap:var(--s3)}
+.sug h3{font-size:var(--t17);font-weight:600}
+.sug ul{list-style:none;margin:0;padding:0;display:grid;gap:var(--s2)}
+.sug li{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap}
+.sug .row{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
+.sw-c{display:inline-block;width:28px;height:28px;border-radius:8px;border:1px solid var(--edge)}
+.colors{display:grid;gap:var(--s2)}
+.crow{display:flex;align-items:center;gap:var(--s3);min-height:var(--hit)}
+.crow input[type=color]{width:56px;height:44px;padding:2px;border:1px solid var(--edge);border-radius:var(--r1);background:var(--card)}
+.crow code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:var(--t15);color:var(--dim)}
+.group{display:grid;gap:var(--s2)}
+.num7{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.num7 button{min-height:48px;min-width:44px;border:1px solid var(--edge);border-radius:var(--r1);background:var(--card);font-weight:600;font-size:var(--t17)}
+.num7 button[aria-checked="true"]{background:var(--go);border-color:var(--go);color:var(--go-ink)}
+.styles{display:grid;grid-template-columns:1fr;gap:var(--s3)}
+@media (min-width:640px){.styles{grid-template-columns:1fr 1fr}}
+.sty{border:1px solid var(--line);border-radius:var(--r2);background:var(--card);overflow:hidden;box-shadow:var(--e1)}
+.sty .art{padding:var(--s5) var(--s4);min-height:104px;display:grid;align-content:end;gap:2px;position:relative}
+.sty .art::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 100% at 50% 40%,transparent 55%,rgba(0,0,0,.14) 100%);pointer-events:none}
+.sty .art b{font-size:var(--t20);line-height:1.2;position:relative;z-index:1}
+.sty .art span{font-size:var(--t15);position:relative;z-index:1;opacity:.9}
+.sty .nm{padding:var(--s3) var(--s4) 0;font-weight:600}
+.sty .acts{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2);padding:var(--s2) var(--s3) var(--s3)}
+.sty .acts button{display:flex;align-items:center;justify-content:center;gap:6px;min-height:var(--hit);border:1px solid var(--edge);border-radius:var(--r1);font-weight:500;font-size:var(--t15);background:var(--card)}
+.sty .acts button[aria-pressed="true"]{background:var(--go);border-color:var(--go);color:var(--go-ink);font-weight:600}
+.sty .acts button.no[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.prow{display:flex;align-items:center;gap:var(--s3);min-height:64px;padding:var(--s3) var(--s4);background:var(--card);border:1px solid var(--line);border-radius:var(--r1)}
+.prow .tx{flex:1;min-width:0}
+.prow .tx b{display:block;line-height:1.3}
+.prow .tx small{display:block;font-size:var(--t15);color:var(--dim)}
+.prow .ic.l{color:var(--go-text)}
+.plancards{display:grid;gap:var(--s3);margin-top:var(--s4)}
+.pc{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:var(--r2);background:var(--card);padding:var(--s4);box-shadow:var(--e1)}
+.pc[aria-checked="true"]{border:2px solid var(--go);padding:calc(var(--s4) - 1px)}
+.pc .top{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);flex-wrap:wrap}
+.pc .nm{font-size:var(--t20);font-weight:600;display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap}
+.pc .price{font-size:var(--t32);font-weight:600;letter-spacing:-.02em;line-height:1}
+.pc .price small{font-size:var(--t15);font-weight:500;color:var(--dim);letter-spacing:0}
+.pc .tag{margin-top:var(--s2);color:var(--dim);font-size:var(--t15)}
+.pc ul{list-style:none;margin:var(--s3) 0 0;padding:0;display:grid;gap:var(--s2)}
+.pc li{display:flex;gap:var(--s2);font-size:var(--t15);line-height:1.4}
+.pc li .ic{margin-top:2px;color:var(--go-text);width:16px;height:16px}
+.rad{flex:none;width:24px;height:24px;border-radius:50%;border:2px solid var(--edge);display:grid;place-items:center}
+.pc[aria-checked="true"] .rad{background:var(--go);border-color:var(--go);color:var(--go-ink)}
+.pc .rad .ic{width:14px;height:14px;stroke-width:3;opacity:0}
+.pc[aria-checked="true"] .rad .ic{opacity:1}
+.saved-card{display:flex;gap:var(--s3);align-items:flex-start;padding:var(--s4);border-radius:var(--r2);background:var(--go-tint);color:var(--go-tint-ink)}
+@media (max-width:420px){.wiz h1{font-size:30px}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5a2 2 0 0 0 1.44 1.44l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"/><path d="M20 3v4M22 5h-4"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></symbol>
+  <symbol id="i-ig" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><path d="M17.5 6.5h.01"/></symbol>
+  <symbol id="i-fb" viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-set" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></symbol>
+  <symbol id="i-spin" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 1 9 9"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+<div class="app">
+  <header class="wtop" id="wtop" hidden>
+    <button class="back" id="back" type="button"><svg class="ic l" aria-hidden="true"><use href="#i-left"/></svg>Back</button>
+    <span class="saved" id="saved" role="status" aria-live="polite"></span>
+    <span class="count" id="count"></span>
+  </header>
+  <div class="prog" id="prog" role="progressbar" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0" hidden><i></i></div>
+  <main class="wiz" id="main"></main>
+  <div class="dock" id="dock" hidden>
+    <div>
+      <p class="dmsg" id="dmsg" aria-live="polite"></p>
+      <button class="btn lg block" id="next" type="button">Continue</button>
+      <button class="btn quiet" id="alt" type="button" hidden></button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== CONFIG ===== */
+const API = "https://rcqfqhguwpmaarseifqg.supabase.co/functions/v1/studio-re";
+const APIKEY = "sb_publishable_K8JVbZUyPt3jUPEHIADBAA_fNzJ0Iqw";
+
+/* ===== core helpers (shared by every page) ===== */
+const OFFLINE = "You look offline. Nothing was lost — try again when you're back.";
+const GENERIC = "Something went wrong on our side. Nothing was lost — try again in a moment.";
+const TOKEN_KEY = "bestly.re.token";
+
+async function api(action, body, o) {
+  o = o || {};
+  const ms = o.timeout || (action === "ai" ? 45000 : 20000);
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": APIKEY },
+      body: JSON.stringify(Object.assign({ action: action }, body || {})),
+      signal: ctl.signal,
+      keepalive: !!o.keepalive
+    });
+    let j = null;
+    try { j = await r.json(); } catch (e) { j = null; }
+    if (!j || typeof j !== "object") return { ok: false, error: "server_error", message: GENERIC };
+    if (j.ok === false && !j.message) j.message = GENERIC;
+    return j;
+  } catch (e) {
+    return { ok: false, error: "offline", message: OFFLINE };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+const store = {
+  get() { try { return localStorage.getItem(TOKEN_KEY) || ""; } catch (e) { return ""; } },
+  set(v) { try { localStorage.setItem(TOKEN_KEY, v); } catch (e) {} },
+  del() { try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
+};
+
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
+
+/* h(tag, attrs, kids...) - strings become text nodes, never HTML */
+function h(tag, attrs) {
+  const n = document.createElement(tag);
+  if (attrs) for (const k in attrs) {
+    const v = attrs[k];
+    if (v == null || v === false) continue;
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else if (k.slice(0, 2) === "on") n.addEventListener(k.slice(2), v);
+    else if (v === true) n.setAttribute(k, "");
+    else n.setAttribute(k, v);
+  }
+  for (let i = 2; i < arguments.length; i++) add(n, arguments[i]);
+  return n;
+}
+function add(n, c) {
+  if (c == null || c === false) return;
+  if (Array.isArray(c)) { c.forEach((x) => add(n, x)); return; }
+  n.appendChild(typeof c === "string" || typeof c === "number" ? document.createTextNode(String(c)) : c);
+}
+function ic(name, cls) {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("class", "ic" + (cls ? " " + cls : ""));
+  s.setAttribute("aria-hidden", "true");
+  s.setAttribute("focusable", "false");
+  const u = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  u.setAttribute("href", "#i-" + name);
+  s.appendChild(u);
+  return s;
+}
+function nwSpan(t) { return h("span", { class: "nw", text: t }); }
+
+/* nwify: text -> fragment with every number+unit / money / time / date kept on one line */
+const MON = "Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec";
+const NW_RE = new RegExp(
+  "(\\$\\s?\\d[\\d,]*(?:\\.\\d+)?(?:\\s?/\\s?(?:mo|yr))?" +
+  "|\\d{1,2}(?::\\d{2})?\\s?(?:AM|PM)" +
+  "|(?:" + MON + ")[a-z]*\\.? \\d{1,2}(?:, \\d{4})?" +
+  "|\\d[\\d,.]*\\s?(?:sq ft|bd|ba|beds?|baths?|photos?|videos?|posts?|slides?|days?|minutes?|min|MB|KB|%)\\b" +
+  "|\\d[\\d,.]*)", "g");
+function nwify(str) {
+  const f = document.createDocumentFragment();
+  str = String(str == null ? "" : str);
+  let last = 0, m;
+  NW_RE.lastIndex = 0;
+  while ((m = NW_RE.exec(str))) {
+    if (m.index > last) f.appendChild(document.createTextNode(str.slice(last, m.index)));
+    f.appendChild(nwSpan(m[0]));
+    last = m.index + m[0].length;
+    if (m[0].length === 0) NW_RE.lastIndex++;
+  }
+  if (last < str.length) f.appendChild(document.createTextNode(str.slice(last)));
+  return f;
+}
+function T(str) { return h("span", null, nwify(str)); }
+
+/* formatters: US dates, 12-hour times, USD */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function toDate(v) { const d = v instanceof Date ? v : new Date(v); return isNaN(d) ? null : d; }
+function fmtTime(v) {
+  const d = toDate(v); if (!d) return "";
+  let hr = d.getHours(); const mi = d.getMinutes(); const ap = hr >= 12 ? "PM" : "AM";
+  hr = hr % 12 || 12;
+  return hr + (mi ? ":" + (mi < 10 ? "0" : "") + mi : "") + " " + ap;
+}
+function fmtDate(v, withYear) {
+  const d = toDate(v); if (!d) return "";
+  return MONTHS[d.getMonth()] + " " + d.getDate() + (withYear === false ? "" : ", " + d.getFullYear());
+}
+function fmtWhen(v) { const d = toDate(v); return d ? fmtDate(d, false) + " at " + fmtTime(d) : ""; }
+function fmtDayTime(v) { const d = toDate(v); return d ? DAYS[d.getDay()] + " " + fmtTime(d) : ""; }
+function fmtUSD(n) { n = Number(n); return isFinite(n) && n > 0 ? "$" + Math.round(n).toLocaleString("en-US") : ""; }
+function plural(n, one, many) { return n + " " + (n === 1 ? one : (many || one + "s")); }
+function digits(s) { return String(s == null ? "" : s).replace(/[^\d.]/g, ""); }
+
+/* toasts: aria-live, 4 s */
+function toast(msg, kind) {
+  let box = $("#toasts");
+  if (!box) { box = h("div", { id: "toasts", class: "toasts", "aria-live": "polite", "aria-atomic": "false" }); document.body.appendChild(box); }
+  const t = h("div", { class: "toast" + (kind === "bad" ? " bad" : ""), role: kind === "bad" ? "alert" : "status" }, nwify(msg));
+  box.appendChild(t);
+  setTimeout(() => { t.remove(); }, 4000);
+}
+
+/* focus the new screen heading */
+function focusEl(el) { if (!el) return; el.setAttribute("tabindex", "-1"); el.focus({ preventScroll: false }); }
+
+/* sheet / dialog with focus trap */
+function openSheet(opts) {
+  const prev = document.activeElement;
+  const scrim = h("div", { class: "scrim" });
+  const title = h("h2", { id: "sheet-title", text: opts.title });
+  const x = h("button", { class: "xbtn", type: "button", "aria-label": "Close" }, ic("x", "l"));
+  const sbody = h("div", { class: "sbody" }, opts.body);
+  const sheet = h("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-labelledby": "sheet-title" },
+    h("div", { class: "shd" }, title, x), sbody, opts.actions ? h("div", { class: "sact" }, opts.actions) : null);
+  document.body.appendChild(scrim); document.body.appendChild(sheet);
+  document.body.style.overflow = "hidden";
+  requestAnimationFrame(() => { scrim.classList.add("on"); sheet.classList.add("on"); });
+  let closed = false;
+  function close(reason) {
+    if (closed) return; closed = true;
+    document.removeEventListener("keydown", key, true);
+    scrim.classList.remove("on"); sheet.classList.remove("on");
+    document.body.style.overflow = "";
+    setTimeout(() => { scrim.remove(); sheet.remove(); }, 260);
+    if (prev && prev.focus) prev.focus();
+    if (opts.onClose) opts.onClose(reason);
+  }
+  function key(e) {
+    if (e.key === "Escape") { e.stopPropagation(); close("esc"); return; }
+    if (e.key !== "Tab") return;
+    const f = $$('button:not([disabled]),input:not([disabled]),select,textarea,a[href],[tabindex]:not([tabindex="-1"])', sheet).filter((n) => n.offsetParent !== null);
+    if (!f.length) return;
+    const a = f[0], z = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
+    else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+  }
+  document.addEventListener("keydown", key, true);
+  x.addEventListener("click", () => close("x"));
+  scrim.addEventListener("click", () => close("scrim"));
+  setTimeout(() => {
+    let f = opts.focus ? $(opts.focus, sheet) : null;
+    if (!f) { f = title; title.setAttribute("tabindex", "-1"); }
+    f.focus();
+  }, 30);
+  return { el: sheet, body: sbody, close: close };
+}
+
+/* reusable switch row */
+function switchRow(label, desc, on, onChange) {
+  const st = h("span", { class: "st", "aria-hidden": "true", text: on ? "On" : "Off" });
+  const b = h("button", { type: "button", class: "sw", role: "switch", "aria-checked": on ? "true" : "false" },
+    h("span", { class: "tx" }, h("b", { text: label }), desc ? h("small", { text: desc }) : null), st, h("span", { class: "knob", "aria-hidden": "true" }));
+  b.addEventListener("click", () => {
+    const v = b.getAttribute("aria-checked") !== "true";
+    b.setAttribute("aria-checked", v ? "true" : "false"); st.textContent = v ? "On" : "Off";
+    onChange(v);
+  });
+  return b;
+}
+
+/* device-aware passkey wording + WebAuthn glue (assumes SimpleWebAuthn-style JSON) */
+const b64u = {
+  enc(buf) { const b = new Uint8Array(buf); let s = ""; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); },
+  dec(str) { str = String(str).replace(/-/g, "+").replace(/_/g, "/"); while (str.length % 4) str += "="; const s = atob(str); const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b.buffer; }
+};
+function passkeySupported() { return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create); }
+function passkeyLabel() {
+  const ua = navigator.userAgent || "", pf = navigator.platform || "";
+  if (/iPhone|iPad|iPod/.test(ua) || (pf === "MacIntel" && navigator.maxTouchPoints > 1)) return "Save with Face ID";
+  if (/Macintosh|MacIntel|Mac OS X/.test(ua + " " + pf)) return "Save with Touch ID";
+  return "Save a passkey";
+}
+function pkOptions(res) {
+  const o = res.publicKey || res.options || res;
+  const pk = Object.assign({}, o);
+  pk.challenge = b64u.dec(o.challenge);
+  if (o.user && o.user.id) pk.user = Object.assign({}, o.user, { id: b64u.dec(o.user.id) });
+  ["excludeCredentials", "allowCredentials"].forEach((k) => {
+    if (o[k]) pk[k] = o[k].map((c) => Object.assign({}, c, { id: b64u.dec(c.id) }));
+  });
+  return pk;
+}
+function pkCred(c) {
+  const r = c.response, out = { id: c.id, rawId: b64u.enc(c.rawId), type: c.type, clientExtensionResults: (c.getClientExtensionResults && c.getClientExtensionResults()) || {}, response: {} };
+  if (r.attestationObject) { out.response.clientDataJSON = b64u.enc(r.clientDataJSON); out.response.attestationObject = b64u.enc(r.attestationObject); if (r.getTransports) out.response.transports = r.getTransports(); }
+  else { out.response.clientDataJSON = b64u.enc(r.clientDataJSON); out.response.authenticatorData = b64u.enc(r.authenticatorData); out.response.signature = b64u.enc(r.signature); if (r.userHandle) out.response.userHandle = b64u.enc(r.userHandle); }
+  return out;
+}
+async function savePasskey(token) {
+  const o = await api("passkey_options", { token: token });
+  if (!o.ok) return o;
+  let cred;
+  try { cred = await navigator.credentials.create({ publicKey: pkOptions(o) }); }
+  catch (e) { return { ok: false, cancelled: true, error: "cancelled", message: "No problem. You can add a passkey any time in Settings." }; }
+  if (!cred) return { ok: false, cancelled: true, message: "No problem. You can add a passkey any time in Settings." };
+  return api("passkey_save", { token: token, credential: pkCred(cred) });
+}
+async function loginPasskey(email) {
+  const o = await api("passkey_login_options", { email: email });
+  if (!o.ok) return o;
+  let cred;
+  try { cred = await navigator.credentials.get({ publicKey: pkOptions(o) }); }
+  catch (e) { return { ok: false, cancelled: true, message: "That did not go through. You can use the email link instead." }; }
+  if (!cred) return { ok: false, cancelled: true, message: "That did not go through. You can use the email link instead." };
+  return api("passkey_login", { credential: pkCred(cred) });
+}
+
+const DISCLOSURE = "AI-animated from listing photos. Camera movement is simulated; no video was filmed. Property is unchanged.";
+
+/* ===== autosave: debounce 500 ms, one request in flight, patch + rev, stale_rev re-apply ===== */
+function Saver(o) {
+  const S = {
+    answers: {}, rev: 0, ver: {}, dirty: new Set(), stepDirty: false,
+    inflight: null, again: false, timer: null, retry: null, fails: 0, hold: false
+  };
+  function state(k, msg) { if (o.onState) o.onState(k, msg); }
+  S.init = function (answers, rev) { S.answers = answers || {}; S.rev = Number(rev) || 0; };
+  S.get = function (g, k, d) { const x = S.answers[g]; return x && x[k] != null ? x[k] : d; };
+  S.set = function (g, k, v) {
+    const x = S.answers[g] = S.answers[g] || {};
+    x[k] = v; S.touch(g);
+  };
+  S.setGroup = function (g, obj) { S.answers[g] = obj; S.touch(g); };
+  S.touch = function (g) { S.ver[g] = (S.ver[g] || 0) + 1; S.dirty.add(g); S.hold = false; S.schedule(); };
+  S.touchStep = function () { S.stepDirty = true; S.hold = false; S.schedule(); };
+  S.schedule = function (ms) {
+    clearTimeout(S.timer); clearTimeout(S.retry); S.retry = null;
+    S.timer = setTimeout(() => S.flush(), ms == null ? 500 : ms);
+  };
+  S.flush = function (keepalive) {
+    clearTimeout(S.timer);
+    if (S.inflight) { S.again = true; return S.inflight; }
+    const token = o.getToken();
+    if (!token || (!S.dirty.size && !S.stepDirty)) return Promise.resolve();
+    const groups = Array.from(S.dirty), vers = groups.map((g) => S.ver[g]);
+    const patch = {};
+    groups.forEach((g) => { patch[g] = JSON.parse(JSON.stringify(S.answers[g] == null ? {} : S.answers[g])); });
+    const step = o.getStep(), sd = S.stepDirty;
+    state("saving");
+    S.inflight = (async () => {
+      const r = await api("save", { token: token, step: step, patch: patch, rev: S.rev }, { keepalive: !!keepalive });
+      if (r.ok) {
+        S.rev = r.rev != null ? r.rev : S.rev; S.fails = 0;
+        groups.forEach((g, i) => { if (S.ver[g] === vers[i]) S.dirty.delete(g); });
+        if (sd && step === o.getStep()) S.stepDirty = false;
+        state("saved");
+      } else if (r.error === "stale_rev") {
+        /* another device saved first: take the server copy, lay our unsaved groups back on top, send again */
+        const rr = await api("resume", { token: token });
+        if (rr.ok) {
+          const local = S.answers, merged = Object.assign({}, rr.answers || {});
+          const plain = (x) => x && typeof x === "object" && !Array.isArray(x);
+          S.dirty.forEach((g) => { merged[g] = plain(local[g]) && plain(merged[g]) ? Object.assign({}, merged[g], local[g]) : local[g]; });
+          S.answers = merged; S.rev = Number(rr.rev) || 0; S.again = true;
+          if (o.onMerged) o.onMerged(rr);
+        } else if (rr.error === "not_signed_in") { o.onSignedOut(); }
+        else {
+          state("error", rr.message);
+          if (rr.error === "offline" || rr.error === "server_error") S.retry = setTimeout(() => S.flush(), 5000); else S.hold = true;
+        }
+      } else if (r.error === "not_signed_in") {
+        o.onSignedOut();
+      } else {
+        S.fails++;
+        state("error", r.message);
+        if (r.error === "offline" || r.error === "server_error") S.retry = setTimeout(() => S.flush(), Math.min(30000, 3000 * Math.pow(2, S.fails - 1)));
+        else S.hold = true; /* a refusal: wait for the next edit instead of looping (old bug 4) */
+      }
+    })().finally(() => {
+      S.inflight = null;
+      if (S.again) { S.again = false; if (!S.hold) S.flush(); }
+      else if ((S.dirty.size || S.stepDirty) && !S.retry && !S.hold) S.schedule();
+    });
+    return S.inflight;
+  };
+  /* flush when the page is hidden or closed */
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") S.flush(true); });
+  window.addEventListener("pagehide", () => S.flush(true));
+  return S;
+}
+
+/* ===== uploads: one component for the wizard and the board ===== */
+const EXT_MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", heic: "image/heic", heif: "image/heic", webp: "image/webp", zip: "application/zip" };
+function mimeOf(f) {
+  if (f.type && f.type !== "application/octet-stream") return f.type === "application/x-zip-compressed" ? "application/zip" : f.type;
+  const m = /\.([a-z0-9]+)$/i.exec(f.name || ""); return (m && EXT_MIME[m[1].toLowerCase()]) || "";
+}
+const CAPS = { photo: 25, logo: 8, headshot: 8, zip: 50 };
+
+/* PUT with progress; resolves {ok} */
+function putFile(url, method, headers, file, onProgress) {
+  return new Promise((resolve) => {
+    const x = new XMLHttpRequest();
+    x.open(method || "PUT", url, true);
+    Object.keys(headers || {}).forEach((k) => x.setRequestHeader(k, headers[k]));
+    x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+    x.onload = () => resolve({ ok: x.status >= 200 && x.status < 300 });
+    x.onerror = () => resolve({ ok: false, offline: true });
+    x.ontimeout = () => resolve({ ok: false, offline: true });
+    x.timeout = 180000;
+    x.send(file);
+  });
+}
+async function uploadOne(token, kind, file, onProgress) {
+  const mime = mimeOf(file);
+  if (!mime) return { ok: false, message: "That file type is not supported. Use JPEG, PNG, HEIC, WebP or a zip." };
+  if (file.size > CAPS[kind] * 1048576) return { ok: false, message: "That file is bigger than " + CAPS[kind] + " MB." };
+  const u = await api("upload_url", { token: token, kind: kind, filename: file.name || "photo", mime: mime, size: file.size });
+  if (!u.ok) return u;
+  const p = await putFile(u.url, u.method, u.headers, file, onProgress);
+  if (!p.ok) return { ok: false, message: p.offline ? OFFLINE : "That upload did not finish. Try again." };
+  return { ok: true, path: u.path };
+}
+
+/* single-file picker (logo, headshot) with progress */
+function SingleUpload(o) {
+  /* o: {kind, label, getToken, has, onDone(path), onRemove(), onSignedOut} */
+  const input = h("input", { type: "file", accept: "image/jpeg,image/png,image/heic,image/webp", class: "sr", tabindex: "-1", "aria-hidden": "true" });
+  const meter = h("div", { class: "meter", hidden: true }, h("i"));
+  const msg = h("p", { class: "help", hidden: true });
+  const thumb = h("div", { class: "ut", style: "width:64px;height:64px;flex:none", hidden: true });
+  const pick = h("button", { type: "button", class: "btn out" });
+  const rm = h("button", { type: "button", class: "btn quiet", text: "Remove", "aria-label": "Remove " + o.label.toLowerCase() });
+  const status = h("p", { class: "help", style: "margin:0" });
+  function paint(has) {
+    pick.textContent = (has ? "Replace " : "Add ") + o.label.toLowerCase();
+    rm.hidden = !has;
+    status.textContent = has ? o.label + " saved." : "";
+  }
+  paint(!!o.has);
+  pick.addEventListener("click", () => input.click());
+  input.addEventListener("change", async () => {
+    const f = input.files && input.files[0]; input.value = "";
+    if (!f) return;
+    msg.hidden = true; meter.hidden = false; meter.firstChild.style.setProperty("--p", 0); pick.disabled = true;
+    if (/^image\/(jpeg|png|webp)$/.test(mimeOf(f))) {
+      const url = URL.createObjectURL(f); thumb.replaceChildren(h("img", { src: url, alt: "" })); thumb.hidden = false;
+    }
+    const r = await uploadOne(o.getToken(), o.kind, f, (p) => meter.firstChild.style.setProperty("--p", p));
+    pick.disabled = false; meter.hidden = true;
+    if (r.ok) { paint(true); o.onDone(r.path); }
+    else {
+      thumb.hidden = true; msg.textContent = r.message || GENERIC; msg.className = "err"; msg.hidden = false;
+      if (r.error === "not_signed_in" && o.onSignedOut) o.onSignedOut();
+    }
+  });
+  rm.addEventListener("click", () => { thumb.hidden = true; paint(false); o.onRemove(); });
+  const el = h("div", { class: "lform" },
+    h("div", { style: "display:flex;gap:12px;align-items:center;flex-wrap:wrap" }, thumb, pick, rm, input),
+    meter, status, msg);
+  return { el: el };
+}
+
+/* multi-photo uploader: files + zip, up to 60, thumbnails, per-file progress, remove >= 44 px */
+function PhotoUploader(o) {
+  /* o: {getToken, max=60, onChange(), onSignedOut()} */
+  const max = o.max || 60;
+  const items = []; let active = 0;
+  const input = h("input", { type: "file", multiple: true, accept: "image/jpeg,image/png,image/heic,image/webp,.heic,.heif,.zip,application/zip", class: "sr", tabindex: "-1", "aria-hidden": "true" });
+  const drop = h("button", { type: "button", class: "drop", "aria-label": "Add listing photos" },
+    h("span", { class: "up", "aria-hidden": "true" }, ic("up", "l")),
+    h("b", { text: "Drop the listing photos here, or tap to choose." }),
+    h("small", null, "Up to ", nwSpan(max + " photos"), ". JPEG, PNG, HEIC, or a zip."));
+  const grid = h("div", { class: "ugrid", role: "list", "aria-label": "Photos added", hidden: true });
+  const count = h("p", { class: "tcount", "aria-live": "polite" });
+  const msg = h("p", { class: "err", hidden: true, role: "alert" });
+  const el = h("div", { class: "lform" }, drop, input, msg, grid, count);
+
+  function say(t) { msg.textContent = t || ""; msg.hidden = !t; }
+  function photoCount() { return items.filter((i) => !i.zip).length; }
+  function refresh() {
+    grid.hidden = !items.length;
+    const busy = items.filter((i) => i.status === "up" || i.status === "q").length;
+    count.replaceChildren();
+    if (items.length) {
+      const bits = [];
+      if (photoCount()) bits.push(plural(photoCount(), "photo") + " added");
+      if (items.some((i) => i.zip)) bits.push("a zip added");
+      if (busy) bits.push(busy + " still uploading");
+      count.appendChild(nwify(bits.join(", ")));
+    }
+    if (o.onChange) o.onChange();
+  }
+  function tile(it) {
+    const t = it.node;
+    t.className = "ut" + (it.status === "err" ? " bad" : "");
+    t.replaceChildren();
+    const generic = () => h("span", { class: "gen" }, ic(it.zip ? "file" : "image", "l"), it.zip ? "Zip file" : "Photo");
+    if (it.preview) {
+      const im = h("img", { src: it.preview, alt: "", loading: "lazy" });
+      im.addEventListener("error", () => { im.remove(); t.insertBefore(generic(), t.firstChild); });
+      t.appendChild(im);
+    } else t.appendChild(generic());
+    if (it.status === "up" || it.status === "q") {
+      t.appendChild(h("span", { class: "pc" }, nwSpan(Math.round((it.pct || 0) * 100) + "%")));
+      const b = h("span", { class: "bar" }, h("i")); b.firstChild.style.setProperty("--p", it.pct || 0); t.appendChild(b);
+    } else if (it.status === "done") {
+      t.appendChild(h("span", { class: "ck", role: "img", "aria-label": "Uploaded" }, ic("check")));
+    } else if (it.status === "err") {
+      t.appendChild(h("button", { type: "button", class: "retry", "aria-label": "Try again. " + (it.msg || "The upload failed."), onclick: () => { it.status = "q"; it.pct = 0; tile(it); pump(); } },
+        ic("refresh"), h("span", { text: "Try again" })));
+    }
+    t.appendChild(h("button", { type: "button", class: "rm", "aria-label": "Remove " + (it.zip ? "zip file" : "photo " + (items.indexOf(it) + 1)), onclick: () => remove(it) }, h("i", null, ic("x"))));
+  }
+  function remove(it) {
+    const i = items.indexOf(it); if (i < 0) return;
+    items.splice(i, 1); it.node.remove(); it.removed = true;
+    if (it.preview) URL.revokeObjectURL(it.preview);
+    say(""); refresh();
+  }
+  async function run(it) {
+    it.status = "up"; tile(it); active++;
+    const r = await uploadOne(o.getToken(), it.zip ? "zip" : "photo", it.file, (p) => {
+      it.pct = p; const bar = $(".bar i", it.node), pc = $(".pc .nw", it.node);
+      if (bar) bar.style.setProperty("--p", p);
+      if (pc) pc.textContent = Math.round(p * 100) + "%";
+    });
+    active--;
+    if (it.removed) { pump(); return; }
+    if (r.ok) { it.status = "done"; it.path = r.path; it.pct = 1; }
+    else { it.status = "err"; it.msg = r.message || GENERIC; if (r.error === "not_signed_in" && o.onSignedOut) o.onSignedOut(); }
+    tile(it); refresh(); pump();
+  }
+  function pump() { items.forEach((it) => { if (it.status === "q" && active < 3) run(it); }); }
+  function addFiles(list) {
+    say("");
+    const files = Array.prototype.slice.call(list || []);
+    let skipped = 0, bad = 0;
+    files.forEach((f) => {
+      const mime = mimeOf(f), zip = mime === "application/zip";
+      if (!mime) { bad++; return; }
+      if (!zip && photoCount() >= max) { skipped++; return; }
+      const it = { file: f, zip: zip, status: "q", pct: 0, node: h("div", { class: "ut", role: "listitem" }) };
+      if (!zip && /^image\/(jpeg|png|webp)$/.test(mime)) it.preview = URL.createObjectURL(f);
+      items.push(it); grid.appendChild(it.node); tile(it);
+    });
+    if (skipped) say("Only " + max + " photos per listing. We kept the first " + max + ".");
+    else if (bad) say("Some files were skipped. Use JPEG, PNG, HEIC, WebP or a zip.");
+    refresh(); pump();
+  }
+  drop.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => { addFiles(input.files); input.value = ""; });
+  ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", (e) => { if (e.dataTransfer) addFiles(e.dataTransfer.files); });
+  return {
+    el: el,
+    busy: () => items.some((i) => i.status === "up" || i.status === "q"),
+    failed: () => items.some((i) => i.status === "err"),
+    count: () => items.filter((i) => i.status === "done").length,
+    any: () => items.length > 0,
+    photos: () => items.filter((i) => i.status === "done").map((i, n) => i.zip ? { path: i.path, position: n, kind: "zip" } : { path: i.path, position: n, name: (i.file && i.file.name) || undefined }),
+    reset: () => { items.splice(0).forEach((i) => { if (i.preview) URL.revokeObjectURL(i.preview); i.removed = true; }); grid.replaceChildren(); say(""); refresh(); },
+    addFiles: addFiles
+  };
+}
+
+/* money input: shows $1,295,000 while typing, keeps the caret next to the same digit, value is read back with the non-digits stripped */
+function moneyField(input) {
+  input.addEventListener("input", () => {
+    const raw = input.value, pos = input.selectionStart == null ? raw.length : input.selectionStart;
+    const before = raw.slice(0, pos).replace(/\D/g, "").length;
+    const d = raw.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 9);
+    const out = d ? "$" + Number(d).toLocaleString("en-US") : "";
+    if (out === raw) return;
+    input.value = out;
+    let seen = 0, np = out.length;
+    if (before === 0) np = out ? 1 : 0;
+    else for (let i = 0; i < out.length; i++) { if (/\d/.test(out[i])) seen++; if (seen === before) { np = i + 1; break; } }
+    try { input.setSelectionRange(np, np); } catch (e) {}
+  });
+}
+
+/* listing form: address, city/state/zip, price, beds/baths/sq ft (one row), notes, attestation */
+const ATTEST = "I own these photos or have written permission to edit them and make videos from them, and I have the owner's OK to advertise this listing.";
+const STATUS_LABELS = { coming_soon: "Coming soon", just_listed: "Just listed", open_house: "Open house", price_change: "Price change", pending: "Pending", sold: "Sold" };
+function ListingForm(o) {
+  /* o: {withStatus, getToken, onChange(), onSignedOut()} */
+  const err = h("p", { class: "err", role: "alert", hidden: true });
+  const ch = () => { if (!err.hidden) err.hidden = true; if (o.onChange) o.onChange(); };
+  const up = PhotoUploader({ getToken: o.getToken, onChange: ch, onSignedOut: o.onSignedOut });
+  function inp(label, id, extra) { const i = h("input", Object.assign({ class: "in", id: id, type: "text", autocomplete: "off" }, extra || {})); i.addEventListener("input", ch); return i; }
+  function wrap(label, input, help) { return h("label", { class: "field", for: input.id }, h("span", { text: label }), input, help ? h("p", { class: "help", text: help }) : null); }
+  const address = inp("Address", "lf-address", { autocomplete: "street-address", placeholder: "4127 SE Hawthorne Blvd" });
+  const city = inp("City", "lf-city", { autocomplete: "address-level2" });
+  const state = inp("State", "lf-state", { autocomplete: "address-level1", maxlength: 2, autocapitalize: "characters", placeholder: "OR" });
+  const zip = inp("ZIP", "lf-zip", { autocomplete: "postal-code", inputmode: "numeric", maxlength: 10 });
+  const price = inp("Price", "lf-price", { inputmode: "numeric", placeholder: "$1,295,000", autocomplete: "off" });
+  moneyField(price);
+  const beds = inp("Beds", "lf-beds", { inputmode: "decimal" });
+  const baths = inp("Baths", "lf-baths", { inputmode: "decimal" });
+  const sqft = inp("Sq ft", "lf-sqft", { inputmode: "numeric" });
+  const notes = h("textarea", { class: "in", id: "lf-notes", rows: 3, placeholder: "Open house times, upgrades, extras." });
+  notes.addEventListener("input", ch);
+  const status = h("select", { class: "in", id: "lf-status" });
+  Object.keys(STATUS_LABELS).forEach((k) => status.appendChild(h("option", { value: k, text: STATUS_LABELS[k] })));
+  status.value = "just_listed";
+  const oh = h("input", { class: "in", id: "lf-oh", type: "datetime-local" });
+  const ohWrap = wrap("Open house date and time", oh); ohWrap.hidden = true;
+  status.addEventListener("change", () => { ohWrap.hidden = status.value !== "open_house"; ch(); });
+  const att = h("input", { type: "checkbox", id: "lf-att" });
+  const attLbl = h("label", { class: "chk", for: "lf-att" }, att, h("span", { text: ATTEST }));
+  att.addEventListener("change", () => { attLbl.classList.remove("bad"); ch(); });
+  const el = h("div", { class: "lform" },
+    up.el, wrap("Address", address),
+    h("div", { class: "fcs" }, wrap("City", city), wrap("State", state), wrap("ZIP", zip)),
+    wrap("Price", price),
+    h("div", { class: "f4" }, wrap("Beds", beds), wrap("Baths", baths), wrap("Sq ft", sqft)),
+    o.withStatus ? wrap("Status", status) : null, o.withStatus ? ohWrap : null,
+    wrap("Notes", notes), attLbl, err);
+  function touched() { return !!(up.any() || address.value.trim() || city.value.trim() || price.value.trim() || notes.value.trim()); }
+  function problems() {
+    const p = [];
+    if (up.busy()) p.push("Wait for the photos to finish uploading.");
+    else if (up.failed()) p.push("A photo did not upload. Tap Try again on it, or remove it.");
+    else if (!up.count()) p.push("Add at least one photo.");
+    if (!address.value.trim()) p.push("Add the street address.");
+    if (!att.checked) { p.push("Tick the box to confirm you have the rights to these photos."); attLbl.classList.add("bad"); }
+    return p;
+  }
+  function value() {
+    const L = {
+      address: address.value.trim(), city: city.value.trim(), state: state.value.trim().toUpperCase(), zip: zip.value.trim(),
+      price_usd: Number(String(price.value).replace(/\D/g, "")) || null, beds: Number(digits(beds.value)) || null, baths: Number(digits(baths.value)) || null,
+      sqft: Number(digits(sqft.value)) || null, notes: notes.value.trim(), status: o.withStatus ? status.value : "just_listed"
+    };
+    if (o.withStatus && status.value === "open_house" && oh.value) L.open_house_at = new Date(oh.value).toISOString();
+    return L;
+  }
+  /* listing_save is called only when attested (and everything else is in place) */
+  async function submit(token) {
+    const p = problems();
+    if (p.length) { err.textContent = p.join(" "); err.hidden = false; return { ok: false, local: true, message: p.join(" ") }; }
+    err.hidden = true;
+    const r = await api("listing_save", { token: token, listing: value(), photos: up.photos(), attested: true });
+    if (!r.ok) { err.textContent = r.message; err.hidden = false; }
+    return r;
+  }
+  function reset() {
+    [address, city, state, zip, price, beds, baths, sqft, notes, oh].forEach((i) => { i.value = ""; });
+    status.value = "just_listed"; ohWrap.hidden = true; att.checked = false; err.hidden = true; up.reset();
+  }
+  return { el: el, uploader: up, touched: touched, problems: problems, submit: submit, reset: reset, value: value };
+}
+
+
+/* ===== steps ===== */
+/* One page, two doors (2026-11-05): /start is for any business; /start?for=real-estate keeps the listing flow. */
+const RE = new URLSearchParams(location.search).get("for") === "real-estate" || /^\/real-estate/.test(location.pathname);
+const VERT = RE ? "real-estate" : "general";
+if (!RE) document.title = "Get started - Bestly Studio";
+const ORDER = ["intro", "email", "code", "you", "brand", "voice", "rules", "mix", "cadence", "styles", "listing", "connect", "plan", "done", "passkey"].filter((x) => RE || x !== "listing");
+const QSTEPS = ["you", "brand", "voice", "rules", "mix", "cadence", "styles", "listing", "connect", "plan"].filter((x) => RE || x !== "listing");
+const TONES = RE ? ["Warm", "Luxury", "Straight-talking", "Playful", "Local expert"] : ["Warm", "Straight-talking", "Playful", "Expert", "Calm"];
+const STYLES = [
+  { k: "clean", name: "Clean", note: "White space, small type", caption: "Sun all afternoon", css: "background:linear-gradient(165deg,#F4F2ED,#E4DFD5);color:#14110E" },
+  { k: "editorial", name: "Editorial", note: "Serif, magazine feel", caption: "A 1926 bungalow, kept", css: "background:linear-gradient(165deg,#2C2A26,#4A453D);color:#F6F2EA" },
+  { k: "bold", name: "Bold", note: "Big type, strong color", caption: "JUST LISTED", css: "background:linear-gradient(165deg,#0F3D3A,#155E57);color:#F2FFFC" },
+  { k: "photo", name: "Photo first", note: "The picture does the talking", caption: "The kitchen, at 4 PM", css: "background:linear-gradient(150deg,#6E8A80,#3E4F49);color:#fff" },
+  { k: "luxe", name: "Dark", note: "Quiet and expensive", caption: "Private, gated, four beds", css: "background:linear-gradient(165deg,#1A1A1D,#33323A);color:#EDE6D6" },
+  { k: "local", name: "Neighborhood", note: "Warm, local, human", caption: "Why we moved here", css: "background:linear-gradient(150deg,#E8DCC8,#C9B79C);color:#20180F" }
+];
+if (!RE) {
+  const GEN_CAP = { clean: "Open from 8 AM", editorial: "How we make it", bold: "NEW THIS WEEK", photo: "Before and after", luxe: "Made by hand", local: "Why we started" };
+  STYLES.forEach((x) => { if (GEN_CAP[x.k]) x.caption = GEN_CAP[x.k]; if (x.k === "local") { x.name = "Personal"; } });
+}
+/* Networks come from the server (studio_networks): open ones connect now, closed ones join a waiting list. */
+const ICONS = { instagram: "ig", facebook: "fb" };
+let NETS = [{ id: "instagram", name: "Instagram", open: false }, { id: "facebook", name: "Facebook", open: false }];
+
+const P = new URLSearchParams(location.search);
+const S = {
+  token: store.get(), step: "intro", email: "", plans: null, cad: P.get("cad") === "annual" ? "annual" : "monthly",
+  plan: P.get("plan") === "carousels" ? "carousels" : "premium", conn: {}, edit: false, busy: false, listingDone: null,
+  clientSlug: "", note: "", mode: "signup", cur: null, signed: false
+};
+const saver = Saver({ getToken: () => S.token, getStep: () => S.step, onState: showSaved, onSignedOut: signedOut, onMerged: (rr) => { if (rr.client_slug) S.clientSlug = rr.client_slug; } });
+const trialDays = () => (S.plans && S.plans.trial_days) || 7;
+const main = $("#main");
+main.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (e.key === "Enter" && t.tagName === "INPUT" && t.type !== "checkbox" && t.type !== "file" && t.type !== "color") { e.preventDefault(); doNext(); }
+});
+let savedTimer = null;
+
+function showSaved(k, msg) {
+  const n = $("#saved"); clearTimeout(savedTimer);
+  if (k === "saving") n.textContent = "Saving";
+  else if (k === "saved") { n.textContent = "Saved"; savedTimer = setTimeout(() => { n.textContent = ""; }, 2000); }
+  else n.textContent = msg ? "Not saved yet. We will keep trying." : "";
+}
+function signedOut() {
+  store.del(); S.token = ""; S.mode = "signin";
+  toast("Please sign in again. Your answers are saved.", "bad");
+  go("email");
+}
+
+/* ----- screen plumbing ----- */
+function chrome(opts) {
+  const q = QSTEPS.indexOf(S.step) >= 0 && !S.edit;
+  const showTop = opts.top !== false;
+  $("#wtop").hidden = !showTop;
+  $("#prog").hidden = !(showTop && q);
+  $("#count").textContent = "";
+  $("#saved").textContent = "";
+  if (showTop && q) {
+    const i = QSTEPS.indexOf(S.step) + 1, n = QSTEPS.length;
+    $("#count").replaceChildren(nwSpan(i + " of " + n));
+    $("#prog").setAttribute("aria-valuemax", n); $("#prog").setAttribute("aria-valuenow", i);
+    $("#prog").setAttribute("aria-valuetext", "Question " + i + " of " + n);
+    $("#prog i").style.setProperty("--p", i / n);
+  }
+  const back = $("#back");
+  back.hidden = !opts.back;
+  back.onclick = opts.back || null;
+  const dock = $("#dock");
+  dock.hidden = !opts.next;
+  if (opts.next) {
+    const nx = $("#next");
+    nx.textContent = opts.next.label; nx.disabled = !!opts.next.disabled;
+    nx.onclick = () => doNext();
+  }
+  const alt = $("#alt");
+  alt.hidden = !opts.alt;
+  if (opts.alt) { alt.textContent = opts.alt.label; alt.onclick = opts.alt.run; }
+  dmsg("");
+}
+function dmsg(t, bad) { const m = $("#dmsg"); m.textContent = t || ""; m.className = "dmsg" + (bad ? " bad" : ""); }
+function setNextLabel(label, disabled) { const nx = $("#next"); nx.textContent = label; nx.disabled = !!disabled; }
+async function doNext() {
+  if (S.busy || !S.cur || !S.cur.onNext) return;
+  S.busy = true; const nx = $("#next"); nx.disabled = true;
+  try { await S.cur.onNext(); } finally { S.busy = false; nx.disabled = !!(S.cur && S.cur.nextDisabled && S.cur.nextDisabled()); }
+}
+function screen(title, sub, body) {
+  return h("div", { class: "screen" }, h("h1", { id: "h1", text: title }), sub ? h("p", { class: "sub" }, nwify(sub)) : null, body);
+}
+function show(node, cur, opts) {
+  S.cur = cur || null;
+  main.replaceChildren(node);
+  chrome(opts || {});
+  window.scrollTo(0, 0);
+  focusEl($("#h1", main));
+}
+function mid(icon, title, text, buttons, loading) {
+  const n = h("div", { class: "screen mid" },
+    loading ? h("svg", { class: "spin", viewBox: "0 0 24 24", "aria-hidden": "true" }, (() => { const u = document.createElementNS("http://www.w3.org/2000/svg", "use"); u.setAttribute("href", "#i-spin"); return u; })()) : h("div", { class: "bigic" }, ic(icon)),
+    h("h1", { id: "h1", text: title }), text ? h("p", null, nwify(text)) : null, buttons || null);
+  show(n, null, { top: false });
+}
+
+function prevOf(id) {
+  if (id === "email") return "intro";
+  if (id === "code") return "email";
+  const i = QSTEPS.indexOf(id);
+  return i > 0 ? QSTEPS[i - 1] : null;
+}
+function go(id) {
+  S.step = id;
+  const def = STEP[id];
+  const prev = S.edit ? null : prevOf(id);
+  const out = def();
+  show(out.node, out, {
+    top: out.top, back: S.edit && id === "brand" ? () => { location.href = "/studio/me"; } : (prev ? () => go(prev) : null),
+    next: out.next, alt: out.alt
+  });
+  if (QSTEPS.indexOf(id) >= 0 && S.token && !S.clientSlug) saver.touchStep();
+  if (out.after) out.after();
+}
+
+/* ----- tiny form helpers ----- */
+function field(label, input, help, id) {
+  const wrap = h("label", { class: "field" }, h("span", { text: label }), input);
+  if (help) wrap.appendChild(h("p", { class: "help", text: help }));
+  const e = h("p", { class: "err", hidden: true, role: "alert" }); wrap.appendChild(e);
+  input.addEventListener("input", () => { if (!e.hidden) wrap.setErr(""); });
+  wrap.setErr = (t) => { e.textContent = t || ""; e.hidden = !t; input.classList.toggle("bad", !!t); input.setAttribute("aria-invalid", t ? "true" : "false"); };
+  return wrap;
+}
+function bind(group, key, input, d) {
+  input.value = saver.get(group, key, d == null ? "" : d);
+  input.addEventListener("input", () => saver.set(group, key, input.value));
+  return input;
+}
+function textIn(o) { return h("input", Object.assign({ class: "in", type: "text", autocomplete: "off" }, o)); }
+const list = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i);
+function listIn(group, key, o, fmt) {
+  const i = textIn(o); const cur = saver.get(group, key, []);
+  i.value = (Array.isArray(cur) ? cur : []).join(", ");
+  i.addEventListener("input", () => { let v = list(i.value); if (fmt) v = v.map(fmt); saver.set(group, key, v); });
+  return i;
+}
+
+/* ===== the steps. Each returns {node, next, alt, onNext, top} ===== */
+const STEP = {};
+
+STEP.intro = function () {
+  const node = h("div", { class: "screen" },
+    h("div", { class: "hero-ic", "aria-hidden": "true" }, ic("spark")),
+    h("h1", { id: "h1", text: RE ? "Send us the photos from a listing. We make the posts and the video." : "We make your social media posts. You approve them. We post them." }),
+    h("p", { class: "sub" }, nwify(RE ? "It takes about 4 minutes. You answer a few questions so every post sounds like you and carries your license line." : "It takes about 4 minutes. You answer a few questions so every post sounds like you.")),
+    h("ul", { class: "pts" },
+      h("li", null, ic("check"), h("span", null, RE ? "We write the posts and make a short video from your photos." : "We write and design the posts from your photos, clips and ideas.")),
+      h("li", null, ic("check"), h("span", null, "Nothing goes out until you tap Approve.")),
+      h("li", null, ic("check"), h("span", null, nwify("Free for " + trialDays() + " days. We ask for your card at the end."))))
+  );
+  return { node, top: false, next: { label: "Start free for " + trialDays() + " days" }, alt: { label: "I already have an account", run: () => { S.mode = "signin"; go("email"); } }, onNext: async () => { S.mode = "signup"; go("email"); } };
+};
+
+STEP.email = function () {
+  const input = textIn({ type: "email", inputmode: "email", autocomplete: "email", autocapitalize: "none", spellcheck: "false", placeholder: RE ? "you@brokerage.com" : "you@yourbusiness.com" });
+  input.value = S.email || "";
+  const f = field("Email", input, "We send a link. No password.");
+  const node = screen(S.mode === "signin" ? "Welcome back. What is your email?" : "What is your email?", "", h("div", { class: "form" }, f, S.note ? h("div", { class: "note plain" }, ic("info"), S.note) : null));
+  S.note = "";
+  const alt = passkeySupported() ? { label: "Sign in with a passkey", run: async () => {
+    const e = input.value.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(e)) { f.setErr("Enter your email first, then tap this."); input.focus(); return; }
+    f.setErr(""); S.email = e;
+    const r = await loginPasskey(e);
+    if (r.ok) afterAuth(r); else dmsg(r.message, true);
+  } } : null;
+  return { node, next: { label: "Email me the link" }, alt,
+    onNext: async () => {
+      const e = input.value.trim().toLowerCase();
+      if (!/^\S+@\S+\.\S+$/.test(e)) { f.setErr("That does not look like an email. Check it and try again."); input.focus(); return; }
+      f.setErr(""); S.email = e; dmsg("Sending");
+      const r = await api("link", { email: e, vertical: VERT });
+      if (!r.ok) { dmsg(r.message, true); return; }
+      go("code");
+    } };
+};
+
+STEP.code = function () {
+  const input = textIn({ autocapitalize: "none", spellcheck: "false", inputmode: "text", autocomplete: "one-time-code", maxlength: 24 });
+  const f = field("Code from the email", input, "Link not working? Type the code from the email here.");
+  const resend = h("button", { type: "button", class: "btn out", text: "Send it again" });
+  let cool = 0;
+  resend.addEventListener("click", async () => {
+    if (cool) return; resend.disabled = true;
+    const r = await api("link", { email: S.email, vertical: VERT });
+    if (r.ok) { toast("Sent again. Check your inbox."); cool = 1; setTimeout(() => { cool = 0; resend.disabled = false; }, 20000); }
+    else { toast(r.message, "bad"); resend.disabled = false; }
+  });
+  const node = screen("Check your email", "We sent a link to " + (S.email || "your inbox") + ". Tap it on this phone and you come right back here.",
+    h("div", { class: "form" }, f, h("div", { class: "group" }, resend, h("button", { type: "button", class: "btn quiet", text: "Use a different email", onclick: () => go("email") }))));
+  return { node, next: { label: "Use this code" },
+    onNext: async () => {
+      const c = input.value.trim().toLowerCase().replace(/\s+/g, "");
+      if (c.length < 6) { f.setErr("That code is short. Copy the whole thing from the email."); input.focus(); return; }
+      f.setErr(""); dmsg("Checking");
+      const r = await api("verify", { code: c });
+      dmsg("");
+      if (r.ok) return afterAuth(r);
+      if (r.error === "used" || r.error === "expired") return expiredScreen(r.message);
+      f.setErr(r.message); input.focus();
+    } };
+};
+
+STEP.you = function () {
+  if (!RE) {
+    const nm = bind("about", "name", textIn({ autocomplete: "name" }));
+    const bz = bind("about", "business", textIn({ autocomplete: "organization" }));
+    const wt = bind("about", "what", textIn({ placeholder: "Dog grooming in Echo Park" }));
+    const wh = listIn("about", "cities", { placeholder: "Los Angeles, online" });
+    const fN = field("Your name", nm), fB = field("Business name", bz, "Leave it as your name if you work under your own name."),
+      fW = field("What you do, in a few words", wt, "We use this to plan your posts."), fH = field("Where you work", wh, "Optional. Separate with commas.");
+    const node = screen("Tell us about your business.", "", h("div", { class: "form" }, fN, fB, fW, fH));
+    return { node, next: { label: "Continue" },
+      onNext: async () => {
+        let first = null;
+        const chk = (f, i, msg) => { const bad = !i.value.trim(); f.setErr(bad ? msg : ""); if (bad && !first) first = i; };
+        chk(fN, nm, "Add your name."); chk(fW, wt, "Say in a few words what you do.");
+        if (!bz.value.trim() && nm.value.trim()) { bz.value = nm.value.trim(); saver.set("about", "business", bz.value); }
+        if (first) { first.focus(); return; }
+        go("brand");
+      } };
+  }
+  const nm = bind("about", "name", textIn({ autocomplete: "name" }));
+  const br = bind("about", "brokerage", textIn({ autocomplete: "organization" }));
+  const ln = bind("about", "licensed_name", textIn({}));
+  const lc = bind("about", "license", textIn({ autocapitalize: "characters" }));
+  let lnTouched = !!ln.value && ln.value !== nm.value;
+  ln.addEventListener("input", () => { lnTouched = true; });
+  nm.addEventListener("input", () => { if (!lnTouched) { ln.value = nm.value; saver.set("about", "licensed_name", ln.value); } });
+  const fN = field("Name", nm), fB = field("Brokerage", br), fL = field("Licensed name", ln, "Exactly as it appears on your license."), fC = field("License number", lc, "Shown on every post, as your state requires.");
+  const stId = "st-lbl", stErr = h("p", { class: "err", hidden: true, role: "alert" });
+  let state = saver.get("about", "state", "");
+  const opts = [["OR", "Oregon"], ["CA", "California"], ["other", "Other"]];
+  const btns = opts.map((o) => {
+    const b = h("button", { type: "button", role: "radio", "aria-checked": state === o[0] ? "true" : "false" }, ic("check", "s"), o[1]);
+    b.addEventListener("click", () => { state = o[0]; saver.set("about", "state", o[0]); stErr.hidden = true; btns.forEach((x, i) => x.setAttribute("aria-checked", opts[i][0] === state ? "true" : "false")); });
+    return b;
+  });
+  const sg = h("div", { class: "sgm", role: "radiogroup", "aria-labelledby": stId }, btns);
+  const node = screen("Who is the post signed by?", "", h("div", { class: "form" }, fN, fB, fL, fC, h("div", { class: "field" }, h("span", { id: stId, class: "lbl", text: "State" }), sg, stErr)));
+  return { node, next: { label: "Continue" },
+    onNext: async () => {
+      let first = null;
+      const chk = (f, i, msg) => { const bad = !i.value.trim(); f.setErr(bad ? msg : ""); if (bad && !first) first = i; };
+      chk(fN, nm, "Add your name."); chk(fB, br, "Add your brokerage."); chk(fL, ln, "Add the name on your license."); chk(fC, lc, "Add your license number.");
+      if (!state) { stErr.textContent = "Pick your state."; stErr.hidden = false; if (!first) first = btns[0]; }
+      if (first) { first.focus(); return; }
+      go("brand");
+    } };
+};
+
+STEP.brand = function () {
+  const web = bind("about", "website", textIn({ type: "url", inputmode: "url", autocapitalize: "none", spellcheck: "false", placeholder: "yourname.com", autocomplete: "url" }));
+  const ig = bind("about", "instagram", textIn({ autocapitalize: "none", spellcheck: "false", placeholder: "@yourhandle" }));
+  const fW = field("Website", web, "Optional. We can look at it for your colors."), fI = field("Instagram handle", ig);
+  const look = h("button", { type: "button", class: "btn out", text: "Look at my website" });
+  const sugBox = h("div", { "aria-live": "polite" });
+  let sugg = null;
+  look.addEventListener("click", async () => {
+    let u = web.value.trim(); if (!u) { fW.setErr("Add your website first."); web.focus(); return; }
+    if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+    fW.setErr(""); look.disabled = true; look.textContent = "Looking"; sugBox.replaceChildren();
+    const r = await api("ai", { token: S.token, task: "brand_from_site", url: u });
+    look.disabled = false; look.textContent = "Look at my website";
+    if (r.error === "not_signed_in") return signedOut();
+    if (!r.ok) { sugBox.replaceChildren(h("div", { class: "note warn" }, ic("alert"), r.message)); return; }
+    sugg = r.suggestion || {}; renderSug();
+  });
+  const hexes = (sugg) => (Array.isArray(sugg.colors) ? sugg.colors : []).map((c) => (typeof c === "string" ? c : c && (c.hex || c.value)) || "").filter((c) => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 3);
+  function renderSug() {
+    const cols = hexes(sugg), bro = RE ? (sugg.brokerage || sugg.name || "") : (sugg.business || ""), tones = (Array.isArray(sugg.tones) ? sugg.tones : []).filter((t) => TONES.indexOf(t) >= 0).slice(0, 2);
+    const canBro = bro && !saver.get("about", RE ? "brokerage" : "business", "").trim(), canTone = tones.length && !(saver.get("voice", "tones", []) || []).length;
+    if (!cols.length && !canBro && !canTone) { sugBox.replaceChildren(h("div", { class: "note plain" }, ic("info"), "We could not find colors on that site. You can pick them below.")); return; }
+    const ul = h("ul", null);
+    if (cols.length) ul.appendChild(h("li", null, "Colors:", cols.map((c) => h("span", { class: "sw-c", style: "background:" + c, role: "img", "aria-label": "Color " + c }))));
+    if (canBro) ul.appendChild(h("li", null, (RE ? "Brokerage: " : "Business name: ") + bro));
+    if (canTone) ul.appendChild(h("li", null, "Tone: " + tones.join(", ")));
+    sugBox.replaceChildren(h("div", { class: "sug" }, h("h3", { text: "Here is what we found" }), ul,
+      h("div", { class: "row" },
+        h("button", { type: "button", class: "btn", text: "Use these", onclick: () => {
+          if (cols.length) { saver.set("brand", "colors", cols); renderColors(); }
+          saver.set("brand", "pulled", sugg);
+          if (canBro) saver.set("about", RE ? "brokerage" : "business", bro);
+          if (canTone) saver.set("voice", "tones", tones);
+          sugBox.replaceChildren(); toast("Added. You can still change them.");
+        } }),
+        h("button", { type: "button", class: "btn out", text: "Not quite", onclick: () => { sugBox.replaceChildren(); sugg = null; } }))));
+  }
+  const logo = SingleUpload({ kind: "logo", label: "Logo", getToken: () => S.token, has: !!saver.get("brand", "logo_path", ""), onDone: (p) => saver.set("brand", "logo_path", p), onRemove: () => saver.set("brand", "logo_path", ""), onSignedOut: signedOut });
+  const head = SingleUpload({ kind: "headshot", label: "Headshot", getToken: () => S.token, has: !!saver.get("brand", "headshot_path", ""), onDone: (p) => saver.set("brand", "headshot_path", p), onRemove: () => saver.set("brand", "headshot_path", ""), onSignedOut: signedOut });
+  const colorsBox = h("div", { class: "colors" });
+  function renderColors() {
+    const cols = (saver.get("brand", "colors", []) || []).slice();
+    colorsBox.replaceChildren();
+    cols.forEach((c, i) => {
+      const inp = h("input", { type: "color", value: c, "aria-label": "Brand color " + (i + 1) });
+      const code = h("code", { text: c.toUpperCase() });
+      inp.addEventListener("input", () => { cols[i] = inp.value; code.textContent = inp.value.toUpperCase(); saver.set("brand", "colors", cols.slice()); });
+      colorsBox.appendChild(h("div", { class: "crow" }, inp, code, h("button", { type: "button", class: "btn quiet", text: "Remove", "aria-label": "Remove color " + (i + 1), onclick: () => { cols.splice(i, 1); saver.set("brand", "colors", cols.slice()); renderColors(); } })));
+    });
+    if (cols.length < 3) colorsBox.appendChild(h("button", { type: "button", class: "btn out", text: cols.length ? "Add another color" : "Add a color", onclick: () => { cols.push(cols.length ? "#145A54" : "#1F7F77"); saver.set("brand", "colors", cols.slice()); renderColors(); } }));
+  }
+  renderColors();
+  const node = screen("Let's get your look.", "Everything here is optional. Add what you have.",
+    h("div", { class: "form" }, fW, look, sugBox, fI,
+      h("div", { class: "group" }, h("span", { class: "lbl", text: "Logo" }), logo.el),
+      h("div", { class: "group" }, h("span", { class: "lbl", text: RE ? "Headshot" : "A photo of you (optional)" }), head.el),
+      h("div", { class: "group" }, h("span", { class: "lbl", text: "Brand colors (up to 3)" }), colorsBox)));
+  return { node, next: { label: S.edit ? "Save and go back" : "Continue" },
+    onNext: async () => { if (S.edit) { await saver.flush(); location.href = "/studio/me"; return; } go("voice"); } };
+};
+
+STEP.voice = function () {
+  let tones = (saver.get("voice", "tones", []) || []).slice();
+  const chips = h("div", { class: "picks", role: "group", "aria-label": "Tone" });
+  const hint = h("p", { class: "help" });
+  function paint() {
+    chips.replaceChildren();
+    TONES.forEach((t) => {
+      const on = tones.indexOf(t) >= 0;
+      const b = h("button", { type: "button", class: "pick", "aria-pressed": on ? "true" : "false" }, on ? ic("check", "s") : null, t);
+      b.addEventListener("click", () => {
+        tones = on ? tones.filter((x) => x !== t) : tones.concat([t]).slice(-2);
+        saver.set("voice", "tones", tones.slice()); paint();
+      });
+      chips.appendChild(b);
+    });
+    hint.textContent = tones.length === 0 ? "Pick up to two." : tones.length === 1 ? "One picked. Add a second if you like." : "Two picked. Tap another to swap the older one.";
+  }
+  paint();
+  const use = listIn("voice", "words_use", { placeholder: RE ? "sun-drenched, move-in ready" : "handmade, friendly, local" });
+  const avoid = listIn("voice", "words_avoid", { placeholder: RE ? "stunning, must see" : "cheap, best ever" });
+  const tags = listIn("voice", "hashtags", { placeholder: RE ? "#portlandhomes, #justlisted" : "#smallbusiness, #echopark", autocapitalize: "none" }, (x) => (x[0] === "#" ? x : "#" + x));
+  const cities = listIn("about", "cities", { placeholder: "Portland, Lake Oswego" });
+  const emoji = switchRow("Use emoji in captions", "Off by default. Turn on if that is how you write.", !!saver.get("voice", "emoji", false), (v) => saver.set("voice", "emoji", v));
+  const node = screen("How should your posts sound?", "", h("div", { class: "form" },
+    h("div", { class: "group" }, h("span", { class: "lbl", text: "Tone" }), chips, hint),
+    field("Words you like", use, "Separate with commas."), field("Words to avoid", avoid, "Separate with commas."),
+    field("Hashtags you use", tags, "Separate with commas."), RE ? field("Cities and neighborhoods you work in", cities, "Optional. Used for neighborhood posts.") : null, emoji));
+  return { node, next: { label: "Continue" }, onNext: async () => go("rules") };
+};
+
+STEP.rules = function () {
+  if (!RE) {
+    if (saver.get("rules", "no_face", undefined) === undefined) saver.set("rules", "no_face", false);
+    const nf = switchRow("Never show people's faces", "We skip photos with people in them.", saver.get("rules", "no_face", false), (v) => saver.set("rules", "no_face", v));
+    const never = listIn("rules", "never", { placeholder: "cheap, guaranteed, competitor names" });
+    const node = screen("Your ground rules.", "A person at Bestly checks every post before you see it.",
+      h("div", { class: "form" }, nf, field("Words we should never write", never, "Separate with commas.")));
+    return { node, next: { label: "Continue" }, onNext: async () => go("mix") };
+  }
+  const def = { license_line: true, equal_housing: true, no_face: true };
+  Object.keys(def).forEach((k) => { if (saver.get("rules", k, undefined) === undefined) saver.set("rules", k, def[k]); });
+  const warn = h("div", { class: "note warn", hidden: true }, ic("alert"), "Your state may require your license on every ad. We recommend leaving this on.");
+  const lic = switchRow("Put my license line on every post", "Your name, brokerage and license number.", saver.get("rules", "license_line", true), (v) => { saver.set("rules", "license_line", v); warn.hidden = v; });
+  const eh = switchRow("Add the Equal Housing line", "A short fair housing line at the end of each caption.", saver.get("rules", "equal_housing", true), (v) => saver.set("rules", "equal_housing", v));
+  const nf = switchRow("Never show faces", "We skip photos with people in them.", saver.get("rules", "no_face", true), (v) => saver.set("rules", "no_face", v));
+  warn.hidden = saver.get("rules", "license_line", true);
+  const never = listIn("rules", "never", { placeholder: "cheap, fixer, perfect for families" });
+  const node = screen("Your ground rules.", "We also check every post for risky fair housing wording before you see it.",
+    h("div", { class: "form" }, lic, warn, eh, nf, field("Words we should never write", never, "Separate with commas.")));
+  return { node, next: { label: "Continue" }, onNext: async () => go("mix") };
+};
+
+STEP.mix = function () {
+  const rows = !RE ? [["news", "News and updates", "What is new, changes and launches.", true], ["tips", "Tips and how-tos", "Short helpful posts from what you know.", true],
+    ["behind", "Behind the scenes", "How you work and who is behind it.", true], ["community", "Customers and community", "Thank-yous, local spots and events.", true],
+    ["offers", "Offers and events", "When you have something on.", false], ["personal", "About you", "Your story.", false]] : [["listing", "New listings", "Just listed and coming soon posts.", true], ["sold", "Sold", "Celebrate a closing.", true], ["openhouse", "Open houses", "Date, time and a reminder the day before.", true],
+    ["price", "Price changes", "When a price drops or moves.", true], ["local", "Neighborhood and market", "Local spots and market notes.", true], ["personal", "About you", "Behind the scenes and your story.", false]];
+  rows.forEach((r) => { if (saver.get("content", r[0], undefined) === undefined) saver.set("content", r[0], r[3]); });
+  const node = screen("What should we post about?", "Turn off anything you do not want.",
+    h("div", { class: "form" }, rows.map((r) => switchRow(r[1], r[2], saver.get("content", r[0], r[3]), (v) => saver.set("content", r[0], v)))));
+  return { node, next: { label: "Continue" }, onNext: async () => go("cadence") };
+};
+
+STEP.cadence = function () {
+  let n = Number(saver.get("cadence", "per_week", 0)) || 3;
+  if (!saver.get("cadence", "per_week", 0)) saver.set("cadence", "per_week", 3);
+  if (saver.get("cadence", "autopost", undefined) === undefined) saver.set("cadence", "autopost", false);
+  const sum = h("p", { class: "help", "aria-live": "polite" });
+  const grp = h("div", { class: "num7", role: "radiogroup", "aria-label": "Posts per week" });
+  function paint() {
+    $$("button", grp).forEach((b, i) => b.setAttribute("aria-checked", i + 1 === n ? "true" : "false"));
+    sum.replaceChildren(nwify("About " + n + (n === 1 ? " post a week." : " posts a week.")));
+  }
+  for (let i = 1; i <= 7; i++) grp.appendChild(h("button", { type: "button", role: "radio", "aria-checked": "false", "aria-label": i + (i === 1 ? " post a week" : " posts a week"), text: String(i), onclick: () => { n = i; saver.set("cadence", "per_week", i); paint(); } }));
+  paint();
+  const auto = switchRow("Post without asking me first", "Off means every post waits for your tap on Approve.", !!saver.get("cadence", "autopost", false), (v) => saver.set("cadence", "autopost", v));
+  const node = screen("How often should we post?", "", h("div", { class: "form" }, h("div", { class: "group" }, h("span", { class: "lbl", text: "Posts per week" }), grp, sum), auto));
+  return { node, next: { label: "Continue" }, onNext: async () => go("styles") };
+};
+
+STEP.styles = function () {
+  const picks = Object.assign({}, saver.get("style", "picks", {}) || {});
+  const count = h("p", { class: "help", "aria-live": "polite" });
+  const cards = STYLES.map((s) => {
+    const like = h("button", { type: "button", "aria-pressed": "false" }, ic("heart", "s"), "I like this");
+    const no = h("button", { type: "button", class: "no", "aria-pressed": "false" }, ic("x", "s"), "Not for me");
+    const card = h("div", { class: "sty", role: "group", "aria-label": s.name },
+      h("div", { class: "art", style: s.css }, h("b", null, nwify(s.caption)), h("span", null, nwify(s.note))),
+      h("div", { class: "nm", text: s.name }), h("div", { class: "acts" }, like, no));
+    function paint() { like.setAttribute("aria-pressed", picks[s.k] === "love" ? "true" : "false"); no.setAttribute("aria-pressed", picks[s.k] === "no" ? "true" : "false"); }
+    like.addEventListener("click", () => { picks[s.k] = picks[s.k] === "love" ? "" : "love"; saver.set("style", "picks", Object.assign({}, picks)); paint(); tally(); });
+    no.addEventListener("click", () => { picks[s.k] = picks[s.k] === "no" ? "" : "no"; saver.set("style", "picks", Object.assign({}, picks)); paint(); tally(); });
+    paint(); return card;
+  });
+  function tally() { const n = Object.keys(picks).filter((k) => picks[k] === "love").length; count.textContent = n === 0 ? "Tap the ones you would actually post. You can skip this." : n === 1 ? "One style saved." : n + " styles saved. We will mix them."; }
+  tally();
+  const node = screen("Which of these look like you?", "Six ways we can make the same photos look.", h("div", { class: "form" }, h("div", { class: "styles" }, cards), count));
+  return { node, next: { label: "Continue" }, onNext: async () => go(RE ? "listing" : "connect") };
+};
+
+STEP.listing = function () {
+  if (!S.lf) S.lf = ListingForm({ withStatus: false, getToken: () => S.token, onChange: refreshNext, onSignedOut: signedOut });
+  const lf = S.lf;
+  const host = h("div", { class: "form" });
+  function paint() {
+    host.replaceChildren();
+    if (S.listingDone) {
+      host.appendChild(h("div", { class: "saved-card" }, ic("check", "l"), h("div", null, h("b", null, "Saved: " + S.listingDone.address), h("p", null, nwify(plural(S.listingDone.n, "photo") + (S.listingDone.later ? ". We\u2019ll make this post as soon as your card is on file." : ". Your first posts for it are being made."))))));
+      host.appendChild(h("button", { type: "button", class: "btn out", text: "Add another listing", onclick: () => { S.listingDone = null; lf.reset(); paint(); refreshNext(); } }));
+    } else host.appendChild(lf.el);
+  }
+  function refreshNext() { if (S.step !== "listing") return; setNextLabel(S.listingDone ? "Continue" : lf.touched() ? "Save listing and continue" : "Skip for now", false); }
+  paint();
+  const node = screen("Add your first listing now, or do it later from your board.", "Optional. Photos in, posts out.", host);
+  return { node, next: { label: S.listingDone ? "Continue" : lf.touched() ? "Save listing and continue" : "Skip for now" },
+    onNext: async () => {
+      if (S.listingDone || !lf.touched()) return go("connect");
+      dmsg("Saving your listing");
+      const r = await lf.submit(S.token);
+      dmsg("");
+      if (r.error === "not_signed_in") return signedOut();
+      if (!r.ok) { const e = $(".err[role=alert]:not([hidden])", host); if (e) e.scrollIntoView({ block: "center" }); return; }
+      S.listingDone = { address: lf.value().address, n: lf.uploader.count(), id: r.listing_id, later: r.carousel === "after_plan" };
+      lf.reset(); toast("Listing saved."); go("connect");
+    } };
+};
+
+STEP.connect = function () {
+  const host = h("div", { class: "form" });
+  const note = h("p", { class: "help", hidden: true, "aria-live": "polite" });
+  const done = (p) => S.conn[p] === "connected";
+  const anyOpen = () => NETS.some((n) => n.open && done(n.id));
+  if (S.note) { note.textContent = S.note; note.hidden = false; S.note = ""; }
+  let timer = null;
+  function paint() {
+    host.replaceChildren();
+    const open = NETS.filter((n) => n.open), soon = NETS.filter((n) => !n.open);
+    open.forEach((p) => {
+      const row = h("div", { class: "prow" }, ic(ICONS[p.id] || "send", "l"), h("div", { class: "tx" }, h("b", { text: p.name })));
+      if (done(p.id)) row.appendChild(h("span", { class: "chip ok" }, "Connected"));
+      else row.appendChild(h("button", { type: "button", class: "btn out", "aria-label": "Connect " + p.name, onclick: async (ev) => {
+        const b = ev.currentTarget; b.disabled = true; b.textContent = "Opening";
+        const w = window.open("", "_blank");   // opened inside the tap so phones do not block it
+        await saver.flush();
+        const r = await api("connect_start", { token: S.token, provider: p.id });
+        if (r.error === "not_signed_in") { if (w) w.close(); return signedOut(); }
+        if (r.ok && r.url) {
+          if (w) { w.location.href = r.url; b.textContent = "Waiting"; note.textContent = "Finish connecting " + p.name + " in the new tab, then come back here."; note.hidden = false; }
+          else { location.href = r.url; }
+          return;
+        }
+        if (w) w.close();
+        b.disabled = false; b.textContent = "Connect";
+        note.textContent = r.message || GENERIC; note.hidden = false;
+      } }, "Connect"));
+      host.appendChild(row);
+    });
+    if (soon.length) {
+      host.appendChild(h("p", { class: "lbl", text: "Opening soon" }));
+      soon.forEach((p) => {
+        const waiting = S.waiting && S.waiting[p.id];
+        const row = h("div", { class: "prow" }, ic(ICONS[p.id] || "send", "l"), h("div", { class: "tx" }, h("b", { text: p.name })));
+        row.appendChild(waiting ? h("span", { class: "chip soon" }, "We will email you") : h("button", { type: "button", class: "btn quiet", "aria-label": "Email me when " + p.name + " opens", onclick: async () => {
+          const r = await api("wait", { token: S.token, platforms: [p.id] });
+          if (r.error === "not_signed_in") return signedOut();
+          S.waiting = S.waiting || {}; S.waiting[p.id] = true; paint(); toast("We will email you when " + p.name + " opens.");
+        } }, "Email me"));
+        host.appendChild(row);
+      });
+    }
+    host.appendChild(note);
+  }
+  function refreshNext() { if (S.step === "connect") setNextLabel(anyOpen() ? "Continue" : "I will connect later", false); }
+  async function poll() {
+    const r = await api("connect_status", { token: S.token });
+    if (r.ok) { if (Array.isArray(r.networks) && r.networks.length) NETS = r.networks; S.conn = r; paint(); refreshNext(); }
+  }
+  const onVis = () => { if (document.visibilityState === "visible" && S.step === "connect") poll(); };
+  paint();
+  const node = screen("Where should we post?", "Connect at least one account. We never post anything you have not approved, and we do not ask for a card until one account is connected.", host);
+  return { node, next: { label: anyOpen() ? "Continue" : "I will connect later" },
+    onNext: async () => {
+      if (timer) { clearInterval(timer); timer = null; } document.removeEventListener("visibilitychange", onVis);
+      if (anyOpen()) return go("plan");
+      mid("clock", "Your answers are saved", "Come back to bestly.tech/studio/start any time to connect an account. We will email you when the networks you asked for open.",
+        h("button", { type: "button", class: "btn lg", text: "Connect an account now", onclick: () => go("connect") }));
+    },
+    after: async () => { await poll(); document.addEventListener("visibilitychange", onVis); if (!timer) timer = setInterval(() => { if (S.step === "connect" && document.visibilityState === "visible") poll(); else if (S.step !== "connect") { clearInterval(timer); timer = null; } }, 4000); } };
+};
+
+STEP.plan = function () {
+  const host = h("div", { class: "form" });
+  const cadSeg = h("div", { class: "seg", role: "radiogroup", "aria-label": "Billing" },
+    h("button", { type: "button", role: "radio", "aria-checked": "true", "data-c": "monthly" }, "Monthly"),
+    h("button", { type: "button", role: "radio", "aria-checked": "false", "data-c": "annual" }, "Yearly"));
+  const money = (p) => parseFloat(String(p).replace(/[^0-9.]/g, "")) || 0;
+  function feats(m) {
+    if (m.id === "premium") {
+      const e = S.plans.extra_video, ex = !e ? "$15" : typeof e === "string" ? e : typeof e === "number" ? "$" + (e >= 100 ? Math.round(e / 100) : e) : (e.price || (e.price_cents ? "$" + Math.round(e.price_cents / 100) : "$15"));
+      return ["Everything in Carousels", (m.videos_per_month || 4) + (RE ? " videos a month, made from your photos" : " short videos a month"), "Need more? " + ex + " for each extra video"];
+    }
+    return RE ? ["Carousel posts for every listing", "Your brokerage and license line on every post", "Approve each post in one tap, or turn on auto-post"]
+      : ["Swipe posts and image posts, made for you", "A person at Bestly checks every post", "Approve each post in one tap, or turn on auto-post"];
+  }
+  function paint() {
+    $$("button", cadSeg).forEach((b) => b.setAttribute("aria-checked", b.dataset.c === S.cad ? "true" : "false"));
+    host.replaceChildren();
+    const P = S.plans; if (!P) return;
+    const cards = h("div", { class: "plancards", role: "radiogroup", "aria-label": "Plan" });
+    P.monthly.forEach((m) => {
+      const a = (P.annual || []).find((x) => x.id === m.id) || {};
+      const yearly = S.cad === "annual" && a.price;
+      const free = a.price ? Math.max(0, Math.round((money(m.price) * 12 - money(a.price)) / money(m.price))) : 0;
+      const c = h("button", { type: "button", class: "pc", role: "radio", "aria-checked": S.plan === m.id ? "true" : "false", "aria-label": m.name + ", " + (yearly ? a.price + " a year" : m.price + " a month") },
+        h("div", { class: "top" }, h("div", { class: "nm" }, m.name, m.id === "premium" ? h("span", { class: "chip new", text: "Includes video" }) : null),
+          h("span", { class: "rad", "aria-hidden": "true" }, ic("check"))),
+        h("div", { class: "price" }, nwSpan(yearly ? a.price : m.price), " ", h("small", null, yearly ? "a year" : "a month")),
+        h("p", { class: "tag" }, nwify(yearly ? "That is " + free + " months free." : (a.price ? "Pay yearly: " + a.price + " and get " + free + " months free." : ""))),
+        h("ul", null, feats(m).map((t) => h("li", null, ic("check"), h("span", null, nwify(t))))));
+      c.addEventListener("click", () => { S.plan = m.id; paint(); });
+      cards.appendChild(c);
+    });
+    host.appendChild(cadSeg); host.appendChild(cards);
+    if (S.note) host.insertBefore(h("div", { class: "note plain", role: "status" }, ic("info"), S.note), host.firstChild);
+    S.note = "";
+    setNextLabel("Start free for " + trialDays() + " days", false);
+    const m = P.monthly.find((x) => x.id === S.plan), a = (P.annual || []).find((x) => x.id === S.plan);
+    if (m) { $("#dmsg").replaceChildren(nwify("You are charged " + (S.cad === "annual" && a ? a.price + " a year" : m.price + " a month") + " only after the " + trialDays() + " days are over.")); }
+  }
+  $$("button", cadSeg).forEach((b) => b.addEventListener("click", () => { S.cad = b.dataset.c; paint(); }));
+  async function load() {
+    host.replaceChildren(h("div", { class: "mid" }, h("p", null, "Loading plans")));
+    const r = await api("plans", {});
+    if (r.ok && r.monthly) { S.plans = r; paint(); }
+    else { host.replaceChildren(h("div", { class: "note bad" }, ic("alert"), r.message), h("button", { type: "button", class: "btn out", text: "Try again", onclick: load }));
+      setNextLabel("Start free for " + trialDays() + " days", true); }
+  }
+  const node = screen("Pick a plan.", "Free for " + trialDays() + " days. We ask for your card now and charge nothing until the trial ends.", host);
+  return { node, next: { label: "Start free for " + trialDays() + " days", disabled: !S.plans }, nextDisabled: () => !S.plans,
+    after: () => { if (S.plans) paint(); else load(); },
+    onNext: async () => {
+      if (!S.plans) return;
+      dmsg("Taking you to checkout");
+      await saver.flush();
+      const r = await api("checkout", { token: S.token, plan: S.plan, cadence: S.cad });
+      if (r.error === "not_signed_in") return signedOut();
+      if (r.error === "connect_first") { S.note = r.message; return go("connect"); }
+      if (!r.ok || !r.url) { dmsg(r.message || GENERIC, true); return; }
+      location.href = r.url;
+    } };
+};
+
+STEP.done = function () {
+  const sub = h("p", { class: "sub" }, nwify("Checking your board."));
+  const node = h("div", { class: "screen mid" }, h("div", { class: "bigic" }, ic("check")), h("h1", { id: "h1", text: "You are in." }), sub);
+  return { node, top: false, next: { label: "Open your board" }, onNext: async () => { location.href = "/studio/me"; },
+    after: async () => {
+      if (!RE) { sub.replaceChildren(nwify("Your board is ready. Send us photos, clips or an idea from your board, or email studio@bestly.tech, and we start on your first posts.")); return; }
+      let has = !!S.listingDone;
+      if (!has) { const r = await api("listing_list", { token: S.token }); has = !!(r.ok && r.listings && r.listings.length); }
+      sub.replaceChildren(nwify(has ? "Your first post is being made. It takes about 10 minutes." : "Your board is ready. Add your first listing and we make your first post in about 10 minutes."));
+    } };
+};
+
+STEP.passkey = function () {
+  const label = passkeyLabel();
+  const node = h("div", { class: "screen mid" }, h("div", { class: "bigic" }, ic("key")),
+    h("h1", { id: "h1", text: "Sign in faster next time." }),
+    h("p", null, "Save a passkey on this device. Next time you sign in with a touch instead of waiting for an email. There is no password to remember."),
+    S.passMsg ? h("div", { class: "note plain" }, ic("info"), S.passMsg) : null);
+  S.passMsg = "";
+  return { node, top: false, next: { label: label }, alt: { label: "Not now", run: () => go("done") },
+    onNext: async () => {
+      dmsg("Waiting for your device");
+      const r = await savePasskey(S.token);
+      dmsg("");
+      if (r.ok) { toast("Passkey saved."); return go("done"); }
+      if (r.error === "not_signed_in") return signedOut();
+      dmsg(r.message, true);
+    } };
+};
+
+/* ===== special screens ===== */
+function expiredScreen(msg) {
+  mid("clock", "This link has expired", msg || "Sign-in links only work once, and only for a short while. We can send you a fresh one.",
+    h("button", { type: "button", class: "btn lg", text: "Send a new link", onclick: () => { S.mode = "signin"; go("email"); } }));
+}
+function offlineScreen(msg) {
+  mid("alert", "We could not reach Bestly", msg || OFFLINE, h("button", { type: "button", class: "btn lg", text: "Try again", onclick: () => boot() }));
+}
+let pollStop = false;
+async function pollDone() {
+  pollStop = false;
+  mid("", "Setting up your account", "Your payment went through. This usually takes a few seconds.", null, true);
+  const t0 = Date.now();
+  while (!pollStop && Date.now() - t0 < 60000) {
+    const r = await api("resume", { token: S.token });
+    if (r.ok && r.client_slug) { S.clientSlug = r.client_slug; saver.init(r.answers, r.rev); history.replaceState(null, "", location.pathname); return go(passkeySupported() ? "passkey" : "done"); }
+    if (r.error === "not_signed_in") return signedOut();
+    await new Promise((res) => setTimeout(res, 2000));
+  }
+  mid("clock", "Still setting up", "This is taking longer than usual. Your payment is safe. Check again, or email studio@bestly.tech and we will sort it out.",
+    h("button", { type: "button", class: "btn lg", text: "Check again", onclick: pollDone }));
+}
+
+/* ===== after a successful sign-in (link, code or passkey) ===== */
+function rightDoor(v) {   // a real estate sign-up that comes back through the general link (or the other way) gets its own page
+  if (!v || (v === "real-estate") === RE) return false;
+  location.replace("/studio/start" + (v === "real-estate" ? "?for=real-estate" : "")); return true;
+}
+function afterAuth(r) {
+  S.token = r.token; store.set(r.token); S.email = r.email || S.email;
+  if (rightDoor(r.vertical)) return;
+  saver.init(r.answers, r.rev); S.clientSlug = r.client_slug || ""; S.conn = r.connections || S.conn || {};
+  if (Array.isArray(r.networks) && r.networks.length) NETS = r.networks;
+  toast("You are in.");
+  route(r);
+}
+function validStep(s) { return QSTEPS.indexOf(s) >= 0 ? s : "you"; }
+function route(r) {
+  if (S.clientSlug && !S.edit && !P.get("done")) { location.replace("/studio/me"); return; }
+  if (P.get("done")) return pollDone();
+  go(validStep(r && r.step));
+}
+
+/* ===== boot ===== */
+async function boot() {
+  if (!S.plans) api("plans", {}, { timeout: 8000 }).then((r) => { if (r.ok && r.monthly) { S.plans = r; if (S.step === "intro") go("intro"); } });
+  const tm = /^\/t\/([A-Za-z0-9]{6,12})\/?$/.exec(location.pathname);
+  const code = P.get("c") || (tm && tm[1]);
+  if (code) {
+    history.replaceState(null, "", tm ? "/studio/start" + (RE ? "?for=real-estate" : "") : location.pathname + (RE ? "?for=real-estate" : ""));
+    mid("", "Signing you in", "One second. Your work is already saved.", null, true);
+    const r = await api("verify", { code: code.trim().toLowerCase() });
+    if (r.ok) return afterAuth(r);
+    if (r.error === "offline" || r.error === "server_error") return offlineScreen(r.message);
+    return expiredScreen(r.message);
+  }
+  if (S.token) {
+    mid("", "Opening your sign-up", "One second. Your work is already saved.", null, true);
+    const r = await api("resume", { token: S.token });
+    if (r.ok) {
+      if (rightDoor(r.vertical)) return; saver.init(r.answers, r.rev); S.email = r.email || S.email; S.clientSlug = r.client_slug || ""; S.conn = r.connections || {}; if (Array.isArray(r.networks) && r.networks.length) NETS = r.networks;
+      if (P.get("step") === "brand" && S.clientSlug) { S.edit = true; return go("brand"); }
+      if (P.get("cancelled")) { S.note = "No problem. You were not charged. Pick a plan whenever you are ready."; history.replaceState(null, "", location.pathname); return go("plan"); }
+      if (P.get("connected")) { history.replaceState(null, "", location.pathname); toast(P.get("connected") === "instagram" || P.get("connected") === "facebook" ? "Connected." : "Connected."); return go("connect"); }
+      return route(r);
+    }
+    if (r.error === "not_signed_in") { store.del(); S.token = ""; S.mode = "signin"; S.note = "Please sign in again."; return go("email"); }
+    return offlineScreen(r.message);          /* offline / 5xx: keep the token */
+  }
+  if (P.get("signin") || P.get("done")) { S.mode = "signin"; if (P.get("done")) S.note = "Sign in to finish setting up."; return go("email"); }
+  go("intro");
+}
+window.addEventListener("pagehide", () => { pollStop = true; });
+boot();
+</script>
+</body>
+</html>

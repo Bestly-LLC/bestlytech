@@ -47,10 +47,11 @@ const faqs = [
   { q: "Where do you post?", a: "To your own accounts, which you connect yourself on each platform's own login page: Instagram, Facebook, Threads, Bluesky, LinkedIn, Pinterest and TikTok. TikTok works differently: you review each video and tap Post yourself, and TikTok is still reviewing Bestly Studio, so for now it is open to approved test accounts only." },
   { q: "What kinds of businesses is this for?", a: "Anyone who runs something and has no time to post about it: coaches, real estate agents, shops, app makers, local businesses, creators and nonprofits. If yours is not on the list, book a call and tell us about it." },
   { q: "Do I have to be on camera?", a: "No. Swipe posts and image posts need no filming. Short videos are optional, and we write the script if you want one." },
-  { q: "Do you work outside the US?", a: "Yes. We work with businesses outside the US. Everything happens online: a video call to start, your board on any phone or computer, and your material sent by email." },
+  { q: "Do you work outside the US?", a: "Yes. We work with businesses outside the US. Everything happens online: sign up on the site or start with a video call, your board on any phone or computer, and your material sent by email." },
   { q: "Does Bestly post on my TikTok without asking?", a: "No. You connect your own TikTok account and review every video and caption. Studio sends a video to TikTok only after you approve it and tap Post, and you choose who can see it. You can disconnect any time from your board." },
   { q: "What does Studio see on my TikTok?", a: "Your basic profile (name and picture), so you can see which account is connected, and the permission to post the videos you approve. Nothing else. The Privacy Policy has the details and how to delete your data." },
-  { q: "What does it cost?", a: "We go through that on the free call, once we know what you need." },
+  { q: "How do I start?", a: "Tap Start free for 7 days. You answer a few short questions about your business and connect your accounts. Some platforms open to new sign-ups as each one finishes its review, and the sign-up shows which are open today. If you would rather talk first, book a free call." },
+  { q: "What does it cost?", a: "The first 7 days are free. You see the plans and prices in the sign-up before you enter a card, and you are not asked for a card until your first account is connected." },
   { q: "What if I do not like a post?", a: "Tap Changes and tell us what to fix, the way you would say it out loud." },
 ];
 
@@ -280,7 +281,7 @@ export default function BestlyStudio() {
               We work with businesses outside the US.
             </h2>
             <p className="mt-6 text-lg text-muted-foreground">
-              <Lines>Everything happens online. We start with a video call. You see your board on any phone or computer. You send your material by email.</Lines>
+              <Lines>Everything happens online. You sign up online, or start with a video call. You see your board on any phone or computer. You send your material by email.</Lines>
             </p>
           </AnimatedSection>
         </div>

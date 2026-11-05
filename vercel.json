@@ -105,6 +105,8 @@
       "source": "/agent",
       "destination": "/agent.html"
     },
+    { "source": "/studio/start", "destination": "/studio-start.html" },
+    { "source": "/studio/me", "destination": "/studio-me.html" },
     {
       "source": "/((?!api/|assets/|models/).*)",
       "destination": "/index.html"

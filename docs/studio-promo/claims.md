@@ -29,8 +29,11 @@ Say these, in plain words. Each line says where it is true.
 - **Book a call.** The call is free: https://cloud.bestly.tech/apps/calendar/appointment/BtktQYtGFocY
 
 ## Never say (and never show)
-1. **No prices.** No dollar figure, "per month", "cheap", "affordable", "free trial", "starting at". Jared has not set public pricing.
-   (His private stance of about $50 to $100 a month for one realtor is NOT public.)
+1. **No prices on promo pages and posts.** No dollar figure, "per month", "cheap", "affordable", "starting at". Updated 2026-11-04:
+   Jared set self-serve pricing on 2026-10-20 and chose to launch the self-serve sign-up with a trial, so **"Start free for 7 days" /
+   "the first 7 days are free" is now true and allowed**, along with "you see the plans and prices in the sign-up before you enter a
+   card" and "no card until your first account is connected". Dollar figures appear only inside the sign-up at studio.bestly.tech/start
+   (source of truth: `supabase/functions/_shared/studio-plans.ts` / `studio_prices`), never on bestly.tech pages or in posts.
 2. **No results, numbers or growth promises.** No followers, likes, leads, clients, sales, reach, engagement, "go viral", percentages,
    "x times", "guaranteed". No "you will get / grow / double".
 3. **No "AI does everything".** No "fully automated", "autopilot", "hands-free", "set and forget", "AI-powered", "AI-generated",
