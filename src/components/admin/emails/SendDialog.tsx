@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Loader2, RotateCcw, Send, ShieldCheck } from "lucide-react";
+import { Loader2, Paperclip, RotateCcw, Send, ShieldCheck } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { btnPlain, btnPrimary, btnTinted } from "@/pages/admin/laxUi";
 import { cn } from "@/lib/utils";
 import { sha256Hex } from "@/lib/email/render";
-import type { EmailApi } from "@/lib/email/api";
+import type { Attachment, EmailApi } from "@/lib/email/api";
+import { fileSize } from "./emailUtils";
 import { PreviewFrame } from "./PreviewFrame";
 import { ContactField } from "./ContactField";
 import "./sendFlow.css";
@@ -19,8 +20,8 @@ const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.
  * Nothing is sent until the Send button in here is tapped; it shows who, what subject, and the exact email.
  * `onSent` fires the moment the mail service says yes; `onFinished` fires when the success view closes (any way).
  */
-export function SendDialog({ api, open, onClose, libraryId, html, subject, defaultTo, defaultName, fromLine, onSent, onFinished }: {
-  api: EmailApi; open: boolean; onClose: () => void; libraryId: string; html: string; subject: string; defaultTo: string; defaultName: string; fromLine: string;
+export function SendDialog({ api, open, onClose, libraryId, html, subject, attachments = [], defaultTo, defaultName, fromLine, onSent, onFinished }: {
+  api: EmailApi; open: boolean; onClose: () => void; libraryId: string; html: string; subject: string; attachments?: Attachment[]; defaultTo: string; defaultName: string; fromLine: string;
   onSent: (to: string, name: string) => void; onFinished?: (to: string, name: string) => void;
 }) {
   const [to, setTo] = useState(defaultTo);
@@ -45,7 +46,7 @@ export function SendDialog({ api, open, onClose, libraryId, html, subject, defau
   /* One id per distinct request: a retry of the same thing reuses it (never a double send); changing who/what gets a new one. */
   const attempt = useRef<{ key: string; id: string } | null>(null);
   const attemptFor = () => {
-    const key = [to.trim(), name.trim(), subject, html].join("\u0001");
+    const key = [to.trim(), name.trim(), subject, html, ...attachments.map((a) => a.path)].join("\u0001");
     if (!attempt.current || attempt.current.key !== key) attempt.current = { key, id: crypto.randomUUID() };
     return attempt.current.id;
   };
@@ -68,7 +69,7 @@ export function SendDialog({ api, open, onClose, libraryId, html, subject, defau
     setBusy(true); setErr("");
     try {
       const html_sha = await sha256Hex(html);
-      const r = await api.send({ library_id: libraryId, to: to.trim(), to_name: name.trim() || undefined, subject, html_sha, attempt: attemptFor() });
+      const r = await api.send({ library_id: libraryId, to: to.trim(), to_name: name.trim() || undefined, subject, html_sha, attempt: attemptFor(), attachments: attachments.map((a) => a.path) });
       if (r.ok) {
         const t = to.trim(), n = name.trim();
         sentRef.current = { to: t, name: n };
@@ -175,6 +176,14 @@ export function SendDialog({ api, open, onClose, libraryId, html, subject, defau
               <dl className="space-y-1 rounded-2xl bg-white/[0.04] px-4 py-3 text-[13px]">
                 <div className="flex flex-wrap gap-x-2"><dt className="text-white/50">Subject</dt><dd className="font-medium text-white [overflow-wrap:anywhere]">{subject}</dd></div>
                 <div className="flex flex-wrap gap-x-2"><dt className="text-white/50">From</dt><dd className="text-white/80 [overflow-wrap:anywhere]">{fromLine}</dd></div>
+                {attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="flex items-center gap-1 text-white/50"><Paperclip className="h-3.5 w-3.5" aria-hidden="true" />Attached</dt>
+                    <dd className="min-w-0 text-white/80">
+                      <ul>{attachments.map((a) => <li key={a.path} className="[overflow-wrap:anywhere]">{a.name} <span className="whitespace-nowrap text-white/50">{fileSize(a.size)}</span></li>)}</ul>
+                    </dd>
+                  </div>
+                )}
                 <div className="flex items-start gap-1.5 pt-1 text-white/50"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span>Sends exactly what you see below. You are copied by bcc.</span></div>
               </dl>
               <div className={cn("transition-opacity duration-300", busy && "opacity-60")}>

@@ -12,6 +12,7 @@ import { ButtonDialog } from "./ButtonDialog";
 import { SendDialog } from "./SendDialog";
 import { ContactField } from "./ContactField";
 import { WhenText } from "./WhenText";
+import { AttachmentList } from "./AttachmentList";
 import { BLOCK_LABEL, cleanHtml, docOf, download, emptyDraft, makeEml, newBlock, previewSource, slugify, textOf, type Draft } from "./emailUtils";
 
 type Snap = { subject: string; preheader: string; blocks: Block[] };
@@ -137,7 +138,7 @@ export function EmailBuilder({ api, initial, onSaved, onSentDone }: { api: Email
       const row = await api.save({
         ...(draft.id ? { id: draft.id } : {}), brand_kit: draft.kit, title: draft.title.trim() || draft.subject || "Untitled email", subject: draft.subject, preheader: draft.preheader || null,
         blocks: draft.fixedHtml ? [] : draft.blocks, html, text_body: textOf(kit, draft), source: draft.source, brief: draft.brief || null,
-        recipient_name: draft.recipient_name || null, recipient_email: draft.recipient_email || null,
+        recipient_name: draft.recipient_name || null, recipient_email: draft.recipient_email || null, attachments: draft.attachments,
       });
       setDraft((d) => ({ ...d, id: row.id })); setSaved(row); onSaved(row);
       return row;
@@ -358,6 +359,9 @@ export function EmailBuilder({ api, initial, onSaved, onSentDone }: { api: Email
               {!locked && <p className={cn("text-[13px]", secondary)}><Lines>Tap any text to edit it. Tap a button to change its words or link.</Lines></p>}
               <PreviewFrame html={preview} device={device} dark={dark} editable={!locked} onEdit={onEdit} />
               <div className={cn(card, "space-y-3")}>
+                <AttachmentList api={api} value={draft.attachments} disabled={!!busy}
+                  savedPaths={(saved?.attachments ?? initial.attachments).map((a) => a.path)}
+                  onChange={(next) => setDraft((d) => ({ ...d, attachments: next }))} />
                 <div className="flex flex-wrap gap-2">
                   {!locked && <button type="button" onClick={save} disabled={!!busy} className={btnTinted}>{busy === "save" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}Save</button>}
                   <button type="button" onClick={openSend} disabled={!!busy || !draft.subject} className={btnPrimary}><Send className="h-4 w-4" aria-hidden="true" />{draft.status === "sent" ? "Send again" : "Send"}</button>
@@ -382,7 +386,7 @@ export function EmailBuilder({ api, initial, onSaved, onSentDone }: { api: Email
       <ButtonDialog block={btn} onClose={() => setBtn(null)}
         onSave={(b) => { patch(b.id, b); setBtn(null); }} onDelete={(id) => { remove(id); setBtn(null); }} />
       {saved && (
-        <SendDialog api={api} open={sendOpen} onClose={() => setSendOpen(false)} libraryId={saved.id} html={saved.html} subject={draft.subject}
+        <SendDialog api={api} open={sendOpen} onClose={() => setSendOpen(false)} libraryId={saved.id} html={saved.html} subject={draft.subject} attachments={saved.attachments ?? []}
           defaultTo={draft.recipient_email} defaultName={draft.recipient_name} fromLine={fromLine}
           onSent={(to, name) => { setDraft((d) => ({ ...d, recipient_email: to, recipient_name: name, status: "sent", sentAt: new Date().toISOString() })); onSaved({ ...saved, status: "sent" }); }}
           onFinished={(to, name) => onSentDone?.({ ...saved, status: "sent", recipient_email: to, recipient_name: name || null, updated_at: new Date().toISOString() }, to, name)} />

@@ -70,6 +70,8 @@ export default function EmailHarness() {
       return saved;
     },
     remove: async () => {}, versions: async () => [],
+    uploadAttachment: (f) => new Promise((resolve) => setTimeout(() => resolve({ path: `h/${crypto.randomUUID()}/${f.name}`, name: f.name, type: f.type || "application/octet-stream", size: f.size }), 400)),
+    fetchAttachment: async () => new Blob(["harness"]), removeAttachment: async () => {},
     generate: async () => ({ ok: false, error: "Offline harness: no AI here." }), revise: async () => ({ ok: false, error: "Offline harness: no AI here." }),
     makeImage: async () => ({ ok: false, error: "Offline harness" }), exportEml: async () => ({ ok: false, error: "Offline harness" }),
     send: () => new Promise((resolve) => setTimeout(() => resolve(failSend ? { ok: false, error: "The mail server did not answer. Nothing was sent." } : { ok: true, id: "harness" }), 900)),

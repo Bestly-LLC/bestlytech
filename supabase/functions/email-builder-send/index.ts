@@ -8,7 +8,11 @@
 // Every attempt, sent or failed, is a row in email_send_log. A failure raises bestly_raise('email-builder.send'),
 // owned by Scout through notification_owners('email-builder').
 //
-// POST { library_id, to, to_name?, subject, html_sha, attempt }  ->  { ok, id }
+// Attachments (2026-11-04): email_library.attachments = [{path, name, type, size}] in the private bucket
+// email-attachments. They are downloaded here with the service key and sent through Resend. The dialog posts the
+// paths it showed (`attachments`); if the saved list differs, nothing is sent (409). Max 10 files, 25 MB in all.
+//
+// POST { library_id, to, to_name?, subject, html_sha, attempt, attachments? }  ->  { ok, id }
 // POST { ..., dry_run: true } checks everything and reports what it would send; Resend is not called.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -27,6 +31,14 @@ const CORS = corsWith({ headers: "authorization, content-type, apikey, x-client-
 const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 
 const DAILY_MAX = 40;
+const ATT_MAX_FILES = 10;
+const ATT_MAX_TOTAL = 25 * 1024 * 1024;
+type Att = { path: string; name: string; type?: string; size?: number };
+
+function b64(bytes: Uint8Array): string {
+  let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
 const EMAIL = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/;
 
 async function adminId(req: Request): Promise<string | null> {
@@ -57,11 +69,18 @@ Deno.serve(async (req) => {
   if (!subject) return J({ ok: false, error: "The subject is empty." }, 400);
   if (typeof b.html_sha !== "string" || b.html_sha.length !== 64) return J({ ok: false, error: "Confirm the preview first." }, 400);
 
-  const { data: row, error } = await db.from("email_library").select("id, brand_kit, html, text_body, subject").eq("id", String(b.library_id ?? "")).maybeSingle();
+  const { data: row, error } = await db.from("email_library").select("id, brand_kit, html, text_body, subject, attachments").eq("id", String(b.library_id ?? "")).maybeSingle();
   if (error || !row) return J({ ok: false, error: "That email is not in the library." }, 404);
   if (!row.html || row.html.length < 200) return J({ ok: false, error: "The email is empty." }, 400);
   const sha = await sha256Hex(row.html);
   if (sha !== b.html_sha) return J({ ok: false, error: "The email changed after you confirmed it. Open the preview again.", changed: true }, 409);
+
+  const atts: Att[] = (Array.isArray(row.attachments) ? row.attachments : []).filter((a: Att) => a && typeof a.path === "string" && a.path && !a.path.includes(".."));
+  if (Array.isArray(b.attachments)) {
+    const shown = b.attachments.map(String).sort().join("\n"), saved = atts.map((a) => a.path).sort().join("\n");
+    if (shown !== saved) return J({ ok: false, error: "The attachments changed after you confirmed. Open the preview again.", changed: true }, 409);
+  }
+  if (atts.length > ATT_MAX_FILES) return J({ ok: false, error: `Too many attachments (max ${ATT_MAX_FILES}).` }, 400);
 
   const { data: kit } = await db.from("email_brand_kits").select("default_sender").eq("slug", row.brand_kit).maybeSingle();
   const s = (kit?.default_sender ?? {}) as Record<string, string>;
@@ -76,14 +95,29 @@ Deno.serve(async (req) => {
   const { count } = await db.from("email_send_log").select("id", { count: "exact", head: true }).eq("template_name", "email-builder").eq("status", "sent").gte("created_at", since.toISOString());
   if ((count ?? 0) >= DAILY_MAX) return J({ ok: false, error: `Daily send limit reached (${DAILY_MAX}).` }, 429);
 
-  if (b.dry_run === true) return J({ ok: true, dry_run: true, from, to: toHeader, reply_to: replyTo, bcc, subject, html_bytes: row.html.length, sha });
+  if (b.dry_run === true) return J({ ok: true, dry_run: true, from, to: toHeader, reply_to: replyTo, bcc, subject, html_bytes: row.html.length, sha, attachments: atts.map((a) => ({ name: a.name, size: a.size ?? null })) });
+
+  // Read every file before calling the mail service: a missing file means nothing is sent.
+  const files: { filename: string; content: string; content_type?: string }[] = [];
+  let total = 0;
+  for (const a of atts) {
+    const { data: blob, error: dlErr } = await db.storage.from("email-attachments").download(a.path);
+    if (dlErr || !blob) {
+      await raiseSend("Email builder: attachment missing", `${a.name} (${a.path}) could not be read: ${dlErr?.message ?? "no data"}. Nothing was sent to ${to}.`);
+      return J({ ok: false, error: `${a.name} could not be read. Remove it and attach it again. Nothing was sent.` }, 200);
+    }
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    total += bytes.length;
+    if (total > ATT_MAX_TOTAL) return J({ ok: false, error: "The attachments are over 25 MB in all. Nothing was sent." }, 400);
+    files.push({ filename: String(a.name || "file").replace(/[\r\n"]/g, "_").slice(0, 200), content: b64(bytes), ...(a.type ? { content_type: a.type } : {}) });
+  }
 
   const key = Deno.env.get("RESEND_API_KEY");
   const log = (status: "sent" | "failed", providerId: string | null, err: string | null) =>
     // email_send_log is the shared transactional log: builder details ride in metadata.
     db.from("email_send_log").insert({
       template_name: "email-builder", recipient_email: to, message_id: providerId, status, error_message: err,
-      metadata: { library_id: row.id, to_name: toName || null, subject, from_email: fromEmail, provider: "resend", html_sha: sha, sent_by: uid },
+      metadata: { library_id: row.id, to_name: toName || null, subject, from_email: fromEmail, provider: "resend", html_sha: sha, sent_by: uid, attachments: atts.map((a) => a.name), attachment_bytes: total },
     }).then(({ error }) => { if (error) console.error("email_send_log insert failed:", error.message); });
   if (!key) {
     await log("failed", null, "RESEND_API_KEY is not set");
@@ -93,7 +127,7 @@ Deno.serve(async (req) => {
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "Idempotency-Key": `eb-${row.id}-${String(b.attempt ?? crypto.randomUUID()).slice(0, 64)}` },
-    body: JSON.stringify({ from, to: [toHeader], bcc: [bcc], reply_to: replyTo, subject, html: row.html, text: row.text_body || undefined }),
+    body: JSON.stringify({ from, to: [toHeader], bcc: [bcc], reply_to: replyTo, subject, html: row.html, text: row.text_body || undefined, ...(files.length ? { attachments: files } : {}) }),
   }).catch((e) => ({ ok: false, status: 0, json: async () => ({ message: String(e) }) }) as unknown as Response);
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {

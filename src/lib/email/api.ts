@@ -23,7 +23,15 @@ export interface LibraryRow {
   updated_at: string;
   /** Exact send time, stamped from email_send_log when the column exists. */
   sent_at?: string | null;
+  /** Files sent with the email (private bucket email-attachments). */
+  attachments?: Attachment[];
 }
+
+/** One file attached to a library email. `path` is inside the private bucket email-attachments. */
+export interface Attachment { path: string; name: string; type: string; size: number }
+export const ATTACH_MAX_FILES = 10;
+export const ATTACH_MAX_FILE = 20 * 1024 * 1024;
+export const ATTACH_MAX_TOTAL = 25 * 1024 * 1024;
 
 export interface GenResult { ok: boolean; doc?: EmailDoc; warnings?: string[]; model?: string; provider?: string; attempts?: number; /** revise only: false when the free AI sent the email back unchanged */ changed?: boolean; error?: string; detail?: string }
 export interface SendResult { ok: boolean; id?: string | null; error?: string; changed?: boolean; detail?: string }
@@ -43,7 +51,11 @@ export interface EmailApi {
   revise: (body: { kit: string; doc: EmailDoc; instruction: string }) => Promise<GenResult>;
   makeImage: (kit: string, prompt: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
   exportEml: (i: { html: string; text: string; subject: string; to?: string }) => Promise<{ ok: boolean; eml?: string; inlined?: number; skipped?: string[]; error?: string }>;
-  send: (i: { library_id: string; to: string; to_name?: string; subject: string; html_sha: string; attempt: string }) => Promise<SendResult>;
+  send: (i: { library_id: string; to: string; to_name?: string; subject: string; html_sha: string; attempt: string; attachments?: string[] }) => Promise<SendResult>;
+  /** Attachments: upload to the private bucket, fetch back (for the .eml), forget an unsaved one. Absent offline. */
+  uploadAttachment?: (file: File) => Promise<Attachment>;
+  fetchAttachment?: (path: string) => Promise<Blob>;
+  removeAttachment?: (path: string) => Promise<void>;
   kitFromClient?: (slug: string) => Promise<string>;
   /** Type-ahead for the To fields: clients, iCloud contacts and recent recipients, already ranked. */
   suggestContacts?: (q: string) => Promise<ContactHit[]>;
@@ -100,6 +112,23 @@ export function createEmailApi(state: { dbReady: boolean; kits: Kit[]; library: 
     makeImage: (kit, prompt) => invoke("email-builder", { op: "image", kit, prompt }),
     exportEml: (i) => invoke("email-builder", { op: "export_eml", ...i }),
     send: (i) => invoke<SendResult>("email-builder-send", i),
+    async uploadAttachment(file) {
+      const { data: u } = await sb.auth.getUser();
+      const safe = file.name.replace(/[^\w.\- ]+/g, "_").replace(/\s+/g, " ").trim().slice(-120) || "file";
+      const path = `${u?.user?.id ?? "admin"}/${crypto.randomUUID()}/${safe}`;
+      const type = file.type || "application/octet-stream";
+      const { error } = await sb.storage.from("email-attachments").upload(path, file, { contentType: type, upsert: false });
+      if (error) throw new Error(error.message);
+      return { path, name: file.name.slice(0, 200), type, size: file.size };
+    },
+    async fetchAttachment(path) {
+      const { data, error } = await sb.storage.from("email-attachments").download(path);
+      if (error || !data) throw new Error(error?.message ?? "Could not read the file.");
+      return data as Blob;
+    },
+    async removeAttachment(path) {
+      await sb.storage.from("email-attachments").remove([path]);
+    },
     async suggestContacts(q) {
       try {
         const { data, error } = await sb.rpc("email_contact_suggest", { p_q: q, p_limit: 8 });
