@@ -7,10 +7,10 @@ import { STUDIO_USE_CASES } from "@/config/studioUseCases";
 
 export const BOOKING = "https://cloud.bestly.tech/apps/calendar/appointment/BtktQYtGFocY";
 export const EMAIL = "studio@bestly.tech";
-/** Self-serve sign-up (questions, then 7 days free, card at the end) on Studio itself. */
-export const START = "https://studio.bestly.tech/start";
+/** Self-serve sign-up (questions, connect an account, then 7 days free with the card). Static page, see vercel.json. */
+export const START = "/studio/start";
 /** Where an existing Studio client signs in. */
-export const SIGNIN = "https://studio.bestly.tech/start?signin=1";
+export const SIGNIN = "/studio/start?signin=1";
 
 export const chipClass =
   "inline-flex min-h-[44px] items-center rounded-full border border-border bg-card px-5 text-sm font-semibold text-foreground " +
